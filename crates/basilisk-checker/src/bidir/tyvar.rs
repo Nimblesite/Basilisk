@@ -138,6 +138,28 @@ impl TyVarStore {
         resolved
     }
 
+    /// [`Self::resolve`] with the call-site fallback of
+    /// [`crate::param_infer`] (#317): what is DEMANDED wins; with no demand,
+    /// the union of what FLOWS IN (call-site lower bounds); with neither,
+    /// `Unknown`. Kept SEPARATE from [`Self::resolve`] on purpose — lambda
+    /// parameters are input-polarity too, and their resolution must stay
+    /// demand-only or every lambda argument leaks a concrete type into
+    /// judgments that promised to abstain.
+    #[must_use]
+    pub fn resolve_with_inflow(&self, id: TyVarId) -> InferredType {
+        match self.resolve(id) {
+            InferredType::Unknown => {
+                let mut visiting = vec![id];
+                self.vars
+                    .get(id.index())
+                    .map_or(InferredType::Unknown, |data| {
+                        self.union_of(&data.lower, &mut visiting)
+                    })
+            }
+            demanded => demanded,
+        }
+    }
+
     /// Union of the given bounds, or `Unknown` when there are none.
     fn union_of(&self, bounds: &[Ty], visiting: &mut Vec<TyVarId>) -> InferredType {
         if bounds.is_empty() {

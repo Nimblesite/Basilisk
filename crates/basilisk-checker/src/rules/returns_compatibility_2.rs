@@ -109,7 +109,8 @@ fn check_function(
         .iter()
         .filter(|stmt| stmt.has_value)
         .for_each(|stmt| {
-            if let ReturnVerdict::Mismatch(inferred_type) = judge_return(judge, stmt, &declared_type)
+            if let ReturnVerdict::Mismatch(inferred_type) =
+                judge_return(judge, stmt, &declared_type)
             {
                 out.push(make_diagnostic(
                     stmt,

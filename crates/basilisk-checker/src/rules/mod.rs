@@ -154,6 +154,8 @@ pub(crate) mod redundant_annotation;
 pub(crate) mod returns_compatibility;
 pub(crate) mod returns_compatibility_2;
 pub(crate) mod shared;
+
+pub(crate) use shared::module_types::ModuleTypes;
 pub(crate) mod specialtypes_never;
 pub(crate) mod specialtypes_never_2;
 pub(crate) mod specialtypes_promotions;

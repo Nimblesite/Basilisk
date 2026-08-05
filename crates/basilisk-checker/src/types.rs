@@ -269,6 +269,9 @@ impl InferredType {
     /// checks live in out-of-scope rule modules (see the consolidated map).
     #[must_use]
     pub fn is_assignable_to(&self, other: &InferredType) -> bool {
+        if special_named_assignable(self, other) {
+            return true;
+        }
         match (self, other) {
             // Any is assignable to/from everything (PEP 484).
             // Unknown means we cannot determine the type — assume compatible to avoid false positives.
@@ -309,27 +312,6 @@ impl InferredType {
             )
             // None is always assignable to Optional[T]
             | (InferredType::None_, InferredType::Optional(_)) => true,
-            // `None` satisfies `Hashable` (it defines `__hash__`). Compared
-            // case-insensitively: the [TYPEINF-ANNOTATION-RESOLUTION] cascade
-            // keeps the ABC's real spelling, the legacy annotation parser it
-            // replaces folded it to `Named("hashable")`.
-            (InferredType::None_, InferredType::Named(name))
-                if name.eq_ignore_ascii_case("hashable") =>
-            {
-                true
-            }
-            // `object` is the top type: every value IS an object, so it accepts
-            // anything as a target. In the SOURCE position it stays as
-            // permissive as the gradual `Any` it used to be modelled by —
-            // narrowing an `object`-typed value to a concrete type is how most
-            // `isinstance` code is written, and this level has no flow
-            // information to tell a narrowed use from an unnarrowed one, so
-            // rejecting it here would fire on spec-valid code.
-            (_, InferredType::Named(name)) | (InferredType::Named(name), _)
-                if name == "object" =>
-            {
-                true
-            }
             // PEP 647/742 narrowing returns. Three distinct relations, and the
             // guard-to-guard one must be tested FIRST or the bool relations
             // below would make the two forms interchangeable:
@@ -505,6 +487,46 @@ fn callable_params_assignable(source: &[InferredType], target: &[InferredType]) 
         .iter()
         .zip(target_prefix.iter())
         .all(|(source_param, target_param)| target_param.is_assignable_to(source_param))
+}
+
+/// Relations a `Named` leaf settles outright, hoisted ahead of the main
+/// assignability match — every one only ever ANSWERS `true`, never rejects:
+///
+/// * `object` is the top type: every value IS an object, so it accepts
+///   anything as a target, and in the SOURCE position it stays as permissive
+///   as the gradual `Any` it used to be modelled by — narrowing an
+///   `object`-typed value to a concrete type is how most `isinstance` code is
+///   written, and this level has no flow information to tell a narrowed use
+///   from an unnarrowed one, so rejecting it would fire on spec-valid code.
+/// * `None` satisfies `Hashable` (it defines `__hash__`). Compared
+///   case-insensitively: the [TYPEINF-ANNOTATION-RESOLUTION] cascade keeps
+///   the ABC's real spelling, the legacy annotation parser it replaces folded
+///   it to `Named("hashable")`.
+/// * A class object (`type` / `type[X]`) IS callable — calling it constructs
+///   an instance — and when the class itself is gradual (`type` means
+///   `type[Any]`) so is its constructor signature, so it satisfies every
+///   `Callable` target.
+fn special_named_assignable(source: &InferredType, target: &InferredType) -> bool {
+    let is_object = |ty: &InferredType| matches!(ty, InferredType::Named(name) if name == "object");
+    if is_object(source) || is_object(target) {
+        return true;
+    }
+    match (source, target) {
+        (InferredType::None_, InferredType::Named(name)) => name.eq_ignore_ascii_case("hashable"),
+        (InferredType::Named(name), InferredType::Callable(_)) => {
+            name == "type" || name.starts_with("type[")
+        }
+        // A `Named` value satisfies a `type` target: the engine's Stage-2
+        // class/instance conflation cannot tell `cls` (a class object) from
+        // an instance, so a nominal value MAY be a class object — rejecting
+        // it would fire on `def f(cls) -> type[Self]: return cls`. Values
+        // positively known NOT to be class objects (`None`, literals,
+        // containers) still mismatch.
+        (InferredType::Named(_), InferredType::Named(target_name)) => {
+            target_name == "type" || target_name.starts_with("type[")
+        }
+        _ => false,
+    }
 }
 
 /// Generator yield/return positions are covariant; the value sent back into

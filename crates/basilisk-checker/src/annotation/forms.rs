@@ -47,9 +47,11 @@ pub(super) fn special_form(
         "tuple" => Some(tuple_type(args, &resolve)),
         "callable" => Some(callable_type(resolver, args, frame)),
         "generator" => Some(generator_type(args, &resolve)),
-        // `type[X]` needs class-object modelling the cascade does not yet do:
+        // `type[X]` is a CLASS OBJECT: the nominal `type` leaf keeps "a value
+        // provably an instance (`None`, `3`) is no class object" enforceable,
+        // while WHICH class stays gradual — `X` is not modelled yet:
         // gradual, so no rule invents a verdict from it.
-        "type" => Some(InferredType::Unknown),
+        "type" => Some(InferredType::Named("type".to_owned())),
         _ => None,
     }
 }

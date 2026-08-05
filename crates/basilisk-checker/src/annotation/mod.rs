@@ -117,6 +117,12 @@ impl<'m> AnnotationResolver<'m> {
     }
 
     /// Resolve an annotation expression to the type it denotes.
+    ///
+    /// NOT memoized: [`Self::resolve_text`] routes standalone-parsed
+    /// expressions through here, and their ranges all start at zero — a
+    /// range-keyed cache would let one text's answer masquerade as
+    /// another's. Only [`Self::resolve_span`], whose keys are module-anchored
+    /// annotation nodes, caches.
     #[must_use]
     pub fn resolve(&self, expr: &Expr) -> InferredType {
         self.eval(expr, &Frame::default())

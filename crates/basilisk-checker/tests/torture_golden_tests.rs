@@ -116,8 +116,28 @@ fn recursive_bases() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
+fn none_class_objects() -> Result<(), Box<dyn std::error::Error>> {
+    assert_case_golden("none_class_objects.py")
+}
+
+#[test]
+fn scope_shadowing() -> Result<(), Box<dyn std::error::Error>> {
+    assert_case_golden("scope_shadowing.py")
+}
+
+#[test]
+fn ternary_narrowing() -> Result<(), Box<dyn std::error::Error>> {
+    assert_case_golden("ternary_narrowing.py")
+}
+
+#[test]
 fn tuple_index() -> Result<(), Box<dyn std::error::Error>> {
     assert_case_golden("tuple_index.py")
+}
+
+#[test]
+fn typeddict_transitive() -> Result<(), Box<dyn std::error::Error>> {
+    assert_case_golden("typeddict_transitive.py")
 }
 
 #[test]

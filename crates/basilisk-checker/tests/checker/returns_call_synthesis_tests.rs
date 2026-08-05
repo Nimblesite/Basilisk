@@ -12,7 +12,7 @@ use super::common::*;
 
 /// Both return-mismatch rules judge the same statement; either firing is a
 /// catch, and neither firing is silence.
-fn return_messages<'a>(diags: &'a [basilisk_checker::Diagnostic]) -> Vec<&'a str> {
+fn return_messages(diags: &[basilisk_checker::Diagnostic]) -> Vec<&str> {
     let mut msgs = messages_for(diags, "returns_compatibility");
     msgs.extend(messages_for(diags, "returns_compatibility_2"));
     msgs

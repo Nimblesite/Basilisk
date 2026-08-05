@@ -20,7 +20,7 @@ use std::collections::{HashMap, HashSet};
 
 use basilisk_resolver::{ResolvedModule, Span};
 use ruff_python_ast::visitor::{walk_body, walk_expr, walk_stmt, Visitor};
-use ruff_python_ast::{Expr, Stmt, StmtClassDef, StmtFunctionDef};
+use ruff_python_ast::{Expr, ExprCall, Stmt, StmtClassDef, StmtFunctionDef};
 use ruff_text_size::Ranged;
 
 use crate::annotation::AnnotationResolver;
@@ -44,13 +44,25 @@ pub(crate) struct ModuleOracle<'m> {
     /// OBJECT, not an instance, and the engine's Stage-2 class/instance
     /// conflation must not let it masquerade as one.
     class_names: HashSet<String>,
+    /// Every `Call` expression in every expression position, in source order
+    /// (outer call before its nested calls) — THE call traversal every
+    /// call-shaped rule rides ([NARROWPLAN-CALLSITES]), collected by the same
+    /// walk that indexes expressions so no rule pays a walk of its own.
+    calls: Vec<&'m ExprCall>,
+    /// Memoized synthesis per span. Several rules judge the SAME expression
+    /// (both return rules share every `return` span; assignment and
+    /// redundancy share every RHS; every call argument is seen by more than
+    /// one pass), and each un-memoized query pays a scope-overlay clone plus
+    /// a solver run — the dominant per-file cost once every rule rides the
+    /// engine ([CHKARCH-TESTING-BENCH-RATCHET]).
+    synth_cache: RefCell<HashMap<(u32, u32), Option<InferredType>>>,
 }
 
 /// One function's lexical scope: the range it spans and the parameter
 /// bindings visible inside it.
 struct FunctionScope {
     range: Span,
-    bindings: HashMap<String, Ty>,
+    bindings: std::sync::Arc<HashMap<String, Ty>>,
 }
 
 impl<'m> ModuleOracle<'m> {
@@ -70,6 +82,7 @@ impl<'m> ModuleOracle<'m> {
             class_attributes: HashMap::new(),
             class_names: HashSet::new(),
             class_stack: Vec::new(),
+            calls: Vec::new(),
         };
         collector.collect_globals(&parsed.ast.body);
         walk_body(&mut collector, &parsed.ast.body);
@@ -80,6 +93,8 @@ impl<'m> ModuleOracle<'m> {
             expressions: collector.expressions,
             scopes: collector.scopes,
             class_names: collector.class_names,
+            calls: collector.calls,
+            synth_cache: RefCell::new(HashMap::new()),
         })
     }
 
@@ -88,12 +103,29 @@ impl<'m> ModuleOracle<'m> {
         self.expressions.get(&(span.start, span.end)).copied()
     }
 
+    /// Every `Call` expression in every expression position, in source order —
+    /// the one call traversal ([NARROWPLAN-CALLSITES]).
+    pub(crate) fn calls(&self) -> &[&'m ExprCall] {
+        &self.calls
+    }
+
     /// Synthesize the type of the expression at `span`, seen from its own
     /// lexical scope. `None` when no expression occupies the span; a bare
     /// name that denotes a module class answers `None` too — the value is the
     /// class OBJECT, which the engine's instance-conflating `Named` cannot
     /// represent without inventing errors on `x: type[C] = C`.
     pub(crate) fn synth_span(&self, span: Span) -> Option<InferredType> {
+        let key = (span.start, span.end);
+        if let Some(hit) = self.synth_cache.borrow().get(&key) {
+            return hit.clone();
+        }
+        let answer = self.synth_span_uncached(span);
+        let _ = self.synth_cache.borrow_mut().insert(key, answer.clone());
+        answer
+    }
+
+    /// The un-memoized synthesis behind [`ModuleOracle::synth_span`].
+    fn synth_span_uncached(&self, span: Span) -> Option<InferredType> {
         let expr = self.expr(span)?;
         if let Expr::Name(name) = expr {
             if self.class_names.contains(name.id.as_str()) {
@@ -131,7 +163,7 @@ impl<'m> ModuleOracle<'m> {
             .filter(|scope| scope.range.contains_offset(offset));
         let mut depth = 0;
         for scope in containing {
-            engine.push_scope_with(scope.bindings.clone());
+            engine.push_scope_shared(std::sync::Arc::clone(&scope.bindings));
             depth += 1;
         }
         depth
@@ -145,6 +177,30 @@ fn pop_overlays(engine: &mut BidirEngine, depth: usize) {
     }
 }
 
+/// Mask every name bound by an assignment target — plain names, and names
+/// inside tuple/list/starred unpacking.
+fn mask_target_names(target: &Expr, bindings: &mut HashMap<String, Ty>) {
+    match target {
+        Expr::Name(name) => {
+            let _ = bindings
+                .entry(name.id.to_string())
+                .or_insert_with(Ty::unknown);
+        }
+        Expr::Tuple(tuple) => {
+            for element in &tuple.elts {
+                mask_target_names(element, bindings);
+            }
+        }
+        Expr::List(list) => {
+            for element in &list.elts {
+                mask_target_names(element, bindings);
+            }
+        }
+        Expr::Starred(starred) => mask_target_names(&starred.value, bindings),
+        _ => {}
+    }
+}
+
 /// Walks the module once: indexes every expression, records function scopes
 /// with their parameter bindings, and gathers module-level globals.
 struct Collector<'m, 'r> {
@@ -155,18 +211,40 @@ struct Collector<'m, 'r> {
     class_attributes: HashMap<String, HashMap<String, InferredType>>,
     class_names: HashSet<String>,
     class_stack: Vec<String>,
+    calls: Vec<&'m ExprCall>,
 }
 
 impl<'m> Collector<'m, '_> {
-    /// Bind module-level `def`s and `class`es into the engine's global scope.
+    /// Bind module-level `def`s, `class`es and `name: T` declarations into
+    /// the engine's global scope.
     fn collect_globals(&mut self, body: &'m [Stmt]) {
         for stmt in body {
             match stmt {
                 Stmt::FunctionDef(def) => self.bind_function(def),
                 Stmt::ClassDef(def) => self.bind_class(def),
+                Stmt::AnnAssign(assign) => self.bind_module_variable(assign),
                 _ => {}
             }
         }
+    }
+
+    /// A module-level `name: T` declaration binds the name to its DECLARED
+    /// type — the annotation is the module's own statement of what the name
+    /// holds, so every later reference carries it
+    /// ([TYPEINF-ANNOTATION-RESOLUTION]). An explicit `name: TypeAlias = …`
+    /// defines an ALIAS, not a value — binding it as one would type
+    /// `MyAlias()` as an instance of the marker.
+    fn bind_module_variable(&mut self, assign: &'m ruff_python_ast::StmtAnnAssign) {
+        let Expr::Name(target) = assign.target.as_ref() else {
+            return;
+        };
+        let resolved = self.resolver.resolve(&assign.annotation);
+        if matches!(&resolved, InferredType::Named(name) if name == "TypeAlias") {
+            return;
+        }
+        let _ = self
+            .globals
+            .insert(target.id.to_string(), Ty::from_inferred(&resolved));
     }
 
     /// A module function becomes a `Callable` global — but only an
@@ -246,27 +324,97 @@ impl<'m> Collector<'m, '_> {
     fn enter_function(&mut self, stmt: &'m Stmt, def: &'m StmtFunctionDef) {
         self.scopes.push(FunctionScope {
             range: Span::from(def.range),
-            bindings: self.function_bindings(def),
+            bindings: std::sync::Arc::new(self.function_bindings(def)),
         });
         walk_stmt(self, stmt);
     }
 
     /// Parameter name → declared type for every annotated parameter, with the
-    /// enclosing class bound to an unannotated leading `self`/`cls`.
-    fn function_bindings(&self, def: &StmtFunctionDef) -> HashMap<String, Ty> {
-        let mut bindings: HashMap<String, Ty> = def
-            .parameters
-            .iter_non_variadic_params()
-            .filter_map(|param| {
-                let annotation = param.parameter.annotation.as_deref()?;
-                Some((
-                    param.parameter.name.to_string(),
-                    Ty::from_inferred(&self.resolver.resolve(annotation)),
-                ))
-            })
-            .collect();
+    /// enclosing class bound to an unannotated leading `self`/`cls` — laid
+    /// over a mask for every name the body ASSIGNS. A function-local binding
+    /// SHADOWS a same-named module global; without the mask, `v1 = …` inside
+    /// a function would read the module's `v1: SomeType` and answer with the
+    /// wrong symbol's type.
+    fn function_bindings(&self, def: &'m StmtFunctionDef) -> HashMap<String, Ty> {
+        let mut bindings: HashMap<String, Ty> = HashMap::new();
+        self.mask_local_assignments(&def.body, &mut bindings);
+        // EVERY parameter shadows — an unannotated one to `Unknown`, never to
+        // a same-named module global.
+        for param in def.parameters.iter_non_variadic_params() {
+            let ty = param
+                .parameter
+                .annotation
+                .as_deref()
+                .map_or_else(Ty::unknown, |annotation| {
+                    Ty::from_inferred(&self.resolver.resolve(annotation))
+                });
+            let _ = bindings.insert(param.parameter.name.to_string(), ty);
+        }
+        for variadic in [
+            def.parameters.vararg.as_deref(),
+            def.parameters.kwarg.as_deref(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            let _ = bindings.insert(variadic.name.to_string(), Ty::unknown());
+        }
         self.bind_receiver(def, &mut bindings);
         bindings
+    }
+
+    /// Mask every name `body` assigns: an annotated local carries its
+    /// declared type, everything else is `Unknown` — never the module
+    /// global it shadows. Nested `def`/`class` bodies are their own scopes
+    /// and are not walked.
+    fn mask_local_assignments(&self, body: &'m [Stmt], bindings: &mut HashMap<String, Ty>) {
+        for stmt in body {
+            match stmt {
+                Stmt::AnnAssign(assign) => {
+                    if let Expr::Name(target) = assign.target.as_ref() {
+                        let _ = bindings.insert(
+                            target.id.to_string(),
+                            Ty::from_inferred(&self.resolver.resolve(&assign.annotation)),
+                        );
+                    }
+                }
+                Stmt::Assign(assign) => {
+                    for target in &assign.targets {
+                        mask_target_names(target, bindings);
+                    }
+                }
+                Stmt::AugAssign(assign) => mask_target_names(&assign.target, bindings),
+                Stmt::For(for_stmt) => {
+                    mask_target_names(&for_stmt.target, bindings);
+                    self.mask_local_assignments(&for_stmt.body, bindings);
+                    self.mask_local_assignments(&for_stmt.orelse, bindings);
+                }
+                Stmt::While(while_stmt) => {
+                    self.mask_local_assignments(&while_stmt.body, bindings);
+                    self.mask_local_assignments(&while_stmt.orelse, bindings);
+                }
+                Stmt::If(if_stmt) => {
+                    self.mask_local_assignments(&if_stmt.body, bindings);
+                    for clause in &if_stmt.elif_else_clauses {
+                        self.mask_local_assignments(&clause.body, bindings);
+                    }
+                }
+                Stmt::With(with_stmt) => {
+                    for item in &with_stmt.items {
+                        if let Some(vars) = item.optional_vars.as_deref() {
+                            mask_target_names(vars, bindings);
+                        }
+                    }
+                    self.mask_local_assignments(&with_stmt.body, bindings);
+                }
+                Stmt::Try(try_stmt) => {
+                    self.mask_local_assignments(&try_stmt.body, bindings);
+                    self.mask_local_assignments(&try_stmt.orelse, bindings);
+                    self.mask_local_assignments(&try_stmt.finalbody, bindings);
+                }
+                _ => {}
+            }
+        }
     }
 
     /// Bind an unannotated leading `self`/`cls` to the enclosing class: both
@@ -311,6 +459,9 @@ impl<'m> Visitor<'m> for Collector<'m, '_> {
         let _ = self
             .expressions
             .insert((range.start().to_u32(), range.end().to_u32()), expr);
+        if let Expr::Call(call) = expr {
+            self.calls.push(call);
+        }
         walk_expr(self, expr);
     }
 }

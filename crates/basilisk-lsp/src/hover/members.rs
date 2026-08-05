@@ -95,7 +95,7 @@ fn local_member_hover(
                     })
             })
     })?;
-    let signature = crate::util::format_type_signature(&hit, &resolved.source);
+    let signature = crate::util::format_type_signature(&hit, resolved);
     let docstring = match hit {
         crate::util::SymbolHit::Function(func) => func.docstring.clone(),
         _ => None,

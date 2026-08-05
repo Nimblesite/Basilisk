@@ -161,35 +161,23 @@ pub(crate) fn receiver_type_name(
     // Never render the type to a display string and look the string up — that
     // keyed `s = "abc"` on `LiteralString` and `xs = [1, 2]` on `list[int]`,
     // neither of which is a class, so both offered nothing (GitHub #389).
-    let inferred = receiver_inferred_type(rhs_kind?, rhs_span, source);
+    let _ = rhs_kind?;
+    let inferred = receiver_inferred_type(resolved, rhs_span);
     basilisk_checker::class_naming::class_name_of_type(&inferred)
         .or_else(|| call_return_type(resolved, rhs_span).map(|name| (name, false)))
 }
 
-/// The inferred type of a receiver's right-hand side.
-///
-/// The `RhsKind` table answers first, exactly as the display path does, and the
-/// shared bidirectional engine fills what the table cannot see — method calls,
-/// subscripts, arithmetic ([NARROWPLAN-CHECKLIST] Stage 2: one inference behind
-/// diagnostics, hover, completions, and inlay hints).
+/// The inferred type of a receiver's right-hand side, from the module's
+/// span-indexed oracle — the SAME engine behind checker diagnostics
+/// ([NARROWPLAN-INTEGRATION] Step 5: one inference behind diagnostics, hover,
+/// completions, and inlay hints).
 fn receiver_inferred_type(
-    rhs: &basilisk_resolver::RhsKind,
+    resolved: &ResolvedModule,
     span: Option<Span>,
-    source: &str,
 ) -> basilisk_checker::types::InferredType {
-    use basilisk_checker::types::InferredType;
-    use basilisk_resolver::RhsKind;
-    // A known call carries the type of what it returns.
-    if let RhsKind::KnownCall(result) = rhs {
-        return receiver_inferred_type(result, span, source);
-    }
-    match basilisk_checker::inference::infer_rhs(rhs) {
-        // The table cannot see this expression; synthesize it from source.
-        InferredType::Unknown => span_text(span, source).map_or(InferredType::Unknown, |snippet| {
-            basilisk_checker::expr_type::infer_expression_source(&snippet)
-        }),
-        typed => typed,
-    }
+    let types = basilisk_checker::expr_type::ModuleSpanTypes::build(resolved);
+    span.and_then(|span| types.type_at(span))
+        .unwrap_or(basilisk_checker::types::InferredType::Unknown)
 }
 
 /// The declared return type of the call that produced a variable.

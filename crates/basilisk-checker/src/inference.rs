@@ -1,59 +1,18 @@
-//! ⚠️ LEGACY — condemned under [TYPEINF-LEGACY]. See
-//! docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-LEGACY.
+//! The [TYPEINF-REQUIRED] / [TYPEINF-EXCEEDS] determination predicate.
 //!
-//! Syntactic [`RhsKind`] classification. NOT the inference engine — the
-//! engine is [`crate::bidir::BidirEngine`] ([TYPEINF-ALGO], [TYPEINF-TARGET]),
-//! and no new code may call into this module. Existing consumers are deleted
-//! rule-by-rule per the demolition order in [NARROWPLAN-INTEGRATION]
-//! (docs/plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-INTEGRATION);
-//! this module dies with its last caller. Still referenced for
-//! [TYPEINF-VARS-SIMPLE] literal behavior and the [TYPEINF-REQUIRED] /
-//! [TYPEINF-EXCEEDS] predicates until then.
+//! NOT the inference engine — the engine is [`crate::bidir::BidirEngine`]
+//! ([TYPEINF-ALGO], [TYPEINF-TARGET]). The one predicate here reads the
+//! resolver's syntactic [`RhsKind`] classification because its question is
+//! syntactic: "does this value's SHAPE alone pin its declared type?" — the
+//! gate the missing-annotation rules (BSK-0001/BSK-0002) apply before
+//! demanding an annotation. Everything type-valued moved to the engine per
+//! [NARROWPLAN-INTEGRATION]; the last shape mapping (`infer_rhs`) is deleted.
 
-use crate::types::InferredType;
 use basilisk_resolver::RhsKind;
 
-/// Infers the type of a right-hand-side expression.
-#[must_use]
-pub fn infer_rhs(rhs: &RhsKind) -> InferredType {
-    match rhs {
-        RhsKind::IntLiteral => InferredType::Int,
-        RhsKind::FloatLiteral => InferredType::Float,
-        // PEP 675: a literal expression is provably a LiteralString. Plain
-        // `str` remains reserved for dynamic string values, preserving that
-        // distinction through container inference.
-        RhsKind::StrLiteral => InferredType::LiteralString,
-        RhsKind::BoolLiteral => InferredType::Bool,
-        RhsKind::BytesLiteral => InferredType::Bytes,
-        RhsKind::NoneValue => InferredType::None_,
-        RhsKind::EmptyList => InferredType::List(Box::new(InferredType::Never)),
-        RhsKind::EmptyDict => {
-            InferredType::Dict(Box::new(InferredType::Never), Box::new(InferredType::Never))
-        }
-        RhsKind::List(elements) => crate::collection_inference::infer_list_type(elements),
-        RhsKind::Set(elements) => crate::collection_inference::infer_set_type(elements),
-        RhsKind::Dict(pairs) => crate::collection_inference::infer_dict_type(pairs),
-        RhsKind::Tuple(elements) => crate::collection_inference::infer_tuple_type(elements),
-        // `KnownCall` feeds inferred-type *display* (hover, inlay hints — #253);
-        // checker semantics deliberately keep call results Unknown, like `CallExpr`.
-        RhsKind::CallExpr | RhsKind::KnownCall(_) | RhsKind::TypeCall | RhsKind::Other => {
-            InferredType::Unknown
-        }
-        RhsKind::Lambda => {
-            // Lambda expressions have type Callable[..., Unknown] since we don't know
-            // parameter types or return type without analyzing the lambda body
-            InferredType::Callable(crate::types::CallableInfo {
-                // The gradual tail: the lambda's parameters are not pinned here.
-                param_types: crate::types::gradual_params(Vec::new()),
-                return_type: Box::new(InferredType::Unknown),
-            })
-        }
-    }
-}
-
-/// Returns `true` when the CURRENT engine fully determines a usable declared
-/// type from this RHS alone — i.e. [`infer_rhs`] produces a type with no
-/// `Unknown`/`Never` component and no widening guess.
+/// Returns `true` when the value's shape alone fully determines a usable
+/// declared type — a type with no `Unknown`/`Never` component and no
+/// widening guess.
 ///
 /// Implements [TYPEINF-EXCEEDS-REQUIRED]: a missing-annotation rule
 /// (BSK-0001/BSK-0002) must never fire where this returns `true`, and must

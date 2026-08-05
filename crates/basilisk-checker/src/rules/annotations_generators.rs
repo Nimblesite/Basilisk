@@ -28,7 +28,7 @@ use basilisk_resolver::{FunctionInfo, ResolvedModule};
 
 use super::annotations_generators_helpers::{
     base_type_name, check_yield_from, extract_return_type_from_generator, extract_yield_type,
-    ASYNC_GENERATOR_TYPES, CODE, SYNC_GENERATOR_TYPES,
+    OuterAnnotation, ASYNC_GENERATOR_TYPES, CODE, SYNC_GENERATOR_TYPES,
 };
 use super::Rule;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic};
@@ -137,8 +137,8 @@ impl Rule for GeneratorReturnTypeViolation {
             if !func.is_generator || func.yield_exprs.is_empty() {
                 continue;
             }
-            check_yield_types(func, module, &judge, diagnostics);
-            check_return_in_generator(func, module, &judge, diagnostics);
+            check_yield_types(func, module, resolver, &judge, diagnostics);
+            check_return_in_generator(func, module, resolver, &judge, diagnostics);
         }
     }
 }
@@ -147,6 +147,7 @@ impl Rule for GeneratorReturnTypeViolation {
 fn check_yield_types(
     func: &FunctionInfo,
     module: &ResolvedModule,
+    resolver: &crate::annotation::AnnotationResolver<'_>,
     judge: &TypeJudge<'_, '_>,
     out: &mut Vec<Diagnostic>,
 ) {
@@ -174,7 +175,11 @@ fn check_yield_types(
         return;
     };
 
-    let declared_yield_type = InferredType::from_annotation(&yield_type_str);
+    // The parameter is a type expression the CASCADE evaluates — the legacy
+    // parser folded class case (`C` → `c`), which no judgment could ground.
+    let declared_yield_type = resolver
+        .resolve_text(&yield_type_str)
+        .unwrap_or(InferredType::Unknown);
 
     // Skip if the declared yield type is Unknown/Any - can't check.
     if matches!(
@@ -190,8 +195,11 @@ fn check_yield_types(
                 func,
                 yield_expr,
                 &declared_yield_type,
-                ann_text,
-                base,
+                &OuterAnnotation {
+                    text: ann_text,
+                    base,
+                },
+                judge,
                 module,
                 out,
             );
@@ -235,6 +243,7 @@ fn check_yield_types(
 fn check_return_in_generator(
     func: &FunctionInfo,
     module: &ResolvedModule,
+    resolver: &crate::annotation::AnnotationResolver<'_>,
     judge: &TypeJudge<'_, '_>,
     out: &mut Vec<Diagnostic>,
 ) {
@@ -257,7 +266,10 @@ fn check_return_in_generator(
         return;
     };
 
-    let declared_return_type = InferredType::from_annotation(&return_type_str);
+    // Same cascade evaluation as the yield parameter — case preserved.
+    let declared_return_type = resolver
+        .resolve_text(&return_type_str)
+        .unwrap_or(InferredType::Unknown);
 
     if matches!(
         declared_return_type,
@@ -299,9 +311,7 @@ fn check_return_in_generator(
             continue;
         }
 
-        if !judge.fits(&inferred, &declared_return_type)
-            && judge.judgeable(&declared_return_type)
-        {
+        if !judge.fits(&inferred, &declared_return_type) && judge.judgeable(&declared_return_type) {
             out.push(error_diagnostic_owned(
                 CODE.clone(),
                 format!(

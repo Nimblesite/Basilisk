@@ -217,50 +217,10 @@ fn declared_target_grounded(resolver: &AnnotationResolver<'_>, declared: &Inferr
     }
 }
 
-/// Nominal-subclass acceptance through the module's registered hierarchy:
-/// `x: Base = Derived()` and `x: int = MyInt()` are assignments
-/// `is_assignable_to` alone cannot bless because it has no class table
-/// ([NARROWPLAN-INTEGRATION]: nominal verdicts route through
-/// [`SubtypingContext`]). Union sides decompose exactly as assignability does.
-fn nominal_subclass_assignable(
-    inferred: &InferredType,
-    declared: &InferredType,
-    subtyping: &SubtypingContext,
-) -> bool {
-    match (inferred, declared) {
-        (InferredType::Union(arms), _) => arms.iter().all(|arm| {
-            arm.is_assignable_to(declared) || nominal_subclass_assignable(arm, declared, subtyping)
-        }),
-        (_, InferredType::Union(arms)) => arms.iter().any(|arm| {
-            inferred.is_assignable_to(arm) || nominal_subclass_assignable(inferred, arm, subtyping)
-        }),
-        (InferredType::Optional(inner), _) => {
-            nominal_subclass_assignable(inner, declared, subtyping)
-                && InferredType::None_.is_assignable_to(declared)
-        }
-        (_, InferredType::Optional(inner)) => {
-            nominal_subclass_assignable(inferred, inner, subtyping)
-        }
-        _ => match (nominal_leaf(inferred), nominal_leaf(declared)) {
-            (Some(sub), Some(sup)) => subtyping.is_subtype(&sub, &sup),
-            _ => false,
-        },
-    }
-}
-
-/// The name a type participates in the nominal walk under — a class's base
-/// spelling, or the builtin name of a concrete leaf.
-fn nominal_leaf(ty: &InferredType) -> Option<String> {
-    match ty {
-        InferredType::Named(name) => Some(name.split('[').next().unwrap_or(name).to_owned()),
-        InferredType::Int => Some("int".to_owned()),
-        InferredType::Str | InferredType::LiteralString => Some("str".to_owned()),
-        InferredType::Float => Some("float".to_owned()),
-        InferredType::Bool => Some("bool".to_owned()),
-        InferredType::Bytes => Some("bytes".to_owned()),
-        _ => None,
-    }
-}
+// The nominal-subclass acceptance is the ONE shared judgment in
+// `rules/shared/judge.rs` ([NARROWPLAN-INTEGRATION]: nominal verdicts route
+// through `SubtypingContext`; one implementation, not two).
+use crate::rules::shared::judge::nominal_subclass_assignable;
 
 /// Raw parameter-annotation texts for the enclosing function, consumed by the
 /// structural callable-subtyping rescue.
@@ -401,12 +361,26 @@ fn check_vars(
             // cross-name assignment (`v: A = b` where `b: B`). Genuine mismatches
             // still fire. Only reachable when the RHS resolves to a TypedDict-typed
             // name (e.g. a parameter), so module-level checks are unaffected.
+            // The grounded-target abstention shields only NEWLY-visible
+            // surfaces (calls, attributes, unannotated names) — surfaces the
+            // rule always judged (literals, displays, annotated-parameter
+            // names) keep their full judgment even against a target the
+            // module cannot ground, e.g. `x: Literal[Answer.Yes] = a`.
+            let judged_before_engine = legacy_inference_surface(var, oracle, params);
             if let (Some(decl), Some(inf)) = (&declared_nominal, nominal_name(&inferred_type)) {
                 if let (Some(target), Some(src)) = (
                     skip.typeddict_schemas.get(decl.as_str()),
                     skip.typeddict_schemas.get(inf.as_str()),
                 ) {
-                    return if typeddict_struct::typeddict_assignable(src, target) {
+                    // A schema rejection is only evidence on a surface the
+                    // pre-engine rule judged (an annotated-parameter name) —
+                    // a newly-visible name abstains, because the schema
+                    // comparison does not model every consistency rule
+                    // (extra-items, closedness) the spec allows
+                    // ([CHKARCH-CONFORMANCE-MODE]).
+                    return if typeddict_struct::typeddict_assignable(src, target)
+                        || !judged_before_engine
+                    {
                         None
                     } else {
                         Some((
@@ -419,16 +393,12 @@ fn check_vars(
                 }
             }
 
-            // The grounded-target abstention shields only NEWLY-visible
-            // surfaces (calls, attributes, unannotated names) — surfaces the
-            // rule always judged (literals, displays, annotated-parameter
-            // names) keep their full judgment even against a target the
-            // module cannot ground, e.g. `x: Literal[Answer.Yes] = a`.
-            let judged_before_engine = legacy_inference_surface(var, oracle, params);
             if inferred_type.is_assignable_to(&declared_type)
                 || literal_collection_assignable(var, oracle, &inferred_type, &declared_type, skip)
                 || enum_expansion_assignable(&inferred_type, &declared_type, &skip.enum_members)
                 || (!judged_before_engine && !declared_target_judgeable(resolver, &declared_type))
+                || (!judged_before_engine && resolver.is_structural_target(&inferred_type))
+                || (!judged_before_engine && inferred_is_typeddict(&inferred_type, skip))
                 || nominal_subclass_assignable(&inferred_type, &declared_type, subtyping)
             {
                 None
@@ -538,6 +508,15 @@ fn nominal_name(ty: &InferredType) -> Option<String> {
         InferredType::Named(name) => Some(name.to_ascii_lowercase()),
         _ => None,
     }
+}
+
+/// Is the value a `TypedDict` the module declared (transitively — a subclass
+/// of one is one)? A `TypedDict` fits by SCHEMA, including extra-items and
+/// closedness rules the nominal judgment does not model, so a newly-visible
+/// `TypedDict` value abstains rather than misjudging
+/// ([CHKARCH-CONFORMANCE-MODE]).
+fn inferred_is_typeddict(inferred: &InferredType, skip: &SkipNames) -> bool {
+    nominal_name(inferred).is_some_and(|name| skip.typeddict_schemas.contains_key(name.as_str()))
 }
 
 /// [`nominal_name`] with any subscript stripped — `Pair[int]` keys as `pair`.

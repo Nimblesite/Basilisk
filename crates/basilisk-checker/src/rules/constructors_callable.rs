@@ -51,6 +51,16 @@ impl Rule for ConstructorCallableMisuse {
     fn check(
         &self,
         module: &ResolvedModule,
+        ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
+        super::check_with_own_types(self, module, ctx, diagnostics);
+    }
+
+    fn check_with_types(
+        &self,
+        module: &ResolvedModule,
+        types: &super::shared::module_types::ModuleTypes<'_>,
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
@@ -68,12 +78,17 @@ impl Rule for ConstructorCallableMisuse {
         }
         let typevars = basilisk_resolver::collect_names(&module.typevar_calls);
 
-        basilisk_resolver::visit_calls(&parsed.ast.body, &mut |call| {
+        // Every call in every expression position, from the module's one
+        // shared walk ([NARROWPLAN-CALLSITES]).
+        let Some(oracle) = types.oracle() else {
+            return;
+        };
+        for call in oracle.calls() {
             let Expr::Name(callee) = call.func.as_ref() else {
-                return;
+                continue;
             };
             let Some(class_name) = var_to_class.get(callee.id.as_str()) else {
-                return;
+                continue;
             };
             let signatures = build_converted_callables(class_name, &class_map, &method_map, source);
             validate_call(
@@ -84,7 +99,7 @@ impl Rule for ConstructorCallableMisuse {
                 &module.path,
                 diagnostics,
             );
-        });
+        }
     }
 }
 

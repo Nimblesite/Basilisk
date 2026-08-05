@@ -1299,26 +1299,76 @@ before the stage is declared closed:
   `infer_yield_type`/`infer_call_result` and
   `inference::literal_collection_assignable_to` (plus both private helpers) are
   deleted. Fixes the return half of #378.
-- [ ] **Step 3 — `calls_argument_type` judges arguments through the engine +
-  `SubtypingContext`**, deleting the syntactic-shape comparison. Fixes #356
-  (false positives on valid `str.join` list displays AND a missed genuine
-  error).
-- [ ] **Step 4 — one engine-driven traversal visits every `Call` node with a
+- [x] **Step 3 — `calls_argument_type` judges arguments through the engine +
+  `SubtypingContext`**, deleting the syntactic-shape comparison. Landed: every
+  argument is typed by the shared `ModuleOracle` and judged by
+  `rules/shared/judge.rs` (`TypeJudge::fits` routes nominal verdicts through
+  `SubtypingContext`), with `deeply_grounded` abstaining on any annotation
+  containing a `TypeVar` leaf. The `ScopedTypes` mini-inferrer
+  (`arg_types.rs`, 119 lines), the `arg_rhs_mismatch` `RhsKind` shape table,
+  and `is_type_call` source-text sniffing are deleted;
+  `container_mismatch` now reads the engine's `InferredType` instead of
+  `RhsKind`. Three engine gaps the migration exposed were fixed in the
+  engine, not patched in the rule: the oracle now binds module-level
+  `name: T` declarations into its global scope, bare `type` resolves to the
+  nominal `type` leaf instead of `Any` (so `register(None)` with `cls: type`
+  still fires), and `is_assignable_to` learned that a class object satisfies
+  every `Callable` target. Fixes #356 (false positives on valid `str.join`
+  list displays AND a missed genuine error).
+- [x] **Step 4 — one engine-driven traversal visits every `Call` node with a
   resolved callee**, not just outermost-expression positions
   ([NARROWPLAN-CALLSITES](#NARROWPLAN-CALLSITES)). The issues this step was
   opened for — #381, #382, and the position half of #335 — shipped ahead of it
   via resolver-side every-position collection, pinned green by
   `tests/checker/calls_expression_position_tests.rs`,
   `tests/checker/class_body_method_binding_tests.rs`, and
-  `tests/checker/directives_cast_tests.rs`; what remains here is consolidating
-  those per-rule walks onto the one engine traversal.
-- [ ] **Step 5 — `directives_assert_type` / `directives_reveal_type` answer
+  `tests/checker/directives_cast_tests.rs`. The consolidation landed: the
+  `ModuleOracle` walk now collects every `ExprCall` in every expression
+  position (`ModuleOracle::calls()`), and the four rules that each paid their
+  own `visit_calls` AST re-walk — `constructors_call_init`,
+  `constructors_call_new`, `constructors_callable`, and
+  `dataclasses_transform_class` (converter checks) — iterate that shared
+  collection through `check_with_types` instead. `visit_calls` survives only
+  inside the resolver, where `module.calls` is built.
+- [x] **Step 5 — `directives_assert_type` / `directives_reveal_type` answer
   from the hover oracle, byte for byte** (the parked
-  `directives_assert_type_2` comes alive here). Fixes #290 — solved generic
-  parameters surface in hover and diagnostics alike.
-- [ ] **Step 6 — `BSK-0001` consults `param_infer` before demanding an
+  `directives_assert_type_2` comes alive here). Landed structurally: the
+  checker now exposes `expr_type::ModuleSpanTypes` — a public wrapper over
+  the SAME per-module `ModuleTypes`/`BidirEngine` the rules judge with — and
+  every LSP display surface (hover signatures, inlay hints, receiver typing,
+  scope binding) reads from it; the legacy `infer_rhs` shape table and
+  `collection_inference.rs` are DELETED, so hover and diagnostics literally
+  share one oracle and cannot disagree. `directives_assert_type_2` came
+  alive: beyond the resolver's flow-narrowed text comparison, an
+  `assert_type(expr, T)` whose value the resolver could not type is judged by
+  the oracle and fires on a provably disjoint, fully-grounded verdict —
+  `assert_type(make(), str)` with `make() -> int` fires
+  (`tests/checker/directives_assert_type_oracle_tests.rs`, 5 tests), while
+  literal widening, untyped callees, and unsolved generics abstain. PEP 675
+  provenance survives display widening (`Literal["x"]` renders
+  `LiteralString`), pinning the #290 hover regression. Conformance stayed
+  141/141 with 0 FP through the change.
+- [x] **Step 6 — `BSK-0001` consults `param_infer` before demanding an
   annotation the engine can already infer** from body constraints and call
-  sites. Fixes #317.
+  sites. Landed: `missing_parameter_annotation` runs `param_infer` (lazily,
+  once per function, module-level functions only) with globals from the
+  annotation cascade plus imported symbols and call-site argument types
+  synthesized by the shared oracle; a parameter the engine pins to a
+  fully-known type is exempt, everything else keeps firing
+  (`tests/checker/param_infer_exemption_tests.rs`, 4 tests). The solver
+  grew `TyVarStore::resolve_with_inflow` — demand wins, call-site inflow
+  falls back — kept SEPARATE from `resolve` so lambda parameters stay
+  demand-only. Landing the step surfaced five engine gaps, each fixed in
+  the engine: function scopes now MASK every locally-assigned or parameter
+  name (a module `v1: T` no longer leaks into a function's own `v1`),
+  `type(x)` synthesizes a class object and `type[X]` resolves to the
+  nominal `type` leaf (specialtypes_none required errors), ternary
+  narrowing applies `x is [not] None` guards, generator yield/return
+  parameters resolve through the cascade instead of the case-folding
+  legacy parser, and `TypedDict` schema membership closed transitively
+  (with a visited-set walk pinned non-exponential by the #398 hang test).
+  Conformance verified at 141/141, 0 FP, 0 missed against the freshly
+  built binary. Fixes #317.
 - [ ] **Step 7 — text-matching long tail to zero.** Drive
   `grep -rln slice_span crates/basilisk-checker/src/rules | wc -l` from
   **86 to 0**, `RhsKind` (26 files) and `InferredType::from_annotation` over
@@ -1326,12 +1376,28 @@ before the stage is declared closed:
   outright. An annotation is a type expression the engine evaluates — never a
   string a rule slices out of the file. Fixes #379; retires the mechanism
   behind #383.
+  *Measured state after Steps 1–6 landed (2026-08-05): `slice_span` 86 → 81
+  files, `RhsKind` 26 → 22 files, `InferredType::from_annotation` call sites
+  in rules down to 11 across 3 files (`annotations_generators_helpers` send
+  types, `alias_match` ×2, `typeform_check` ×6 — the generator yield/return
+  and yield-from-callee parameters now evaluate through the cascade's
+  `resolve_text`). `text_scan.rs` still has 6 functions with ~44 consumer
+  references (`split_top_level_commas` alone: 27 files). Each remaining file
+  is an individual judgment-preserving rewiring; none is mechanical.*
 - [ ] **Step 8 — `names_unbound` migrates to the walker's all-paths
   divergence analysis**, replacing the last-statement idiom. Fixes #285.
 - [ ] Route all 22 direct `name_subtype`/`is_numeric_subtype` call sites (12
   files) through `subtyping::SubtypingContext` and delete the shims — runs
   alongside steps 3–7. One subtyping implementation. Not two, not
   twenty-two.
+  *Measured state (2026-08-05): 14 call sites across 11 rule files remain;
+  `is_numeric_subtype` already DELEGATES to the one `subtyping::name_subtype`
+  tower core, and the shared `TypeJudge`/`nominal_subclass_assignable`
+  judgment (now the single copy — `assignment_compatibility`'s duplicate was
+  deleted) routes every engine-side nominal verdict through
+  `SubtypingContext`. What remains is threading a context into the 11
+  pre-engine rules so the free-function tower calls become
+  `SubtypingContext::is_subtype` and the shims die.*
 - [ ] Delete every replaced code path **in the change that replaces it**. A
   migration that leaves the legacy path alive alongside the new one is
   incomplete and does not merge.
@@ -1421,6 +1487,15 @@ detached engine.
   `crates/basilisk-checker/tests/torture_golden_tests.rs`, which scores all
   eight cases in-process on every `cargo test` so CI breaks the moment a
   case regresses.
+  **Expanded to twelve cases (2026-08-05)**, each new one measured live by
+  the runner before landing: `scope_shadowing` (function locals shadow
+  same-named module globals — basilisk passes, pyright/ty/pyrefly all
+  produce false positives), `typeddict_transitive` (PEP 728 extra-items
+  consistency through TypedDict inheritance — basilisk passes, mypy ×4 and
+  ty ×3 false positives), `none_class_objects` (`None` value vs `type(None)`
+  class object per the special-types chapter), and `ternary_narrowing`
+  (`x is [not] None` guards narrow conditional-expression arms). All twelve
+  are pinned in-process by `torture_golden_tests.rs`; basilisk stands 12/12.
 - [ ] Build the inference scoreboard harness mirroring `benchmarks/`: pull the
   latest official release of each competitor (pyright, mypy, ty, pyrefly,
   zuban) every run; write scores to a status file immediately and

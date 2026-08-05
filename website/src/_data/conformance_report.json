@@ -1054,6 +1054,7 @@
       "missed": 0,
       "falsePositives": 0,
       "codes": [
+        "calls_argument_type",
         "tuples_index_2"
       ]
     },

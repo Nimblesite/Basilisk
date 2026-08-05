@@ -1,44 +1,14 @@
 //! Implements [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
-//! Type-directed argument resolution for bound built-in method calls.
+//! Type-level argument predicates for bound built-in method calls.
 //!
-//! The resolver classifies a call argument by the *syntactic shape* of its
-//! expression (`RhsKind`): a name is `Other` whatever it was declared to be,
-//! and a display element is `Other` even when its declared type is known. A
-//! rule that matches on those shapes cannot tell a valid `[*p]` (`p: list[str]`)
-//! from an invalid `[1]`, so it must either reject both or accept both
-//! (GitHub #356).
-//!
-//! This module answers the question the shape cannot: the *type* of the
-//! argument expression, resolved through the declared types visible at that
-//! point in the module. Anything it cannot resolve is [`InferredType::Unknown`],
-//! which every compatibility predicate here accepts — an unresolved expression
-//! never manufactures a diagnostic ([CHKARCH-CONFORMANCE-MODE]).
+//! Arguments arrive here already typed by the module's bidirectional engine
+//! ([NARROWPLAN-INTEGRATION] Step 3); these predicates decide what those
+//! types satisfy. Anything the engine could not resolve is
+//! [`InferredType::Unknown`], which every predicate here accepts — an
+//! unresolved expression never manufactures a diagnostic
+//! ([CHKARCH-CONFORMANCE-MODE]).
 
 use crate::types::{InferredType, LiteralValue};
-
-/// The type produced by iterating `container`; `Unknown` when unknowable.
-fn iterated_type(container: &InferredType) -> InferredType {
-    match container {
-        InferredType::List(element) | InferredType::Set(element) => element.as_ref().clone(),
-        InferredType::Dict(key, _) => key.as_ref().clone(),
-        InferredType::Tuple(elements) => elements
-            .iter()
-            .cloned()
-            .fold(InferredType::Never, InferredType::union),
-        InferredType::Str | InferredType::LiteralString => InferredType::Str,
-        InferredType::Generator(yielded, _, _) => yielded.as_ref().clone(),
-        _ => InferredType::Unknown,
-    }
-}
-
-/// The type of a numeric literal.
-fn number_type(number: &ruff_python_ast::Number) -> InferredType {
-    match number {
-        ruff_python_ast::Number::Int(_) => InferredType::Int,
-        ruff_python_ast::Number::Float(_) => InferredType::Float,
-        ruff_python_ast::Number::Complex { .. } => InferredType::Named("complex".to_owned()),
-    }
-}
 
 /// Does `argument` satisfy an `Iterable[str]` / `Iterable[LiteralString]`
 /// parameter such as `str.join`'s?
@@ -72,7 +42,7 @@ pub(crate) fn satisfies_str_iterable(argument: &InferredType) -> bool {
 
 /// Could a value of this type be a `str`? `true` unless it is positively known
 /// to be something else.
-fn may_be_str(element: &InferredType) -> bool {
+pub(super) fn may_be_str(element: &InferredType) -> bool {
     match element {
         InferredType::Int
         | InferredType::Float

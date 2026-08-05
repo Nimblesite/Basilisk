@@ -74,7 +74,7 @@ pub fn infer_parameters(
     let parameters = param_vars
         .into_iter()
         .map(|(name, var)| {
-            let inferred = var.map(|id| solution.vars.resolve(id));
+            let inferred = var.map(|id| solution.vars.resolve_with_inflow(id));
             (name, inferred)
         })
         .collect();
@@ -202,6 +202,11 @@ def f(p):
         let (name, ty) = inferred.parameters.first().expect("one parameter");
         assert_eq!(name, "p");
         let ty = ty.clone().expect("inferred");
+        assert!(
+            !matches!(ty, InferredType::Unknown),
+            "call-site lower bounds must produce a REAL type, not the \
+             vacuously-admitting Unknown"
+        );
         assert!(
             InferredType::Literal(LiteralValue::Int(1)).is_assignable_to(&ty)
                 && InferredType::Literal(LiteralValue::Int(2)).is_assignable_to(&ty),

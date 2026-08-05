@@ -52,6 +52,13 @@ impl<'m, 'a> TypeJudge<'m, 'a> {
             .unwrap_or(InferredType::Unknown)
     }
 
+    /// Evaluate a type expression held only as TEXT through the same
+    /// cascade — alias expansion, class case, shadowing included
+    /// ([TYPEINF-ANNOTATION-RESOLUTION]).
+    pub(crate) fn resolve_annotation_text(&self, text: &str) -> Option<InferredType> {
+        self.resolver.resolve_text(text)
+    }
+
     /// The AST node occupying `span`, if the oracle indexed one.
     pub(crate) fn node(&self, span: Option<Span>) -> Option<&'m Expr> {
         self.oracle.zip(span).and_then(|(o, span)| o.expr(span))
@@ -98,6 +105,44 @@ impl<'m, 'a> TypeJudge<'m, 'a> {
         !self.resolver.is_structural_target(declared) && self.grounded(declared)
     }
 
+    /// Is `inferred` EVIDENCE this judgment may reject on? A structural value
+    /// (a `TypedDict` fits by schema, a `Protocol` by members) and an
+    /// ungrounded nominal leaf (`Self`, an unexpanded `TypeVar`) are
+    /// questions, not answers — rejecting on either fires on spec-valid code
+    /// ([CHKARCH-CONFORMANCE-MODE]).
+    pub(crate) fn evidence(&self, inferred: &InferredType) -> bool {
+        !self.resolver.is_structural_target(inferred) && self.grounded_deep(inferred)
+    }
+
+    /// Every nominal leaf at ANY depth is grounded — the inferred side has no
+    /// abstention downstream, so a doubtful leaf anywhere disqualifies it.
+    fn grounded_deep(&self, ty: &InferredType) -> bool {
+        match ty {
+            InferredType::Named(name) => self.resolver.is_grounded_name(name),
+            InferredType::List(inner)
+            | InferredType::Set(inner)
+            | InferredType::Optional(inner)
+            | InferredType::TypeForm(inner)
+            | InferredType::Guard { inner, .. } => self.grounded_deep(inner),
+            InferredType::Dict(key, value) => self.grounded_deep(key) && self.grounded_deep(value),
+            InferredType::Tuple(items) | InferredType::Union(items) => {
+                items.iter().all(|item| self.grounded_deep(item))
+            }
+            InferredType::Generator(yielded, sent, returned) => {
+                self.grounded_deep(yielded)
+                    && self.grounded_deep(sent)
+                    && self.grounded_deep(returned)
+            }
+            InferredType::Callable(info) => {
+                info.param_types
+                    .iter()
+                    .all(|param| self.grounded_deep(param))
+                    && self.grounded_deep(&info.return_type)
+            }
+            _ => true,
+        }
+    }
+
     /// Every top-level nominal leaf (through unions and optionals) is grounded.
     fn grounded(&self, declared: &InferredType) -> bool {
         match declared {
@@ -130,16 +175,37 @@ pub(crate) fn nominal_subclass_assignable(
             nominal_subclass_assignable(inner, declared, subtyping)
                 && InferredType::None_.is_assignable_to(declared)
         }
-        (_, InferredType::Optional(inner)) => nominal_subclass_assignable(inferred, inner, subtyping),
-        _ => match (nominal_leaf(inferred), nominal_leaf(declared)) {
-            (Some(sub), Some(sup)) => subtyping.is_subtype(&sub, &sup),
-            _ => false,
-        },
+        (_, InferredType::Optional(inner)) => {
+            nominal_subclass_assignable(inferred, inner, subtyping)
+        }
+        // The nominal walk only ARBITRATES across representations — a `Named`
+        // class against a builtin leaf (either direction). Two container
+        // forms already had their structural verdict from
+        // [`InferredType::is_assignable_to`]; re-blessing them under their
+        // bare class name would erase invariance errors.
+        _ if matches!(inferred, InferredType::Named(_))
+            || matches!(declared, InferredType::Named(_)) =>
+        {
+            match (nominal_leaf(inferred), nominal_leaf(declared)) {
+                // `Answer.Yes` IS an `Answer`: a dotted member literal is an
+                // instance of the enum that owns it.
+                (Some(sub), Some(sup)) => {
+                    subtyping.is_subtype(&sub, &sup)
+                        || sub
+                            .strip_prefix(sup.as_str())
+                            .is_some_and(|rest| rest.starts_with('.'))
+                }
+                _ => false,
+            }
+        }
+        _ => false,
     }
 }
 
 /// The name a type participates in the nominal walk under — a class's base
-/// spelling, or the builtin name of a concrete leaf.
+/// spelling, or the builtin name of a concrete leaf. Containers join under
+/// their builtin class so a user class deriving `dict[K, V]` is accepted
+/// where `dict` is declared.
 fn nominal_leaf(ty: &InferredType) -> Option<String> {
     match ty {
         InferredType::Named(name) => Some(name.split('[').next().unwrap_or(name).to_owned()),
@@ -148,6 +214,10 @@ fn nominal_leaf(ty: &InferredType) -> Option<String> {
         InferredType::Float => Some("float".to_owned()),
         InferredType::Bool => Some("bool".to_owned()),
         InferredType::Bytes => Some("bytes".to_owned()),
+        InferredType::List(_) => Some("list".to_owned()),
+        InferredType::Set(_) => Some("set".to_owned()),
+        InferredType::Dict(_, _) => Some("dict".to_owned()),
+        InferredType::Tuple(_) => Some("tuple".to_owned()),
         _ => None,
     }
 }

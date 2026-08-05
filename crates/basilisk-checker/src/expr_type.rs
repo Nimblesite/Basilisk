@@ -13,7 +13,71 @@
 //! [`is_fully_known`] and [`display_widened`] are the render contract, not
 //! inference: what may be shown at all, and in what form.
 
+use basilisk_resolver::{ResolvedModule, Span};
+
 use crate::types::InferredType;
+
+/// The module's span-indexed type oracle, exposed for display surfaces
+/// (hover, inlay hints, completions) so a rendered type and a diagnostic can
+/// never disagree — both read the SAME per-module [`crate::bidir::BidirEngine`]
+/// the checker rules judge with ([NARROWPLAN-INTEGRATION] Step 5).
+pub struct ModuleSpanTypes<'m> {
+    types: crate::rules::ModuleTypes<'m>,
+}
+
+impl std::fmt::Debug for ModuleSpanTypes<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ModuleSpanTypes").finish_non_exhaustive()
+    }
+}
+
+impl<'m> ModuleSpanTypes<'m> {
+    /// Build the oracle for `module` — one walk, every expression indexed.
+    #[must_use]
+    pub fn build(module: &'m ResolvedModule) -> Self {
+        Self {
+            types: crate::rules::ModuleTypes::build(module),
+        }
+    }
+
+    /// The engine's type for the expression at exactly `span`, seen from its
+    /// own lexical scope. `None` when no expression occupies the span or the
+    /// engine abstains.
+    #[must_use]
+    pub fn type_at(&self, span: Span) -> Option<InferredType> {
+        self.types
+            .oracle()
+            .and_then(|oracle| oracle.synth_span(span))
+    }
+
+    /// The display rendering of the expression at `span`: the engine's answer,
+    /// gated by [`is_fully_known`] and widened by [`display_widened`] — the
+    /// same render contract every display surface applies. Empty when the
+    /// type cannot be shown.
+    ///
+    /// Empty container displays render as their bare container name (`[]` →
+    /// `list`) — the checker-internal element sentinel must never reach a
+    /// label (GitHub #385) — and lambdas render nothing: parameter and return
+    /// inference for them is not modelled.
+    #[must_use]
+    pub fn display_at(&self, span: Span) -> String {
+        use ruff_python_ast::Expr;
+        match self.types.oracle().and_then(|oracle| oracle.expr(span)) {
+            Some(Expr::List(list)) if list.elts.is_empty() => return "list".to_owned(),
+            Some(Expr::Dict(dict)) if dict.items.is_empty() => return "dict".to_owned(),
+            Some(Expr::Lambda(_)) | None => return String::new(),
+            _ => {}
+        }
+        let Some(ty) = self.type_at(span) else {
+            return String::new();
+        };
+        if is_fully_known(&ty) {
+            display_widened(&ty).to_string()
+        } else {
+            String::new()
+        }
+    }
+}
 
 /// Synthesize the type of one expression's SOURCE text through the
 /// bidirectional engine ([TYPEINF-TARGET-BIDIRECTIONAL]).
@@ -96,8 +160,10 @@ pub fn is_fully_known(ty: &InferredType) -> bool {
 
 /// Widen an inferred type to its DISPLAY form: literals become their base
 /// type (`Literal[1]` → `int`), matching how annotations are conventionally
-/// written in hover/inlay surfaces. Precision-preserving variants
-/// (`LiteralString`, unions, containers) widen structurally.
+/// written in hover/inlay surfaces. A string literal's base type is
+/// `LiteralString`, not `str` — PEP 675 provenance is part of the display
+/// (GitHub #290). Precision-preserving variants (unions, containers) widen
+/// structurally.
 ///
 /// Matched EXHAUSTIVELY on purpose: under a catch-all, a future type-carrying
 /// variant would clone through unwidened and render a raw `Literal[1]` inside
@@ -109,12 +175,14 @@ pub fn display_widened(ty: &InferredType) -> InferredType {
     match ty {
         InferredType::Literal(literal) => match literal {
             crate::types::LiteralValue::Int(_) => InferredType::Int,
-            crate::types::LiteralValue::Str(_) => InferredType::Str,
+            // PEP 675: a literal expression is provably a `LiteralString`;
+            // plain `str` stays reserved for dynamic string values.
+            crate::types::LiteralValue::Str(_) => InferredType::LiteralString,
             crate::types::LiteralValue::Float(_) => InferredType::Float,
             crate::types::LiteralValue::Bool(_) => InferredType::Bool,
             crate::types::LiteralValue::Bytes(_) => InferredType::Bytes,
         },
-        InferredType::LiteralString => InferredType::Str,
+        InferredType::LiteralString => InferredType::LiteralString,
         InferredType::List(elem) => InferredType::List(Box::new(display_widened(elem))),
         InferredType::Set(elem) => InferredType::Set(Box::new(display_widened(elem))),
         InferredType::Dict(key, value) => InferredType::Dict(
@@ -192,15 +260,17 @@ mod tests {
             display_widened(&InferredType::Literal(LiteralValue::Int(1))),
             InferredType::Int
         );
+        // PEP 675 provenance survives widening: a string literal's base type
+        // IS `LiteralString` (GitHub #290).
         assert_eq!(
             display_widened(&InferredType::LiteralString),
-            InferredType::Str
+            InferredType::LiteralString
         );
         assert_eq!(
             display_widened(&InferredType::List(Box::new(InferredType::Literal(
                 LiteralValue::Str("x".into())
             )))),
-            InferredType::List(Box::new(InferredType::Str))
+            InferredType::List(Box::new(InferredType::LiteralString))
         );
         let union = InferredType::Union(vec![
             InferredType::Literal(LiteralValue::Int(1)),

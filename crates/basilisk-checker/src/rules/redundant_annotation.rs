@@ -11,13 +11,46 @@
 //! z: float = 42      # NO warning — annotation adds information (widening)
 //! ```
 
-use crate::inference::infer_rhs;
 use crate::types::InferredType;
 use basilisk_resolver::ResolvedModule;
 
 use crate::diagnostic::{warning_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
+
+/// The engine's type for the value at `span`, widened to annotation form —
+/// `x: int = 5` reads as `int` against `int`, exactly what "the annotation
+/// repeats what inference already knows" means ([TYPEINF-REDUNDANT]).
+///
+/// Only a value whose type is syntactically self-evident (a literal or a
+/// display) can make an annotation REDUNDANT. A call's result type comes
+/// from its callee, so annotating it adds information — and BSK-0003 demands
+/// exactly that annotation, which BSK-0050 must never contradict.
+fn oracle_widened(
+    types: &super::shared::module_types::ModuleTypes<'_>,
+    span: Option<basilisk_resolver::Span>,
+) -> Option<InferredType> {
+    use ruff_python_ast::Expr;
+    let oracle = types.oracle()?;
+    let span = span?;
+    if !matches!(
+        oracle.expr(span)?,
+        Expr::NumberLiteral(_)
+            | Expr::StringLiteral(_)
+            | Expr::BytesLiteral(_)
+            | Expr::BooleanLiteral(_)
+            | Expr::NoneLiteral(_)
+            | Expr::FString(_)
+            | Expr::List(_)
+            | Expr::Dict(_)
+            | Expr::Set(_)
+            | Expr::Tuple(_)
+    ) {
+        return None;
+    }
+    let ty = oracle.synth_span(span)?;
+    crate::expr_type::is_fully_known(&ty).then(|| crate::expr_type::display_widened(&ty))
+}
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-0050",
@@ -68,13 +101,8 @@ impl Rule for RedundantAnnotationWarning {
             .filter_map(|var| {
                 let annotation_text = extract_annotation(&module.source, var.name_span)?;
 
-                // Use inference system to get RHS type
-                let inferred_type = infer_rhs(&var.rhs_kind);
-
-                // Skip if inference failed
-                if matches!(inferred_type, InferredType::Unknown) {
-                    return None;
-                }
+                // The value's type comes from the module's shared oracle.
+                let inferred_type = oracle_widened(types, var.rhs_span)?;
 
                 let declared_type = var
                     .annotation_span
@@ -115,16 +143,12 @@ impl Rule for RedundantAnnotationWarning {
             .filter_map(|attr| {
                 let annotation_text = extract_annotation(&module.source, attr.name_span)?;
 
-                // Use inference system to get RHS type
-                let inferred_type = infer_rhs(&attr.rhs_kind);
-
-                // For class attributes with literal values, we can infer the type from the source
-                let inferred_type = if matches!(inferred_type, InferredType::Unknown) {
-                    // Try to infer from the source text
-                    infer_type_from_source(&module.source, attr.name_span)
-                } else {
-                    inferred_type
-                };
+                // The value's type comes from the module's shared oracle; a
+                // class-body literal the oracle has no span for falls back to
+                // the source-window inference until the resolver records
+                // attribute value spans.
+                let inferred_type = oracle_widened(types, attr.rhs_span)
+                    .unwrap_or_else(|| infer_type_from_source(&module.source, attr.name_span));
 
                 // Skip if inference still failed
                 if matches!(inferred_type, InferredType::Unknown) {

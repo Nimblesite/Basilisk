@@ -88,7 +88,7 @@ directives_assert_type_2|generics_basic|generics_typevartuple_basic|generics_upp
 generics_typevartuple_basic|generics_variance,generics_variance.py,generics,PASS,9,0,0
 generics_variance_inference,generics_variance_inference.py,generics,PASS,23,0,0
 historical_positional,historical_positional.py,historical,PASS,4,0,0
-tuples_index_2,literals_interactions.py,literals,PASS,4,0,0
+calls_argument_type|tuples_index_2,literals_interactions.py,literals,PASS,4,0,0
 assignment_compatibility|generics_upper_bound_2|literals_literalstring|literals_parameterizations|literals_semantics_2,literals_literalstring.py,literals,PASS,9,0,0
 assignment_compatibility|generics_scoping|generics_variance_inference|literals_parameterizations|literals_parameterizations_2|literals_semantics_2,literals_parameterizations.py,literals,PASS,17,0,0
 assignment_compatibility|literals_semantics_2,literals_semantics.py,literals,PASS,4,0,0

@@ -41,6 +41,8 @@ mod decorator_resolution;
 mod dict_key_hashable;
 #[path = "checker/dict_key_hashable_group_tests.rs"]
 mod dict_key_hashable_group;
+#[path = "checker/directives_assert_type_oracle_tests.rs"]
+mod directives_assert_type_oracle;
 #[path = "checker/imports_unresolved_tests.rs"]
 mod imports_unresolved;
 #[path = "checker/match_exhaustiveness_tests.rs"]
@@ -65,6 +67,8 @@ mod names_undefined;
 mod overloads_consistency;
 #[path = "checker/overloads_definitions_tests.rs"]
 mod overloads_definitions;
+#[path = "checker/param_infer_exemption_tests.rs"]
+mod param_infer_exemption;
 #[path = "checker/returns_call_synthesis_tests.rs"]
 mod returns_call_synthesis;
 #[path = "checker/returns_compatibility_tests.rs"]

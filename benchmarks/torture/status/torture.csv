@@ -14,10 +14,14 @@
 case,basilisk,pyright,mypy,ty,pyrefly,zuban
 enum_literal_expansion,pass,fail(m0,x3),pass,pass,pass,fail(m0,x2)
 generic_constructor,pass,pass,pass,fail(m0,x2),pass,pass
+none_class_objects,pass,pass,pass,pass,pass,pass
 param_inference,pass,pass,pass,pass,pass,pass
 paramspec_decorator,pass,pass,pass,fail(m0,x1),pass,pass
 recursive_aliases,pass,pass,pass,fail(m0,x3),pass,pass
 recursive_bases,pass,pass,pass,pass,pass,pass
+scope_shadowing,pass,fail(m0,x1),pass,fail(m0,x2),fail(m0,x1),pass
+ternary_narrowing,pass,pass,pass,pass,pass,pass
 tuple_index,pass,pass,pass,pass,pass,pass
+typeddict_transitive,pass,pass,fail(m0,x4),fail(m0,x3),pass,pass
 typeis_narrowing,pass,pass,pass,fail(m0,x3),pass,pass
-passed,8/8,7/8,8/8,4/8,8/8,7/8
+passed,12/12,10/12,11/12,6/12,11/12,11/12

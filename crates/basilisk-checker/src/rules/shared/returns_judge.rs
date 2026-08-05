@@ -48,6 +48,7 @@ pub(crate) fn judge_return(
     if judge.fits(&inferred, declared)
         || judge.display_checks(span, declared)
         || !judge.judgeable(declared)
+        || !judge.evidence(&inferred)
     {
         return ReturnVerdict::Silent;
     }

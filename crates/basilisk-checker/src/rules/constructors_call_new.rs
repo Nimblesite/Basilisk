@@ -49,6 +49,16 @@ impl Rule for ConstructorCallNewMismatch {
     fn check(
         &self,
         module: &ResolvedModule,
+        ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
+        super::check_with_own_types(self, module, ctx, diagnostics);
+    }
+
+    fn check_with_types(
+        &self,
+        module: &ResolvedModule,
+        types: &super::shared::module_types::ModuleTypes<'_>,
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
@@ -62,20 +72,20 @@ impl Rule for ConstructorCallNewMismatch {
         // Build method map: (class_name, method_name) -> Vec<&FunctionInfo>
         let method_map = super::shared::method_name_map(&module.functions);
 
-        // Re-parse source to get AST for walking call expressions.
-        let Some(parsed) = super::shared::parse_module(module) else {
+        // Every call in every expression position, from the module's one
+        // shared walk ([NARROWPLAN-CALLSITES]).
+        let Some(oracle) = types.oracle() else {
             return;
         };
-
         let ctx = Ctx {
             source,
             path,
             class_map: &class_map,
             method_map: &method_map,
         };
-        basilisk_resolver::visit_calls(&parsed.ast.body, &mut |call| {
+        for call in oracle.calls() {
             check_specialized_constructor_call(call, &ctx, diagnostics);
-        });
+        }
     }
 }
 

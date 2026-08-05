@@ -16,14 +16,10 @@
     clippy::uninlined_format_args,
     dead_code
 )]
-#[path = "checker/collection_inference_tests.rs"]
-mod collection_inference;
 mod common;
 #[path = "checker/guards_exemption_tests.rs"]
 mod guards_exemption;
 #[path = "checker/inference_tests.rs"]
 mod inference;
-#[path = "checker/inference_rhs_shape_tests.rs"]
-mod inference_rhs_shape;
 #[path = "checker/types_tests.rs"]
 mod types;

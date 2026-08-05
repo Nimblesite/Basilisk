@@ -24,7 +24,13 @@ pub(super) fn leaf(name: &str) -> Option<InferredType> {
         "none" => Some(InferredType::None_),
         // [TYPEINF-SPECIAL-ANY] — `Any` and the bare gradual forms are the
         // escape hatch for assignment purposes.
-        "any" | "final" | "tuple" | "type" => Some(InferredType::Any),
+        "any" | "final" | "tuple" => Some(InferredType::Any),
+        // Bare `type` means `type[Any]`: SOME class object. Which class is
+        // gradual, but class-object-ness is not — a value positively known to
+        // be an instance (`None`, `3`, `"x"`) can never be one, and the
+        // nominal leaf keeps that judgment while the class-object guard in the
+        // oracle keeps `x: type = C` silent ([NARROWPLAN-INTEGRATION] Step 3).
+        "type" => Some(InferredType::Named("type".to_owned())),
         // `object` is the TOP type, not the gradual one. It accepts every value
         // exactly as `Any` does (see `is_assignable_to`), but it is a real named
         // leaf: collapsing it into `Any` made `list[object]` and `list[Any]`
