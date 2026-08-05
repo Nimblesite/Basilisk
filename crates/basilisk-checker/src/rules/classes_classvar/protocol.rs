@@ -7,20 +7,45 @@
 //!
 //! e.g. `a: ProtoA = ProtoAImpl()` where `ProtoA` requires `y: ClassVar[str]`
 //! but `ProtoAImpl` only sets `self.y = ""` in `__init__` (instance variable).
+//!
+//! Every verdict here is structural ([LINESCANPLAN-AST-MIGRATION]): protocol
+//! bases and `ClassVar` annotations resolve through the module's import
+//! cascade, and the implementation class comes from the parsed constructor
+//! call rather than from the substring before the first `(`.
 
-use basilisk_resolver::ResolvedModule;
+use basilisk_resolver::{ClassInfo, ResolvedModule};
+use ruff_python_ast::Expr;
 
+use crate::annotation::AnnotationResolver;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic};
+use crate::rules::shared::ExprIndex;
 
-use super::helpers::{span_text, CODE};
+use super::helpers::{is_classvar, CODE};
 
-/// Returns `true` when the annotation text looks like a `ClassVar` annotation.
-fn is_classvar_annotation(ann: &str) -> bool {
-    ann.starts_with("ClassVar[")
-        || ann.starts_with("ClassVar ")
-        || ann == "ClassVar"
-        || ann.starts_with("CV[")
-        || ann == "CV"
+/// Does this class list `Protocol` — under any spelling — among its bases?
+fn is_protocol(resolver: &AnnotationResolver<'_>, cls: &ClassInfo) -> bool {
+    cls.bases
+        .iter()
+        .any(|base| resolver.decorator_denotes(base, "Protocol"))
+}
+
+/// The class-level attributes of `cls`, each paired with whether it is
+/// declared `ClassVar`.
+fn class_attrs<'m>(
+    resolver: &AnnotationResolver<'_>,
+    index: &ExprIndex<'_>,
+    cls: &'m ClassInfo,
+) -> Vec<(&'m str, bool)> {
+    cls.attributes
+        .iter()
+        .map(|attr| {
+            let is_cv = attr
+                .annotation_span
+                .and_then(|span| index.expr(span))
+                .is_some_and(|ann| is_classvar(resolver, ann));
+            (attr.name.as_str(), is_cv)
+        })
+        .collect()
 }
 
 /// Check module-level annotated assignments for protocol `ClassVar` conformance.
@@ -30,110 +55,73 @@ fn is_classvar_annotation(ann: &str) -> bool {
 /// (not merely as `self.x = ...` in `__init__`).
 pub(super) fn check_protocol_classvar_conformance(
     module: &ResolvedModule,
+    resolver: &AnnotationResolver<'_>,
+    index: &ExprIndex<'_>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let source = &module.source;
-    let path = &module.path;
-
-    // Step 1: Build a map of protocol classes -> their ClassVar attribute names.
-    let mut protocol_classvar_attrs: Vec<(&str, Vec<&str>)> = Vec::new();
-    for cls in &module.classes {
-        if !cls.bases.iter().any(|b| b == "Protocol") {
-            continue;
-        }
-        let cv_names: Vec<&str> = cls
-            .attributes
-            .iter()
-            .filter(|attr| {
-                span_text(source, attr.annotation_span).is_some_and(is_classvar_annotation)
-            })
-            .map(|attr| attr.name.as_str())
-            .collect();
-        if !cv_names.is_empty() {
-            protocol_classvar_attrs.push((&cls.name, cv_names));
-        }
-    }
+    // Step 1: protocol classes -> the attribute names they require to be class
+    // variables.
+    let protocol_classvar_attrs: Vec<(&str, Vec<&str>)> = module
+        .classes
+        .iter()
+        .filter(|cls| is_protocol(resolver, cls))
+        .filter_map(|cls| {
+            let names: Vec<&str> = class_attrs(resolver, index, cls)
+                .into_iter()
+                .filter_map(|(name, is_cv)| is_cv.then_some(name))
+                .collect();
+            (!names.is_empty()).then_some((cls.name.as_str(), names))
+        })
+        .collect();
 
     if protocol_classvar_attrs.is_empty() {
         return;
     }
 
-    // Step 2: Build a map of non-protocol class names -> their class-level
-    // attributes, each paired with whether it is declared `ClassVar`.
+    // Step 2: implementation classes -> their class-level attributes, each
+    // flagged as `ClassVar` or not.
     let class_level_attrs: Vec<(&str, Vec<(&str, bool)>)> = module
         .classes
         .iter()
-        .filter(|cls| !cls.bases.iter().any(|b| b == "Protocol"))
-        .map(|cls| {
-            let attrs: Vec<(&str, bool)> = cls
-                .attributes
-                .iter()
-                .map(|attr| {
-                    let is_cv =
-                        span_text(source, attr.annotation_span).is_some_and(is_classvar_annotation);
-                    (attr.name.as_str(), is_cv)
-                })
-                .collect();
-            (cls.name.as_str(), attrs)
-        })
+        .filter(|cls| !is_protocol(resolver, cls))
+        .map(|cls| (cls.name.as_str(), class_attrs(resolver, index, cls)))
         .collect();
 
-    // Step 3: Check module-level annotated assignments like `a: ProtoName = ClassName(...)`.
+    // Step 3: `a: ProtoName = ClassName(...)` at module level.
     for var in &module.module_vars {
-        // Get the annotation text (e.g. "ProtoA").
-        let Some(ann_trimmed) = span_text(source, var.annotation_span).map(str::trim) else {
+        let Some(Expr::Name(annotation)) = var.annotation_span.and_then(|span| index.expr(span))
+        else {
             continue;
         };
-
-        // Check if the annotation names a protocol with ClassVar attrs.
-        let Some((_proto_name, required_cv_attrs)) = protocol_classvar_attrs
+        let Some((proto_name, required_cv_attrs)) = protocol_classvar_attrs
             .iter()
-            .find(|(name, _)| *name == ann_trimmed)
+            .find(|(name, _)| *name == annotation.id.as_str())
         else {
             continue;
         };
 
-        // Get the RHS text and check if it's a constructor call.
-        let Some(rhs_trimmed) = span_text(source, var.rhs_span).map(str::trim) else {
+        // The RHS must be a direct constructor call on a name this module
+        // defines as a class.
+        let Some(Expr::Call(call)) = var.rhs_span.and_then(|span| index.expr(span)) else {
             continue;
         };
-
-        // Extract class name from constructor call: ClassName(...)
-        let Some(paren_idx) = rhs_trimmed.find('(') else {
+        let Expr::Name(callee) = call.func.as_ref() else {
             continue;
         };
-        let Some(impl_class_name) = rhs_trimmed.get(..paren_idx).map(str::trim) else {
-            continue;
-        };
-
-        if impl_class_name.is_empty()
-            || !impl_class_name
-                .chars()
-                .next()
-                .is_some_and(|ch| ch.is_ascii_uppercase())
-            || !impl_class_name
-                .chars()
-                .all(|ch| ch.is_alphanumeric() || ch == '_')
-        {
-            continue;
-        }
-
-        // Find the implementation class's class-level attributes.
-        let Some((_cls_name, impl_attrs)) = class_level_attrs
+        let Some((impl_class_name, impl_attrs)) = class_level_attrs
             .iter()
-            .find(|(name, _)| *name == impl_class_name)
+            .find(|(name, _)| *name == callee.id.as_str())
         else {
             continue;
         };
 
-        // Check each required ClassVar attribute.
         emit_protocol_violations(
             required_cv_attrs,
             impl_attrs,
             impl_class_name,
-            ann_trimmed,
+            proto_name,
             var.name_span,
-            path,
+            &module.path,
             diagnostics,
         );
     }
@@ -149,7 +137,7 @@ fn emit_protocol_violations(
     required_cv_attrs: &[&str],
     impl_attrs: &[(&str, bool)],
     impl_class_name: &str,
-    ann_trimmed: &str,
+    proto_name: &str,
     name_span: basilisk_resolver::Span,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
@@ -163,7 +151,7 @@ fn emit_protocol_violations(
                 CODE.clone(),
                 format!(
                     "Class `{impl_class_name}` is not compatible with protocol \
-                     `{ann_trimmed}`: attribute `{cv_attr}` is required to be a \
+                     `{proto_name}`: attribute `{cv_attr}` is required to be a \
                      class variable (`ClassVar`) but is declared as an instance variable",
                 ),
                 name_span,
@@ -182,7 +170,7 @@ fn emit_protocol_violations(
                 CODE.clone(),
                 format!(
                     "Class `{impl_class_name}` is not compatible with protocol \
-                     `{ann_trimmed}`: attribute `{cv_attr}` is required to be a \
+                     `{proto_name}`: attribute `{cv_attr}` is required to be a \
                      class variable (`ClassVar`) but is not defined at class level",
                 ),
                 name_span,

@@ -9,6 +9,7 @@ pub(crate) mod judge;
 pub(crate) mod module_types;
 pub(crate) mod oracle;
 pub(crate) mod returns_judge;
+mod runtime_names;
 mod text_scan;
 mod type_expr;
 pub(crate) mod typing_form;
@@ -16,6 +17,7 @@ pub(crate) mod typing_form;
 pub(crate) use class_walks::{
     any_base_name_matches, class_name_map, class_or_base_matches, method_name_map,
 };
+pub(crate) use runtime_names::{runtime_value_names, type_constructor_names};
 pub(crate) use type_expr::{
     annotation_is_type_alias, is_type_expression, ExprIndex, StringPolicy, TypeExprJudge,
 };
