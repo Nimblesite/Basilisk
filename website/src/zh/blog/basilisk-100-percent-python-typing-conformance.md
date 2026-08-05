@@ -19,11 +19,11 @@ faq:
   - q: "哪个 Python 类型检查器的符合性分数最高？"
     a: "Basilisk 目前不在官方 python/typing 结果中。此前的结果已撤回；在受影响逻辑完成重新实现和验证之前，实际百分比暂时未知。其他工具请查看官方实时结果表。"
   - q: "什么是 python/typing 符合性测试套件？"
-    a: "这是由 Python Typing 社区维护的官方测试套件，用于衡量类型检查器对 Python 类型规范的实现有多忠实。每个检查器都针对同一组测试运行，并由该套件自己的评分工具评分。结果发布在 github.com/python/typing 的 conformance/results 下。"
+    a: "这是由 Python Typing 社区维护的官方测试套件。它使用自己的评分工具记录检查器在确切测试用例上的行为。这是有价值的证据，但原始套件结果本身不能证明完整规范已被忠实实现；还必须通过保持语义的变异和独立的套件外用例验证。"
   - q: "100% 的符合性分数是否等于是最好的类型检查器？"
-    a: "不。python/typing 的维护者明确表示，符合性不应成为选择类型检查器的主要依据，因为它无法反映速度、编辑器集成、错误信息质量或生态系统支持。符合性只衡量规范正确性。它是一个重要的输入，但不是全部决定因素。"
+    a: "不。套件分数只描述被覆盖的测试用例；正如 Basilisk 此次撤回所证明的，它本身不能证明规范实现正确。它也无法反映编辑器集成、错误信息质量、生态系统支持或经过独立验证的性能。"
   - q: "Basilisk 的符合性分数是如何测量的？"
-    a: "Basilisk 目前没有可发布的符合性分数。未来结果会同时使用未经修改的 python/typing 评分工具、稳健性测试和变异测试，并只在受影响实现完成重建后发布。"
+    a: "Basilisk 目前没有可发布的符合性分数。受影响实现完成重建后，未来结果必须同时通过未经修改的 python/typing 评分工具、保持语义的变异测试，以及依据规范独立设计的套件外用例。"
 ---
 
 > **撤回说明——2026 年 8 月 6 日：**我们撤回本文中的所有符合性声明。Basilisk 源码中存在针对确切符合性测试用例实现的逻辑，因此此前的满分结果不能证明规范符合性。我们请求从官方结果表中移除 Basilisk，现已完成移除。在删除有问题的实现、根据规范重新构建并通过保持语义的变异测试之前，当前百分比暂时未知。下方原文仅作为公开历史记录保留；其中的得分、排名、通过数量和结论均不可依赖。请阅读[完整更正](/zh/docs/conformance/)。
@@ -32,7 +32,7 @@ Python 现在拥有一个真正出色的类型系统，而大多数开发者仍�
 
 从来悬而未决的问题从不是 Python 的类型系统是否足够好。而是任何一个具体工具究竟对它的实现有多忠实。
 
-发布本文时，我们以为 Basilisk 得到了一个客观答案。它被添加进[官方 python/typing 符合性结果]({{ conformanceOfficial.historical.snapshot.source }})，当时的运行报告了 {{ conformanceOfficial.historical.basilisk.pct }}%（{{ conformanceOfficial.historical.basilisk.total }} 项测试中通过 {{ conformanceOfficial.historical.basilisk.passLabel }} 项）。该结果现已撤回。
+发布本文时，我们以为 Basilisk 得到了一个客观答案。它被添加进这份[官方 python/typing 符合性结果的固定快照]({{ conformanceOfficial.historical.snapshot.snapshotUrl }})，当时的运行报告了 {{ conformanceOfficial.historical.basilisk.pct }}%（{{ conformanceOfficial.historical.basilisk.total }} 项测试中通过 {{ conformanceOfficial.historical.basilisk.passLabel }} 项）。该结果现已撤回。
 
 我们曾为此感到自豪。完整性审计证明这个结论是错误的。
 

@@ -104,12 +104,11 @@ fn alias_tuple_union_verdict(
     span: basilisk_resolver::Span,
 ) -> Option<(String, String)> {
     let oracle = types.oracle()?;
-    let resolver = types.annotations()?;
     let aliases = module_alias_map(module, oracle);
     let alias_rhs = aliases.get(actual.trim())?;
 
-    // An open type variable or `Any` anywhere makes the comparison a
-    // specialization/gradual question, not an equivalence one — abstain.
+    // An open type variable anywhere makes the comparison a specialization
+    // question, not an equivalence one — abstain.
     let type_vars: std::collections::HashSet<&str> = module
         .typevar_calls
         .iter()
@@ -117,8 +116,8 @@ fn alias_tuple_union_verdict(
         .collect();
 
     let (_, expected_expr) = assert_type_arguments(oracle, span)?;
-    let actual_members = tuple_union_members(resolver, &aliases, &type_vars, alias_rhs)?;
-    let expected_members = tuple_union_members(resolver, &aliases, &type_vars, expected_expr)?;
+    let actual_members = tuple_union_members(&aliases, &type_vars, alias_rhs)?;
+    let expected_members = tuple_union_members(&aliases, &type_vars, expected_expr)?;
     (actual_members != expected_members).then(|| {
         (
             actual_members
@@ -152,11 +151,10 @@ fn module_alias_map<'m>(
 }
 
 /// The canonical member set of a type expression, when EVERY member is a
-/// tuple form after alias expansion. `None` when any member is anything else,
-/// or when any member's canonical form references an open type variable or
-/// `Any` — those are questions for specialization, not equivalence.
+/// builtin `tuple[...]` form after alias expansion. `None` when any member is
+/// anything else, or when any member's canonical form references an open type
+/// variable — those are questions for specialization, not equivalence.
 fn tuple_union_members(
-    resolver: &crate::annotation::AnnotationResolver<'_>,
     aliases: &std::collections::HashMap<&str, &Expr>,
     type_vars: &std::collections::HashSet<&str>,
     expr: &Expr,
@@ -170,9 +168,8 @@ fn tuple_union_members(
                 member,
                 Expr::Subscript(subscript)
                     if matches!(subscript.value.as_ref(), Expr::Name(name) if name.id.as_str() == "tuple")
-                        || crate::rules::shared::typing_form::denotes(resolver, &subscript.value, "Tuple")
             );
-            if !is_tuple || references_open_type(resolver, type_vars, member) {
+            if !is_tuple || references_open_type(type_vars, member) {
                 return None;
             }
             canonical(member)
@@ -180,30 +177,23 @@ fn tuple_union_members(
         .collect()
 }
 
-/// Does this expression reference a declared type variable or `Any` anywhere?
-fn references_open_type(
-    resolver: &crate::annotation::AnnotationResolver<'_>,
-    type_vars: &std::collections::HashSet<&str>,
-    expr: &Expr,
-) -> bool {
-    if crate::rules::shared::typing_form::denotes(resolver, expr, "Any") {
-        return true;
-    }
+/// Does this expression reference a declared type variable anywhere?
+fn references_open_type(type_vars: &std::collections::HashSet<&str>, expr: &Expr) -> bool {
     match expr {
         Expr::Name(name) => type_vars.contains(name.id.as_str()),
         Expr::Subscript(subscript) => {
-            references_open_type(resolver, type_vars, &subscript.value)
-                || references_open_type(resolver, type_vars, &subscript.slice)
+            references_open_type(type_vars, &subscript.value)
+                || references_open_type(type_vars, &subscript.slice)
         }
         Expr::Tuple(tuple) => tuple
             .elts
             .iter()
-            .any(|elt| references_open_type(resolver, type_vars, elt)),
+            .any(|elt| references_open_type(type_vars, elt)),
         Expr::BinOp(binop) => {
-            references_open_type(resolver, type_vars, &binop.left)
-                || references_open_type(resolver, type_vars, &binop.right)
+            references_open_type(type_vars, &binop.left)
+                || references_open_type(type_vars, &binop.right)
         }
-        Expr::Starred(starred) => references_open_type(resolver, type_vars, &starred.value),
+        Expr::Starred(starred) => references_open_type(type_vars, &starred.value),
         _ => false,
     }
 }

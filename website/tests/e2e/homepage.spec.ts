@@ -20,7 +20,7 @@ test.describe("homepage positioning", () => {
       "An open-source Python type checker and language server, built in Rust.",
     );
     await expect(page.locator(".hero__subheadline")).toContainText(
-      "withdrawn our former conformance claim",
+      "withdrawn both our former conformance claim",
     );
     await expect(
       page.locator('a[href="vscode:extension/Nimblesite.basilisk"]'),
@@ -36,7 +36,7 @@ test.describe("homepage positioning", () => {
 
   test("puts the integrity correction beside the product introduction", async ({ page }) => {
     await expect(page.locator(".hero__subheadline")).toContainText(
-      "withdrawn our former conformance claim and published benchmark figures",
+      "withdrawn both our former conformance claim and our published benchmark figures",
     );
     await expect(page.locator(".hero__subheadline")).toContainText(
       "removed from the official python/typing results at our request",

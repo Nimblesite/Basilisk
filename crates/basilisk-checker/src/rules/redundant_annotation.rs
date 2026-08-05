@@ -129,7 +129,7 @@ impl Rule for RedundantAnnotationWarning {
         module
             .classes
             .iter()
-            .filter(|class| !annotation_defines_field(class, &module.classes))
+            .filter(|class| !annotation_defines_field(class))
             .flat_map(|class| &class.attributes)
             .filter(|attr| attr.has_annotation && attr.has_value)
             .filter_map(|attr| {
@@ -306,65 +306,10 @@ fn make_diagnostic_for_var(
 /// Whether annotated assignments in this class declare *fields* rather than
 /// plain attributes (issue #110).
 ///
-/// For `pydantic.BaseModel` / `pydantic_settings.BaseSettings` subclasses,
-/// `@dataclass` classes (including `dataclass_transform` factories), and
-/// attrs-style classes, the annotation is what makes the assignment a field —
-/// removing it silently deletes the field from validation/serialization or the
-/// generated `__init__`. BSK-0050 must never call such an annotation redundant.
-fn annotation_defines_field(
-    class: &basilisk_resolver::ClassInfo,
-    all_classes: &[basilisk_resolver::ClassInfo],
-) -> bool {
+/// In a `@dataclass` (including `dataclass_transform` factories) the annotation
+/// is what makes the assignment a field — removing it silently deletes the
+/// field from the generated `__init__`. BSK-0050 must never call such an
+/// annotation redundant.
+fn annotation_defines_field(class: &basilisk_resolver::ClassInfo) -> bool {
     class.is_dataclass
-        || has_attrs_class_decorator(class)
-        || transitively_inherits(class, all_classes, &is_pydantic_field_base)
-}
-
-/// attrs-style class decorators (`@define`, `@frozen`, `@mutable`, `@attr.s`,
-/// `@attr.attrs`, …). The resolver records the decorator's dotted spelling,
-/// so the final name segment is compared: `@attr.s` arrives as `"attr.s"` and
-/// `@attrs.define` as `"attrs.define"`. A stray match merely suppresses a
-/// warning — safe — whereas a miss corrupts a model.
-fn has_attrs_class_decorator(class: &basilisk_resolver::ClassInfo) -> bool {
-    class.decorator_spans.iter().any(|(name, _)| {
-        matches!(
-            name.rsplit('.').next().unwrap_or(name.as_str()),
-            "define" | "frozen" | "mutable" | "attrs" | "s"
-        )
-    })
-}
-
-/// A pydantic base whose annotated attributes are model *fields*.
-///
-/// `BaseModel` (pydantic) and `BaseSettings` (pydantic-settings, itself a
-/// `BaseModel` subclass) both turn `name: T = default` into a registered field;
-/// `BaseSettings` lives in a third-party package, so the resolver records only
-/// the bare base name and cannot see the inheritance — the name must be matched
-/// directly (issue #182). Dotted references (`pydantic_settings.BaseSettings`)
-/// keep their qualifier, hence the `ends_with` arm.
-fn is_pydantic_field_base(base: &str) -> bool {
-    base == "BaseModel"
-        || base.ends_with(".BaseModel")
-        || base == "BaseSettings"
-        || base.ends_with(".BaseSettings")
-}
-
-/// Check if a class transitively inherits from a base matching `is_marker_base`,
-/// directly or via locally-defined intermediate classes.
-///
-/// This catches subclasses like `class PointWithName(Point)` where `Point` itself
-/// inherits from the marker base.
-fn transitively_inherits(
-    class: &basilisk_resolver::ClassInfo,
-    all_classes: &[basilisk_resolver::ClassInfo],
-    is_marker_base: &dyn Fn(&str) -> bool,
-) -> bool {
-    super::shared::any_base_name_matches(
-        class,
-        &|base| {
-            let stripped = base.split('[').next().unwrap_or(base);
-            all_classes.iter().find(|other| other.name == stripped)
-        },
-        &|base| is_marker_base(base.split('[').next().unwrap_or(base)),
-    )
 }

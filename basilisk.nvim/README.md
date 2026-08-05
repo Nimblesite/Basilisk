@@ -4,7 +4,7 @@
 
 First-class Neovim plugin for Basilisk — zero-config Python type checking, debugging, profiling, and test exploration.
 
-> **Metrics notice:** Basilisk has retracted its former 100% conformance claim and all published benchmark figures. The conformance result was not robust under semantics-preserving mutations, and Basilisk has been removed from the [official `python/typing` results table](https://github.com/python/typing/blob/main/conformance/results/results.html). Its actual conformance level is temporarily unknown while the fitted code is deleted and the affected logic is reimplemented from the specification. New results will be published only after robustness and mutation validation. [Read the audit and recovery plan](https://www.basilisk-python.dev/docs/conformance/).
+> **Metrics notice:** Basilisk has retracted its former 100% conformance claim and all published benchmark figures. The conformance result was not robust under semantics-preserving mutations, and Basilisk has been removed from the [official `python/typing` results table](https://github.com/python/typing/blob/main/conformance/results/results.html). Its actual conformance level is temporarily unknown while the fitted code is deleted and the affected logic is reimplemented from the specification. New results will be published only after mutation robustness and independent off-suite cases derived from the specification validate the rebuilt behavior. [Read the audit and recovery plan](https://www.basilisk-python.dev/docs/conformance/).
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/Nimblesite/Basilisk/main/website/src/assets/images/screenshot.png" alt="Basilisk in action — type checking, diagnostics, and refactoring in the editor" width="900">

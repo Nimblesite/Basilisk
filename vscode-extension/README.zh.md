@@ -34,7 +34,7 @@
 
 > **诚信说明：** 我们已撤回 Basilisk 此前“100% 一致性”的说法。该结果并不可信：检查器的部分规则针对上游测试文件的具体文本进行了拟合；面对不改变程序语义的变异（例如一致地重命名类型变量），分数无法保持稳定。应我们的要求，Basilisk 已从官方 [`python/typing` 结果表](https://github.com/python/typing/blob/main/conformance/results/results.html)中移除。目前真实的一致性水平暂时未知。
 >
-> 在完成测量流程审计之前，我们也撤回所有已公布的基准测试数据与性能排名。我们正在删除这些针对测试拟合的代码，并依据 Python 类型规范从头重写受影响的逻辑。在公布新分数或申请重新收录之前，包括语义保持重命名在内的变异测试必须证明结果足够稳健。一旦得出可信结论，我们就会公布新的一致性与基准测试结果，即使结果低于或慢于此次撤回的数据也会如实发布。[查看一致性审计与修复计划 &rarr;](https://www.basilisk-python.dev/zh/docs/conformance/)
+> 在完成测量流程审计之前，我们也撤回所有已公布的基准测试数据与性能排名。我们正在删除这些针对测试拟合的代码，并依据 Python 类型规范从头重写受影响的逻辑。在公布新分数或申请重新收录之前，包括语义保持重命名在内的变异测试必须证明结果足够稳健，并由依据规范独立设计的套件外用例确认修复后的行为。一旦得出可信结论，我们就会公布新的一致性与基准测试结果，即使结果低于或慢于此次撤回的数据也会如实发布。[查看一致性审计与修复计划 &rarr;](https://www.basilisk-python.dev/zh/docs/conformance/)
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/Nimblesite/Basilisk/main/images/screenshot.png" alt="Basilisk 实战 —— 编辑器中的类型检查、诊断与重构" width="900">

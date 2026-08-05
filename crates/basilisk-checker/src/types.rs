@@ -498,10 +498,6 @@ fn callable_params_assignable(source: &[InferredType], target: &[InferredType]) 
 ///   `object`-typed value to a concrete type is how most `isinstance` code is
 ///   written, and this level has no flow information to tell a narrowed use
 ///   from an unnarrowed one, so rejecting it would fire on spec-valid code.
-/// * `None` satisfies `Hashable` (it defines `__hash__`). Compared
-///   case-insensitively: the [TYPEINF-ANNOTATION-RESOLUTION] cascade keeps
-///   the ABC's real spelling, the legacy annotation parser it replaces folded
-///   it to `Named("hashable")`.
 /// * A class object (`type` / `type[X]`) IS callable — calling it constructs
 ///   an instance — and when the class itself is gradual (`type` means
 ///   `type[Any]`) so is its constructor signature, so it satisfies every
@@ -512,7 +508,6 @@ fn special_named_assignable(source: &InferredType, target: &InferredType) -> boo
         return true;
     }
     match (source, target) {
-        (InferredType::None_, InferredType::Named(name)) => name.eq_ignore_ascii_case("hashable"),
         (InferredType::Named(name), InferredType::Callable(_)) => {
             name == "type" || name.starts_with("type[")
         }

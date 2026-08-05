@@ -75,9 +75,11 @@ error[names_unbound]: Function `describe` returns `label` but `label` may be unb
 Found 3 diagnostics (3 errors).
 ```
 
-开箱即用，Basilisk 启用完整的 PEP 类型规范规则集，每个违反都是**错误**。
-这里没有任何主观风格约束——这是
-[Python 类型系统规范](https://typing.python.org/en/latest/spec/index.html)的严格执行。
+开箱即用，Basilisk 会以**错误**级别启用当前已注册的所有 PEP 标签规则；
+可选的项目风格规则另行配置。这描述的是默认配置，并不证明实现完整或正确。
+在受影响规则依据 [Python 类型系统规范](https://typing.python.org/en/latest/spec/index.html)
+完成重写并通过独立验证之前，Basilisk 的实际符合性水平暂时未知。请参阅
+[符合性更正](/zh/docs/conformance/)。
 
 ## 第 2 步——修复错误
 

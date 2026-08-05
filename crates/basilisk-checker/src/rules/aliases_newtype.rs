@@ -7,17 +7,13 @@
 //! - The base type must be a proper concrete class
 //! - `NewType` accepts exactly two arguments
 //!
-//! Every verdict is structural over the parsed `ruff` AST, with typing
-//! members resolved through the module's import cascade
-//! ([LINESCANPLAN-AST-MIGRATION], issue #408): `Literal` under a renamed
-//! import is still `Literal`, and a module-local class is never mistaken for
-//! a `TypeVar` because of its capitalisation.
+//! Every verdict is structural over the parsed `ruff` AST
+//! ([LINESCANPLAN-AST-MIGRATION], issue #408).
 //!
 //! ```python
 //! from typing import NewType
 //! GoodName = NewType("BadName", int)  # E: name mismatch
 //! BadNewType6 = NewType("BadNewType6", int, int)  # E: too many arguments
-//! BadNewType7 = NewType("BadNewType7", Any)  # E: cannot be Any
 //! ```
 
 use std::collections::{HashMap, HashSet};
@@ -25,9 +21,7 @@ use std::collections::{HashMap, HashSet};
 use basilisk_resolver::{NewTypeCallInfo, ResolvedModule, Span};
 use ruff_python_ast::{Expr, Operator};
 
-use crate::annotation::AnnotationResolver;
 use crate::diagnostic::{error_diagnostic, error_diagnostic_owned, Diagnostic, ErrorCode};
-use crate::rules::shared::typing_form::{denotes, subscript_of};
 use crate::rules::shared::ExprIndex;
 
 use super::Rule;
@@ -48,64 +42,17 @@ fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
     )
 }
 
-/// Typing-module abstract protocol classes that cannot be a `NewType` base.
-/// Membership is decided by resolving the base through the import cascade,
-/// never by comparing raw spelling.
-const ABSTRACT_TYPING_PROTOCOLS: &[&str] = &[
-    "Hashable",
-    "Iterable",
-    "Iterator",
-    "Generator",
-    "Sized",
-    "Container",
-    "Collection",
-    "Callable",
-    "Sequence",
-    "MutableSequence",
-    "Mapping",
-    "MutableMapping",
-    "Set",
-    "MutableSet",
-    "Awaitable",
-    "Coroutine",
-    "AsyncIterable",
-    "AsyncIterator",
-    "AsyncGenerator",
-    "Buffer",
-    "SupportsInt",
-    "SupportsFloat",
-    "SupportsComplex",
-    "SupportsBytes",
-    "SupportsAbs",
-    "SupportsRound",
-];
-
 /// The error reason when this base-type expression is invalid for `NewType`.
 fn invalid_base_reason(
-    resolver: &AnnotationResolver<'_>,
     base: &Expr,
     typevar_names: &HashSet<&str>,
     typeddict_names: &HashSet<&str>,
 ) -> Option<&'static str> {
-    if denotes(resolver, base, "Any") {
-        return Some("cannot use `Any` as a `NewType` base");
-    }
-    if subscript_of(resolver, base, "Literal").is_some() || denotes(resolver, base, "Literal") {
-        return Some("cannot use `Literal` as a `NewType` base");
-    }
-    if matches!(base, Expr::BinOp(binop) if binop.op == Operator::BitOr)
-        || subscript_of(resolver, base, "Union").is_some()
-    {
+    if matches!(base, Expr::BinOp(binop) if binop.op == Operator::BitOr) {
         return Some("cannot use a union type as a `NewType` base");
     }
     if is_typevar_parameterized(base, typevar_names) {
         return Some("cannot use a TypeVar-parameterized generic as a `NewType` base");
-    }
-    if ABSTRACT_TYPING_PROTOCOLS
-        .iter()
-        .any(|member| denotes(resolver, base, member))
-    {
-        return Some("cannot use a Protocol class as a `NewType` base");
     }
     if matches!(base, Expr::Name(name) if typeddict_names.contains(name.id.as_str())) {
         return Some("cannot use a `TypedDict` class as a `NewType` base");
@@ -143,7 +90,6 @@ fn slice_references_typevar(expr: &Expr, typevar_names: &HashSet<&str>) -> bool 
 
 fn check_newtype_call(
     info: &NewTypeCallInfo,
-    resolver: &AnnotationResolver<'_>,
     index: &ExprIndex<'_>,
     path: &str,
     typevar_names: &HashSet<&str>,
@@ -179,7 +125,7 @@ fn check_newtype_call(
 
     // Validate the base type node.
     if let Some(base) = info.base_type_span.and_then(|span| index.expr(span)) {
-        if let Some(reason) = invalid_base_reason(resolver, base, typevar_names, typeddict_names) {
+        if let Some(reason) = invalid_base_reason(base, typevar_names, typeddict_names) {
             diagnostics.push(make_diagnostic(
                 format!(
                     "Invalid base type for `NewType` `{}`: {reason}",
@@ -205,9 +151,6 @@ impl Rule for InvalidNewType {
         let Some(parsed) = module.lazy_ast.get_or_parse(&module.source, &module.path) else {
             return;
         };
-        let Some(resolver) = AnnotationResolver::for_module(module) else {
-            return;
-        };
         let index = ExprIndex::build(&parsed.ast);
         let path = &module.path;
 
@@ -228,7 +171,6 @@ impl Rule for InvalidNewType {
         for info in &module.newtype_calls {
             check_newtype_call(
                 info,
-                &resolver,
                 &index,
                 path,
                 &typevar_names,

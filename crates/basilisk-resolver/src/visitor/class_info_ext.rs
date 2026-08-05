@@ -320,13 +320,12 @@ fn case_has_structural_pattern(case: &MatchCase) -> bool {
 // ---------------------------------------------------------------------------
 
 /// A decorator's name as spelled — the FULL dotted path for attribute
-/// spellings (`typing.overload` → `"typing.overload"`, never just
-/// `"overload"`), because whether `t.overload` IS `typing.overload` is a
-/// binding question the consumer answers by resolving `t`
+/// spellings (`@m.d` → `"m.d"`, never just the leaf), because which
+/// declaration a decorator binds to is a question the consumer answers by
+/// resolving the qualifier
 /// ([#380](https://github.com/Nimblesite/Basilisk/issues/380)). Dropping the
 /// qualifier here would make that question unanswerable everywhere
-/// downstream. A call decorator reports its callee (`@cache(size=1)` →
-/// `"cache"`).
+/// downstream. A call decorator reports its callee (`@d(size=1)` → `"d"`).
 pub(super) fn decorator_name(dec: &Decorator) -> Option<String> {
     match &dec.expression {
         Expr::Call(call) => dotted_expr_name(&call.func),

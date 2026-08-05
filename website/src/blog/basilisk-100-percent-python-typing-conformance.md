@@ -18,11 +18,11 @@ faq:
   - q: "Which Python type checker has the highest conformance score?"
     a: "Basilisk is not currently listed in the official python/typing results. Its former result is withdrawn and its actual percentage is temporarily unknown while affected logic is rebuilt and verified. Check the live official table for currently listed tools."
   - q: "What is the python/typing conformance suite?"
-    a: "It is the official test suite maintained by the Python Typing community that measures how faithfully a type checker implements the Python typing specification. Each checker is run against the same set of tests and graded by the suite's own harness. The results are published at github.com/python/typing under conformance/results."
+    a: "It is the official test suite maintained by the Python Typing community. Its harness records how a checker behaves on the suite's exact fixtures. That is valuable evidence, but a raw suite result alone does not establish faithful implementation of the full specification; mutation robustness and independent off-suite cases are also required."
   - q: "Is a 100% conformance score the same as being the best type checker?"
-    a: "No. The python/typing maintainers explicitly say conformance should not be the primary basis for choosing a type checker, because it does not capture speed, editor integration, error message quality, or ecosystem support. Conformance measures spec correctness only. It is one important input, not the whole decision."
+    a: "No. A suite score describes the covered fixtures; it is not proof of specification correctness by itself, as Basilisk's retraction demonstrates. It also does not capture editor integration, error quality, ecosystem support, or independently validated performance."
   - q: "How is Basilisk's conformance score measured?"
-    a: "There is no current Basilisk conformance score. A future result will use the unmodified python/typing harness plus robustness and mutation testing, and will be published only after the affected implementation has been rebuilt."
+    a: "There is no current Basilisk conformance score. A future result will require the unmodified python/typing harness, semantics-preserving mutation testing, and independent off-suite cases derived from the specification, after the affected implementation has been rebuilt."
 ---
 
 > **Retraction — 6 August 2026:** We withdraw every conformance claim in this post. Basilisk's source contained logic fitted to the exact conformance fixtures, so the former perfect result did not establish specification conformance. We asked for Basilisk to be removed from the official results table, and it has been removed. The current percentage is temporarily unknown while the offending implementation is deleted, rebuilt from the specification, and tested against semantics-preserving mutations. The original article is retained below only as a public record; its score, ranking, pass counts, and conclusions must not be relied on. Read the [full correction](/docs/conformance/).
@@ -31,7 +31,7 @@ Python has a genuinely good type system now, and most developers still do not re
 
 The open question was never whether Python's type system was good enough. It was how faithfully any given tool actually implements it.
 
-At publication, we believed we had an objective answer for Basilisk. It had been added to the [official python/typing conformance results]({{ conformanceOfficial.historical.snapshot.source }}), where that run reported {{ conformanceOfficial.historical.basilisk.pct }}% ({{ conformanceOfficial.historical.basilisk.passLabel }} of {{ conformanceOfficial.historical.basilisk.total }} tests). That result is now withdrawn.
+At publication, we believed we had an objective answer for Basilisk. It had been added to this [pinned snapshot of the official python/typing conformance results]({{ conformanceOfficial.historical.snapshot.snapshotUrl }}), where that run reported {{ conformanceOfficial.historical.basilisk.pct }}% ({{ conformanceOfficial.historical.basilisk.passLabel }} of {{ conformanceOfficial.historical.basilisk.total }} tests). That result is now withdrawn.
 
 We were proud of that result. The integrity audit showed that conclusion was wrong.
 

@@ -6,7 +6,7 @@
 
 Basilisk 的 Zed 编辑器扩展 —— 基于 WASM 的 Python 类型检查与语言服务器集成。
 
-> **数据说明：** Basilisk 已撤回此前“100% 一致性”的说法及所有已公布的基准测试数据。该一致性结果无法经受语义保持变异的检验，Basilisk 也已从[官方 `python/typing` 结果表](https://github.com/python/typing/blob/main/conformance/results/results.html)中移除。目前真实的一致性水平暂时未知；我们正在删除针对测试拟合的代码，并依据规范从头重写受影响的逻辑。只有通过稳健性与变异测试验证后，我们才会公布新结果。[查看审计与修复计划](https://www.basilisk-python.dev/zh/docs/conformance/)。
+> **数据说明：** Basilisk 已撤回此前“100% 一致性”的说法及所有已公布的基准测试数据。该一致性结果无法经受语义保持变异的检验，Basilisk 也已从[官方 `python/typing` 结果表](https://github.com/python/typing/blob/main/conformance/results/results.html)中移除。目前真实的一致性水平暂时未知；我们正在删除针对测试拟合的代码，并依据规范从头重写受影响的逻辑。只有保持语义的变异测试和依据规范独立设计的套件外用例都验证重建后的行为后，我们才会公布新结果。[查看审计与修复计划](https://www.basilisk-python.dev/zh/docs/conformance/)。
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/Nimblesite/Basilisk/main/website/src/assets/images/zed-screenshot.png" alt="Zed 编辑器中的 Basilisk —— 行内 Python 类型检查与诊断" width="900">

@@ -39,20 +39,10 @@ pub(super) struct Tables<'m> {
     pub(super) aliases: HashMap<String, AliasEntry<'m>>,
     /// Same-file classes, by declared name.
     pub(super) nominal: HashSet<String>,
-    /// The subset of [`Self::nominal`] whose assignability is **structural** —
-    /// `Protocol` and `TypedDict` classes. They resolve like any other class;
-    /// the set exists so a rule that can only compare *nominally* knows to
-    /// abstain rather than invent a mismatch.
-    pub(super) structural: HashSet<String>,
     /// Names bound by `from X import name`.
     pub(super) imports: HashMap<String, ImportedName>,
     /// Local binding → module path, for `import X` / `import X as Y`.
     pub(super) modules: HashMap<String, String>,
-    /// Value re-bindings of one name to another: `o = overload`,
-    /// `o = typing.overload`. The decorator resolution follows these chains
-    /// ([#380](https://github.com/Nimblesite/Basilisk/issues/380)); annotation
-    /// resolution does not consult them.
-    pub(super) values: HashMap<String, String>,
 }
 
 impl<'m> Tables<'m> {
@@ -172,11 +162,6 @@ impl<'m> Tables<'m> {
         let Some(name) = simple_name(target) else {
             return;
         };
-        // Any name-to-name re-binding joins the value table (`o = overload`),
-        // whether or not it also reads as a type alias below.
-        if let Some(rhs) = dotted_name(&assign.value) {
-            let _ = self.values.insert(name.clone(), rhs);
-        }
         if self.aliases.contains_key(&name) || self.nominal.contains(&name) {
             return;
         }

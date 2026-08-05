@@ -21,9 +21,6 @@ use ruff_python_ast::visitor::{walk_expr, Visitor};
 use ruff_python_ast::{Expr, ModModule, Operator};
 use ruff_text_size::Ranged;
 
-use crate::annotation::AnnotationResolver;
-use crate::types::InferredType;
-
 /// How string literals inside the judged expression are treated.
 ///
 /// The evaluation regime of the surrounding construct decides this — it is a
@@ -103,20 +100,6 @@ pub(crate) fn forward_ref_is_type_expression(content: &str, judge: &TypeExprJudg
         return false;
     };
     valid(parsed.expr(), judge, true)
-}
-
-/// Whether the annotation at `span` denotes `typing.TypeAlias`, resolved
-/// through the shared cascade ([TYPEINF-ANNOTATION-RESOLUTION]) so every
-/// spelling — `TypeAlias`, `typing.TypeAlias`, `t.TypeAlias`,
-/// `from typing import TypeAlias as TA` — collapses to the same answer.
-pub(crate) fn annotation_is_type_alias(
-    resolver: &AnnotationResolver<'_>,
-    span: Option<Span>,
-) -> bool {
-    span.and_then(|span| resolver.resolve_span(span))
-        .is_some_and(
-            |ty| matches!(&ty, InferredType::Named(name) if name.eq_ignore_ascii_case("typealias")),
-        )
 }
 
 /// Every expression in a parsed module, keyed by its exact source range —

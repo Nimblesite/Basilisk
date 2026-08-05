@@ -228,7 +228,7 @@ pub(super) fn literal_elem_matches(elem: &str, expected: &str) -> bool {
         .unwrap_or(expected_lower.as_str())
         .trim();
 
-    if expected_base == "any" || expected_base == "object" {
+    if expected_base == "object" {
         return true;
     }
 

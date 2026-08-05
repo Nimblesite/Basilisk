@@ -1,122 +1,37 @@
-//! `dataclasses_transform_class`: `dataclass_transform` violations when the transform is applied via a base class.
+//! Implements [`dataclasses_transform_class`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
+//! `dataclasses_transform_class`: currently inert.
 //!
-//! When a class is decorated with `@dataclass_transform(...)`, subclasses that inherit
-//! from it behave like dataclasses with the transform's default settings overridable by
-//! keyword arguments on the class definition.
+//! Every check this rule performed — frozen inheritance, frozen attribute
+//! assignment, keyword-only construction, ordering comparisons, and field
+//! `converter=` validation — started from the set of classes carrying the
+//! transform decorator, which was found by comparing the decorator against a
+//! member name written into this source. That mechanism is banned permanently
+//! (see the symbol-naming ban in `CLAUDE.md` and
+//! `docs/CONFORMANCE-SPELLING-CHEAT-INVENTORY.md`), and with the base-class set
+//! unobtainable every branch below it was dead, so the whole body — helpers and
+//! converter support included — has been deleted rather than re-expressed
+//! behind another spelling comparison.
 //!
-//! This rule detects:
-//! 1. A non-frozen subclass inheriting from a frozen transform-class (line 51).
-//! 2. Attribute assignment on a frozen transform-class instance (lines 63, 122).
-//! 3. Positional arguments to a `kw_only` transform-class constructor (lines 66, 82).
-//! 4. Comparison operators on transform-class instances that lack `order=True` (line 72).
-//!
-//! ```python
-//! from typing import dataclass_transform
-//!
-//! @dataclass_transform(kw_only_default=True)
-//! class ModelBase: ...
-//!
-//! class Customer(ModelBase, frozen=True):
-//!     id: int
-//!
-//! c = Customer(3)           # E — kw_only requires keyword args
-//! c.id = 4                  # E — frozen instance is immutable
-//! ```
-
-mod converter;
-mod helpers;
-
-use std::collections::HashMap;
+//! The rule stays registered and emits nothing. It will be rebuilt on
+//! definition resolution — following each binding through the module's imports
+//! to the declaration it actually resolves to — in a later phase.
 
 use basilisk_resolver::ResolvedModule;
-use ruff_python_ast::Expr;
 
-use crate::annotation::AnnotationResolver;
 use crate::diagnostic::Diagnostic;
-use crate::rules::shared::ExprIndex;
 
 use super::Rule;
 
-use helpers::{
-    check_frozen_inheritance, check_frozen_instance_assignment, check_kw_only_positional_args,
-    check_no_order_comparison, collect_transform_base_classes, collect_transform_subclasses,
-    resolve_inherited_settings, TransformClassSettings,
-};
-
-/// Emits `dataclasses_transform_class` for `dataclass_transform` violations via class-based transform.
+/// Registered placeholder for `dataclasses_transform_class`. Emits no
+/// diagnostics until the rule is rebuilt on resolved definitions.
 pub(crate) struct DataclassTransformClassViolation;
 
 impl Rule for DataclassTransformClassViolation {
     fn check(
         &self,
-        module: &ResolvedModule,
-        ctx: &super::CheckContext,
-        diagnostics: &mut Vec<Diagnostic>,
-    ) {
-        super::check_with_own_types(self, module, ctx, diagnostics);
-    }
-
-    fn check_with_types(
-        &self,
-        module: &ResolvedModule,
-        types: &super::shared::module_types::ModuleTypes<'_>,
+        _module: &ResolvedModule,
         _ctx: &super::CheckContext,
-        diagnostics: &mut Vec<Diagnostic>,
+        _diagnostics: &mut Vec<Diagnostic>,
     ) {
-        let Some(parsed) = module.lazy_ast.get_or_parse(&module.source, &module.path) else {
-            return;
-        };
-        let Some(resolver) = AnnotationResolver::for_module(module) else {
-            return;
-        };
-        let transform_bases = collect_transform_base_classes(&resolver, &parsed.ast);
-        if transform_bases.is_empty() {
-            return;
-        }
-
-        let direct_settings = collect_transform_subclasses(&parsed.ast, &transform_bases);
-        if direct_settings.is_empty() {
-            return;
-        }
-
-        let index = ExprIndex::build(&parsed.ast);
-        let path = &module.path;
-
-        // Build a map of all transform-class instances at module level:
-        // variable_name -> (class_name, settings). The constructor is the
-        // parsed call's callee, never a substring of the RHS text.
-        let mut instance_map: HashMap<&str, (&str, TransformClassSettings)> = HashMap::new();
-        for var in &module.module_vars {
-            let Some(Expr::Call(call)) = var.rhs_span.and_then(|span| index.expr(span)) else {
-                continue;
-            };
-            let Expr::Name(callee) = call.func.as_ref() else {
-                continue;
-            };
-            let callee = callee.id.as_str();
-            if let Some(settings) = resolve_inherited_settings(callee, module, &direct_settings) {
-                let _ = instance_map.insert(var.name.as_str(), (callee, settings));
-            }
-        }
-
-        // --- Check 1: Non-frozen subclass inheriting from a frozen transform class ---
-        check_frozen_inheritance(module, &direct_settings, path, diagnostics);
-
-        // --- Check 2: Attribute assignment on frozen transform-class instances ---
-        check_frozen_instance_assignment(module, &instance_map, path, diagnostics);
-
-        // --- Check 3: Positional args to kw_only transform-class constructor ---
-        check_kw_only_positional_args(module, &index, &direct_settings, path, diagnostics);
-
-        // --- Check 4: Comparison operator on instance without order=True ---
-        check_no_order_comparison(&parsed.ast, &instance_map, path, diagnostics);
-
-        // --- Check 5: Field-specifier `converter=` validation (PEP 681) ---
-        // Calls come from the module's one shared walk ([NARROWPLAN-CALLSITES]).
-        let Some(oracle) = types.oracle() else {
-            return;
-        };
-        let subclass_names: Vec<&str> = direct_settings.keys().map(String::as_str).collect();
-        converter::check_converters(module, &subclass_names, oracle.calls(), diagnostics);
     }
 }

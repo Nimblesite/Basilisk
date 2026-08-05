@@ -40,7 +40,6 @@ use basilisk_resolver::{ResolvedModule, Span};
 use ruff_python_ast::{Expr, Stmt, StmtFunctionDef};
 use ruff_text_size::Ranged;
 
-use crate::annotation::AnnotationResolver;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
@@ -68,12 +67,9 @@ impl Rule for TupleStarredUnpackCompatibility {
         let Some(parsed) = module.lazy_ast.get_or_parse(&module.source, &module.path) else {
             return;
         };
-        let Some(resolver) = AnnotationResolver::for_module(module) else {
-            return;
-        };
 
-        check_module_level(&parsed.ast.body, &resolver, &module.path, diagnostics);
-        walk_functions(&parsed.ast.body, &resolver, &module.path, diagnostics);
+        check_module_level(&parsed.ast.body, &module.path, diagnostics);
+        walk_functions(&parsed.ast.body, &module.path, diagnostics);
     }
 }
 
@@ -106,12 +102,7 @@ fn make_diag(message: &str, span: Span, path: &str) -> Diagnostic {
 
 /// Check module-level bare assignments like `t2 = (1, 1, "")` after a
 /// preceding annotated declaration like `t2: tuple[int, *tuple[str, ...]] = ...`.
-fn check_module_level(
-    body: &[Stmt],
-    resolver: &AnnotationResolver<'_>,
-    path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
+fn check_module_level(body: &[Stmt], path: &str, diagnostics: &mut Vec<Diagnostic>) {
     // Annotated module variables whose annotation carries a starred unpack.
     let mut known_shapes: HashMap<&str, TupleShape> = HashMap::new();
 
@@ -121,10 +112,10 @@ fn check_module_level(
                 let Expr::Name(target) = assign.target.as_ref() else {
                     continue;
                 };
-                if !has_starred_unpack(resolver, &assign.annotation) {
+                if !has_starred_unpack(&assign.annotation) {
                     continue;
                 }
-                if let Some(shape) = parse_tuple_shape(resolver, &assign.annotation) {
+                if let Some(shape) = parse_tuple_shape(&assign.annotation) {
                     let _ = known_shapes.insert(target.id.as_str(), shape);
                 }
             }
@@ -153,20 +144,15 @@ fn check_module_level(
 // ---------------------------------------------------------------------------
 
 /// Recursively visit every function definition, however nested.
-fn walk_functions(
-    body: &[Stmt],
-    resolver: &AnnotationResolver<'_>,
-    path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
+fn walk_functions(body: &[Stmt], path: &str, diagnostics: &mut Vec<Diagnostic>) {
     for stmt in body {
         match stmt {
             Stmt::FunctionDef(func_def) => {
-                check_function_body(func_def, resolver, path, diagnostics);
-                walk_functions(&func_def.body, resolver, path, diagnostics);
+                check_function_body(func_def, path, diagnostics);
+                walk_functions(&func_def.body, path, diagnostics);
             }
             Stmt::ClassDef(class_def) => {
-                walk_functions(&class_def.body, resolver, path, diagnostics);
+                walk_functions(&class_def.body, path, diagnostics);
             }
             _ => {}
         }
@@ -175,19 +161,14 @@ fn walk_functions(
 
 /// Check one function's own body for incompatible assignments to
 /// tuple-annotated local variables, using parameter shapes as source types.
-fn check_function_body(
-    func_def: &StmtFunctionDef,
-    resolver: &AnnotationResolver<'_>,
-    path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
+fn check_function_body(func_def: &StmtFunctionDef, path: &str, diagnostics: &mut Vec<Diagnostic>) {
     // Parameter tuple shapes.
     let mut param_shapes: HashMap<&str, TupleShape> = HashMap::new();
     for param in func_def.parameters.iter_non_variadic_params() {
         let Some(ann) = param.annotation() else {
             continue;
         };
-        if let Some(shape) = parse_tuple_shape(resolver, ann) {
+        if let Some(shape) = parse_tuple_shape(ann) {
             let _ = param_shapes.insert(param.name().as_str(), shape);
         }
     }
@@ -201,7 +182,7 @@ fn check_function_body(
                 let Expr::Name(target) = assign.target.as_ref() else {
                     continue;
                 };
-                if let Some(shape) = parse_tuple_shape(resolver, &assign.annotation) {
+                if let Some(shape) = parse_tuple_shape(&assign.annotation) {
                     let _ = local_shapes.insert(target.id.as_str(), shape);
                 }
             }

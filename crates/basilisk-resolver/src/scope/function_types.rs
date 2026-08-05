@@ -121,7 +121,7 @@ pub struct FunctionInfo {
     pub kwarg: Option<ParameterInfo>,
     /// How the return annotation is classified (or absent).
     pub return_annotation: ReturnAnnotationKind,
-    /// Decorator names applied to this function (e.g. `"overload"`, `"override"`).
+    /// Decorator names applied to this function, as spelled at the definition.
     pub decorators: Vec<String>,
     /// Decorator name spans paired with their names (for semantic token highlighting).
     pub decorator_spans: Vec<(String, Span)>,

@@ -4,14 +4,12 @@
 //! Validates assignments where the RHS is a `TypedDict`-typed variable:
 //!
 //! - `TypedDict` → `dict`: always an error
-//! - `TypedDict` → `Mapping[str, T]`: error unless T is `object` or `Any`
 //! - `TypedDict` → `TypedDict`: structural compatibility check
 //!
 //! Every verdict is structural over the parsed `ruff` AST
-//! ([LINESCANPLAN-AST-MIGRATION], issue #408): `dict`/`Dict`, `Mapping` from
-//! `typing` or `collections.abc`, `Required`/`NotRequired` under any import
-//! spelling, and the PEP 728 `extra_items=` keyword all resolve through the
-//! module's binding tables — never through sliced source text.
+//! ([LINESCANPLAN-AST-MIGRATION], issue #408): the builtin `dict` and the
+//! PEP 728 `extra_items=` class keyword resolve through the module's binding
+//! tables — never through sliced source text.
 
 use std::collections::HashMap;
 
@@ -20,9 +18,7 @@ use ruff_python_ast::{Expr, ModModule, Operator, Stmt};
 
 use crate::annotation::AnnotationResolver;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic};
-use crate::rules::shared::typing_form::{
-    denotes, denotes_abc, strip_qualifiers, subscript_args, subscript_of,
-};
+use crate::rules::shared::typing_form::{strip_qualifiers, subscript_args};
 use crate::rules::shared::{ann_str, ExprIndex};
 
 use super::CODE;
@@ -116,7 +112,7 @@ fn check_td_to_target(
 ) {
     // TypedDict → dict[...]: an error, except a PEP 728 `extra_items=`
     // TypedDict whose value types are all assignable to the dict value type.
-    if let Some(dict_target) = dict_target(ctx.resolver, annotation) {
+    if let Some(dict_target) = dict_target(annotation) {
         if let DictTarget::Parameterized(value_type) = dict_target {
             if extra_items_values_assignable(ctx, rhs_td_name, &ann_str(value_type)) {
                 return;
@@ -132,31 +128,6 @@ fn check_td_to_target(
             ),
             "A TypedDict is not consistent with any dict[...] type",
         );
-        return;
-    }
-
-    // TypedDict → Mapping[str, T]: error unless T is object/Any, or the
-    // TypedDict declares `extra_items=` and every value type is assignable
-    // to T (PEP 728).
-    if let Some(value_type) = mapping_value_type(ctx.resolver, annotation) {
-        let is_top = matches!(value_type, Expr::Name(name) if name.id.as_str() == "object")
-            || denotes(ctx.resolver, value_type, "Any");
-        if !is_top && !extra_items_values_assignable(ctx, rhs_td_name, &ann_str(value_type)) {
-            emit_td_error(
-                diagnostics,
-                span,
-                &module.path,
-                &format!(
-                    "TypedDict `{rhs_td_name}` is not assignable to `{}`",
-                    ann_str(annotation)
-                ),
-                &format!(
-                    "TypedDict is only assignable to Mapping[str, object], \
-                     not Mapping[str, {}]",
-                    ann_str(value_type)
-                ),
-            );
-        }
         return;
     }
 
@@ -209,16 +180,10 @@ enum DictTarget<'e> {
     Parameterized(&'e Expr),
 }
 
-/// When the annotation is `dict`/`Dict` (bare or subscripted), the target
+/// When the annotation is the builtin `dict` (bare or subscripted), the target
 /// shape; `None` when the annotation is not a dict type at all.
-fn dict_target<'e>(
-    resolver: &AnnotationResolver<'_>,
-    annotation: &'e Expr,
-) -> Option<DictTarget<'e>> {
-    let is_dict_head = |head: &Expr| {
-        matches!(head, Expr::Name(name) if name.id.as_str() == "dict")
-            || denotes(resolver, head, "Dict")
-    };
+fn dict_target(annotation: &Expr) -> Option<DictTarget<'_>> {
+    let is_dict_head = |head: &Expr| matches!(head, Expr::Name(name) if name.id.as_str() == "dict");
     match annotation {
         Expr::Subscript(subscript) if is_dict_head(&subscript.value) => {
             match subscript_args(&subscript.slice).get(1).copied() {
@@ -229,21 +194,6 @@ fn dict_target<'e>(
         head if is_dict_head(head) => Some(DictTarget::Bare),
         _ => None,
     }
-}
-
-/// The value type T of a `Mapping[str, T]` annotation, under any spelling of
-/// `Mapping` from `typing` or `collections.abc`.
-fn mapping_value_type<'e>(
-    resolver: &AnnotationResolver<'_>,
-    annotation: &'e Expr,
-) -> Option<&'e Expr> {
-    let Expr::Subscript(subscript) = annotation else {
-        return None;
-    };
-    if !denotes_abc(resolver, &subscript.value, "Mapping") {
-        return None;
-    }
-    subscript_args(&subscript.slice).get(1).copied()
 }
 
 /// Emit a `TypedDict` assignability error.
@@ -348,7 +298,7 @@ fn class_keyword_value<'ast>(
 }
 
 /// One structural field: name, value-type node (qualifiers peeled), and
-/// required-ness under PEP 655.
+/// required-ness as declared by the class's totality.
 struct TdField<'m, 'ast> {
     name: &'m str,
     value_type: &'ast Expr,
@@ -364,17 +314,10 @@ fn extract_fields<'m, 'ast>(
         .iter()
         .filter_map(|attr| {
             let ann = attr.annotation_span.and_then(|span| ctx.index.expr(span))?;
-            let required = if subscript_of(ctx.resolver, ann, "Required").is_some() {
-                true
-            } else if subscript_of(ctx.resolver, ann, "NotRequired").is_some() {
-                false
-            } else {
-                cls.is_typeddict_total
-            };
             Some(TdField {
                 name: attr.name.as_str(),
                 value_type: strip_qualifiers(ctx.resolver, ann),
-                required,
+                required: cls.is_typeddict_total,
             })
         })
         .collect()

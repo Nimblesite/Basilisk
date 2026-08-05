@@ -11,6 +11,48 @@ Target: implement the [Python typing specification](https://typing.python.org/en
 
 ⚠️ **Never touch the scoreboard — move the number by FIXING the checker.** FORBIDDEN: disabling or unregistering a rule, deleting a rule merely to avoid implementing it, removing it from `all_rules()`, applying rule-suppressing config (the legacy `basilisk.json` is no longer read), hand-editing `conformance/conformance_status.csv`, or loosening `coverage-thresholds.json` (`threshold` / `max_false_positives`). REQUIRED ON THIS CLEANUP BRANCH: delete fixture-fitted implementation logic and rebuild each affected rule structurally from the AST and specification, with independent tests. See [CHKARCH-CONFORMANCE], [CHKARCH-CONFORMANCE-MODE]. ⚠️
 
+⚠️⚠️ **THE SYMBOL-NAMING BAN — PERMANENT, NON-NEGOTIABLE, NO EXCEPTIONS.** Basilisk MUST NEVER
+identify a Python typing symbol by writing that symbol's NAME into Rust. Not as a comparison, not
+as a match arm, not as a const array, not as a function argument, not as a "just this once"
+helper. **BANNED FOREVER**, in every crate, in every form:
+
+```rust
+name.id.as_str() == "TypeVar"              // BANNED
+matches!(base, "Protocol" | "Generic")     // BANNED
+ann.starts_with("Callable[")               // BANNED
+bases.iter().any(|b| b == "TypedDict")     // BANNED
+const FORMS: &[&str] = &["Final", ...]     // BANNED
+denotes(resolver, expr, "ClassVar")        // BANNED — passing the name as an argument is
+symbols.denotes(expr, "TypeVar")           // BANNED   the SAME cheat with extra steps
+decorator_spelled(d, "overload")           // BANNED
+source_line.contains("Generic[")           // BANNED — and never scan raw source text at all
+```
+
+If the string `"TypeVar"`, `"Protocol"`, `"ClassVar"`, `"overload"`, `"dataclass"` — or ANY other
+name that Python code must import to use — appears in a Rust file for the purpose of deciding
+what an expression means, that is cheat code. It is illegal whether it sits at the comparison, in
+a table, or behind an API that takes it as a parameter. **Delete it on sight.** Wrapping it in a
+resolver does not launder it: the checker still only works because a human typed the conformance
+suite's vocabulary into the source.
+
+**Why:** a name in Python source is not the symbol. `from typing import TypeVar as TV` is a
+`TypeVar`; a local `class TypeVar:` is not. Matching characters gets both wrong, and it made the
+conformance score a measurement of how well the code had been fitted to the fixtures rather than
+of whether the checker works. See [`docs/CONFORMANCE-SPELLING-CHEAT-INVENTORY.md`] for the ~431
+sites this produced and their deletion.
+
+**The only lawful mechanism:** recognition is a question about *definitions*, answered from the
+AST plus resolution — follow the binding through the module's imports to the declaration it
+actually resolves to in typeshed, and derive meaning from that declaration. Never from the
+characters at the use site. Rule code carries no PEP vocabulary at all.
+
+**Permitted** (these need no import, so naming them decides nothing about typing): true builtins
+(`int`, `str`, `list`, `isinstance`, `object`, …), dunder names, keyword-argument names at call
+sites (`bound=`, `kw_only=`, `total=`), and text inside diagnostic MESSAGES shown to users.
+
+Guarded by `crates/basilisk-checker/tests/no_symbol_naming.rs`, which fails the build if a banned
+name reappears. **Never weaken, skip, or allowlist your way past that test.** ⚠️⚠️
+
 ⚠️ **One pristine-fixture regression path**, run fresh every CI run: `python3 conformance/run_conformance.py`. `python/typing@main` removed the Basilisk adapter with the official listing, so the runner currently clones the last upstream snapshot that carried it (`a4906624f170c169cf667f962080c56d5a5ba6ff`), with no cache or committed-fixture fallback; builds the release-profile binary from this checkout; runs that snapshot's own unmodified `conformance/src/main.py --only-run basilisk` via `BASILISK_BIN`; and regenerates `conformance_status.csv` from the harness's own results. A vendored scorer, reimplemented/injected adapter, or cached fixtures standing in for that run is a **BUILD FAILURE**. The raw result is historical fixture-regression evidence, not a current official result or publishable conformance claim, until `make mutation-conformance` and independent off-suite tests confirm structural behaviour. Move back to a freshly cloned current upstream suite only when upstream carries a Basilisk adapter again. ⚠️
 
 - Score the binary in its default config — every PEP rule on, nothing configured ([CHKARCH-CONFIGURATION-ONLY]). Do not publish a replacement percentage until the clean implementation passes the upstream, mutation-conformance, and off-suite integrity gates. Historical generated score files are audit evidence, not a current claim.

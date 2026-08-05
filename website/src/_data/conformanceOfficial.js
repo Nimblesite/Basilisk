@@ -18,7 +18,7 @@
 
 const SNAPSHOT = {
   source: "https://github.com/python/typing/blob/main/conformance/results/results.html",
-  resultsDir: "https://github.com/python/typing/tree/main/conformance/results",
+  resultsDir: "https://github.com/python/typing/tree/3410759355c3018063d3a446102f88621fc43eb5/conformance/results",
   snapshotUrl: "https://github.com/python/typing/blob/3410759355c3018063d3a446102f88621fc43eb5/conformance/results/results.html",
   commitUrl: "https://github.com/python/typing/commit/3410759355c3018063d3a446102f88621fc43eb5",
   addedPrUrl: "https://github.com/python/typing/pull/2316",

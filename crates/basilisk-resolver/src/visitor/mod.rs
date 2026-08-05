@@ -54,7 +54,7 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
         true,
     );
 
-    dataclass::apply_dataclass_transform(&module.ast.body, &mut classes, &functions);
+    dataclass::apply_dataclass_transform(&module.ast.body, &mut classes);
 
     let calls = calls_and_reveal::collect_calls_from_stmts(&module.ast.body);
     let typevar_calls = typevar::collect_typevar_calls(&module.ast.body);

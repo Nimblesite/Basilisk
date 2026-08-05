@@ -6,12 +6,16 @@
 //! `Expr::Starred` nodes and element types are expression nodes rendered
 //! canonically — never `*tuple[` substring hits or comma-splitting of source
 //! text.
+//!
+//! Only the builtin `tuple[...]` spelling is modelled. Recognising a typing
+//! special form by the name written at the use site is banned permanently (see
+//! the symbol-naming ban in `CLAUDE.md`), so that alternative was deleted
+//! rather than re-expressed behind another spelling comparison.
 
 use ruff_python_ast::{Expr, Number};
 
-use crate::annotation::AnnotationResolver;
 use crate::rules::shared::ann_str;
-use crate::rules::shared::typing_form::{denotes, subscript_args};
+use crate::rules::shared::typing_form::subscript_args;
 
 // ---------------------------------------------------------------------------
 // Parsed tuple annotation representation
@@ -37,26 +41,22 @@ pub(super) enum TupleShape {
     },
 }
 
-/// Is this annotation a `tuple[...]` subscript (builtin `tuple` or
-/// `typing.Tuple` under any spelling)?
-fn tuple_subscript<'e>(resolver: &AnnotationResolver<'_>, expr: &'e Expr) -> Option<Vec<&'e Expr>> {
+/// Is this annotation a builtin `tuple[...]` subscript?
+fn tuple_subscript(expr: &Expr) -> Option<Vec<&Expr>> {
     let Expr::Subscript(subscript) = expr else {
         return None;
     };
-    let is_tuple = matches!(subscript.value.as_ref(), Expr::Name(name) if name.id.as_str() == "tuple")
-        || denotes(resolver, &subscript.value, "Tuple");
+    let is_tuple =
+        matches!(subscript.value.as_ref(), Expr::Name(name) if name.id.as_str() == "tuple");
     is_tuple.then(|| subscript_args(&subscript.slice))
 }
 
 /// Parse a tuple annotation node into a structured shape.
 ///
 /// Returns `None` for non-tuple annotations and forms the model does not
-/// cover (e.g. a `*Ts` `TypeVarTuple` unpack).
-pub(super) fn parse_tuple_shape(
-    resolver: &AnnotationResolver<'_>,
-    expr: &Expr,
-) -> Option<TupleShape> {
-    let args = tuple_subscript(resolver, expr)?;
+/// cover.
+pub(super) fn parse_tuple_shape(expr: &Expr) -> Option<TupleShape> {
+    let args = tuple_subscript(expr)?;
 
     // Empty tuple: `tuple[()]`.
     if let [Expr::Tuple(inner)] = args.as_slice() {
@@ -81,7 +81,7 @@ pub(super) fn parse_tuple_shape(
     let Expr::Starred(starred) = args.get(star_idx)? else {
         return None;
     };
-    let unpack_args = tuple_subscript(resolver, &starred.value)?;
+    let unpack_args = tuple_subscript(&starred.value)?;
 
     let mut prefix_types: Vec<String> = args.get(..star_idx)?.iter().map(|e| ann_str(e)).collect();
     let suffix_types: Vec<String> = args
@@ -123,9 +123,8 @@ pub(super) fn parse_tuple_shape(
 }
 
 /// Does this tuple annotation contain a starred unpack component?
-pub(super) fn has_starred_unpack(resolver: &AnnotationResolver<'_>, expr: &Expr) -> bool {
-    tuple_subscript(resolver, expr)
-        .is_some_and(|args| args.iter().any(|arg| matches!(arg, Expr::Starred(_))))
+pub(super) fn has_starred_unpack(expr: &Expr) -> bool {
+    tuple_subscript(expr).is_some_and(|args| args.iter().any(|arg| matches!(arg, Expr::Starred(_))))
 }
 
 /// Check whether a source variable's tuple shape is incompatible with the

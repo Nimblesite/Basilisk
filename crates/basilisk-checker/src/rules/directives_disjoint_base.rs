@@ -1,21 +1,19 @@
 //! Implements [`directives_disjoint_base`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 //! `directives_disjoint_base`: PEP 800 disjoint bases.
 //!
-//! PEP 800 introduces `typing.disjoint_base`. A class is a *disjoint base* when
-//! it is decorated `@disjoint_base` or defines a non-empty `__slots__`. A class
-//! definition must have a single *dominating* disjoint base among its bases:
+//! PEP 800 introduces disjoint bases. A class is a *disjoint base* when it
+//! defines a non-empty `__slots__`. A class definition must have a single
+//! *dominating* disjoint base among its bases:
 //!
 //! ```python
-//! @disjoint_base
-//! class Left: ...
-//! @disjoint_base
-//! class Right: ...
+//! class Left:
+//!     __slots__ = ("a",)
+//!
+//! class Right:
+//!     __slots__ = ("b",)
 //!
 //! class Both(Left, Right): ...   # error — incompatible disjoint bases
 //! ```
-//!
-//! The decorator may be used only on nominal classes (including `NamedTuple`); it
-//! is an error to apply it to a function, a `TypedDict`, or a `Protocol`.
 
 use std::collections::{HashMap, HashSet};
 
@@ -23,7 +21,6 @@ use basilisk_resolver::{ClassInfo, ResolvedModule, RhsKind, Span};
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
-use super::guards::is_protocol_class;
 use super::shared::class_name_map;
 use super::Rule;
 
@@ -32,8 +29,8 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/directives_disjoint_base",
 };
 
-/// Emits `directives_disjoint_base` for `@disjoint_base` misuse and for class
-/// definitions with incompatible disjoint bases.
+/// Emits `directives_disjoint_base` for class definitions with incompatible
+/// disjoint bases.
 pub(crate) struct DisjointBaseViolation;
 
 impl Rule for DisjointBaseViolation {
@@ -43,31 +40,9 @@ impl Rule for DisjointBaseViolation {
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        // `@disjoint_base` on a module-level function is forbidden.
-        for func in &module.functions {
-            if func.class_name.is_none() {
-                if let Some(span) = disjoint_base_decorator_span(&func.decorator_spans) {
-                    diagnostics.push(misuse(span, "a function", &module.path));
-                }
-            }
-        }
-
         let map = class_name_map(&module.classes);
 
         for cls in &module.classes {
-            // `@disjoint_base` on a TypedDict / Protocol is forbidden (NamedTuple
-            // and plain nominal classes are allowed).
-            if let Some(span) = disjoint_base_decorator_span(&cls.decorator_spans) {
-                if cls.is_typed_dict {
-                    diagnostics.push(misuse(span, "a TypedDict", &module.path));
-                    continue;
-                }
-                if is_protocol_class(cls) {
-                    diagnostics.push(misuse(span, "a Protocol", &module.path));
-                    continue;
-                }
-            }
-
             // A class must have a single dominating disjoint base among its bases.
             let candidates: Vec<&str> = collect_candidates(cls, &map).into_iter().collect();
             if candidates.len() > 1 && !has_dominator(&candidates, &map) {
@@ -77,22 +52,8 @@ impl Rule for DisjointBaseViolation {
     }
 }
 
-/// The span of a `@disjoint_base` / `@*.disjoint_base` decorator, if present.
-fn disjoint_base_decorator_span(decorators: &[(String, Span)]) -> Option<Span> {
-    decorators
-        .iter()
-        .find(|(name, _)| name == "disjoint_base" || name.ends_with(".disjoint_base"))
-        .map(|(_, span)| *span)
-}
-
-/// A class is a disjoint base when decorated `@disjoint_base` or when it defines
-/// a non-empty `__slots__`.
-fn is_disjoint_base(cls: &ClassInfo) -> bool {
-    disjoint_base_decorator_span(&cls.decorator_spans).is_some() || has_nonempty_slots(cls)
-}
-
-/// `true` when the class assigns a non-empty `__slots__` (an empty `__slots__ = ()`
-/// does not make the class a disjoint base).
+/// A class is a disjoint base when it assigns a non-empty `__slots__` (an empty
+/// `__slots__ = ()` does not make the class a disjoint base).
 fn has_nonempty_slots(cls: &ClassInfo) -> bool {
     cls.attributes
         .iter()
@@ -136,7 +97,7 @@ fn resolve_base<'a>(
     let Some(cls) = map.get(name) else {
         return; // external base — contributes no disjoint base
     };
-    if is_disjoint_base(cls) {
+    if has_nonempty_slots(cls) {
         let _ = out.insert(name);
         return;
     }
@@ -164,20 +125,6 @@ fn is_subclass(child: &str, ancestor: &str, map: &HashMap<&str, &ClassInfo>, dep
             .iter()
             .any(|base| is_subclass(base, ancestor, map, depth + 1))
     })
-}
-
-fn misuse(span: Span, target: &str, path: &str) -> Diagnostic {
-    error_diagnostic_owned(
-        CODE.clone(),
-        format!("`@disjoint_base` cannot be applied to {target}"),
-        span,
-        path,
-        Some("Remove the `@disjoint_base` decorator".to_owned()),
-        Some(
-            "PEP 800: `@disjoint_base` may be used only on nominal classes (including NamedTuple)"
-                .to_owned(),
-        ),
-    )
 }
 
 fn incompatible(span: Span, candidates: &[&str], path: &str) -> Diagnostic {

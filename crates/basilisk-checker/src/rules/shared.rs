@@ -27,48 +27,10 @@ pub(crate) use type_expr::{
 
 use std::collections::HashSet;
 
-use crate::annotation::AnnotationResolver;
-use crate::span_util::slice_span;
 use crate::types::InferredType;
 use basilisk_parser::ParsedModule;
-use basilisk_resolver::{ResolvedModule, Span, TypeVarCallInfo};
+use basilisk_resolver::{ResolvedModule, TypeVarCallInfo};
 use ruff_python_ast::{self as ast, Expr};
-
-/// Is one of `decorators` the `typing.overload` decorator?
-///
-/// Resolved through the module's binding tables
-/// ([TYPEINF-ANNOTATION-RESOLUTION], [#380](https://github.com/Nimblesite/Basilisk/issues/380)):
-/// `@overload`, `@ov` after `from typing import overload as ov`,
-/// `@typing.overload` / `@t.overload`, and `@o` after `o = overload` all
-/// answer yes; a decorator merely *named* `overload` but bound from another
-/// module answers no. Every rule that reasons about overload groups shares
-/// this one predicate so the groups they form agree.
-pub(crate) fn overload_decorated(resolver: &AnnotationResolver<'_>, decorators: &[String]) -> bool {
-    decorators
-        .iter()
-        .any(|decorator| resolver.decorator_denotes(decorator, "overload"))
-}
-
-/// Returns `true` when the annotation at `span` denotes `ClassVar`, bare or
-/// subscripted, under ANY import spelling ([TYPEINF-ANNOTATION-RESOLUTION]).
-///
-/// `ClassVar` fields are excluded from the dataclass `__init__` parameter list,
-/// so dataclass rules (field ordering, constructor arity) skip them. The
-/// sliced text is parsed by `ruff` into the type expression it always was and
-/// judged through the cascade — never compared against a hardcoded spelling.
-pub(crate) fn annotation_is_classvar(
-    resolver: &AnnotationResolver<'_>,
-    source: &str,
-    span: Option<Span>,
-) -> bool {
-    let Some(text) = span.and_then(|span| slice_span(source, span)) else {
-        return false;
-    };
-    let Ok(parsed) = ruff_python_parser::parse_expression(text.trim()) else {
-        return false;
-    };
-    typing_form::denotes_form(resolver, parsed.expr(), "ClassVar")
-}
 
 // ---------------------------------------------------------------------------
 // Parsing

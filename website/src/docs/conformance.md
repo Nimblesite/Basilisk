@@ -40,8 +40,9 @@ A future conformance result must satisfy all of these checks:
 
 1. Run the official, unmodified `python/typing` harness against Basilisk's default configuration.
 2. Apply AST-preserving mutations such as consistent renaming of type variables and equivalent spelling changes. A rule is not accepted if those changes move its result.
-3. Add regression and mutation tests for every test-specific implementation found by the audit.
-4. Publish the robustness result alongside the suite percentage and make the methodology reproducible.
+3. Pass independent off-suite cases derived from the typing specification and real-world code rather than from the upstream fixture text.
+4. Add regression and mutation tests for every test-specific implementation found by the audit.
+5. Publish the robustness and off-suite results alongside the suite percentage and make the methodology reproducible.
 
 Until that work is complete, old conformance tables, charts, category scores, pass counts, and false-positive totals are withdrawn and should not be cited as Basilisk's current state.
 

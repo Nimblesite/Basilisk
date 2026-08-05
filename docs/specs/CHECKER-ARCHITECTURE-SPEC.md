@@ -1640,21 +1640,23 @@ re-timed. Nothing measured is ever carried, so the write-always rule is
 untouched. CI never runs benchmarks at all; **a number published as a full
 benchmark must come from `make bench`** — this mode is for iteration.
 
-**Publication.** The website reads the status CSV directly, so published figures
-are never hand-typed and never stale relative to the last committed run. The
-benchmark page carries the indicative-only caveat and the measured tool versions
-next to the table (`website/src/docs/benchmarks.njk`). Moving the benchmark onto
-dedicated, isolated hardware is the prerequisite for treating any of these
-numbers as authoritative.
+**Publication.** Every existing figure and ranking is withdrawn. The website
+may read the status CSV only to render a clearly labelled historical audit
+record; direct ingestion prevents transcription errors but does not validate
+the method or make a figure current. A controlled, repeatable environment,
+same-run comparisons, stated limitations, and independent methodology review
+are prerequisites for any future publication. No developer-workstation number
+is authoritative.
 
 ### CI Artifact Storage Policy {#GITHUB-NO-ARTIFACTS}
 
 Basilisk is **public**: GitHub-hosted runner compute (all `ubuntu-24.04`) is free and unlimited; GitHub bills for **stored Actions artifacts** (GB-days). Therefore:
 
 - **CI stores no artifacts.** No `actions/upload-artifact` for coverage HTML,
-  mutation reports, logs, screenshots. Gates enforce in-job (coverage, mutation
-  merge, benchmarks) and reports reproduce locally (`make test`, `make
-  mutation-test`). Codecov consumes `lcov.info` directly without GitHub storage.
+  mutation reports, logs, screenshots. Coverage and mutation gates enforce
+  in-job, and reports reproduce locally (`make test`, `make mutation-test`).
+  Benchmarks do not run or gate in CI. Codecov consumes `lcov.info` directly
+  without GitHub storage.
 - **The only permanent store is the GitHub Release.** Release assets (binaries,
   per-platform VSIX) are free and unlimited; never retained Actions artifacts.
 - **Transient cross-job hand-offs are the sole exception** (matrix jobs on separate
