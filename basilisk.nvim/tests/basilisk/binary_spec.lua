@@ -440,7 +440,18 @@ describe("basilisk.binary", function()
 
   describe("download", function()
     it("downloads and extracts a working binary (requires network)", function()
-      local release = binary.fetch_latest_release()
+      local asset_name = binary.platform_asset_name()
+      if not asset_name then
+        pending("no published asset for this platform")
+        return
+      end
+      -- The release download() resolves is NOT always the newest one: a release
+      -- published before its upload job ran carries zero assets, and download()
+      -- skips past it. Pinning the version assertion below to the release the
+      -- binary ACTUALLY came from is stronger than pinning it to the newest
+      -- tag — it ties the reported version to the artifact on disk.
+      -- [NVIM-BINARY-UPGRADE-ASSETS]
+      local release = binary.find_release_with_asset(asset_name)
       if not release then
         pending("GitHub unreachable — skipping download test")
         return
@@ -461,7 +472,7 @@ describe("basilisk.binary", function()
       -- Version assertions.
       assert.is_true(type(version) == "string", "version should be a string")
       assert.is_true(#version > 0, "version should not be empty")
-      assert.are.equal(release.tag_name, version, "version should match release tag")
+      assert.are.equal(release.tag_name, version, "version must match the release the binary came from")
 
       -- Path should be under stdpath("data")/basilisk/<version>/.
       local expected_dir = vim.fn.stdpath("data") .. "/basilisk/" .. version
