@@ -49,10 +49,6 @@ pub(super) fn resolve_actual_type(
 /// Extract the text of a type expression (the second argument to `assert_type`).
 pub(super) fn normalize_type_str(ann: &str) -> String {
     let trimmed = ann.trim();
-    // Strip Annotated[T, ...] → take first argument only.
-    if let Some(inner) = strip_annotated_wrapper(trimmed) {
-        return normalize_type_str(inner);
-    }
     // Strip outer string quotes (forward references like `"list[int]"` or `'MyClass'`).
     if trimmed.len() >= 2
         && ((trimmed.starts_with('"') && trimmed.ends_with('"'))
@@ -100,29 +96,22 @@ pub(super) fn split_subscript(text: &str) -> Option<(&str, &str)> {
     Some((name, inner))
 }
 
-/// Strip a leading unpacked-tuple marker (`*tuple[...]` or `Unpack[tuple[...]]`),
-/// returning the inner element text of the wrapped tuple. Other unpacks (e.g.
-/// `*Ts` for a `TypeVarTuple`) yield `None` — they cannot be expanded textually.
+/// Strip a leading unpacked-tuple marker (`*tuple[...]`), returning the inner
+/// element text of the wrapped tuple. Other unpacks (e.g. `*Ts`) yield `None` —
+/// they cannot be expanded textually.
 fn unpacked_tuple_inner(arg: &str) -> Option<&str> {
     let arg = arg.trim();
-    let tuple_expr = if let Some(star) = arg.strip_prefix('*') {
-        star.trim()
-    } else {
-        arg.strip_prefix("Unpack[")
-            .and_then(|rest| rest.strip_suffix(']'))?
-            .trim()
-    };
+    let tuple_expr = arg.strip_prefix('*')?.trim();
     split_subscript(tuple_expr).and_then(|(name, inner)| (name == "tuple").then_some(inner))
 }
 
 /// Canonicalize a type-expression string so that equivalent spellings compare
-/// equal. Two rewrites are applied recursively:
+/// equal. One rewrite is applied recursively:
 ///
-/// - `Union[a, b, ...]` → `a | b | ...` (PEP 604 form), preserving member order.
 /// - Fixed unpacked tuples inside `tuple[...]` are spliced in place, e.g.
 ///   `tuple[int, *tuple[bool, bool], str]` → `tuple[int, bool, bool, str]`.
-///   Unbounded unpacks (`*tuple[x, ...]`, `Unpack[tuple[x, ...]]`) are left
-///   intact, matching the typing-spec rule that an unbounded tuple is preserved.
+///   Unbounded unpacks (`*tuple[x, ...]`) are left intact, matching the
+///   typing-spec rule that an unbounded tuple is preserved.
 ///
 /// Order is preserved (no member sorting), so genuinely different types such as
 /// `int` vs `int | str` stay distinct. Implements part of `directives_assert_type_2`.
@@ -130,11 +119,6 @@ pub(super) fn canonicalize_type_str(ann: &str) -> String {
     let text = normalize_type_str(ann);
     let trimmed = text.trim();
     match split_subscript(trimmed) {
-        Some(("Union", inner)) => split_top_level_args(inner)
-            .iter()
-            .map(|a| canonicalize_type_str(a))
-            .collect::<Vec<_>>()
-            .join(" | "),
         Some(("tuple", inner)) => format!("tuple[{}]", canonicalize_tuple_args(inner)),
         Some((name, inner)) => {
             let args = split_top_level_args(inner)
@@ -225,40 +209,9 @@ pub(super) fn collect_typeddict_key_violations<'a>(
     }
 
     let var_type = td_var_type_from_stmts(stmts, &typeddict_fields);
-    let final_consts = collect_final_str_consts(stmts);
     let mut out = Vec::new();
-    check_td_stmts(&typeddict_fields, &var_type, &final_consts, stmts, &mut out);
+    check_td_stmts(&typeddict_fields, &var_type, stmts, &mut out);
     out
-}
-
-/// Returns `true` when `ann` is a `Final` / `Final[...]` / `typing.Final[...]` annotation.
-fn ann_is_final(ann: &Expr) -> bool {
-    match ann {
-        Expr::Name(n) => n.id.as_str() == "Final",
-        Expr::Attribute(a) => a.attr.as_str() == "Final",
-        Expr::Subscript(s) => ann_is_final(&s.value),
-        _ => false,
-    }
-}
-
-/// Collect module-level `NAME: Final = "literal"` string constants as a
-/// name → value map. Used so a `Final` string name can stand in for a string
-/// literal in `TypedDict` subscript operations (PEP 591).
-fn collect_final_str_consts(stmts: &[Stmt]) -> std::collections::HashMap<String, String> {
-    let mut map = std::collections::HashMap::new();
-    for stmt in stmts {
-        let Stmt::AnnAssign(ann) = stmt else { continue };
-        if !ann_is_final(&ann.annotation) {
-            continue;
-        }
-        let Some(name) = expr_simple_name(&ann.target) else {
-            continue;
-        };
-        if let Some(Expr::StringLiteral(value)) = ann.value.as_deref() {
-            let _ = map.insert(name, value.value.to_string());
-        }
-    }
-    map
 }
 
 /// `(all_fields, field_types, is_total, has_extra_items)` map keyed by class name.

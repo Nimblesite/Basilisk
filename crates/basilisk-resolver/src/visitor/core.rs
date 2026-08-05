@@ -429,22 +429,13 @@ pub(super) fn check_td_stmts(
                                 // A TypedDict with `extra_items` (PEP 728) behaves
                                 // like `dict[str, VT]`, so the mutating dict methods
                                 // become available and must not be flagged.
-                                if let Some((_, field_types, _, has_extra_items)) =
+                                if let Some((_, _, _, has_extra_items)) =
                                     fields.get(class_name.as_str())
                                 {
                                     const DISALLOWED: &[&str] =
                                         &["clear", "pop", "popitem", "setdefault", "update"];
                                     let method = attr.attr.as_str();
-                                    if !has_extra_items
-                                        && DISALLOWED.contains(&method)
-                                        && disallowed_mutator_flagged(
-                                            method,
-                                            call,
-                                            field_types,
-                                            var_type,
-                                            fields,
-                                        )
-                                    {
+                                    if !has_extra_items && DISALLOWED.contains(&method) {
                                         out.push(TypedDictKeyViolation {
                                             span: text_range_to_span(expr_stmt.value.range()),
                                             class_name: class_name.clone(),

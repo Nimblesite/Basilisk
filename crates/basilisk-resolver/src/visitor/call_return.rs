@@ -210,4 +210,3 @@ fn effective_params(
     }
     params.to_vec()
 }
-

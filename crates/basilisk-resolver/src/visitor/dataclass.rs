@@ -84,9 +84,6 @@ pub(super) fn collect_dc_transform_factories(stmts: &[Stmt]) -> Vec<DcTransformF
     out
 }
 
-/// Parse a `@dataclass_transform(...)` expression.
-///
-/// Returns `(is_dc_transform, kw_only_default, field_specifier_names)`.
 pub(super) fn build_field_specifier_overloads(
     stmts: &[Stmt],
     spec_name: &str,
@@ -340,94 +337,6 @@ pub(super) fn resolve_transform_field_attrs(
         }
         attr.is_kw_only = effective_kw_only.unwrap_or(kw_only_default);
     }
-}
-
-// ---------------------------------------------------------------------------
-// Function info
-// ---------------------------------------------------------------------------
-
-/// Returns `true` when `class` carries a `@dataclass` / `@dataclass(...)` /
-/// `@dataclasses.dataclass` decorator. Used to recognize that the synthesized
-/// `__init__` assigns every (non-`ClassVar`) field, so a `Final` field without an
-/// inline default is valid (it becomes a required constructor parameter).
-pub(super) fn is_dataclass_decorated(class: &StmtClassDef) -> bool {
-    class.decorator_list.iter().any(|dec| {
-        let expr = match &dec.expression {
-            Expr::Call(call) => call.func.as_ref(),
-            other => other,
-        };
-        super::walks::is_name_or_attr_named(expr, "dataclass")
-    })
-}
-
-pub(super) fn dataclass_flag(class: &StmtClassDef, key: &str) -> bool {
-    for dec in &class.decorator_list {
-        let Expr::Call(call) = &dec.expression else {
-            continue;
-        };
-        let is_dc = super::walks::is_name_or_attr_named(call.func.as_ref(), "dataclass");
-        if !is_dc {
-            continue;
-        }
-        for kw in &call.arguments.keywords {
-            if kw.arg.as_ref().map(ruff_python_ast::Identifier::as_str) == Some(key) {
-                return matches!(&kw.value, Expr::BooleanLiteral(b) if b.value);
-            }
-        }
-    }
-    false
-}
-
-/// Returns `true` when the annotation expression is `KW_ONLY`
-/// (the sentinel that makes all following fields keyword-only).
-pub(super) fn field_kw_only_override(value: &Expr) -> Option<bool> {
-    let Expr::Call(call) = value else { return None };
-    let is_field_call = super::walks::is_name_or_attr_named(call.func.as_ref(), "field");
-    if !is_field_call {
-        return None;
-    }
-    for kw in &call.arguments.keywords {
-        if kw.arg.as_ref().is_some_and(|arg| arg.as_str() == "kw_only") {
-            return Some(matches!(&kw.value, Expr::BooleanLiteral(b) if b.value));
-        }
-    }
-    None
-}
-
-/// Returns `true` when the value expression is a `field(init=False, ...)` call.
-///
-/// Only checks calls to the standard `dataclasses.field` function.  Field specifier
-/// calls from `@dataclass_transform` are resolved in `apply_dataclass_transform`.
-pub(super) fn field_init_is_false(value: &Expr) -> bool {
-    let Expr::Call(call) = value else {
-        return false;
-    };
-    let is_field_call = super::walks::is_name_or_attr_named(call.func.as_ref(), "field");
-    if !is_field_call {
-        return false;
-    }
-    call.arguments.keywords.iter().any(|kw| {
-        kw.arg.as_ref().is_some_and(|a| a.as_str() == "init")
-            && matches!(&kw.value, Expr::BooleanLiteral(b) if !b.value)
-    })
-}
-
-pub(super) fn dataclass_bool_flag_is_false(class: &StmtClassDef, key: &str) -> bool {
-    for dec in &class.decorator_list {
-        let Expr::Call(call) = &dec.expression else {
-            continue;
-        };
-        let is_dc = super::walks::is_name_or_attr_named(call.func.as_ref(), "dataclass");
-        if !is_dc {
-            continue;
-        }
-        for kw in &call.arguments.keywords {
-            if kw.arg.as_ref().map(ruff_python_ast::Identifier::as_str) == Some(key) {
-                return matches!(&kw.value, Expr::BooleanLiteral(b) if !b.value);
-            }
-        }
-    }
-    false
 }
 
 pub(super) fn extract_string_list(

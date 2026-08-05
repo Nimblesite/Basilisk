@@ -54,8 +54,7 @@ pub(super) fn count_unbounded_in_tuple_slice(slice: &Expr) -> usize {
 
 /// Returns `true` if this expression is an unbounded tuple component:
 /// - `*tuple[T, ...]` — starred subscript with an ellipsis last element
-/// - `*Name` — starred name (`TypeVarTuple` unpack)
-/// - `Unpack[tuple[T, ...]]` — legacy form
+/// - `*Name` — starred name (type-variable-tuple unpack)
 pub(super) fn is_unbounded_component(expr: &Expr) -> bool {
     match expr {
         Expr::Starred(starred) => match starred.value.as_ref() {
@@ -66,21 +65,10 @@ pub(super) fn is_unbounded_component(expr: &Expr) -> bool {
                 }
                 inner_tuple_is_unbounded(&sub.slice)
             }
-            // `*Ts` — TypeVarTuple unpack
+            // `*Ts` — type-variable-tuple unpack
             Expr::Name(_) => true,
             _ => false,
         },
-        // `Unpack[tuple[T, ...]]` — legacy unpack form
-        Expr::Subscript(sub) if expr_simple_name(&sub.value).as_deref() == Some("Unpack") => {
-            match sub.slice.as_ref() {
-                Expr::Subscript(inner_sub)
-                    if expr_simple_name(&inner_sub.value).as_deref() == Some("tuple") =>
-                {
-                    inner_tuple_is_unbounded(&inner_sub.slice)
-                }
-                _ => false,
-            }
-        }
         _ => false,
     }
 }
@@ -231,86 +219,7 @@ pub(super) fn collect_multi_unbounded_from_stmt(stmt: &Stmt, out: &mut Vec<Span>
     }
 }
 
-// ---------------------------------------------------------------------------
-// assert_type type-aware collection
-// ---------------------------------------------------------------------------
-
-/// Strip `Annotated[T, ...]` wrapper, returning just `T`.
-pub(super) fn strip_annotated_wrapper(ann: &str) -> Option<&str> {
-    let ann = ann.trim();
-    if !ann.starts_with("Annotated[") {
-        return None;
-    }
-    let inner_start = "Annotated[".len();
-    let inner = &ann[inner_start..];
-    // Find the end of the first argument (handle nested brackets).
-    let mut depth = 0i32;
-    let mut end = inner.len();
-    for (i, ch) in inner.char_indices() {
-        match ch {
-            '[' | '(' | '{' => depth += 1,
-            ']' | ')' | '}' => {
-                if depth == 0 {
-                    // Hit closing ] of Annotated without a comma — whole inner is one arg.
-                    end = i;
-                    break;
-                }
-                depth -= 1;
-            }
-            ',' if depth == 0 => {
-                end = i;
-                break;
-            }
-            _ => {}
-        }
-    }
-    Some(inner[..end].trim())
-}
-
-/// Returns `true` when `actual` type is a user-defined type alias that cannot be
-/// resolved without a full type engine. These produce false positives because we
-/// compare annotation text without expanding aliases.
-///
-/// A type is a user-defined alias when its base identifier (the part before `[`)
-/// starts with an uppercase letter and is not a known typing special form.
-pub(super) fn annotation_contains_readonly_expr(expr: &Expr) -> bool {
-    match expr {
-        Expr::Name(name) => name.id.as_str() == "ReadOnly",
-        Expr::Attribute(attr) => attr.attr.as_str() == "ReadOnly",
-        Expr::Subscript(sub) => {
-            annotation_contains_readonly_expr(&sub.value)
-                || annotation_contains_readonly_expr(&sub.slice)
-        }
-        Expr::BinOp(bin) => {
-            annotation_contains_readonly_expr(&bin.left)
-                || annotation_contains_readonly_expr(&bin.right)
-        }
-        Expr::Tuple(tuple) => tuple.elts.iter().any(annotation_contains_readonly_expr),
-        _ => false,
-    }
-}
-
-/// Extract `ReadOnly` field names from a functional `TypedDict(...)` call's dict literal.
-///
-/// Returns a set of field names that have `ReadOnly[...]` annotations.
-pub(super) fn ann_text_is_final(text: &str) -> bool {
-    let t = text.trim();
-    t == "Final" || t.starts_with("Final[") || t == "typing.Final" || t.starts_with("typing.Final[")
-}
-
-/// Collect the names of module-level `Final`-annotated variables from a statement list.
-pub(super) fn is_classvar_annotation(expr: &Expr) -> bool {
-    match expr {
-        Expr::Name(name) => name.id.as_str() == "ClassVar",
-        Expr::Subscript(sub) => {
-            matches!(&*sub.value, Expr::Name(name) if name.id.as_str() == "ClassVar")
-        }
-        _ => false,
-    }
-}
-
-/// Recursively walk statements finding call expressions that instantiate
-/// protocols or abstract classes.
+/// Recursively walk statements collecting invalid annotation patterns.
 pub(super) fn collect_invalid_annotations(stmts: &[Stmt]) -> Vec<InvalidStringAnnotation> {
     let mut out = Vec::new();
     for stmt in stmts {

@@ -38,7 +38,6 @@ pub(super) fn collect_class_body(
     class: &StmtClassDef,
     functions: &mut Vec<FunctionInfo>,
     match_stmts: &mut Vec<MatchStmtInfo>,
-    class_kw_only: bool,
 ) -> ClassBodyInfo {
     let mut attributes = Vec::new();
     let mut method_names = Vec::new();
@@ -52,9 +51,7 @@ pub(super) fn collect_class_body(
                 // Detect `_: KW_ONLY` sentinel — skip it as a real attribute.
                 if is_kw_only_sentinel(ann) {
                     after_kw_only_sentinel = true;
-                } else if let Some(attr) =
-                    ann_attribute(ann, after_kw_only_sentinel, class_kw_only, None)
-                {
+                } else if let Some(attr) = ann_attribute(ann, after_kw_only_sentinel, None) {
                     attributes.push(attr);
                 }
             }
@@ -66,13 +63,7 @@ pub(super) fn collect_class_body(
             // the guard so `resolve_with_target` can prune the ones that do not
             // exist for the target version.
             Stmt::If(if_stmt) => {
-                collect_guarded_fields(
-                    if_stmt,
-                    None,
-                    after_kw_only_sentinel,
-                    class_kw_only,
-                    &mut attributes,
-                );
+                collect_guarded_fields(if_stmt, None, after_kw_only_sentinel, &mut attributes);
             }
             Stmt::FunctionDef(func) => {
                 let func_info = function_info_from(func, Some(class.name.to_string()));
@@ -180,13 +171,12 @@ fn is_kw_only_sentinel(ann: &StmtAnnAssign) -> bool {
 fn ann_attribute(
     ann: &StmtAnnAssign,
     after_kw_only_sentinel: bool,
-    class_kw_only: bool,
     guard: Option<StaticCondition>,
 ) -> Option<AttributeInfo> {
     let name = expr_simple_name(&ann.target)?;
     let field_kw_only = ann.value.as_deref().and_then(field_kw_only_override);
-    // Determine kw_only: explicit field() override wins; then sentinel; then class default.
-    let is_kw_only = field_kw_only.unwrap_or(after_kw_only_sentinel || class_kw_only);
+    // Determine kw_only: explicit field() override wins; then sentinel.
+    let is_kw_only = field_kw_only.unwrap_or(after_kw_only_sentinel);
     Some(AttributeInfo {
         name,
         name_span: text_range_to_span(ann.target.range()),
@@ -195,7 +185,6 @@ fn ann_attribute(
         has_value: ann.value.is_some(),
         rhs_kind: RhsKind::Other,
         rhs_span: ann.value.as_ref().map(|v| text_range_to_span(v.range())),
-        rhs_is_nonmember_call: false,
         rhs_is_lambda: false,
         rhs_descriptor: None,
         rhs_name: None,
@@ -238,10 +227,6 @@ fn assign_attributes(
     guard: Option<&StaticCondition>,
     attributes: &mut Vec<AttributeInfo>,
 ) {
-    let rhs_is_nonmember_call = matches!(
-        &*assign.value,
-        Expr::Call(c) if matches!(c.func.as_ref(), Expr::Name(n) if n.id == "nonmember")
-    );
     let rhs_is_lambda = matches!(&*assign.value, Expr::Lambda(_));
     let (rhs_descriptor, rhs_name) = rhs_callable_binding(&assign.value);
     for target in &assign.targets {
@@ -254,7 +239,6 @@ fn assign_attributes(
                 has_value: true,
                 rhs_kind: classify_rhs(&assign.value),
                 rhs_span: Some(text_range_to_span(assign.value.range())),
-                rhs_is_nonmember_call,
                 rhs_is_lambda,
                 rhs_descriptor: rhs_descriptor.clone(),
                 rhs_name: rhs_name.clone(),
@@ -276,18 +260,11 @@ fn collect_guarded_fields(
     if_stmt: &StmtIf,
     outer: Option<&StaticCondition>,
     after_kw_only_sentinel: bool,
-    class_kw_only: bool,
     attributes: &mut Vec<AttributeInfo>,
 ) {
     let test = parse_static_condition(&if_stmt.test);
     let if_guard = combine_guards(outer, test.clone());
-    collect_fields_in_branch(
-        &if_stmt.body,
-        &if_guard,
-        after_kw_only_sentinel,
-        class_kw_only,
-        attributes,
-    );
+    collect_fields_in_branch(&if_stmt.body, &if_guard, after_kw_only_sentinel, attributes);
 
     // Each elif/else branch is reached only when every preceding test was false.
     let mut prior_negations = vec![StaticCondition::Not(Box::new(test))];
@@ -303,13 +280,7 @@ fn collect_guarded_fields(
             None => StaticCondition::All(prior_negations.clone()),
         };
         let guard = combine_guards(outer, branch);
-        collect_fields_in_branch(
-            &clause.body,
-            &guard,
-            after_kw_only_sentinel,
-            class_kw_only,
-            attributes,
-        );
+        collect_fields_in_branch(&clause.body, &guard, after_kw_only_sentinel, attributes);
     }
 }
 
@@ -318,18 +289,14 @@ fn collect_fields_in_branch(
     stmts: &[Stmt],
     guard: &StaticCondition,
     after_kw_only_sentinel: bool,
-    class_kw_only: bool,
     attributes: &mut Vec<AttributeInfo>,
 ) {
     for stmt in stmts {
         match stmt {
             Stmt::AnnAssign(ann) if !is_kw_only_sentinel(ann) => {
-                if let Some(attr) = ann_attribute(
-                    ann,
-                    after_kw_only_sentinel,
-                    class_kw_only,
-                    Some(guard.clone()),
-                ) {
+                if let Some(attr) =
+                    ann_attribute(ann, after_kw_only_sentinel, Some(guard.clone()))
+                {
                     attributes.push(attr);
                 }
             }
@@ -337,13 +304,7 @@ fn collect_fields_in_branch(
                 assign_attributes(assign, Some(guard), attributes);
             }
             Stmt::If(nested) => {
-                collect_guarded_fields(
-                    nested,
-                    Some(guard),
-                    after_kw_only_sentinel,
-                    class_kw_only,
-                    attributes,
-                );
+                collect_guarded_fields(nested, Some(guard), after_kw_only_sentinel, attributes);
             }
             _ => {}
         }

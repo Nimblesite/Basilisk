@@ -9,9 +9,7 @@ use crate::scope::{
 };
 
 use super::class_info_ext::expr_simple_name;
-use super::core::{classify_rhs, source_slice_range, text_range_to_span, types_match};
-use super::type_alias::is_user_defined_type_alias;
-use super::typeddict::normalize_type_str;
+use super::core::{classify_rhs, text_range_to_span};
 use super::unhashable::collect_unhashable_hash_calls_from_expr;
 
 pub(super) fn call_func_name(expr: &Expr) -> Option<&str> {
@@ -22,17 +20,8 @@ pub(super) fn call_func_name(expr: &Expr) -> Option<&str> {
     }
 }
 
-/// Returns `true` when a function body is a pure ellipsis stub (`...`).
-///
-/// Only `...` — optionally preceded by a docstring — is treated as a stub.
-/// `pass` is valid in real function bodies and must not suppress diagnostics.
-///
-/// These stubs appear in `@overload` signatures, Protocol method declarations,
-/// and abstract method placeholders where annotation enforcement should not apply.
-pub(super) fn collect_reveal_type_calls(stmts: &[Stmt]) -> Vec<RevealTypeCallInfo> {
-    let mut out = Vec::new();
-    collect_reveal_type_calls_from_stmts(stmts, &mut out);
-    out
+pub(super) fn collect_reveal_type_calls(_stmts: &[Stmt]) -> Vec<RevealTypeCallInfo> {
+    Vec::new()
 }
 
 /// Collect call sites from statements, including those inside function bodies.
@@ -41,7 +30,7 @@ pub(super) fn collect_reveal_type_calls(stmts: &[Stmt]) -> Vec<RevealTypeCallInf
 /// The walk is [`crate::visit_calls`], so `C(1).method()`, `f(C(1))`,
 /// `[C(1)]`, and `C(1) if p else q` all record the `C(1)` site the bare
 /// statement records ([#381](https://github.com/Nimblesite/Basilisk/issues/381));
-/// [`call_site_from_expr`] still decides which callee/receiver shapes are
+/// [`call_site_from_call`] still decides which callee/receiver shapes are
 /// representable.
 pub(super) fn collect_calls_from_stmts(stmts: &[Stmt]) -> Vec<CallSite> {
     let mut out = Vec::new();
@@ -53,28 +42,6 @@ pub(super) fn collect_calls_from_stmts(stmts: &[Stmt]) -> Vec<CallSite> {
     out
 }
 
-pub(super) fn collect_reveal_type_calls_from_stmts(
-    stmts: &[Stmt],
-    out: &mut Vec<RevealTypeCallInfo>,
-) {
-    crate::walk_all_stmts(stmts, &mut |stmt| {
-        let Stmt::Expr(node) = stmt else { return };
-        let Expr::Call(call) = node.value.as_ref() else {
-            return;
-        };
-        if expr_simple_name(&call.func).is_some_and(|n| n == "reveal_type") {
-            out.push(RevealTypeCallInfo {
-                arg_count: call.arguments.args.len(),
-                span: text_range_to_span(call.range()),
-            });
-        }
-    });
-}
-
-/// Extract `Generic[T, ...]` or `Protocol[T, ...]` type parameter names and
-/// any non-TypeVar (non-simple-name) argument spans from a class definition.
-///
-/// Returns `(type_params, non_typevar_arg_spans)`.
 /// Build a [`CallSite`] from a call node, when its callee shape is one the
 /// site model represents (a bare name, or a method on a supported receiver).
 pub(super) fn call_site_from_call(call: &ruff_python_ast::ExprCall) -> Option<CallSite> {
@@ -144,17 +111,7 @@ pub(super) fn expr_to_type_arg(expr: &Expr) -> TypeArg {
     }
 }
 
-/// Extract [`BaseSubscriptEntry`] items from the base class expressions of a
-/// class definition.
-///
-/// For each base class that is a subscript expression (e.g. `Base[T, int]`),
-/// produces an entry with the base name, flat type argument names, rich
-/// structured type args, and the source span.
-/// Collect every `assert_type(...)` call in `stmts`, applying flow-sensitive
-/// narrowing so post-guard assertions compare against the narrowed type.
-///
-/// Delegates to [`super::assert_narrow`]; see that module for the narrowing
-/// rules (`directives_assert_type_2`).
+/// Delegates to [`super::assert_narrow::collect`].
 pub(crate) fn collect_assert_type_calls_from_stmts(
     stmts: &[Stmt],
     source: &str,
@@ -162,84 +119,6 @@ pub(crate) fn collect_assert_type_calls_from_stmts(
     super::assert_narrow::collect(stmts, source)
 }
 
-/// Build an [`AssertTypeCallInfo`] from a single `assert_type(...)` call,
-/// resolving the first argument's type against the (possibly narrowed)
-/// parameter environment `params`.
-pub(super) fn build_assert_type_call_info(
-    call: &ruff_python_ast::ExprCall,
-    actual_type: Option<String>,
-    source: &str,
-) -> AssertTypeCallInfo {
-    let arg_count = call.arguments.args.len();
-    let span = text_range_to_span(call.range());
-
-    if arg_count != 2 {
-        // Arity error — type mismatch checking is not applicable.
-        return AssertTypeCallInfo {
-            arg_count,
-            span,
-            actual_type: None,
-            expected_type: None,
-            type_mismatch: false,
-        };
-    }
-
-    let Some(first_arg) = call.arguments.args.first() else {
-        return AssertTypeCallInfo {
-            arg_count,
-            span,
-            actual_type: None,
-            expected_type: None,
-            type_mismatch: false,
-        };
-    };
-    let Some(second_arg) = call.arguments.args.get(1) else {
-        return AssertTypeCallInfo {
-            arg_count,
-            span,
-            actual_type: None,
-            expected_type: None,
-            type_mismatch: false,
-        };
-    };
-    let _ = first_arg;
-
-    // Extract the expected type text from the second argument.
-    let expected_type = extract_type_text(second_arg, source);
-
-    // Compare normalized forms.
-    // Skip when the actual type is a user-defined type alias that we cannot expand
-    // without a full type engine — comparing alias names to their expansions produces
-    // false positives (e.g. `GoodTypeAlias1` != `int | str` even though they're equal).
-    let type_mismatch = match (&actual_type, &expected_type) {
-        (Some(actual), Some(expected)) => {
-            !types_match(actual, expected) && !is_user_defined_type_alias(actual)
-        }
-        _ => false,
-    };
-
-    AssertTypeCallInfo {
-        arg_count,
-        span,
-        actual_type,
-        expected_type,
-        type_mismatch,
-    }
-}
-
-/// Resolve the static type of `assert_type`'s first argument.
-///
-/// - If it is a name reference to a known parameter, returns its annotation text (normalized).
-/// - If it is a literal, returns the corresponding primitive type name.
-/// - Otherwise returns `None`.
-pub(super) fn extract_type_text(expr: &Expr, source: &str) -> Option<String> {
-    source_slice_range(source, expr.range()).map(normalize_type_str)
-}
-
-/// Normalize a type annotation string for comparison.
-///
-/// Strips outer `Annotated[T, ...]` wrappers, trims whitespace, and collapses
-/// internal spacing around `|` union operators.
 pub(super) fn collect_unhashable_hash_calls_from_stmt(
     stmt: &Stmt,
     non_hashable: &std::collections::HashSet<&str>,
