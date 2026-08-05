@@ -1,7 +1,8 @@
 //! `qualifiers_annotated`: Invalid first argument to `Annotated[...]`.
 //!
 //! PEP 593 requires that the first argument to `Annotated[...]` be a valid type
-//! expression. The following are errors:
+//! expression. Verdicts are structural, over the parsed `ruff` AST
+//! ([LINESCANPLAN-AST-MIGRATION], issue #408). The following are errors:
 //!
 //! - List literals: `Annotated[[int, str], ""]`
 //! - Tuple literals: `Annotated[((int, str),), ""]`
@@ -31,15 +32,17 @@ mod helpers;
 use std::collections::HashSet;
 
 use basilisk_resolver::{CallSite, ResolvedModule, Span};
+use ruff_python_ast::{Expr, ExprSubscript};
 
+use crate::annotation::AnnotationResolver;
 use crate::diagnostic::{error_diagnostic, Diagnostic, ErrorCode};
+use crate::rules::shared::{
+    annotation_is_type_alias, is_type_expression, ExprIndex, StringPolicy, TypeExprJudge,
+};
 
 use super::Rule;
 
-use helpers::{
-    annotated_inner, annotation_is_type_subscript, collect_defined_names, collect_type_alias_names,
-    count_args, first_arg, is_invalid_type_expr, is_undefined_bare_name, span_text,
-};
+use helpers::{collect_defined_names, span_text};
 
 const CODE: ErrorCode = ErrorCode {
     code: "qualifiers_annotated",
@@ -72,6 +75,15 @@ impl Rule for AnnotatedInvalidFirstArg {
     ) {
         let source = &module.source;
         let path = &module.path;
+        // The module's own AST and binding tables; a module that does not
+        // parse is reported by the parser itself.
+        let Some(parsed) = module.lazy_ast.get_or_parse(&module.source, &module.path) else {
+            return;
+        };
+        let Some(resolver) = AnnotationResolver::for_module(module) else {
+            return;
+        };
+        let index = ExprIndex::build(&parsed.ast);
 
         let defined_names = collect_defined_names(
             &module.module_vars,
@@ -80,19 +92,11 @@ impl Rule for AnnotatedInvalidFirstArg {
             &module.functions,
         );
 
-        check_annotated_in_vars(
-            &module.module_vars,
-            source,
-            path,
-            &defined_names,
-            diagnostics,
-        );
-
+        check_annotated_in_vars(module, &index, path, &defined_names, diagnostics);
         for cls in &module.classes {
-            check_annotated_in_attrs(&cls.attributes, source, path, &defined_names, diagnostics);
+            check_annotated_in_attrs(&cls.attributes, &index, path, &defined_names, diagnostics);
         }
-
-        check_annotated_in_functions(&module.functions, source, path, &defined_names, diagnostics);
+        check_annotated_in_functions(&module.functions, &index, path, &defined_names, diagnostics);
 
         // Detect direct calls to `Annotated` or `Annotated[...]` — always invalid.
         for span in &module.annotated_direct_call_spans {
@@ -107,15 +111,21 @@ impl Rule for AnnotatedInvalidFirstArg {
         }
 
         // Detect calls to TypeAlias names (e.g. `SmallInt(1)` where
-        // `SmallInt: TypeAlias = Annotated[int, ""]`).
-        let type_alias_names = collect_type_alias_names(&module.module_vars, source);
+        // `SmallInt: TypeAlias = Annotated[int, ""]`). Alias-hood resolves
+        // through the shared cascade, covering every import spelling.
+        let type_alias_names: HashSet<String> = module
+            .module_vars
+            .iter()
+            .filter(|var| annotation_is_type_alias(&resolver, var.annotation_span))
+            .map(|var| var.name.clone())
+            .collect();
         check_type_alias_calls(&module.calls, &type_alias_names, path, diagnostics);
 
         // Detect `type[...] = Annotated[...]` and `type[...] = <TypeAlias>` assignments.
         // PEP 593: Annotated is not type-compatible with `type` or `type[T]`.
         check_vars_type_annotation_incompatible(
-            &module.module_vars,
-            source,
+            module,
+            &index,
             path,
             &type_alias_names,
             diagnostics,
@@ -125,6 +135,7 @@ impl Rule for AnnotatedInvalidFirstArg {
         // Passing an Annotated expression or TypeAlias where `type[T]` is expected is invalid.
         check_calls_with_annotated_args(
             &module.calls,
+            &index,
             source,
             path,
             &type_alias_names,
@@ -134,40 +145,33 @@ impl Rule for AnnotatedInvalidFirstArg {
 }
 
 fn check_annotated_in_vars(
-    vars: &[basilisk_resolver::VariableInfo],
-    source: &str,
+    module: &ResolvedModule,
+    index: &ExprIndex<'_>,
     path: &str,
     defined_names: &HashSet<String>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    for var in vars {
-        let Some(ann) = span_text(source, var.annotation_span) else {
+    for var in &module.module_vars {
+        let Some(ann) = var.annotation_span.and_then(|span| index.expr(span)) else {
             continue;
         };
-        check_annotated_annotation(
-            ann.trim(),
-            var.name_span,
-            &var.name,
-            path,
-            defined_names,
-            diagnostics,
-        );
+        check_annotated_annotation(ann, var.name_span, &var.name, path, defined_names, diagnostics);
     }
 }
 
 fn check_annotated_in_attrs(
     attrs: &[basilisk_resolver::AttributeInfo],
-    source: &str,
+    index: &ExprIndex<'_>,
     path: &str,
     defined_names: &HashSet<String>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     for attr in attrs {
-        let Some(ann) = span_text(source, attr.annotation_span) else {
+        let Some(ann) = attr.annotation_span.and_then(|span| index.expr(span)) else {
             continue;
         };
         check_annotated_annotation(
-            ann.trim(),
+            ann,
             attr.name_span,
             &attr.name,
             path,
@@ -179,7 +183,7 @@ fn check_annotated_in_attrs(
 
 fn check_annotated_in_functions(
     funcs: &[basilisk_resolver::FunctionInfo],
-    source: &str,
+    index: &ExprIndex<'_>,
     path: &str,
     defined_names: &HashSet<String>,
     diagnostics: &mut Vec<Diagnostic>,
@@ -191,11 +195,11 @@ fn check_annotated_in_functions(
             .chain(func.vararg.iter())
             .chain(func.kwarg.iter())
         {
-            let Some(ann) = span_text(source, param.annotation_span) else {
+            let Some(ann) = param.annotation_span.and_then(|span| index.expr(span)) else {
                 continue;
             };
             check_annotated_annotation(
-                ann.trim(),
+                ann,
                 param.name_span,
                 &param.name,
                 path,
@@ -206,22 +210,37 @@ fn check_annotated_in_functions(
     }
 }
 
+/// The subscript node when `expr` is `Annotated[...]` (bare or dotted base).
+fn annotated_subscript(expr: &Expr) -> Option<&ExprSubscript> {
+    let Expr::Subscript(subscript) = expr else {
+        return None;
+    };
+    let base = match &*subscript.value {
+        Expr::Name(name) => name.id.as_str(),
+        Expr::Attribute(attr) => attr.attr.as_str(),
+        _ => return None,
+    };
+    (base == "Annotated").then_some(subscript)
+}
+
 fn check_annotated_annotation(
-    ann: &str,
+    ann: &Expr,
     span: Span,
     name: &str,
     path: &str,
     defined_names: &HashSet<String>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let Some(inner) = annotated_inner(ann) else {
+    let Some(subscript) = annotated_subscript(ann) else {
         return;
     };
-
-    let arg_count = count_args(inner);
+    let args: Vec<&Expr> = match &*subscript.slice {
+        Expr::Tuple(tuple) => tuple.elts.iter().collect(),
+        single => vec![single],
+    };
 
     // Annotated[int] — too few arguments
-    if arg_count < 2 {
+    if args.len() < 2 {
         diagnostics.push(make_diagnostic(
             format!("`Annotated` requires at least two arguments for `{name}`"),
             span,
@@ -230,9 +249,18 @@ fn check_annotated_annotation(
         return;
     }
 
-    // Check that the first argument is a valid type expression
-    let first = first_arg(inner);
-    if is_invalid_type_expr(first) || is_undefined_bare_name(first, defined_names) {
+    // The first argument must be a valid type expression. A bare name must
+    // also be defined somewhere the module can see.
+    let judge = TypeExprJudge {
+        non_type: &|_| false,
+        strings: StringPolicy::EagerForwardRef,
+    };
+    let Some(first) = args.first().copied() else {
+        return;
+    };
+    let undefined_bare_name =
+        matches!(first, Expr::Name(n) if !defined_names.contains(n.id.as_str()));
+    if !is_type_expression(first, &judge) || undefined_bare_name {
         diagnostics.push(make_diagnostic(
             format!("Invalid type expression as first argument to `Annotated` for `{name}`"),
             span,
@@ -265,30 +293,45 @@ fn check_type_alias_calls(
     }
 }
 
+/// Whether the annotation node is a `type[...]` subscript (bare `type`,
+/// `Type`, or dotted `typing.Type`).
+fn annotation_is_type_subscript(ann: &Expr) -> bool {
+    let Expr::Subscript(subscript) = ann else {
+        return false;
+    };
+    matches!(
+        &*subscript.value,
+        Expr::Name(name) if matches!(name.id.as_str(), "type" | "Type")
+    ) || matches!(
+        &*subscript.value,
+        Expr::Attribute(attr) if attr.attr.as_str() == "Type"
+    )
+}
+
 /// Emit E0045 for module variables annotated `type[...]` whose RHS is an `Annotated[...]`
 /// expression or a known `TypeAlias` name.
 ///
 /// PEP 593: `Annotated[T, ...]` is not compatible with `type[T]` — it is a value that
 /// carries metadata, not a type constructor.
 fn check_vars_type_annotation_incompatible(
-    vars: &[basilisk_resolver::VariableInfo],
-    source: &str,
+    module: &ResolvedModule,
+    index: &ExprIndex<'_>,
     path: &str,
     type_alias_names: &HashSet<String>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    for var in vars {
-        let Some(ann) = span_text(source, var.annotation_span) else {
-            continue;
-        };
-        if !annotation_is_type_subscript(ann.trim()) {
+    for var in &module.module_vars {
+        let is_type_subscript = var
+            .annotation_span
+            .and_then(|span| index.expr(span))
+            .is_some_and(annotation_is_type_subscript);
+        if !is_type_subscript {
             continue;
         }
-        let Some(rhs) = span_text(source, var.rhs_span) else {
+        let Some(rhs) = var.rhs_span.and_then(|span| index.expr(span)) else {
             continue;
         };
-        let rhs = rhs.trim();
-        if rhs.starts_with("Annotated[") {
+        if annotated_subscript(rhs).is_some() {
             diagnostics.push(make_diagnostic(
                 format!(
                     "`Annotated[...]` is not compatible with `type[...]` for `{}`",
@@ -297,15 +340,17 @@ fn check_vars_type_annotation_incompatible(
                 var.name_span,
                 path,
             ));
-        } else if type_alias_names.contains(rhs) {
-            diagnostics.push(make_diagnostic(
-                format!(
-                    "Type alias `{rhs}` (an `Annotated[...]` alias) is not compatible with `type[...]` for `{}`",
-                    var.name
-                ),
-                var.name_span,
-                path,
-            ));
+        } else if let Expr::Name(rhs_name) = rhs {
+            if type_alias_names.contains(rhs_name.id.as_str()) {
+                diagnostics.push(make_diagnostic(
+                    format!(
+                        "Type alias `{}` (an `Annotated[...]` alias) is not compatible with `type[...]` for `{}`",
+                        rhs_name.id, var.name
+                    ),
+                    var.name_span,
+                    path,
+                ));
+            }
         }
     }
 }
@@ -317,6 +362,7 @@ fn check_vars_type_annotation_incompatible(
 /// a `type[T]` value is expected is always a type error.
 fn check_calls_with_annotated_args(
     calls: &[CallSite],
+    index: &ExprIndex<'_>,
     source: &str,
     path: &str,
     type_alias_names: &HashSet<String>,
@@ -328,11 +374,11 @@ fn check_calls_with_annotated_args(
             continue;
         }
         for (_kind, arg_span) in &call.args {
-            let Some(arg_text) = span_text(source, Some(*arg_span)) else {
+            let Some(arg) = index.expr(*arg_span) else {
                 continue;
             };
-            let arg_text = arg_text.trim();
-            if arg_text.starts_with("Annotated[") {
+            if annotated_subscript(arg).is_some() {
+                let arg_text = span_text(source, Some(*arg_span)).unwrap_or("Annotated[...]");
                 diagnostics.push(make_diagnostic(
                     format!(
                         "`Annotated[...]` is not compatible with `type[T]` — \
@@ -341,15 +387,18 @@ fn check_calls_with_annotated_args(
                     call.span,
                     path,
                 ));
-            } else if type_alias_names.contains(arg_text) {
-                diagnostics.push(make_diagnostic(
-                    format!(
-                        "Type alias `{arg_text}` (an `Annotated[...]` alias) is not \
-                         compatible with `type[T]`"
-                    ),
-                    call.span,
-                    path,
-                ));
+            } else if let Expr::Name(arg_name) = arg {
+                if type_alias_names.contains(arg_name.id.as_str()) {
+                    diagnostics.push(make_diagnostic(
+                        format!(
+                            "Type alias `{}` (an `Annotated[...]` alias) is not \
+                             compatible with `type[T]`",
+                            arg_name.id
+                        ),
+                        call.span,
+                        path,
+                    ));
+                }
             }
         }
     }

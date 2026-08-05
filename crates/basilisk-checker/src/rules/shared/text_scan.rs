@@ -35,33 +35,6 @@ fn line_to_byte_offset(source: &str, target_line: usize) -> u32 {
     source.len() as u32
 }
 
-/// Returns `true` when `inner` contains a comma at bracket-depth zero.
-///
-/// Bracket-depth tracks `[`/`(`/`{` openers and their matching closers. Used
-/// by rules that need to decide whether a parenthesised expression like
-/// `(a, b)` is a tuple at top level versus a single bracketed group.
-pub(crate) fn contains_top_level_comma(inner: &str) -> bool {
-    let mut depth = 0i32;
-    for ch in inner.chars() {
-        match ch {
-            '[' | '(' | '{' => depth += 1,
-            ']' | ')' | '}' => depth -= 1,
-            ',' if depth == 0 => return true,
-            _ => {}
-        }
-    }
-    false
-}
-
-/// Returns `true` when `s` is a `(...)` parenthesised expression whose
-/// contents contain a top-level comma (i.e. a tuple expression).
-pub(crate) fn paren_has_top_level_comma(s: &str) -> bool {
-    if s.len() < 2 || !s.starts_with('(') || !s.ends_with(')') {
-        return false;
-    }
-    contains_top_level_comma(&s[1..s.len() - 1])
-}
-
 /// Build a `Span` covering the trimmed content of a given 1-based line.
 #[expect(
     clippy::as_conversions,

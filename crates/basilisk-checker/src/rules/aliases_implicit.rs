@@ -2,20 +2,20 @@
 //! `aliases_implicit`: Invalid right-hand side for a `TypeAlias` annotation.
 //!
 //! PEP 613 requires that the RHS of an explicit `TypeAlias` annotation must be
-//! a valid type expression. The following are errors:
+//! a valid type expression, and the typing spec's aliases chapter gives plain
+//! assignments the same split: an assignment whose RHS is a type expression is
+//! an implicit alias; any other assignment makes an ordinary variable, and a
+//! variable is not valid in a type expression. All verdicts are structural,
+//! over the parsed `ruff` AST ([LINESCANPLAN-AST-MIGRATION], issue #408):
 //!
-//! - List literals: `x: TypeAlias = [int, str]`
-//! - Tuple literals: `x: TypeAlias = ((int, str),)`
-//! - Dict literals: `x: TypeAlias = {"a": "b"}`
-//! - List comprehensions: `x: TypeAlias = [int for i in range(1)]`
-//! - Lambda calls: `x: TypeAlias = (lambda: int)()`
-//! - Conditional expressions: `x: TypeAlias = int if cond else str`
-//! - Boolean literals: `x: TypeAlias = True`
-//! - Integer literals: `x: TypeAlias = 1`
-//! - Binary boolean operators: `x: TypeAlias = list or set`
-//! - F-strings: `x: TypeAlias = f"..."`
-//! - Subscript-into-subscript: `x: TypeAlias = [int][0]`
-//! - Runtime calls: `x: TypeAlias = eval("int")`
+//! - Literals, collection displays, comprehensions, lambdas, conditionals,
+//!   boolean operators, f-strings, and calls that are not recognised type
+//!   constructors (`TypeVar`, `ParamSpec`, `TypeVarTuple`, `NewType`,
+//!   `TypedDict`, `NamedTuple`, `TypeAliasType`, `type(...)`) all make
+//!   runtime values, not types.
+//! - Alias parameterization is checked against the alias's own type
+//!   parameters: arity, `ParamSpec` argument shape (PEP 612), and `TypeVar`
+//!   bounds through the module's subtyping context ([NARROWPLAN-SUBTYPING]).
 //!
 //! ```python
 //! from typing import TypeAlias
@@ -23,11 +23,19 @@
 //! BadTypeAlias10: TypeAlias = True         # E — bool literal
 //! ```
 
-use basilisk_resolver::{ImportKind, ResolvedModule, Span};
+use std::collections::{HashMap, HashSet};
 
+use basilisk_resolver::{ResolvedModule, RhsKind, Span};
+use ruff_python_ast::visitor::{walk_expr, Visitor};
+use ruff_python_ast::{Expr, Operator};
+
+use crate::annotation::AnnotationResolver;
 use crate::diagnostic::{error_diagnostic, error_diagnostic_owned, Diagnostic, ErrorCode};
-use crate::rules::shared::split_top_level_commas;
+use crate::rules::shared::{
+    annotation_is_type_alias, is_type_expression, ExprIndex, StringPolicy, TypeExprJudge,
+};
 use crate::span_util::slice_span;
+use crate::subtyping::SubtypingContext;
 
 use super::Rule;
 
@@ -35,10 +43,6 @@ const CODE: ErrorCode = ErrorCode {
     code: "aliases_implicit",
     docs_url: "https://www.basilisk-python.dev/errors/aliases_implicit",
 };
-
-fn span_text(source: &str, span: Option<Span>) -> Option<&str> {
-    slice_span(source, span?)
-}
 
 fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
     error_diagnostic(
@@ -51,145 +55,6 @@ fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
     )
 }
 
-/// Collect all local names that refer to `typing.TypeAlias` in this module.
-///
-/// Handles:
-/// - `from typing import TypeAlias`
-/// - `from typing import TypeAlias as TA`
-/// - `import typing` (used as `typing.TypeAlias`)
-fn collect_type_alias_names(module: &ResolvedModule) -> Vec<String> {
-    let mut names = vec!["TypeAlias".to_owned()];
-    for import in &module.imports {
-        if import.kind != ImportKind::From {
-            continue;
-        }
-        if import.module != "typing" && import.module != "typing_extensions" {
-            continue;
-        }
-        // Scan the raw import source text for `TypeAlias as <alias>` patterns.
-        let Some(import_text) = slice_span(&module.source, import.span) else {
-            continue;
-        };
-        // Find all occurrences of `TypeAlias as <identifier>`. `match_indices`
-        // advances structurally past each match, so the loop cannot be turned
-        // into an infinite loop by mutating an arithmetic advance step.
-        for (pos, marker) in import_text.match_indices("TypeAlias as ") {
-            let after = &import_text[pos + marker.len()..];
-            let alias: String = after
-                .chars()
-                .take_while(|c| c.is_alphanumeric() || *c == '_')
-                .collect();
-            if !alias.is_empty() && alias != "TypeAlias" {
-                names.push(alias);
-            }
-        }
-    }
-    names
-}
-
-/// Returns `true` when the annotation text matches one of the known `TypeAlias` names.
-fn is_type_alias_annotation(ann: &str, type_alias_names: &[String]) -> bool {
-    let ann = ann.trim();
-    type_alias_names.iter().any(|n| ann == n) || ann.ends_with(".TypeAlias")
-}
-
-/// Returns `true` when the RHS text is an invalid type expression for a `TypeAlias`.
-fn is_invalid_rhs(rhs: &str) -> bool {
-    let rhs = rhs.trim();
-
-    // Boolean literals
-    if rhs == "True" || rhs == "False" {
-        return true;
-    }
-
-    // Integer or float literals: starts with a digit
-    if rhs.chars().next().is_some_and(|c| c.is_ascii_digit()) {
-        return true;
-    }
-
-    // Negative numeric literals
-    if rhs.starts_with('-')
-        && rhs[1..]
-            .trim()
-            .chars()
-            .next()
-            .is_some_and(|c| c.is_ascii_digit())
-    {
-        return true;
-    }
-
-    // F-string
-    if rhs.starts_with("f\"") || rhs.starts_with("f'") {
-        return true;
-    }
-
-    // List literal (starts with `[`) — also catches list comprehensions
-    if rhs.starts_with('[') {
-        return true;
-    }
-
-    // Dict literal
-    if rhs.starts_with('{') {
-        return true;
-    }
-
-    // Tuple literal: starts with `(` and has a comma at depth 0 inside
-    if rhs.starts_with('(') && paren_has_top_level_comma(rhs) {
-        return true;
-    }
-
-    // Conditional expression: has ` if ` at depth 0
-    if has_top_level_token(rhs, " if ") {
-        return true;
-    }
-
-    // Boolean binary operator `or` / `and` at depth 0
-    if has_top_level_token(rhs, " or ") || has_top_level_token(rhs, " and ") {
-        return true;
-    }
-
-    // Lambda (possibly called)
-    if rhs.contains("lambda") {
-        return true;
-    }
-
-    // Runtime call: eval(...)
-    if rhs.starts_with("eval(") {
-        return true;
-    }
-
-    false
-}
-
-/// Returns `true` when the text contains `token` at bracket depth 0.
-fn has_top_level_token(s: &str, token: &str) -> bool {
-    let mut depth = 0i32;
-    let bytes = s.as_bytes();
-    let tok = token.as_bytes();
-    let tok_len = tok.len();
-    // `enumerate` yields each index exactly once — forward progress is
-    // structural, so mutating the loop counter is impossible.
-    for (i, &byte) in bytes.iter().enumerate() {
-        match byte {
-            b'[' | b'(' | b'{' => depth += 1,
-            b']' | b')' | b'}' => depth -= 1,
-            _ if depth == 0 && bytes.get(i..i + tok_len) == Some(tok) => {
-                return true;
-            }
-            _ => {}
-        }
-    }
-    false
-}
-
-/// Returns `true` when `(...)` contains a comma at depth 0 inside the parens.
-fn paren_has_top_level_comma(s: &str) -> bool {
-    if s.len() < 2 {
-        return false;
-    }
-    crate::rules::shared::contains_top_level_comma(&s[1..s.len() - 1])
-}
-
 /// Emits `aliases_implicit` when a `TypeAlias`-annotated variable has an invalid RHS type expression.
 pub(crate) struct TypeAliasInvalidRhs;
 
@@ -200,388 +65,271 @@ impl Rule for TypeAliasInvalidRhs {
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        let source = &module.source;
-        let path = &module.path;
-        let type_alias_names = collect_type_alias_names(module);
+        // The module's own AST and binding tables; a module that does not
+        // parse is reported by the parser itself.
+        let Some(parsed) = module.lazy_ast.get_or_parse(&module.source, &module.path) else {
+            return;
+        };
+        let Some(resolver) = AnnotationResolver::for_module(module) else {
+            return;
+        };
+        let index = ExprIndex::build(&parsed.ast);
+        let runtime_vars = collect_runtime_var_names(module, &resolver, &index);
 
-        // Collect names of module-level variables that hold runtime values
-        // (not types). These cannot be used as `TypeAlias` RHS values.
-        let runtime_var_names = collect_runtime_var_names(module);
+        check_explicit_alias_values(module, &resolver, &index, &runtime_vars, diagnostics);
 
-        for var in &module.module_vars {
-            let Some(ann) = span_text(source, var.annotation_span) else {
-                continue;
-            };
-            if !is_type_alias_annotation(ann.trim(), &type_alias_names) {
-                continue;
-            }
-            let Some(rhs_span) = var.rhs_span else {
-                continue;
-            };
-            let Some(rhs) = span_text(source, Some(rhs_span)) else {
-                continue;
-            };
-            let rhs_trimmed = rhs.trim();
-            if is_invalid_rhs(rhs_trimmed)
-                || is_runtime_variable_ref(rhs_trimmed, &runtime_var_names)
-            {
-                diagnostics.push(make_diagnostic(
-                    format!(
-                        "Invalid type expression as right-hand side of `TypeAlias` for `{}`",
-                        var.name
-                    ),
-                    var.name_span,
-                    path,
-                ));
-            }
-        }
-
-        // Check type alias parameterization (wrong number of type args)
-        let alias_map = build_alias_info_map(module, &type_alias_names);
-        check_alias_parameterization(module, &alias_map, diagnostics);
+        let alias_map = build_alias_info_map(module, &resolver, &index, &runtime_vars);
+        check_alias_parameterization(module, &index, &alias_map, diagnostics);
         check_union_alias_instantiation(module, &alias_map, diagnostics);
-
-        // Check annotations that reference runtime (non-type) names
-        check_runtime_name_annotations(module, &runtime_var_names, diagnostics);
+        check_runtime_name_annotations(module, &index, &runtime_vars, diagnostics);
     }
 }
 
-/// Collect names of module-level variables that hold runtime values (not types).
+/// Validate the RHS of every explicit `TypeAlias`-annotated variable.
 ///
-/// A name is considered a runtime variable if its RHS is a literal value,
-/// a collection, or an expression that `is_invalid_rhs` would reject as a
-/// `TypeAlias` RHS (call, ternary, bool-op, lambda, etc.).
-fn collect_runtime_var_names(module: &ResolvedModule) -> std::collections::HashSet<String> {
-    use basilisk_resolver::RhsKind;
-    let source = &module.source;
-    let mut names = std::collections::HashSet::new();
+/// The annotation is resolved through the shared cascade, so `TypeAlias`,
+/// `typing.TypeAlias`, and `from typing import TypeAlias as TA` all count.
+/// PEP 613 alias values are evaluated eagerly, so a string is a forward
+/// reference only at the top level (`X: TypeAlias = "int | str"` is valid;
+/// `X: TypeAlias = "int" | str` is a runtime error).
+fn check_explicit_alias_values(
+    module: &ResolvedModule,
+    resolver: &AnnotationResolver<'_>,
+    index: &ExprIndex<'_>,
+    runtime_vars: &HashSet<String>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let judge = TypeExprJudge {
+        non_type: &|name| runtime_vars.contains(name),
+        strings: StringPolicy::EagerForwardRef,
+    };
     for var in &module.module_vars {
-        // Skip TypeAlias-annotated variables (handled separately)
-        if var.has_annotation {
+        if !annotation_is_type_alias(resolver, var.annotation_span) {
             continue;
         }
-        let is_runtime = match &var.rhs_kind {
-            RhsKind::IntLiteral
-            | RhsKind::FloatLiteral
-            | RhsKind::StrLiteral
-            | RhsKind::BoolLiteral
-            | RhsKind::BytesLiteral
-            | RhsKind::NoneValue
-            | RhsKind::EmptyList
-            | RhsKind::EmptyDict
-            | RhsKind::Lambda
-            | RhsKind::List(_)
-            | RhsKind::Dict(_)
-            | RhsKind::Set(_)
-            | RhsKind::Tuple(_) => true,
-            RhsKind::CallExpr | RhsKind::KnownCall(_) | RhsKind::TypeCall => {
-                // Check if the RHS text looks like a runtime expression
-                var.rhs_span
-                    .and_then(|sp| slice_span(source, sp))
-                    .is_some_and(|rhs| is_invalid_rhs(rhs.trim()))
-            }
-            RhsKind::Other => {
-                // Check text for ternary, bool-op, subscript-of-list, etc.
-                var.rhs_span
-                    .and_then(|sp| slice_span(source, sp))
-                    .is_some_and(|rhs| is_invalid_rhs(rhs.trim()))
-            }
+        let Some(rhs) = var.rhs_span.and_then(|span| index.expr(span)) else {
+            continue;
         };
-        if is_runtime {
-            let _ = names.insert(var.name.clone());
+        if !is_type_expression(rhs, &judge) {
+            diagnostics.push(make_diagnostic(
+                format!(
+                    "Invalid type expression as right-hand side of `TypeAlias` for `{}`",
+                    var.name
+                ),
+                var.name_span,
+                &module.path,
+            ));
         }
     }
+}
 
-    // Second pass: catch transitive references (`BadAlias = var1` where
-    // `var1` is already known to be a runtime variable).
-    for var in &module.module_vars {
-        if var.has_annotation || names.contains(&var.name) {
-            continue;
-        }
-        if let Some(rhs_span) = var.rhs_span {
-            if let Some(rhs_text) = slice_span(source, rhs_span) {
-                let rhs_trimmed = rhs_text.trim();
-                if !rhs_trimmed.contains(['[', ']', '|', '.', '(', ')'])
-                    && names.contains(rhs_trimmed)
-                {
-                    let _ = names.insert(var.name.clone());
-                }
-            }
-        }
-    }
-
+/// Names the module binds to recognised type constructors — `TypeVar`,
+/// `ParamSpec`, `TypeVarTuple`, `NewType`, `TypedDict`, `NamedTuple`, and
+/// `TypeAliasType` calls all produce types even though their RHS is a call.
+fn type_constructor_names(module: &ResolvedModule) -> HashSet<&str> {
+    let mut names: HashSet<&str> = module
+        .typevar_calls
+        .iter()
+        .map(|tv| tv.name.as_str())
+        .collect();
+    names.extend(module.newtype_calls.iter().map(|n| n.lhs_name.as_str()));
+    names.extend(module.typeddict_calls.iter().map(|t| t.lhs_name.as_str()));
+    names.extend(module.namedtuple_defs.iter().map(|n| n.lhs_name.as_str()));
+    names.extend(
+        module
+            .type_alias_type_calls
+            .iter()
+            .map(|t| t.lhs_name.as_str()),
+    );
     names
 }
 
-/// Returns `true` when the RHS is a simple name reference to a runtime variable.
-fn is_runtime_variable_ref(
-    rhs: &str,
-    runtime_var_names: &std::collections::HashSet<String>,
-) -> bool {
-    // Only match simple identifiers (no brackets, dots, pipes)
-    if rhs.contains(['[', ']', '|', '.', '(', ')']) {
-        return false;
+/// Collect names of module-level variables that hold runtime values.
+///
+/// An unannotated assignment is either an implicit alias (its RHS is a type
+/// expression), a recognised type-constructor binding, or an ordinary
+/// variable. Ordinary variables are not valid in type expressions, so their
+/// names are the "non-type" set every other check consults. A second pass
+/// follows plain name-to-name assignments (`B = A` where `A` is runtime) to
+/// a fixpoint.
+fn collect_runtime_var_names(
+    module: &ResolvedModule,
+    resolver: &AnnotationResolver<'_>,
+    index: &ExprIndex<'_>,
+) -> HashSet<String> {
+    let constructors = type_constructor_names(module);
+    let value_judge = TypeExprJudge {
+        non_type: &|_| false,
+        strings: StringPolicy::RejectValue,
+    };
+    let mut runtime: HashSet<String> = HashSet::new();
+    for var in &module.module_vars {
+        if annotation_is_type_alias(resolver, var.annotation_span) {
+            continue; // Explicit aliases are judged separately.
+        }
+        if var.has_annotation
+            || constructors.contains(var.name.as_str())
+            || var.rhs_kind == RhsKind::TypeCall
+        {
+            continue;
+        }
+        let Some(rhs) = var.rhs_span.and_then(|span| index.expr(span)) else {
+            continue;
+        };
+        if !is_type_expression(rhs, &value_judge) {
+            let _ = runtime.insert(var.name.clone());
+        }
     }
-    runtime_var_names.contains(rhs)
+    propagate_runtime_refs(module, index, &mut runtime);
+    runtime
+}
+
+/// Mark `B = A` runtime when `A` already is, until no assignment changes.
+fn propagate_runtime_refs(
+    module: &ResolvedModule,
+    index: &ExprIndex<'_>,
+    runtime: &mut HashSet<String>,
+) {
+    loop {
+        let mut changed = false;
+        for var in &module.module_vars {
+            if var.has_annotation || runtime.contains(&var.name) {
+                continue;
+            }
+            let Some(Expr::Name(rhs)) = var.rhs_span.and_then(|span| index.expr(span)) else {
+                continue;
+            };
+            if runtime.contains(rhs.id.as_str()) {
+                let _ = runtime.insert(var.name.clone());
+                changed = true;
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
 // Type alias parameterization checking
 // ---------------------------------------------------------------------------
 
-/// Information about a type alias definition.
-struct AliasInfo {
-    /// Number of `TypeVar`/`ParamSpec`/`TypeVarTuple` parameters the alias accepts.
-    typevar_count: usize,
-    /// Whether the alias RHS contains a top-level `|` (union alias).
-    is_union: bool,
-    /// Whether any of the type parameters is a `ParamSpec`.
-    has_paramspec: bool,
-    /// Ordered list of `(typevar_name, bound_type_name)` for each type parameter.
-    /// `bound_type_name` is `None` if the `TypeVar` has no bound.
-    typevar_bounds: Vec<(String, Option<String>)>,
+/// One declared type parameter of an alias, in order of first appearance in
+/// the alias's RHS.
+struct TypeParam {
+    name: String,
+    bound: Option<String>,
+    is_paramspec: bool,
 }
 
-/// Build a map from alias name to its `AliasInfo`.
-///
-/// Scans `TypeAlias`-annotated module variables, counts how many distinct
-/// `TypeVar` names appear in their RHS, and detects union aliases.
-fn build_alias_info_map(
-    module: &ResolvedModule,
-    type_alias_names: &[String],
-) -> std::collections::HashMap<String, AliasInfo> {
-    let source = &module.source;
+/// Information about a type alias definition.
+struct AliasInfo {
+    /// The alias's type parameters in RHS order.
+    params: Vec<TypeParam>,
+    /// Whether the alias RHS is a top-level `|` union.
+    is_union: bool,
+}
 
-    // Collect known TypeVar/ParamSpec/TypeVarTuple names
-    let typevar_names: std::collections::HashSet<&str> = module
+/// Every `Name` referenced anywhere in an expression, in source order —
+/// including subscript arguments, where an alias's type parameters live.
+fn ordered_name_refs(expr: &Expr) -> Vec<&str> {
+    struct NameCollector<'ast> {
+        names: Vec<&'ast str>,
+    }
+    impl<'ast> Visitor<'ast> for NameCollector<'ast> {
+        fn visit_expr(&mut self, expr: &'ast Expr) {
+            if let Expr::Name(name) = expr {
+                self.names.push(name.id.as_str());
+            }
+            walk_expr(self, expr);
+        }
+    }
+    let mut collector = NameCollector { names: Vec::new() };
+    collector.visit_expr(expr);
+    collector.names
+}
+
+/// The alias's type parameters: every distinct declared `TypeVar` /
+/// `ParamSpec` / `TypeVarTuple` referenced in the RHS, in first-appearance
+/// order, each carrying its declared bound.
+fn alias_type_params(module: &ResolvedModule, rhs: &Expr) -> Vec<TypeParam> {
+    let declared: HashMap<&str, (Option<&str>, bool)> = module
         .typevar_calls
         .iter()
-        .map(|tv| tv.name.as_str())
+        .map(|tv| {
+            (
+                tv.name.as_str(),
+                (tv.bound_type_name.as_deref(), tv.is_paramspec),
+            )
+        })
         .collect();
-
-    let mut map = std::collections::HashMap::new();
-
-    for var in &module.module_vars {
-        let Some(ann) = span_text(source, var.annotation_span) else {
-            continue;
-        };
-        if !is_type_alias_annotation(ann.trim(), type_alias_names) {
-            continue;
+    let mut seen = HashSet::new();
+    let mut params = Vec::new();
+    for name in ordered_name_refs(rhs) {
+        if let Some((bound, is_paramspec)) = declared.get(name) {
+            if seen.insert(name) {
+                params.push(TypeParam {
+                    name: name.to_owned(),
+                    bound: bound.map(str::to_owned),
+                    is_paramspec: *is_paramspec,
+                });
+            }
         }
-        let Some(rhs_span) = var.rhs_span else {
-            continue;
-        };
-        let Some(rhs) = span_text(source, Some(rhs_span)) else {
-            continue;
-        };
-        let rhs = rhs.trim();
+    }
+    params
+}
 
-        // Count unique TypeVar references in the RHS
-        let typevar_count = count_typevar_refs(rhs, &typevar_names);
-        let is_union = has_top_level_token(rhs, " | ");
-        let has_paramspec = has_paramspec_ref(rhs, &module.typevar_calls);
-        let typevar_bounds = collect_typevar_bounds(rhs, &module.typevar_calls);
+/// Build a map from alias name to its [`AliasInfo`], covering explicit
+/// `TypeAlias`-annotated variables and implicit aliases — unannotated
+/// assignments whose RHS is a type expression. Alias-hood comes from the
+/// binding's structure, never from the spelling of its name.
+fn build_alias_info_map(
+    module: &ResolvedModule,
+    resolver: &AnnotationResolver<'_>,
+    index: &ExprIndex<'_>,
+    runtime_vars: &HashSet<String>,
+) -> HashMap<String, AliasInfo> {
+    let constructors = type_constructor_names(module);
+    let implicit_judge = TypeExprJudge {
+        non_type: &|name| runtime_vars.contains(name),
+        strings: StringPolicy::RejectValue,
+    };
+    let mut map = HashMap::new();
+    for var in &module.module_vars {
+        let Some(rhs) = var.rhs_span.and_then(|span| index.expr(span)) else {
+            continue;
+        };
+        let explicit = annotation_is_type_alias(resolver, var.annotation_span);
+        if !explicit {
+            let is_implicit = !var.has_annotation
+                && !runtime_vars.contains(&var.name)
+                && !constructors.contains(var.name.as_str())
+                && is_type_expression(rhs, &implicit_judge);
+            if !is_implicit {
+                continue;
+            }
+        }
         let _ = map.insert(
             var.name.clone(),
             AliasInfo {
-                typevar_count,
-                is_union,
-                has_paramspec,
-                typevar_bounds,
+                params: alias_type_params(module, rhs),
+                is_union: matches!(rhs, Expr::BinOp(binop) if binop.op == Operator::BitOr),
             },
         );
     }
-
-    // Also handle implicit aliases (no TypeAlias annotation):
-    // `ListAlias = list` or `ListOrSetAlias = list | set`
-    for var in &module.module_vars {
-        if var.has_annotation {
-            continue; // Already handled above or not an alias
-        }
-        if map.contains_key(&var.name) {
-            continue;
-        }
-        // Heuristic: if the name starts with uppercase and the RHS is a type
-        // expression (name, subscript, or union), treat it as an implicit alias
-        let first_char = var.name.chars().next().unwrap_or('a');
-        if !first_char.is_ascii_uppercase() {
-            continue;
-        }
-        let Some(rhs_span) = var.rhs_span else {
-            continue;
-        };
-        let Some(rhs) = span_text(source, Some(rhs_span)) else {
-            continue;
-        };
-        let rhs = rhs.trim();
-
-        // Only treat simple type-expression-like RHS as aliases
-        if matches!(var.rhs_kind, basilisk_resolver::RhsKind::Other)
-            && looks_like_type_expression(rhs)
-        {
-            let typevar_count = count_typevar_refs(rhs, &typevar_names);
-            let is_union = has_top_level_token(rhs, " | ");
-            let has_paramspec = has_paramspec_ref(rhs, &module.typevar_calls);
-            let typevar_bounds = collect_typevar_bounds(rhs, &module.typevar_calls);
-            let _ = map.insert(
-                var.name.clone(),
-                AliasInfo {
-                    typevar_count,
-                    is_union,
-                    has_paramspec,
-                    typevar_bounds,
-                },
-            );
-        }
-    }
-
     map
 }
 
-/// Count unique `TypeVar` name references in a type expression string.
-fn count_typevar_refs(rhs: &str, typevar_names: &std::collections::HashSet<&str>) -> usize {
-    let mut seen = std::collections::HashSet::new();
-    // Split on non-identifier chars to extract names
-    let mut current = String::new();
-    for ch in rhs.chars() {
-        if ch.is_alphanumeric() || ch == '_' {
-            current.push(ch);
-        } else {
-            if !current.is_empty() && typevar_names.contains(current.as_str()) {
-                let _ = seen.insert(current.clone());
-            }
-            current.clear();
-        }
-    }
-    if !current.is_empty() && typevar_names.contains(current.as_str()) {
-        let _ = seen.insert(current);
-    }
-    seen.len()
-}
-
-/// Returns `true` if the RHS text references any `ParamSpec` name.
-fn has_paramspec_ref(rhs: &str, typevar_calls: &[basilisk_resolver::TypeVarCallInfo]) -> bool {
-    let paramspec_names: std::collections::HashSet<&str> = typevar_calls
-        .iter()
-        .filter(|tv| tv.is_paramspec)
-        .map(|tv| tv.name.as_str())
-        .collect();
-    if paramspec_names.is_empty() {
-        return false;
-    }
-    let mut current = String::new();
-    for ch in rhs.chars() {
-        if ch.is_alphanumeric() || ch == '_' {
-            current.push(ch);
-        } else {
-            if !current.is_empty() && paramspec_names.contains(current.as_str()) {
-                return true;
-            }
-            current.clear();
-        }
-    }
-    !current.is_empty() && paramspec_names.contains(current.as_str())
-}
-
-/// Collect ordered `TypeVar` bounds for type parameters in a type alias RHS.
-///
-/// Scans the RHS for `TypeVar` names in order of first appearance and pairs
-/// each with its bound (if any) from the `TypeVarCallInfo` list.
-fn collect_typevar_bounds(
-    rhs: &str,
-    typevar_calls: &[basilisk_resolver::TypeVarCallInfo],
-) -> Vec<(String, Option<String>)> {
-    let tv_info: std::collections::HashMap<&str, Option<&str>> = typevar_calls
-        .iter()
-        .map(|tv| (tv.name.as_str(), tv.bound_type_name.as_deref()))
-        .collect();
-
-    let mut seen = std::collections::HashSet::new();
-    let mut result = Vec::new();
-    let mut current = String::new();
-
-    for ch in rhs.chars() {
-        if ch.is_alphanumeric() || ch == '_' {
-            current.push(ch);
-        } else {
-            if !current.is_empty() {
-                if let Some(bound) = tv_info.get(current.as_str()) {
-                    if seen.insert(current.clone()) {
-                        result.push((current.clone(), bound.map(String::from)));
-                    }
-                }
-            }
-            current.clear();
-        }
-    }
-    if !current.is_empty() {
-        if let Some(bound) = tv_info.get(current.as_str()) {
-            if seen.insert(current.clone()) {
-                result.push((current.clone(), bound.map(String::from)));
-            }
-        }
-    }
-
-    result
-}
-
-/// Returns `true` if the text looks like a type expression (for implicit alias detection).
-fn looks_like_type_expression(text: &str) -> bool {
-    let text = text.trim();
-    if text.is_empty() {
-        return false;
-    }
-    // Must start with an uppercase letter or be a builtin type
-    let first = text.chars().next().unwrap_or(' ');
-    if !first.is_ascii_uppercase() && !first.is_ascii_lowercase() {
-        return false;
-    }
-    // Must not contain invalid chars for type expressions
-    !text.contains(['=', '+', '-', '*', '/', '%', '!', '~', '^', '&', '{', '}'])
-}
-
-/// Count type arguments in a `Name[arg1, arg2, ...]` annotation.
-///
-/// Returns `None` if the annotation is not a subscript.
-fn count_type_args(annotation: &str) -> Option<usize> {
-    let bracket_start = annotation.find('[')?;
-    if !annotation.ends_with(']') {
-        return None;
-    }
-    let inner = &annotation[bracket_start + 1..annotation.len() - 1];
-    if inner.trim().is_empty() {
-        return Some(0);
-    }
-    // Count top-level commas
-    let mut depth = 0i32;
-    let mut count = 1usize;
-    for ch in inner.chars() {
-        match ch {
-            '[' | '(' | '{' => depth += 1,
-            ']' | ')' | '}' => depth -= 1,
-            ',' if depth == 0 => count += 1,
-            _ => {}
-        }
-    }
-    Some(count)
-}
-
-/// Extract the base name from an annotation like `Name[args]`.
-fn annotation_base_name(annotation: &str) -> &str {
-    annotation.split('[').next().unwrap_or(annotation).trim()
-}
-
-/// Check type alias parameterization across all function parameter annotations.
+/// Check alias parameterization across function parameter and module
+/// variable annotations.
 fn check_alias_parameterization(
     module: &ResolvedModule,
-    alias_map: &std::collections::HashMap<String, AliasInfo>,
+    index: &ExprIndex<'_>,
+    alias_map: &HashMap<String, AliasInfo>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let source = &module.source;
-    let path = &module.path;
-    // Names of declared TypeVars: a TypeVar used as a type argument defers its
-    // bound to the use site and must not be bound-checked as a concrete type.
-    let typevar_names: std::collections::HashSet<&str> = module
+    // A TypeVar used as a type argument defers its bound to the use site.
+    let typevar_names: HashSet<&str> = module
         .typevar_calls
         .iter()
         .map(|tv| tv.name.as_str())
@@ -589,179 +337,224 @@ fn check_alias_parameterization(
     // Bound verdicts route through the module-seeded context
     // ([NARROWPLAN-SUBTYPING]).
     let subtyping = crate::subtyping::module_context(module);
-
-    // Check function parameter annotations
+    let known_class_names: HashSet<&str> =
+        module.classes.iter().map(|c| c.name.as_str()).collect();
+    let checker = ParameterizationChecker {
+        module,
+        index,
+        alias_map,
+        typevar_names,
+        subtyping,
+        known_class_names,
+    };
     for func in &module.functions {
         for param in &func.parameters {
-            if !param.has_annotation {
-                continue;
+            if let Some(span) = param.annotation_span {
+                checker.check_annotation(span, diagnostics);
             }
-            let Some(ann_span) = param.annotation_span else {
-                continue;
-            };
-            let Some(ann_text) = slice_span(source, ann_span) else {
-                continue;
-            };
-            let ann_text = ann_text.trim();
-            check_single_annotation(
-                &subtyping,
-                ann_text,
-                ann_span,
-                alias_map,
-                path,
-                &typevar_names,
-                diagnostics,
-            );
         }
     }
-
-    // Check module-level variable annotations
     for var in &module.module_vars {
-        let Some(ann_span) = var.annotation_span else {
-            continue;
-        };
-        let Some(ann_text) = slice_span(source, ann_span) else {
-            continue;
-        };
-        let ann_text = ann_text.trim();
-        check_single_annotation(
-            &subtyping,
-            ann_text,
-            ann_span,
-            alias_map,
-            path,
-            &typevar_names,
-            diagnostics,
-        );
-    }
-}
-
-/// Check a single annotation for alias parameterization errors.
-fn check_single_annotation(
-    subtyping: &crate::subtyping::SubtypingContext,
-    ann_text: &str,
-    ann_span: Span,
-    alias_map: &std::collections::HashMap<String, AliasInfo>,
-    path: &str,
-    typevar_names: &std::collections::HashSet<&str>,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    let base = annotation_base_name(ann_text);
-    let Some(info) = alias_map.get(base) else {
-        return;
-    };
-
-    // Check if annotation uses `[...]` subscript
-    if let Some(arg_count) = count_type_args(ann_text) {
-        if info.typevar_count == 0 {
-            // Alias is not generic — cannot be parameterized
-            diagnostics.push(error_diagnostic_owned(
-                CODE.clone(),
-                format!("Type alias `{base}` is not generic and cannot be parameterized"),
-                ann_span,
-                path,
-                Some(format!("Remove the type arguments from `{ann_text}`")),
-                Some(format!(
-                    "`{base}` does not use any TypeVar parameters in its definition"
-                )),
-            ));
-        } else if arg_count > info.typevar_count {
-            diagnostics.push(error_diagnostic_owned(
-                CODE.clone(),
-                format!(
-                    "Too many type arguments for `{base}`: expected {}, got {arg_count}",
-                    info.typevar_count
-                ),
-                ann_span,
-                path,
-                Some(format!(
-                    "`{base}` accepts {} type parameter(s)",
-                    info.typevar_count
-                )),
-                None,
-            ));
-        } else if info.has_paramspec && arg_count == info.typevar_count {
-            // Check if a simple type is used where a ParamSpec expects a
-            // parameter specification (list of types or `...`).
-            // E.g. `Alias[int, int]` where the alias has `P: ParamSpec`
-            // and `R: TypeVar` — `int` is not a valid ParamSpec argument.
-            let bracket_start = ann_text.find('[').unwrap_or(ann_text.len());
-            if ann_text.ends_with(']') {
-                let inner = &ann_text[bracket_start + 1..ann_text.len() - 1];
-                let args: Vec<&str> = split_top_level_commas(inner);
-                // If all args are simple types (no `[...]` or `...`),
-                // the ParamSpec arg is probably wrong
-                let all_simple = args.iter().all(|arg| {
-                    let trimmed = arg.trim();
-                    !trimmed.contains('[') && trimmed != "..."
-                });
-                if all_simple && args.len() > 1 {
-                    diagnostics.push(error_diagnostic_owned(
-                        CODE.clone(),
-                        format!("Invalid type argument for `ParamSpec` parameter in `{base}`"),
-                        ann_span,
-                        path,
-                        Some(
-                            "ParamSpec arguments must be a list of parameter types \
-                             (e.g. `[int, str]`) or `...`"
-                                .to_owned(),
-                        ),
-                        None,
-                    ));
-                }
-            }
-        }
-
-        // Check TypeVar bounds: if a type arg doesn't satisfy the bound
-        if !info.typevar_bounds.is_empty() {
-            let bracket_start = ann_text.find('[').unwrap_or(ann_text.len());
-            if ann_text.ends_with(']') {
-                let inner = &ann_text[bracket_start + 1..ann_text.len() - 1];
-                let args: Vec<&str> = split_top_level_commas(inner);
-                for (idx, arg) in args.iter().enumerate() {
-                    if let Some((tv_name, Some(bound))) = info.typevar_bounds.get(idx) {
-                        let arg_trimmed = arg.trim();
-                        // A TypeVar argument defers its bound to the use site.
-                        if typevar_names.contains(arg_trimmed) {
-                            continue;
-                        }
-                        if !is_assignable_to_bound(subtyping, arg_trimmed, bound) {
-                            diagnostics.push(error_diagnostic_owned(
-                                CODE.clone(),
-                                format!(
-                                    "Type argument `{arg_trimmed}` does not satisfy \
-                                     bound `{bound}` of TypeVar `{tv_name}` in `{base}`"
-                                ),
-                                ann_span,
-                                path,
-                                Some(format!(
-                                    "TypeVar `{tv_name}` requires a type that is a \
-                                     subtype of `{bound}`"
-                                )),
-                                None,
-                            ));
-                        }
-                    }
-                }
-            }
+        if let Some(span) = var.annotation_span {
+            checker.check_annotation(span, diagnostics);
         }
     }
 }
 
-/// Check if a type argument is assignable to a `TypeVar` bound.
-///
-/// Numeric-tower bounds route through the module-seeded context
-/// ([NARROWPLAN-SUBTYPING], parity pinned in
-/// `tests/subtyping_context_tests.rs`); any other bound accepts
-/// conservatively.
-fn is_assignable_to_bound(
-    subtyping: &crate::subtyping::SubtypingContext,
-    arg: &str,
-    bound: &str,
-) -> bool {
-    match bound {
-        "int" | "float" | "complex" => subtyping.is_subtype(arg, bound),
-        _ => true,
+struct ParameterizationChecker<'m, 'ast> {
+    module: &'m ResolvedModule,
+    index: &'m ExprIndex<'ast>,
+    alias_map: &'m HashMap<String, AliasInfo>,
+    typevar_names: HashSet<&'m str>,
+    subtyping: SubtypingContext,
+    known_class_names: HashSet<&'m str>,
+}
+
+impl ParameterizationChecker<'_, '_> {
+    /// Check one annotation node: it must be a subscript of a known alias.
+    fn check_annotation(&self, span: Span, diagnostics: &mut Vec<Diagnostic>) {
+        let Some(Expr::Subscript(subscript)) = self.index.expr(span) else {
+            return;
+        };
+        let Expr::Name(base) = &*subscript.value else {
+            return;
+        };
+        let Some(info) = self.alias_map.get(base.id.as_str()) else {
+            return;
+        };
+        let args: Vec<&Expr> = match &*subscript.slice {
+            Expr::Tuple(tuple) => tuple.elts.iter().collect(),
+            single => vec![single],
+        };
+        let base_name = base.id.as_str();
+        if info.params.is_empty() {
+            self.report_not_generic(base_name, span, diagnostics);
+            return;
+        }
+        if args.len() > info.params.len() {
+            self.report_too_many(base_name, info, args.len(), span, diagnostics);
+            return;
+        }
+        self.check_paramspec_args(base_name, info, &args, span, diagnostics);
+        self.check_bounds(base_name, info, &args, span, diagnostics);
+    }
+
+    fn report_not_generic(&self, base: &str, span: Span, diagnostics: &mut Vec<Diagnostic>) {
+        let annotation_text = slice_span(&self.module.source, span).unwrap_or(base);
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!("Type alias `{base}` is not generic and cannot be parameterized"),
+            span,
+            &self.module.path,
+            Some(format!("Remove the type arguments from `{annotation_text}`")),
+            Some(format!(
+                "`{base}` does not use any TypeVar parameters in its definition"
+            )),
+        ));
+    }
+
+    fn report_too_many(
+        &self,
+        base: &str,
+        info: &AliasInfo,
+        arg_count: usize,
+        span: Span,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
+                "Too many type arguments for `{base}`: expected {}, got {arg_count}",
+                info.params.len()
+            ),
+            span,
+            &self.module.path,
+            Some(format!(
+                "`{base}` accepts {} type parameter(s)",
+                info.params.len()
+            )),
+            None,
+        ));
+    }
+
+    /// PEP 612: the argument at a `ParamSpec` parameter's position must be a
+    /// parameter-list expression — `[...]`, `...`, another `ParamSpec`, or
+    /// `Concatenate[...]`. When the alias's ONLY parameter is the
+    /// `ParamSpec`, a single argument is implicitly wrapped in a list and
+    /// any shape is valid.
+    fn check_paramspec_args(
+        &self,
+        base: &str,
+        info: &AliasInfo,
+        args: &[&Expr],
+        span: Span,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
+        if info.params.len() < 2 {
+            return;
+        }
+        for (position, param) in info.params.iter().enumerate() {
+            if !param.is_paramspec {
+                continue;
+            }
+            let Some(arg) = args.get(position) else {
+                continue;
+            };
+            if !self.is_paramspec_argument(arg) {
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!("Invalid type argument for `ParamSpec` parameter in `{base}`"),
+                    span,
+                    &self.module.path,
+                    Some(
+                        "ParamSpec arguments must be a list of parameter types \
+                         (e.g. `[int, str]`) or `...`"
+                            .to_owned(),
+                    ),
+                    None,
+                ));
+            }
+        }
+    }
+
+    fn is_paramspec_argument(&self, arg: &Expr) -> bool {
+        match arg {
+            Expr::List(_) | Expr::EllipsisLiteral(_) => true,
+            Expr::Name(name) => self
+                .module
+                .typevar_calls
+                .iter()
+                .any(|tv| tv.is_paramspec && tv.name == name.id.as_str()),
+            Expr::Subscript(subscript) => {
+                matches!(&*subscript.value, Expr::Name(name) if name.id.as_str() == "Concatenate")
+            }
+            _ => false,
+        }
+    }
+
+    /// Check `TypeVar` bounds. A violation is reported only when the
+    /// subtyping context has positive knowledge of BOTH sides — builtin
+    /// tower names or module-local classes — because `is_subtype` answers
+    /// `false` for names it cannot see (imported bases, typeshed classes),
+    /// and inventing errors from ignorance breaks the gradual guarantee.
+    fn check_bounds(
+        &self,
+        base: &str,
+        info: &AliasInfo,
+        args: &[&Expr],
+        span: Span,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
+        for (position, param) in info.params.iter().enumerate() {
+            let Some(bound) = param.bound.as_deref() else {
+                continue;
+            };
+            let Some(arg_name) = args.get(position).and_then(|arg| simple_type_name(arg)) else {
+                continue;
+            };
+            if self.typevar_names.contains(arg_name) {
+                continue; // Defers its own bound to the use site.
+            }
+            if !self.name_is_known(arg_name) || !self.name_is_known(bound) {
+                continue;
+            }
+            if !self.subtyping.is_subtype(arg_name, bound) {
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
+                        "Type argument `{arg_name}` does not satisfy \
+                         bound `{bound}` of TypeVar `{}` in `{base}`",
+                        param.name
+                    ),
+                    span,
+                    &self.module.path,
+                    Some(format!(
+                        "TypeVar `{}` requires a type that is a \
+                         subtype of `{bound}`",
+                        param.name
+                    )),
+                    None,
+                ));
+            }
+        }
+    }
+
+    /// Positive knowledge: the builtin types the tower models, or a class
+    /// this module defines (registered in the subtyping context).
+    fn name_is_known(&self, name: &str) -> bool {
+        matches!(
+            name,
+            "int" | "float" | "complex" | "bool" | "str" | "bytes" | "object" | "None"
+        ) || self.known_class_names.contains(name)
+    }
+}
+
+/// The simple name a type argument denotes, when it has one.
+fn simple_type_name(expr: &Expr) -> Option<&str> {
+    match expr {
+        Expr::Name(name) => Some(name.id.as_str()),
+        Expr::NoneLiteral(_) => Some("None"),
+        _ => None,
     }
 }
 
@@ -771,7 +564,7 @@ fn is_assignable_to_bound(
 /// runtime doesn't know which branch to construct.
 fn check_union_alias_instantiation(
     module: &ResolvedModule,
-    alias_map: &std::collections::HashMap<String, AliasInfo>,
+    alias_map: &HashMap<String, AliasInfo>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     for call in &module.calls {
@@ -796,41 +589,35 @@ fn check_union_alias_instantiation(
 
 /// Check function parameter annotations that reference runtime (non-type) names.
 ///
-/// When a module-level name like `BadTypeAlias1 = eval(...)` is used as a
-/// type annotation (`p1: BadTypeAlias1`), this is an error because the name
-/// does not resolve to a type.
+/// When a module-level name holds a runtime value (`BadTypeAlias1 = eval(...)`)
+/// and is used as a type annotation (`p1: BadTypeAlias1`), this is an error
+/// because the name does not resolve to a type.
 fn check_runtime_name_annotations(
     module: &ResolvedModule,
-    runtime_var_names: &std::collections::HashSet<String>,
+    index: &ExprIndex<'_>,
+    runtime_vars: &HashSet<String>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let source = &module.source;
-    let path = &module.path;
-
     for func in &module.functions {
         for param in &func.parameters {
-            if !param.has_annotation {
-                continue;
-            }
-            let Some(ann_span) = param.annotation_span else {
+            let Some(span) = param.annotation_span else {
                 continue;
             };
-            let Some(ann_text) = slice_span(source, ann_span) else {
+            let Some(Expr::Name(name)) = index.expr(span) else {
                 continue;
             };
-            let ann_text = ann_text.trim();
-            // Simple name reference to a runtime variable
-            if runtime_var_names.contains(ann_text) {
+            let name = name.id.as_str();
+            if runtime_vars.contains(name) {
                 diagnostics.push(error_diagnostic_owned(
                     CODE.clone(),
                     format!(
-                        "Variable `{ann_text}` is not a valid type and \
+                        "Variable `{name}` is not a valid type and \
                          cannot be used as an annotation"
                     ),
-                    ann_span,
-                    path,
+                    span,
+                    &module.path,
                     Some(format!(
-                        "`{ann_text}` is assigned a runtime value, not a type expression"
+                        "`{name}` is assigned a runtime value, not a type expression"
                     )),
                     Some(
                         "Only type expressions (classes, type aliases, typing constructs) \

@@ -694,7 +694,7 @@ def func(x: int, y: str) -> None:
 
 /// Kills mutants in `has_top_level_token` depth tracking.
 /// Nested brackets must NOT trigger `if`/`or`/`and` detection inside them.
-#[mutation_safe(rule = "aliases_implicit", fns = "has_top_level_token")]
+#[mutation_safe(rule = "aliases_implicit", fns = "is_type_expression")]
 #[test]
 fn mutant_nested_brackets_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
@@ -785,7 +785,7 @@ fn mutant_multiline_annotation_extraction() -> Result<(), Box<dyn std::error::Er
 /// Kills mutant: e0048.rs line 69 `import.kind != ImportKind::From` → `==`.
 /// With the mutant, `From` imports are skipped, so `TypeAlias as TA` is never
 /// registered and `BadAlias: TA = [int, str]` would not be detected as E0048.
-#[mutation_safe(rule = "aliases_implicit", fns = "collect_type_alias_names")]
+#[mutation_safe(rule = "aliases_implicit", fns = "annotation_is_type_alias")]
 #[test]
 fn mutant_from_import_kind_guard() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
@@ -808,7 +808,7 @@ BadAlias: TA = [int, str]
 /// Kills mutant: e0048.rs line 86 `|| *c == '_'` → `&&`.
 /// With the mutant, underscore chars break alias extraction, so `My_Alias`
 /// would be truncated to `My` and `Bad: My_Alias = [int]` would not fire E0048.
-#[mutation_safe(rule = "aliases_implicit", fns = "collect_type_alias_names")]
+#[mutation_safe(rule = "aliases_implicit", fns = "annotation_is_type_alias")]
 #[test]
 fn mutant_alias_underscore_accepted() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
@@ -835,7 +835,7 @@ Bad: My_Alias = [int, str]
 /// via `is_type_alias_annotation`'s `.any(|n| ann == n)`, so it can never change a
 /// diagnostic — and is excluded in `.cargo/mutants.toml`. This test keeps the
 /// function in mutation scope for its other, killable mutants.
-#[mutation_safe(rule = "aliases_implicit", fns = "collect_type_alias_names")]
+#[mutation_safe(rule = "aliases_implicit", fns = "annotation_is_type_alias")]
 #[test]
 fn mutant_typealias_self_alias_not_duplicated() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
@@ -907,7 +907,7 @@ fn mutant_line_start_off_by_one_second_var() -> Result<(), Box<dyn std::error::E
 /// Kills mutant: e0048 line 72 second `!=` → `==` (`import.module != "typing_extensions"`).
 /// With the mutant, only `typing_extensions` is processed; plain `typing` is skipped.
 /// An aliased import from `typing` must still be detected.
-#[mutation_safe(rule = "aliases_implicit", fns = "collect_type_alias_names")]
+#[mutation_safe(rule = "aliases_implicit", fns = "annotation_is_type_alias")]
 #[test]
 fn mutant_typing_module_guard() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
@@ -933,7 +933,7 @@ Bad: Alias = [int, str]
 /// `+= with -=` or `*=` on depth means brackets increase instead of tracking.
 /// All these mutants break the nested-bracket guard, causing false positives
 /// on type expressions that contain `or`/`if` inside subscript brackets.
-#[mutation_safe(rule = "aliases_implicit", fns = "has_top_level_token")]
+#[mutation_safe(rule = "aliases_implicit", fns = "is_type_expression")]
 #[test]
 fn mutant_depth_tracking_no_false_positive() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
@@ -958,7 +958,7 @@ GoodDeep: TypeAlias = dict[str, tuple[int, list[str]]]
 /// Kills mutants in `has_top_level_token` where closing bracket arm is deleted
 /// (lines 181) — without it, depth goes up but never comes down, so tokens
 /// after the first bracket pair are never visible at depth 0, hiding real errors.
-#[mutation_safe(rule = "aliases_implicit", fns = "has_top_level_token")]
+#[mutation_safe(rule = "aliases_implicit", fns = "is_type_expression")]
 #[test]
 fn mutant_depth_decrement_catches_after_bracket() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"
@@ -982,7 +982,7 @@ BadAfterBracket: TypeAlias = tuple[int] or list[str]
 /// Mutant: `module != "typing" && module == "typing_extensions"` → skips
 /// `typing_extensions` imports. `from typing_extensions import TypeAlias as TEA`
 /// would not register TEA, so `Bad: TEA = [int]` fires no E0048.
-#[mutation_safe(rule = "aliases_implicit", fns = "collect_type_alias_names")]
+#[mutation_safe(rule = "aliases_implicit", fns = "annotation_is_type_alias")]
 #[test]
 fn mutant_typing_extensions_module_guard() -> Result<(), Box<dyn std::error::Error>> {
     let source = r"

@@ -12,14 +12,6 @@ use basilisk_resolver::{ImportKind, ResolvedModule};
 // Circular annotation detection
 // ---------------------------------------------------------------------------
 
-/// Returns `true` when `ann` is a bare identifier (only alphanumeric chars and underscores).
-pub(super) fn is_bare_identifier(ann: &str) -> bool {
-    !ann.is_empty()
-        && !ann.starts_with('"')
-        && !ann.starts_with('\'')
-        && ann.chars().all(|c| c.is_alphanumeric() || c == '_')
-}
-
 /// Returns `true` when the annotation is a string literal that circularly references
 /// its own attribute name, and that name is not otherwise defined.
 pub(super) fn is_circular_string_annotation(
