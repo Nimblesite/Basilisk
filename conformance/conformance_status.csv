@@ -52,7 +52,7 @@ assignment_compatibility,directives_type_ignore_file2.py,directives,PASS,1,0,0
 directives_version_platform,directives_version_platform.py,directives,PASS,3,0,0
 enums_behaviors|enums_expansion,enums_behaviors.py,enums,PASS,1,0,0
 enums_definition,enums_definition.py,enums,PASS,1,0,0
-enums_expansion,enums_expansion.py,enums,PASS,1,0,0
+assignment_compatibility|enums_expansion,enums_expansion.py,enums,FAIL,1,0,1
 ,enums_member_names.py,enums,PASS,0,0,0
 enums_member_values,enums_member_values.py,enums,PASS,2,0,0
 enums_members|enums_members_2,enums_members.py,enums,PASS,7,0,0

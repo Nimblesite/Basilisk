@@ -1,7 +1,7 @@
 ---
 layout: layouts/base.njk
 title: "Basilisk —— 快速的 Python 类型检查器与语言服务器"
-description: "Basilisk 是用 Rust 构建的开源 Python 类型检查器与语言服务器：在官方 python/typing 符合性套件中取得 100%，并在我们公开的基准测试中最快。"
+description: "Basilisk 是用 Rust 构建的开源 Python 类型检查器与语言服务器：在官方 python/typing 符合性套件中取得 99.3%（上游近期扩充了枚举测试，一个文件的修复正在进行中），并在我们公开的基准测试中最快。"
 keywords: "python 类型检查器, python type checker, python 类型检查, python 语言服务器, python language server, python 类型检查器对比, rust python 类型检查器, typing conformance, 类型检查器基准测试"
 imageAlt: "Basilisk Python 类型检查器与语言服务器，附公开的符合性结果与冷启动基准测试"
 dateModified: 2026-08-04
@@ -20,6 +20,9 @@ permalink: /zh/
   and benchmarks.toolMedians.ms.pyrefly
   and benchmarks.toolMedians.ms.zuban %}
 {% set basiliskIsFastest = hasCompleteBenchmark and benchmarks.toolMedians.fastest == 'basilisk' %}
+{# 上游榜单快照可能滞后于我们每次发布的实测结果：只有当最新实测同样满分时，
+   才以快照的“唯一满分”口径开头；否则展示最新实测得分。 #}
+{% set freshRunPerfect = conformance.hasData and conformance.pass == conformance.total %}
 
 <section class="hero">
   <div class="container">
@@ -28,13 +31,14 @@ permalink: /zh/
         <span class="hero__kicker">Python 类型检查器 &middot; 语言服务器</span>
 
         <h1 class="hero__headline">
-          {% if conformanceOfficial.basiliskIsSolePerfect %}唯一在官方 Python typing 套件中取得 {{ conformanceOfficial.basilisk.pct }}% 的 Python 类型检查器。{% elif conformance.hasData %}在官方 Python typing 套件中取得 {{ conformance.scorePct }}% 的 Python 类型检查器。{% else %}为速度与规范符合性打造的 Python 类型检查器。{% endif %}
+          {% if conformanceOfficial.basiliskIsSolePerfect and freshRunPerfect %}唯一在官方 Python typing 套件中取得 {{ conformanceOfficial.basilisk.pct }}% 的 Python 类型检查器。{% elif conformance.hasData %}在官方 Python typing 套件中取得 {{ conformance.scorePct }}% 的 Python 类型检查器。{% else %}为速度与规范符合性打造的 Python 类型检查器。{% endif %}
           {% if basiliskIsFastest %}<span class="hero__headline-accent">也是我们测过最快的。</span>{% endif %}
         </h1>
 
         <p class="hero__subheadline">
           Basilisk 是用 Rust 构建的开源 Python 类型检查器与语言服务器。
-          {% if conformance.hasData and conformance.pass == conformance.total %}它是{% if conformanceOfficial.basiliskIsSolePerfect %}唯一{% endif %}通过<a href="{{ conformanceOfficial.snapshot.source }}" target="_blank" rel="noopener">官方 <code>python/typing</code> 符合性套件中每一个文件</a>的检查器，捕获 {{ conformance.caught }} 个必需错误，{{ conformance.fp }} 处误报。{% elif conformance.hasData %}它在<a href="/zh/docs/conformance/">官方 <code>python/typing</code> 符合性套件</a>中取得 {{ conformance.scorePct }}%。{% endif %}
+          {% if freshRunPerfect %}它是{% if conformanceOfficial.basiliskIsSolePerfect %}唯一{% endif %}通过<a href="{{ conformanceOfficial.snapshot.source }}" target="_blank" rel="noopener">官方 <code>python/typing</code> 符合性套件中每一个文件</a>的检查器，捕获 {{ conformance.caught }} 个必需错误，{{ conformance.fp }} 处误报。{% elif conformance.hasData %}它在<a href="/zh/docs/conformance/">官方 <code>python/typing</code> 符合性套件</a>中取得 {{ conformance.scorePct }}%。
+          <em>注：上游于 2026 年 8 月 4 日<a href="https://github.com/python/typing/pull/2324" target="_blank" rel="noopener">扩充了枚举展开测试</a>；目前有一个文件未通过，修复正在进行中。</em>{% endif %}
           {% if basiliskIsFastest %}在<a href="/docs/benchmarks/">我们公开的基准测试</a>中，它的冷启动全文件 CLI 检查中位耗时也低于所有其他检查器。{% endif %}
         </p>
 
@@ -71,7 +75,7 @@ permalink: /zh/
       <div class="stat-card">
         <span class="stat-card__num">{{ conformance.scorePct }}<span class="stat-card__unit">%</span></span>
         <span class="stat-card__label">
-          {% if conformanceOfficial.basiliskIsSolePerfect %}官方榜单中唯一取得满分的检查器{% else %}官方类型符合性得分{% endif %}
+          {% if conformanceOfficial.basiliskIsSolePerfect and freshRunPerfect %}官方榜单中唯一取得满分的检查器{% else %}官方类型符合性得分{% endif %}
         </span>
         <span class="stat-card__sub">
           {{ conformance.total }} 个文件中有 {{ conformance.pass }} 个通过套件未经修改的评分器，

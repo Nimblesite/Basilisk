@@ -1,7 +1,7 @@
 ---
 layout: layouts/base.njk
 title: "Basilisk — Fast Python Type Checker & Language Server"
-description: "Basilisk is an open-source Python type checker and language server in Rust: 100% on the official Python typing conformance suite, fastest in our benchmark."
+description: "Basilisk is an open-source Python type checker and language server in Rust: 99.3% on the official Python typing conformance suite (one file pending a fix after upstream broadened its enum tests), fastest in our benchmark."
 keywords: "python type checker, python typing, python type checking, python language server, python type checker comparison, python type checker rust, typing conformance, type checker benchmark"
 imageAlt: "Basilisk Python type checker and language server, with published conformance results and cold-check benchmarks"
 dateModified: 2026-08-03
@@ -16,6 +16,10 @@ permalink: /
   and benchmarks.toolMedians.ms.pyrefly
   and benchmarks.toolMedians.ms.zuban %}
 {% set basiliskIsFastest = hasCompleteBenchmark and benchmarks.toolMedians.fastest == 'basilisk' %}
+{# The upstream leaderboard snapshot may lag our own per-release measurement.
+   Lead with the snapshot's "only checker at 100%" framing ONLY while our own
+   fresh run is also perfect — otherwise show the fresh measured score. #}
+{% set freshRunPerfect = conformance.hasData and conformance.pass == conformance.total %}
 
 <section class="hero">
   <div class="container">
@@ -24,18 +28,20 @@ permalink: /
         <span class="hero__kicker">Python type checker &middot; language server</span>
 
         <h1 class="hero__headline">
-          {% if conformanceOfficial.basiliskIsSolePerfect %}The only Python type checker that scores {{ conformanceOfficial.basilisk.pct }}% on the official Python typing suite.{% elif conformance.hasData %}A Python type checker that scores {{ conformance.scorePct }}% on the official Python typing suite.{% else %}A Python type checker built for speed and conformance.{% endif %}
+          {% if conformanceOfficial.basiliskIsSolePerfect and freshRunPerfect %}The only Python type checker that scores {{ conformanceOfficial.basilisk.pct }}% on the official Python typing suite.{% elif conformance.hasData %}A Python type checker that scores {{ conformance.scorePct }}% on the official Python typing suite.{% else %}A Python type checker built for speed and conformance.{% endif %}
           {% if basiliskIsFastest %}<span class="hero__headline-accent">And the fastest we&rsquo;ve benchmarked.</span>{% endif %}
         </h1>
 
         <p class="hero__subheadline">
           Basilisk is an open-source Python type checker and language server built in Rust.
-          {% if conformance.hasData and conformance.pass == conformance.total %}
+          {% if freshRunPerfect %}
           {% if conformanceOfficial.basiliskIsSolePerfect %}It is the only checker that passes{% else %}It passes{% endif %}
           <a href="{{ conformanceOfficial.snapshot.source }}" target="_blank" rel="noopener">every file of the official <code>python/typing</code> conformance suite</a>,
           with {{ conformance.caught }} required errors caught and {{ conformance.fp }} false positives.
           {% elif conformance.hasData %}It scores
-          <a href="/docs/conformance/">{{ conformance.scorePct }}% on the official <code>python/typing</code> conformance suite</a>.{% endif %}
+          <a href="/docs/conformance/">{{ conformance.scorePct }}% on the official <code>python/typing</code> conformance suite</a>.
+          <em>Note: upstream <a href="https://github.com/python/typing/pull/2324" target="_blank" rel="noopener">broadened its enum-expansion tests</a>
+          on Aug&nbsp;4,&nbsp;2026; one file currently fails and a fix is in progress.</em>{% endif %}
           {% if basiliskIsFastest %}It also records the
           <a href="/docs/benchmarks/">lowest median cold full-file CLI time of any checker in our published benchmark</a>.{% endif %}
         </p>
@@ -73,7 +79,7 @@ permalink: /
       <div class="stat-card">
         <span class="stat-card__num">{{ conformance.scorePct }}<span class="stat-card__unit">%</span></span>
         <span class="stat-card__label">
-          {% if conformanceOfficial.basiliskIsSolePerfect %}Only listed checker with a perfect official score{% else %}Official typing conformance score{% endif %}
+          {% if conformanceOfficial.basiliskIsSolePerfect and freshRunPerfect %}Only listed checker with a perfect official score{% else %}Official typing conformance score{% endif %}
         </span>
         <span class="stat-card__sub">
           {{ conformance.pass }} of {{ conformance.total }} files pass the suite&rsquo;s unmodified harness,

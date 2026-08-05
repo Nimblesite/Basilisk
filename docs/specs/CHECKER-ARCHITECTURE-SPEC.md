@@ -264,7 +264,7 @@ configuration/editor behavior is specified by
 
 ### Python Typing PEP Coverage {#CHKARCH-PEPS}
 
-Basilisk's **target** is 100% conformance with the Python typing specification. We measure against the latest **`python/typing@main`**, recording the exact graded commit by hash in `conformance_report.json` (currently [`<!--g:short-->0dc9b5d<!--/g:short-->`](https://github.com/python/typing/tree/0dc9b5d23b368713af33ac25338eeb08b80f6360/conformance)). Today the official scorer, run unmodified in CI on the binary in its default configuration (the PEP conformance set; see [CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)), reports **<!--g:pass-->141<!--/g:pass--> of <!--g:total-->141<!--/g:total--> files passing (<!--g:score-->100.0%<!--/g:score-->)**, with **<!--g:fp-->0<!--/g:fp--> false positives** and **<!--g:missed-->0<!--/g:missed--> missed required errors** (<!--g:caught-->970<!--/g:caught--> caught). We run that suite in CI on every change; the gate ratchets the pass-percentage **up** and the false-positive ceiling **down** — closed only by fixing the checker, never by disabling a rule.
+Basilisk's **target** is 100% conformance with the Python typing specification. We measure against the latest **`python/typing@main`**, recording the exact graded commit by hash in `conformance_report.json` (currently [`<!--g:short-->a490662<!--/g:short-->`](https://github.com/python/typing/tree/a4906624f170c169cf667f962080c56d5a5ba6ff/conformance)). Today the official scorer, run unmodified in CI on the binary in its default configuration (the PEP conformance set; see [CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)), reports **<!--g:pass-->140<!--/g:pass--> of <!--g:total-->141<!--/g:total--> files passing (<!--g:score-->99.3%<!--/g:score-->)**, with **<!--g:fp-->1<!--/g:fp--> false positives** and **<!--g:missed-->0<!--/g:missed--> missed required errors** (<!--g:caught-->970<!--/g:caught--> caught). We run that suite in CI on every change; the gate ratchets the pass-percentage **up** and the false-positive ceiling **down** — closed only by fixing the checker, never by disabling a rule.
 
 #### Foundation PEPs {#CHKARCH-PEPS-FOUNDATION}
 
@@ -1464,8 +1464,8 @@ that official check did not run against a freshly cloned suite is a BUILD FAILUR
   **down**. Per-file results are written to `conformance/conformance_status.csv`.
 - **Current score** — measured against `python/typing@main` at the exact graded
   commit recorded in `conformance_report.json`, currently
-  [`<!--g:short-->0dc9b5d<!--/g:short-->`](https://github.com/python/typing/tree/0dc9b5d23b368713af33ac25338eeb08b80f6360/conformance):
-  **<!--g:pass-->141<!--/g:pass--> / <!--g:total-->141<!--/g:total--> = <!--g:score-->100.0%<!--/g:score-->**, **<!--g:fp-->0<!--/g:fp--> false positives**, **<!--g:missed-->0<!--/g:missed--> missed required errors**, with
+  [`<!--g:short-->a490662<!--/g:short-->`](https://github.com/python/typing/tree/a4906624f170c169cf667f962080c56d5a5ba6ff/conformance):
+  **<!--g:pass-->140<!--/g:pass--> / <!--g:total-->141<!--/g:total--> = <!--g:score-->99.3%<!--/g:score-->**, **<!--g:fp-->1<!--/g:fp--> false positives**, **<!--g:missed-->0<!--/g:missed--> missed required errors**, with
   **<!--g:caught-->970<!--/g:caught-->** required errors caught. The binary runs in its default configuration — the
   PEP conformance set — over a fresh `python/typing` clone whose tree holds no
   Basilisk config of any format, so nothing can silence a rule; Basilisk's opt-in house-style rules never run during scoring,
@@ -1489,7 +1489,7 @@ opinionated *house-style* rules (require-annotations `BSK-0001`/`BSK-0002`/`BSK-
 require-`@override` `BSK-0025`, redundant-annotation `BSK-0050`, the explicit-`Any`
 nudge `BSK-0014`) are **opt-in and off by default**, so they never run during scoring
 and can neither pad nor sink the number. The figure is the genuine out-of-the-box
-conformance result — currently <!--g:score-->100.0%<!--/g:score-->. Any shortfall would be a real
+conformance result — currently <!--g:score-->99.3%<!--/g:score-->. Any shortfall would be a real
 checker bug to fix (a missing spec feature, or a false positive from an over-strict
 *conformance* rule), never something to paper over by silencing a rule.
 

@@ -28,9 +28,9 @@
 </p>
 
 <p align="center">
-  <a href="https://www.basilisk-python.dev/docs/conformance/"><strong><!--g:score-->100.0%<!--/g:score--> PEP conformance</strong></a> &mdash; <!--g:pass-->141<!--/g:pass--> of <!--g:total-->141<!--/g:total--> tests in the official
-  <a href="https://github.com/python/typing/tree/0dc9b5d23b368713af33ac25338eeb08b80f6360/conformance"><code>python/typing</code></a>
-  conformance suite (commit <code><!--g:short-->0dc9b5d<!--/g:short--></code>), scored on the wheel-installed CLI in its default config by the real upstream harness.
+  <a href="https://www.basilisk-python.dev/docs/conformance/"><strong><!--g:score-->99.3%<!--/g:score--> PEP conformance</strong></a> &mdash; <!--g:pass-->140<!--/g:pass--> of <!--g:total-->141<!--/g:total--> tests in the official
+  <a href="https://github.com/python/typing/tree/a4906624f170c169cf667f962080c56d5a5ba6ff/conformance"><code>python/typing</code></a>
+  conformance suite (commit <code><!--g:short-->a490662<!--/g:short--></code>), scored on the wheel-installed CLI in its default config by the real upstream harness.
   We target <code>python/typing@main</code> and ratchet the score up only.
 </p>
 
@@ -38,7 +38,7 @@
 
 Basilisk is the **only** Python type checker with a perfect score on the official
 [`python/typing` conformance suite](https://github.com/python/typing/blob/main/conformance/results/results.html):
-**<!--g:score-->100.0%<!--/g:score-->** (<!--g:pass-->141<!--/g:pass-->/<!--g:total-->141<!--/g:total--> files, <!--g:caught-->970<!--/g:caught--> required errors caught, <!--g:fp-->0<!--/g:fp--> false positives),
+**<!--g:score-->99.3%<!--/g:score-->** (<!--g:pass-->140<!--/g:pass-->/<!--g:total-->141<!--/g:total--> files, <!--g:caught-->970<!--/g:caught--> required errors caught, <!--g:fp-->1<!--/g:fp--> false positives),
 measured by the real upstream harness on the wheel-installed CLI in its default config.
 
 <p align="center">
