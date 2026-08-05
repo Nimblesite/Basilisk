@@ -11,6 +11,7 @@ pub(crate) mod oracle;
 pub(crate) mod returns_judge;
 mod text_scan;
 mod type_expr;
+pub(crate) mod typing_form;
 
 pub(crate) use class_walks::{
     any_base_name_matches, class_name_map, class_or_base_matches, method_name_map,

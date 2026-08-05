@@ -1,169 +1,152 @@
 //! Implements [`classes_classvar`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
 //! Instance-level `ClassVar` violation checks for `classes_classvar`.
 //!
-//! Handles two cases:
+//! Handles two cases, both over the parsed `ruff` AST
+//! ([LINESCANPLAN-AST-MIGRATION] — the previous byte scanner for `self.x:`
+//! could not tell code from a docstring and hardcoded the fixture's `CV`
+//! import alias):
+//!
 //! 1. `self.x: ClassVar[T]` annotations inside methods (invalid context).
 //! 2. `instance.classvar_attr = value` assignments to class-level `ClassVar`
 //!    attributes through an instance (forbidden by PEP 526).
 
 use basilisk_resolver::{ResolvedModule, Span};
+use ruff_python_ast::visitor::{walk_stmt, Visitor};
+use ruff_python_ast::{Expr, Stmt, StmtClassDef, StmtFunctionDef};
+use ruff_text_size::Ranged;
 
+use crate::annotation::AnnotationResolver;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic};
+use crate::rules::shared::ExprIndex;
 
-use super::helpers::{is_ident_char, make_diagnostic, span_text, CODE};
+use super::helpers::{is_classvar, make_diagnostic, CODE};
 
-/// Scan source text for `self.<name>: ClassVar` or `self.<name>: CV` patterns
-/// and return the spans and names of violations.
-pub(super) fn find_self_classvar_annotations(source: &str) -> Vec<(String, Span)> {
-    let mut results = Vec::new();
-    let bytes = source.as_bytes();
-    let source_len = bytes.len();
-    let self_dot = b"self.";
+/// Every `self.<name>: <annotation>` target inside a method body, with the
+/// attribute name, its span, and the annotation node.
+struct SelfAnnotations<'ast> {
+    hits: Vec<(String, Span, &'ast Expr)>,
+    method_depth: usize,
+    class_depth: usize,
+}
 
-    let mut idx = 0;
-    while idx + self_dot.len() < source_len {
-        // Find "self."
-        if bytes.get(idx..idx + self_dot.len()) != Some(self_dot.as_slice()) {
-            idx += 1;
-            continue;
-        }
-
-        // Check that "self." is preceded by whitespace/newline/start (not part of a larger name)
-        if idx > 0 && bytes.get(idx - 1).is_some_and(|&b| is_ident_char(b)) {
-            idx += 1;
-            continue;
-        }
-
-        let attr_start = idx + self_dot.len();
-
-        // Collect the attribute name
-        let mut attr_end = attr_start;
-        while bytes.get(attr_end).is_some_and(|&b| is_ident_char(b)) {
-            attr_end += 1;
-        }
-        if attr_end == attr_start {
-            idx += 1;
-            continue;
-        }
-
-        let Some(attr_bytes) = bytes.get(attr_start..attr_end) else {
-            idx += 1;
-            continue;
-        };
-        let attr_name = if let Ok(name) = std::str::from_utf8(attr_bytes) {
-            name.to_owned()
-        } else {
-            idx += 1;
-            continue;
-        };
-
-        // Skip whitespace after the attribute name
-        let mut colon_idx = attr_end;
-        while bytes.get(colon_idx) == Some(&b' ') {
-            colon_idx += 1;
-        }
-
-        // Check for ":"
-        if bytes.get(colon_idx) != Some(&b':') {
-            idx = attr_end;
-            continue;
-        }
-
-        // Skip whitespace after ":"
-        let mut ann_start = colon_idx + 1;
-        while bytes.get(ann_start) == Some(&b' ') {
-            ann_start += 1;
-        }
-
-        // Check if annotation starts with "ClassVar" or "CV"
-        let has_cv = if bytes.get(ann_start..ann_start + 8) == Some(b"ClassVar") {
-            true
-        } else {
-            bytes.get(ann_start..ann_start + 2) == Some(b"CV")
-                && (ann_start + 2 >= source_len
-                    || bytes.get(ann_start + 2) == Some(&b'[')
-                    || bytes.get(ann_start + 2) == Some(&b' '))
-        };
-
-        // Both `continue` arms below used to re-assign `idx` themselves, which
-        // read and wrote it inside one expression; the tail assignment already
-        // covers every path out of the iteration.
-        if has_cv {
-            if let (Ok(span_start), Ok(span_end)) = (u32::try_from(idx), u32::try_from(attr_end)) {
-                let span = Span {
-                    start: span_start,
-                    end: span_end,
-                };
-                results.push((attr_name, span));
+impl<'ast> Visitor<'ast> for SelfAnnotations<'ast> {
+    fn visit_stmt(&mut self, stmt: &'ast Stmt) {
+        match stmt {
+            Stmt::ClassDef(StmtClassDef { body, .. }) => {
+                self.class_depth += 1;
+                for inner in body {
+                    self.visit_stmt(inner);
+                }
+                self.class_depth -= 1;
             }
+            Stmt::FunctionDef(StmtFunctionDef { body, .. }) => {
+                // A function directly inside a class body is a method; the
+                // `self.x` annotations that matter live in its body.
+                let is_method = self.class_depth > 0;
+                if is_method {
+                    self.method_depth += 1;
+                }
+                for inner in body {
+                    self.visit_stmt(inner);
+                }
+                if is_method {
+                    self.method_depth -= 1;
+                }
+            }
+            Stmt::AnnAssign(assign) if self.method_depth > 0 => {
+                if let Expr::Attribute(attr) = assign.target.as_ref() {
+                    if matches!(attr.value.as_ref(), Expr::Name(name) if name.id.as_str() == "self")
+                    {
+                        let range = attr.range();
+                        self.hits.push((
+                            attr.attr.to_string(),
+                            Span {
+                                start: range.start().to_u32(),
+                                end: range.end().to_u32(),
+                            },
+                            &assign.annotation,
+                        ));
+                    }
+                }
+                walk_stmt(self, stmt);
+            }
+            other => walk_stmt(self, other),
         }
-
-        idx = attr_end;
     }
-
-    results
 }
 
-/// Returns `true` when the annotation text looks like a `ClassVar` annotation.
-fn is_classvar_annotation(ann: &str) -> bool {
-    ann.starts_with("ClassVar[")
-        || ann.starts_with("ClassVar ")
-        || ann == "ClassVar"
-        || ann.starts_with("CV[")
-        || ann == "CV"
-}
-
-/// Check module-level attribute assignments to ClassVar-annotated class attributes.
-///
-/// e.g. `enterprise_d.stats = {}` where `stats: ClassVar[dict[str, int]]` in the class.
-pub(super) fn check_instance_classvar_assignments(
+/// Emit `classes_classvar` for every `self.<name>: ClassVar` annotation inside
+/// a method body — these are not captured in `local_vars` because the
+/// assignment target is an `Attribute` node rather than a `Name` node.
+pub(super) fn check_self_classvar_annotations(
     module: &ResolvedModule,
+    resolver: &AnnotationResolver<'_>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let source = &module.source;
-    let path = &module.path;
-
-    // Build a map of class names to their ClassVar attribute names
-    let mut classvar_attrs: Vec<(&str, Vec<&str>)> = Vec::new();
-    for cls in &module.classes {
-        let cv_names: Vec<&str> = cls
-            .attributes
-            .iter()
-            .filter(|attr| {
-                span_text(source, attr.annotation_span).is_some_and(is_classvar_annotation)
-            })
-            .map(|attr| attr.name.as_str())
-            .collect();
-        if !cv_names.is_empty() {
-            classvar_attrs.push((&cls.name, cv_names));
+    let Some(parsed) = module.lazy_ast.get_or_parse(&module.source, &module.path) else {
+        return;
+    };
+    let mut visitor = SelfAnnotations {
+        hits: Vec::new(),
+        method_depth: 0,
+        class_depth: 0,
+    };
+    for stmt in &parsed.ast.body {
+        visitor.visit_stmt(stmt);
+    }
+    for (attr_name, span, annotation) in &visitor.hits {
+        if is_classvar(resolver, annotation) {
+            diagnostics.push(make_diagnostic(
+                format!("`ClassVar` is not allowed in self-attribute annotation for `{attr_name}`"),
+                *span,
+                &module.path,
+            ));
         }
     }
+}
 
+/// Check module-level attribute assignments to `ClassVar`-annotated class
+/// attributes: `enterprise_d.stats = {}` where `stats: ClassVar[...]`.
+pub(super) fn check_instance_classvar_assignments(
+    module: &ResolvedModule,
+    resolver: &AnnotationResolver<'_>,
+    index: &ExprIndex<'_>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let classvar_attrs: Vec<(&str, Vec<&str>)> = module
+        .classes
+        .iter()
+        .filter_map(|cls| {
+            let names: Vec<&str> = cls
+                .attributes
+                .iter()
+                .filter(|attr| {
+                    attr.annotation_span
+                        .and_then(|span| index.expr(span))
+                        .is_some_and(|ann| is_classvar(resolver, ann))
+                })
+                .map(|attr| attr.name.as_str())
+                .collect();
+            (!names.is_empty()).then_some((cls.name.as_str(), names))
+        })
+        .collect();
     if classvar_attrs.is_empty() {
         return;
     }
 
-    // Build a map of variable names to their class types (simple heuristic)
-    // Look for module-level assignments like `enterprise_d = Starship(3000)`
-    let instance_class_map = build_instance_class_map(module, source);
-
-    // Check each module-level attribute assignment
+    let instances = instance_class_map(module, index);
     for assignment in &module.module_attr_assignments {
-        // Find if the object is an instance of a class with ClassVar attrs
-        let Some(class_name) = instance_class_map
+        let Some(class_name) = instances
             .iter()
-            .find(|(var_name, _)| var_name == &assignment.object_name)
+            .find(|(var, _)| var == &assignment.object_name)
             .map(|(_, cls)| cls.as_str())
         else {
-            // Could also be a direct class assignment (Starship.stats = {}) which is OK
+            // `Starship.stats = {}` assigns on the class itself, which is legal.
             continue;
         };
-
-        // Check if the attribute is a ClassVar
-        let is_classvar_attr = classvar_attrs.iter().any(|(cls, attrs)| {
-            *cls == class_name && attrs.contains(&assignment.attr_name.as_str())
-        });
-
+        let is_classvar_attr = classvar_attrs
+            .iter()
+            .any(|(cls, attrs)| *cls == class_name && attrs.contains(&assignment.attr_name.as_str()));
         if is_classvar_attr {
             diagnostics.push(error_diagnostic_owned(
                 CODE.clone(),
@@ -172,7 +155,7 @@ pub(super) fn check_instance_classvar_assignments(
                     assignment.attr_name, class_name
                 ),
                 assignment.target_span,
-                path,
+                &module.path,
                 Some("Assign to the class directly instead: `ClassName.attr = value`".to_owned()),
                 Some(
                     "PEP 526: ClassVar attributes can only be assigned on the class itself, \
@@ -184,67 +167,27 @@ pub(super) fn check_instance_classvar_assignments(
     }
 }
 
-/// Build a map of variable name -> class name by scanning module-level constructor calls.
-///
-/// e.g. `enterprise_d = Starship(3000)` yields `("enterprise_d", "Starship")`.
-fn build_instance_class_map(module: &ResolvedModule, source: &str) -> Vec<(String, String)> {
-    let mut map = Vec::new();
-    for var in &module.module_vars {
-        let Some(rhs) = span_text(source, var.rhs_span) else {
-            continue;
-        };
-        // Check if RHS is a constructor call: ClassName(...)
-        let Some(paren_idx) = rhs.find('(') else {
-            continue;
-        };
-        let Some(class_name) = rhs.get(..paren_idx) else {
-            continue;
-        };
-        let class_name = class_name.trim();
-        if !class_name.is_empty()
-            && class_name
-                .chars()
-                .next()
-                .is_some_and(|ch| ch.is_ascii_uppercase())
-            && class_name
-                .chars()
-                .all(|ch| ch.is_alphanumeric() || ch == '_')
-        {
-            map.push((var.name.clone(), class_name.to_owned()));
-        }
-    }
-    map
-}
-
-/// Emit `classes_classvar` for every `self.<name>: ClassVar` annotation found inside a method body.
-///
-/// These are not captured in `local_vars` because the assignment target is an `Attribute`
-/// node rather than a `Name` node.
-pub(super) fn check_self_classvar_annotations(
-    module: &ResolvedModule,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    let source = &module.source;
-    let path = &module.path;
-
-    let self_classvar_violations = find_self_classvar_annotations(source);
-    for (attr_name, span) in &self_classvar_violations {
-        // Only flag self.xxx ClassVar inside methods (verify by checking the span
-        // falls within a function that has a class_name)
-        let in_method = module.functions.iter().any(|func| {
-            func.class_name.is_some()
-                && func.def_span.start <= span.start
-                // Use the next function/class boundary or end of source as upper bound
-                && span.start > func.name_span.start
-        });
-        if in_method {
-            diagnostics.push(make_diagnostic(
-                format!(
-                    "`ClassVar` is not allowed in self-attribute annotation for `{attr_name}`",
-                ),
-                *span,
-                path,
-            ));
-        }
-    }
+/// Map module-level variable names to the class they are constructed from:
+/// `enterprise_d = Starship(3000)` yields `("enterprise_d", "Starship")`.
+/// Class-hood comes from the module's own class list, not from the name's
+/// capitalisation.
+fn instance_class_map(module: &ResolvedModule, index: &ExprIndex<'_>) -> Vec<(String, String)> {
+    module
+        .module_vars
+        .iter()
+        .filter_map(|var| {
+            let Some(Expr::Call(call)) = var.rhs_span.and_then(|span| index.expr(span)) else {
+                return None;
+            };
+            let Expr::Name(callee) = call.func.as_ref() else {
+                return None;
+            };
+            let name = callee.id.as_str();
+            module
+                .classes
+                .iter()
+                .any(|cls| cls.name == name)
+                .then(|| (var.name.clone(), name.to_owned()))
+        })
+        .collect()
 }
