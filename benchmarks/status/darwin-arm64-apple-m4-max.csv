@@ -3,34 +3,34 @@
 # arch: arm64
 # os: Darwin 25.5.0
 # cores: 14
-# tools: basilisk=basilisk 0.0.0-dev+ga6de567-dirty, pyright=pyright 1.1.408, mypy=mypy 1.19.1 (compiled: yes), ty=ty 0.0.19 (ae10022c2 2026-02-26), pyrefly=pyrefly 0.54.0, zuban=zuban 0.9.0
+# tools: basilisk=basilisk 0.0.0-dev+g5ae7fd7, pyright=pyright 1.1.408, mypy=mypy 1.19.1 (compiled: yes), ty=ty 0.0.19 (ae10022c2 2026-02-26), pyrefly=pyrefly 0.54.0, zuban=zuban 0.9.0
 # runs: 10 minimum; noisy Basilisk CV > 15% is remeasured with at least 30 runs (hyperfine mean wall-clock, milliseconds)
-# generated: 2026-08-05T14:06:42+1000
+# generated: 2026-08-05T19:03:35+1000
 # note: <tool>_ms = COLD full-file CLI check from scratch (whole process: startup + stubs + analysis). <tool>_diags = error diagnostics the tool reported on that fixture in the measured configuration (error severity only; warnings/notes are not counted) — read every time next to its diags; a tool that reports 0 analyzed the file but flagged no errors there. A blank _ms cell means the tool either was not installed on this machine or failed to analyze that fixture (exit >= 2, e.g. parse abort) and was excluded rather than timed as a crash. Competitor versions are the LATEST official release pulled at the top of every run, so their columns always reflect current upstream, never a pinned build. Only basilisk and mypy have a -warm column (they keep a real cross-run cache): basilisk-warm = --cache result-cache hit; mypy-warm = incremental .mypy_cache hit (cold mypy = --no-incremental). pyright/ty/pyrefly keep NO cross-run result cache (a repeat run = cold), so they are measured cold-only. zuban is also cold-only but its mypy mode DOES reuse a ./.mypy_cache when present (no flag disables it), so we wipe ./.mypy_cache before every timed run to keep the measurement cold. mypy runs with --strict so it performs the strict-mode analysis the fixtures stress (plain mypy reports 'no issues' on the strictness fixtures); zuban runs as `zuban mypy --strict` for the same reason (its default `zuban check` mode skips these strictness rules). This file is ALWAYS rewritten with the latest measured numbers, even on a regression — the CI gate reads the committed baseline, never this working copy, so a slip is recorded here AND fails CI rather than being hidden.
 fixture,basilisk_ms,basilisk-warm_ms,pyright_ms,mypy_ms,mypy-warm_ms,ty_ms,pyrefly_ms,zuban_ms,basilisk_diags,pyright_diags,mypy_diags,ty_diags,pyrefly_diags,zuban_diags
-aliases_type_statement,12.5,5.7,739.6,855.1,230.4,85.3,144.9,36.5,600,850,650,1850,700,600
-assignment_compatibility,13.6,7.5,821.3,788.2,221.1,66.1,146.5,40.3,2000,2000,2000,2000,2000,2000
-call_argument_types,22.6,5.9,895.9,816.5,216.8,73.1,155.6,70.3,998,998,1002,998,998,1000
-callables_subtyping,18.3,7.2,702.3,789.7,210.0,47.4,136.2,36.6,600,600,600,600,600,600
-classvar_scoping,23.4,8.3,838.8,959.5,220.9,72.9,174.2,41.7,2000,2000,2000,2000,4000,2000
-constructors_call_init,14.0,6.4,875.3,787.0,207.9,48.5,136.8,35.7,444,370,296,370,444,518
-dataclasses_usage,16.0,7.6,2090.5,859.7,225.4,83.4,239.4,75.5,500,500,500,500,500,500
-dict_key_hashability,17.3,6.5,695.2,835.3,211.4,47.1,131.5,40.9,2000,2000,0,0,0,0
-enums_member_values,12.0,5.9,761.5,745.0,216.3,50.8,131.2,34.4,480,480,80,480,480,480
-final_reassignment,9.6,5.0,575.5,741.6,204.5,33.8,125.5,31.3,500,500,500,500,500,500
-generics_defaults_specialization,15.1,6.0,741.0,766.8,208.7,43.2,131.3,35.2,560,560,560,421,560,560
-literals_semantics,18.0,5.7,683.2,760.2,208.6,38.9,134.6,35.8,1008,576,576,576,576,576
-match_exhaustiveness,16.9,5.5,687.0,805.3,205.9,44.5,138.4,35.1,500,0,0,500,0,0
-narrowing_typeis,14.7,5.8,710.2,752.6,210.7,43.2,142.1,34.9,520,520,520,520,520,520
-newtype_definition,14.8,7.2,940.5,837.2,210.0,29.0,152.8,47.5,2000,2000,2000,0,2000,2000
-overloads_evaluation,20.9,6.2,800.0,823.3,205.9,75.2,148.7,45.5,1267,1401,801,600,600,801
-override_compatibility,20.1,5.1,966.6,793.3,214.9,49.7,138.2,37.6,200,200,300,1,200,300
-protocols_definition,12.7,6.4,726.5,747.5,208.5,44.0,131.5,36.9,670,402,402,335,402,402
-returns_compatibility,10.7,6.1,613.6,778.6,205.2,38.7,125.0,30.2,1080,540,540,540,540,540
-tuples_index,12.6,5.2,728.2,732.7,203.8,42.1,136.3,33.1,600,600,600,1800,600,600
-typeddict_key_access,14.6,5.6,814.7,769.8,202.9,44.6,134.4,33.7,500,500,500,500,500,500
-typeddict_readonly_inheritance,20.0,5.1,913.3,752.1,217.1,46.2,144.3,35.0,500,500,500,2,500,500
-typeddict_readonly_mutation,13.9,5.7,819.1,744.2,207.3,52.0,140.3,35.2,500,500,500,500,500,500
-typevar_constraints,24.7,7.2,933.4,771.1,205.2,49.0,138.8,43.2,2000,2000,2000,2000,2000,2000
-undefined_names,23.9,7.2,639.1,824.2,220.3,63.2,683.4,42.7,2000,2000,4000,2000,2000,4000
-unresolved_imports,18.1,7.0,529.8,895.4,211.7,358.4,1127.4,352.0,2000,2000,2000,2000,2000,2000
+aliases_type_statement,10.9,4.9,556.3,629.9,168.0,64.7,114.1,27.9,600,850,650,1850,700,600
+assignment_compatibility,10.5,5.4,613.5,598.2,168.9,51.8,115.8,29.9,2000,2000,2000,2000,2000,2000
+call_argument_types,17.2,4.6,649.6,620.6,166.3,56.8,119.2,48.8,998,998,1002,998,998,1000
+callables_subtyping,14.5,5.0,532.8,594.6,167.3,39.1,107.9,28.2,600,600,600,600,600,600
+classvar_scoping,19.0,5.8,626.5,631.7,170.8,59.9,137.5,31.8,2000,2000,2000,2000,4000,2000
+constructors_call_init,10.3,4.4,639.4,611.6,169.4,39.1,107.7,26.9,444,370,296,370,444,518
+dataclasses_usage,11.1,4.6,1594.0,665.3,171.6,60.6,180.9,57.9,500,500,500,500,500,500
+dict_key_hashability,14.1,5.5,547.6,630.8,163.4,37.7,103.1,30.4,2000,2000,0,0,0,0
+enums_member_values,9.6,4.9,577.5,590.8,169.1,42.8,105.4,27.2,480,480,80,480,480,480
+final_reassignment,9.3,4.8,469.1,584.7,168.1,27.7,101.5,24.9,500,500,500,500,500,500
+generics_defaults_specialization,12.2,5.2,559.9,595.8,167.2,34.8,104.8,26.2,560,560,560,421,560,560
+literals_semantics,15.2,4.6,534.3,590.1,167.9,32.5,107.6,27.4,1008,576,576,576,576,576
+match_exhaustiveness,13.3,4.8,533.4,612.2,166.7,35.3,110.2,27.3,500,0,0,500,0,0
+narrowing_typeis,11.7,4.4,544.1,590.7,169.7,36.0,107.2,26.4,520,520,520,520,520,520
+newtype_definition,12.3,5.5,722.5,634.2,168.6,23.8,121.2,35.6,2000,2000,2000,0,2000,2000
+overloads_evaluation,17.6,6.1,600.0,628.4,166.5,59.8,118.9,34.4,1267,1401,801,600,600,801
+override_compatibility,16.6,4.4,652.0,615.7,166.9,40.0,111.1,28.5,200,200,300,1,200,300
+protocols_definition,10.7,4.6,587.2,590.8,166.1,35.7,105.9,27.2,670,402,402,335,402,402
+returns_compatibility,9.1,4.6,499.7,587.4,168.8,32.2,102.3,24.8,1080,540,540,540,540,540
+tuples_index,10.8,5.3,569.9,585.5,167.7,33.6,105.1,26.1,600,600,600,1800,600,600
+typeddict_key_access,11.4,4.5,616.2,597.5,167.1,36.8,108.5,25.9,500,500,500,500,500,500
+typeddict_readonly_inheritance,17.9,4.5,673.3,589.5,169.1,38.5,115.9,26.4,500,500,500,2,500,500
+typeddict_readonly_mutation,11.5,4.2,625.2,594.8,166.3,42.1,111.3,26.2,500,500,500,500,500,500
+typevar_constraints,18.4,5.3,743.7,613.4,168.6,40.5,113.5,33.4,2000,2000,2000,2000,2000,2000
+undefined_names,19.2,5.7,495.7,647.8,174.1,53.3,550.3,34.8,2000,2000,4000,2000,2000,4000
+unresolved_imports,15.0,6.2,467.1,687.3,175.4,278.8,894.2,305.9,2000,2000,2000,2000,2000,2000
