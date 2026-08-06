@@ -1,7 +1,7 @@
 ---
 layout: layouts/docs.njk
 title: "Quick Start — Type-Check Your First File in 5 Minutes"
-description: "Get started with Basilisk in 5 minutes. Install the VS Code extension, run your first type check, and see PEP-conformant Python diagnostics in action."
+description: "Get started with Basilisk in 5 minutes. Install the VS Code extension, run your first type check, and inspect Python diagnostics in your editor."
 keywords: basilisk, quick start, best python type checker, python language server, type checking, tutorial, vs code
 date: 2026-02-28
 dateModified: 2026-07-14
@@ -80,10 +80,12 @@ error[names_unbound]: Function `describe` returns `label` but `label` may be unb
 Found 3 diagnostics (3 errors).
 ```
 
-Out of the box, Basilisk enables the complete PEP typing-spec rule set, and
-every violation is an **error**. Nothing here is house style — this is the
-[Python type system specification](https://typing.python.org/en/latest/spec/index.html),
-enforced.
+Out of the box, Basilisk enables every currently registered PEP-tagged rule at
+**error** severity; optional house rules are separate. That describes the
+default configuration, not completeness or correctness. Basilisk's actual
+conformance level is temporarily unknown while affected rules are rebuilt from
+the [Python type system specification](https://typing.python.org/en/latest/spec/index.html)
+and independently validated. See the [conformance correction](/docs/conformance/).
 
 ## Step 2 — Fix the errors
 

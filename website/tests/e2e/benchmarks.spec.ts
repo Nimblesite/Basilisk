@@ -19,6 +19,13 @@ test("benchmark table reports whole-file timings and links every fixture", async
 }) => {
   await page.goto("/docs/benchmarks/");
 
+  await expect(page.locator(".bench-caveat").first()).toContainText(
+    "benchmark figures are withdrawn pending an integrity review",
+  );
+  await expect(page.locator(".bench-caveat").first()).toContainText(
+    "Do not use the values below to compare Basilisk with other tools",
+  );
+
   await expect(page.locator(".releases-intro")).toContainText(
     "Each row is one complete Python fixture file",
   );
