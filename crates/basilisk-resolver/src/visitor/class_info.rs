@@ -4,9 +4,19 @@
 use ruff_python_ast::{Expr, Stmt, StmtAnnAssign, StmtAssign, StmtClassDef, StmtIf};
 use ruff_text_size::Ranged;
 
+use crate::canonical::{BindingTable, TypingForm};
 use crate::scope::{AttributeInfo, FunctionInfo, MatchStmtInfo, RhsKind};
 use crate::static_condition::{parse_static_condition, StaticCondition};
 use crate::visitor::class_info_ext::decorator_name;
+
+/// Whether a class-body value is wrapped in the enum non-member marker, which
+/// keeps it out of the enumeration's members.
+///
+/// Resolved through the module's bindings, so an aliased or module-qualified
+/// use is recognised and a local definition of the same name is not.
+fn rhs_is_nonmember_call(bindings: &BindingTable, value: &Expr) -> bool {
+    matches!(value, Expr::Call(call) if bindings.is_form(&call.func, TypingForm::EnumNonmember))
+}
 
 /// Return type for [`collect_class_body`]: attributes, method names, and
 /// per-method decorator lists.
@@ -160,21 +170,25 @@ fn collect_nested_method_names(
     }
 }
 
-/// `true` for the `_: KW_ONLY` dataclass sentinel.
-fn is_kw_only_sentinel(ann: &StmtAnnAssign) -> bool {
+/// `true` for the keyword-only dataclass sentinel field.
+fn is_kw_only_sentinel(bindings: &BindingTable, ann: &StmtAnnAssign) -> bool {
     matches!(expr_simple_name(&ann.target), Some(name) if name == "_")
-        && annotation_is_kw_only(&ann.annotation)
+        && annotation_is_kw_only(bindings, &ann.annotation)
 }
 
 /// Build an [`AttributeInfo`] from an annotated field (`name: T = value`), or
 /// `None` when the target is not a simple name.
 fn ann_attribute(
+    bindings: &BindingTable,
     ann: &StmtAnnAssign,
     after_kw_only_sentinel: bool,
     guard: Option<StaticCondition>,
 ) -> Option<AttributeInfo> {
     let name = expr_simple_name(&ann.target)?;
-    let field_kw_only = ann.value.as_deref().and_then(field_kw_only_override);
+    let field_kw_only = ann
+        .value
+        .as_deref()
+        .and_then(|value| field_kw_only_override(bindings, value));
     // Determine kw_only: explicit field() override wins; then sentinel.
     let is_kw_only = field_kw_only.unwrap_or(after_kw_only_sentinel);
     Some(AttributeInfo {
@@ -188,10 +202,17 @@ fn ann_attribute(
         rhs_is_lambda: false,
         rhs_descriptor: None,
         rhs_name: None,
-        is_readonly: annotation_contains_readonly_expr(&ann.annotation),
+        is_readonly: annotation_contains_readonly_expr(bindings, &ann.annotation),
         is_kw_only,
-        is_init_false: ann.value.as_deref().is_some_and(field_init_is_false),
-        is_init_var: annotation_is_init_var(&ann.annotation),
+        is_init_false: ann
+            .value
+            .as_deref()
+            .is_some_and(|value| field_init_is_false(bindings, value)),
+        is_init_var: annotation_is_init_var(bindings, &ann.annotation),
+        rhs_is_nonmember_call: ann
+            .value
+            .as_deref()
+            .is_some_and(|value| rhs_is_nonmember_call(bindings, value)),
         guard,
     })
 }
@@ -223,6 +244,7 @@ fn rhs_callable_binding(value: &Expr) -> (Option<String>, Option<String>) {
 
 /// Append an [`AttributeInfo`] for each simple-name target of `name = value`.
 fn assign_attributes(
+    bindings: &BindingTable,
     assign: &StmtAssign,
     guard: Option<&StaticCondition>,
     attributes: &mut Vec<AttributeInfo>,
@@ -246,6 +268,7 @@ fn assign_attributes(
                 is_kw_only: false,
                 is_init_false: false,
                 is_init_var: false,
+                rhs_is_nonmember_call: rhs_is_nonmember_call(bindings, &assign.value),
                 guard: guard.cloned(),
             });
         }

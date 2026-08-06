@@ -100,7 +100,7 @@ pub struct ExternalSymbol {
     /// Empty for non-class symbols. Lets hover resolve inherited member access
     /// on subclasses of external classes (GitHub #287).
     pub methods: Vec<ExternalMethod>,
-    /// Base-class names (text form, e.g. `"NonCallableMock"`, `"Generic[T]"`),
+    /// Base-class names (text form, e.g. `"NonCallableMock"`),
     /// when `kind` is [`ExternalSymbolKind::Class`].
     ///
     /// Empty for non-class symbols. Carries the external class's declared bases

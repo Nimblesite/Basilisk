@@ -6,12 +6,14 @@ use ruff_text_size::Ranged;
 
 use crate::scope::{ClassInfo, ReadOnlyViolationInfo, ReadOnlyViolationKind};
 
-use super::annotations::ann_text_is_final;
+use crate::canonical::BindingTable;
+
+use super::annotations::annotation_is_final;
 use super::core::{source_slice_range, text_range_to_span};
 
 pub(super) fn collect_final_string_constants<'a>(
+    bindings: &BindingTable,
     stmts: &'a [Stmt],
-    source: &'a str,
 ) -> std::collections::HashMap<&'a str, &'a str> {
     let mut map = std::collections::HashMap::new();
     for stmt in stmts {
@@ -19,11 +21,7 @@ pub(super) fn collect_final_string_constants<'a>(
         let Expr::Name(n) = ann.target.as_ref() else {
             continue;
         };
-        let range = ann.annotation.range();
-        let Some(ann_text) = source_slice_range(source, range) else {
-            continue;
-        };
-        if !ann_text_is_final(ann_text) {
+        if !annotation_is_final(bindings, &ann.annotation) {
             continue;
         }
         // RHS must be a string literal.
@@ -172,21 +170,17 @@ pub(super) fn collect_readonly_violations(
 /// Collect module-level bare assignments (`name = expr`).
 ///
 /// Used by the checker to detect re-assignments to `Final`-annotated variables.
-pub(super) fn collect_file_final_names(
-    stmts: &[Stmt],
-    source: &str,
-) -> std::collections::HashSet<String> {
+pub(super) fn collect_file_final_names(stmts: &[Stmt]) -> std::collections::HashSet<String> {
+    // These statements are a whole module's body — its own imports decide what
+    // the qualifier binds to there, so the table is built from them.
+    let bindings = BindingTable::from_module(stmts);
     let mut names = std::collections::HashSet::new();
     for stmt in stmts {
         let Stmt::AnnAssign(ann) = stmt else { continue };
         let Expr::Name(n) = ann.target.as_ref() else {
             continue;
         };
-        let range = ann.annotation.range();
-        let Some(ann_text) = source_slice_range(source, range) else {
-            continue;
-        };
-        if ann_text_is_final(ann_text) {
+        if annotation_is_final(&bindings, &ann.annotation) {
             let _ = names.insert(n.id.to_string());
         }
     }

@@ -7,11 +7,13 @@
 //! [`ResolvedModule`] without touching the raw AST.
 
 mod bounded_typevar;
+pub mod canonical;
 mod ident;
 pub mod scope;
 pub mod static_condition;
 mod visitor;
 
+pub use canonical::{BindingTable, CanonicalSymbol, TypingForm};
 pub use ident::{is_simple_ascii_python_identifier, is_simple_python_identifier};
 pub use static_condition::{evaluate, parse_static_condition, BranchTruth, StaticCondition};
 pub use visitor::walks::{

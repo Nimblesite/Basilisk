@@ -1,0 +1,528 @@
+# Implements [RESOLV-CANONICAL-REGISTRY].
+# See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#RESOLV-CANONICAL-REGISTRY
+#
+# THE SPECIFICATION REGISTRY — canonical definition sites of typing-spec symbols.
+#
+# WHAT THIS IS, AND WHY IT IS NOT THE BANNED MECHANISM.
+#
+# The banned mechanism compared the CHARACTERS AT A USE SITE against a Python
+# spelling: `name.id == "ClassVar"`. That is wrong under aliasing
+# (`from typing import ClassVar as CV`), wrong under module access
+# (`import typing as t; t.ClassVar`), and wrong under shadowing
+# (a local `class ClassVar:` is not the special form). It made the conformance
+# score a measurement of how well the code had been fitted to the fixtures.
+#
+# This file is a different kind of statement. It records WHERE THE
+# SPECIFICATION DEFINES EACH SYMBOL — a (module, name) definition site — and is
+# consulted ONLY AFTER a use-site expression has been resolved, through the
+# module's own import statements and local bindings, to the definition it
+# actually binds to. The three cases above all resolve correctly because the
+# resolution happens in the AST, not in the characters.
+#
+# This layer is unavoidable, and empirically so: in typeshed, `ClassVar`,
+# `Final`, `Union`, `Literal`, `Protocol`, `Self`, `Never`, `Required`,
+# `TypeGuard` and the rest are ALL declared identically as `X: _SpecialForm`.
+# The declaration's structure carries NO information distinguishing them. What
+# separates them is the typing specification, which assigns meaning to a
+# canonical name at a canonical location. That assignment has to be written
+# down once, as data, or no checker can implement the spec at all.
+#
+# RULES FOR THIS FILE:
+#   * It is DATA, not logic. No Rust file may contain these spellings.
+#   * Nothing here may be compared against use-site text. The only lawful
+#     consumer is the canonical-symbol lookup in `canonical::binding`.
+#   * Every entry must name a declaration that REALLY EXISTS in bundled
+#     typeshed. `tests/canonical_registry.rs` fails the build otherwise, so an
+#     invented symbol cannot be smuggled in to satisfy a fixture.
+#   * `modules` lists every module that legitimately re-exports the symbol as
+#     part of its public API, so `typing_extensions` back-ports resolve too.
+
+# ---------------------------------------------------------------------------
+# Type-parameter factories
+# ---------------------------------------------------------------------------
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "TypeVar"
+form = "type-var"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "TypeVarTuple"
+form = "type-var-tuple"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "ParamSpec"
+form = "param-spec"
+
+# ---------------------------------------------------------------------------
+# Class-construction special bases
+# ---------------------------------------------------------------------------
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "Protocol"
+form = "protocol"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "Generic"
+form = "generic"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "TypedDict"
+form = "typed-dict"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "NamedTuple"
+form = "named-tuple"
+
+[[symbol]]
+modules = ["collections"]
+name = "namedtuple"
+form = "collections-namedtuple"
+
+# ---------------------------------------------------------------------------
+# Alias and distinct-type factories
+# ---------------------------------------------------------------------------
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "NewType"
+form = "new-type"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "TypeAliasType"
+form = "type-alias-type"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "TypeAlias"
+form = "type-alias-qualifier"
+
+# ---------------------------------------------------------------------------
+# Annotation qualifiers
+# ---------------------------------------------------------------------------
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "ClassVar"
+form = "class-var"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "Final"
+form = "final-qualifier"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "Annotated"
+form = "annotated"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "Required"
+form = "required"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "NotRequired"
+form = "not-required"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "ReadOnly"
+form = "read-only"
+
+[[symbol]]
+modules = ["dataclasses"]
+name = "InitVar"
+form = "init-var"
+
+[[symbol]]
+modules = ["dataclasses"]
+name = "KW_ONLY"
+form = "kw-only-sentinel"
+
+# ---------------------------------------------------------------------------
+# Type forms
+# ---------------------------------------------------------------------------
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "Union"
+form = "union"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "Optional"
+form = "optional"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "Literal"
+form = "literal"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "LiteralString"
+form = "literal-string"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "Self"
+form = "self-type"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "Never"
+form = "never"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "NoReturn"
+form = "no-return"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "Any"
+form = "any"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "Concatenate"
+form = "concatenate"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "Unpack"
+form = "unpack"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "TypeGuard"
+form = "type-guard"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "TypeIs"
+form = "type-is"
+
+[[symbol]]
+modules = ["typing_extensions"]
+name = "TypeForm"
+form = "type-form"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "Callable"
+form = "callable"
+
+[[symbol]]
+modules = ["collections.abc"]
+name = "Callable"
+form = "callable"
+
+# ---------------------------------------------------------------------------
+# Decorators
+# ---------------------------------------------------------------------------
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "overload"
+form = "overload"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "final"
+form = "final-decorator"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "override"
+form = "override"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "runtime_checkable"
+form = "runtime-checkable"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "dataclass_transform"
+form = "dataclass-transform"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "no_type_check"
+form = "no-type-check"
+
+[[symbol]]
+modules = ["abc"]
+name = "abstractmethod"
+form = "abstract-method"
+
+[[symbol]]
+modules = ["abc"]
+name = "ABC"
+form = "abstract-base"
+
+[[symbol]]
+modules = ["abc"]
+name = "ABCMeta"
+form = "abstract-base-meta"
+
+[[symbol]]
+modules = ["dataclasses"]
+name = "dataclass"
+form = "dataclass"
+
+[[symbol]]
+modules = ["dataclasses"]
+name = "field"
+form = "dataclass-field"
+
+[[symbol]]
+modules = ["functools"]
+name = "total_ordering"
+form = "total-ordering"
+
+[[symbol]]
+modules = ["functools"]
+name = "cached_property"
+form = "cached-property"
+
+[[symbol]]
+modules = ["warnings", "typing_extensions"]
+name = "deprecated"
+form = "deprecated"
+
+# ---------------------------------------------------------------------------
+# Diagnostic and introspection calls
+# ---------------------------------------------------------------------------
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "assert_type"
+form = "assert-type"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "reveal_type"
+form = "reveal-type"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "cast"
+form = "cast"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "assert_never"
+form = "assert-never"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "TYPE_CHECKING"
+form = "type-checking-flag"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "get_type_hints"
+form = "get-type-hints"
+
+# ---------------------------------------------------------------------------
+# Abstract collection protocols (typing aliases and their canonical homes)
+# ---------------------------------------------------------------------------
+[[symbol]]
+modules = ["typing", "typing_extensions", "collections.abc"]
+name = "Iterable"
+form = "iterable"
+
+[[symbol]]
+modules = ["typing", "typing_extensions", "collections.abc"]
+name = "Iterator"
+form = "iterator"
+
+[[symbol]]
+modules = ["typing", "typing_extensions", "collections.abc"]
+name = "Generator"
+form = "generator"
+
+[[symbol]]
+modules = ["typing", "typing_extensions", "collections.abc"]
+name = "AsyncGenerator"
+form = "async-generator"
+
+[[symbol]]
+modules = ["typing", "typing_extensions", "collections.abc"]
+name = "AsyncIterator"
+form = "async-iterator"
+
+[[symbol]]
+modules = ["typing", "typing_extensions", "collections.abc"]
+name = "AsyncIterable"
+form = "async-iterable"
+
+[[symbol]]
+modules = ["typing", "typing_extensions", "collections.abc"]
+name = "Awaitable"
+form = "awaitable"
+
+[[symbol]]
+modules = ["typing", "typing_extensions", "collections.abc"]
+name = "Coroutine"
+form = "coroutine"
+
+[[symbol]]
+modules = ["typing", "typing_extensions", "collections.abc"]
+name = "Sequence"
+form = "sequence"
+
+[[symbol]]
+modules = ["typing", "typing_extensions", "collections.abc"]
+name = "MutableSequence"
+form = "mutable-sequence"
+
+[[symbol]]
+modules = ["typing", "typing_extensions", "collections.abc"]
+name = "Mapping"
+form = "mapping"
+
+[[symbol]]
+modules = ["typing", "typing_extensions", "collections.abc"]
+name = "MutableMapping"
+form = "mutable-mapping"
+
+[[symbol]]
+modules = ["typing", "typing_extensions", "collections.abc"]
+name = "Collection"
+form = "collection"
+
+[[symbol]]
+modules = ["typing", "typing_extensions", "collections.abc"]
+name = "Container"
+form = "container"
+
+[[symbol]]
+modules = ["typing", "typing_extensions", "collections.abc"]
+name = "Hashable"
+form = "hashable"
+
+[[symbol]]
+modules = ["typing", "typing_extensions", "collections.abc"]
+name = "Sized"
+form = "sized"
+
+[[symbol]]
+modules = ["typing", "typing_extensions", "collections.abc"]
+name = "Set"
+form = "abstract-set"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "AbstractSet"
+form = "abstract-set"
+
+# ---------------------------------------------------------------------------
+# Deprecated capitalised aliases of builtin containers (PEP 585)
+# ---------------------------------------------------------------------------
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "List"
+form = "list-alias"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "Dict"
+form = "dict-alias"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "Set"
+form = "set-alias"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "FrozenSet"
+form = "frozenset-alias"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "Tuple"
+form = "tuple-alias"
+
+[[symbol]]
+modules = ["typing", "typing_extensions"]
+name = "Type"
+form = "type-alias-builtin"
+
+[[symbol]]
+modules = ["typing", "typing_extensions", "collections"]
+name = "Deque"
+form = "deque-alias"
+
+[[symbol]]
+modules = ["collections"]
+name = "OrderedDict"
+form = "ordered-dict"
+
+[[symbol]]
+modules = ["collections"]
+name = "defaultdict"
+form = "default-dict"
+
+# ---------------------------------------------------------------------------
+# Enumerations
+# ---------------------------------------------------------------------------
+[[symbol]]
+modules = ["enum"]
+name = "Enum"
+form = "enum-base"
+
+[[symbol]]
+modules = ["enum"]
+name = "EnumMeta"
+form = "enum-meta"
+
+[[symbol]]
+modules = ["enum"]
+name = "EnumType"
+form = "enum-meta"
+
+[[symbol]]
+modules = ["enum"]
+name = "IntEnum"
+form = "int-enum"
+
+[[symbol]]
+modules = ["enum"]
+name = "StrEnum"
+form = "str-enum"
+
+[[symbol]]
+modules = ["enum"]
+name = "Flag"
+form = "flag-enum"
+
+[[symbol]]
+modules = ["enum"]
+name = "IntFlag"
+form = "int-flag-enum"
+
+[[symbol]]
+modules = ["enum"]
+name = "ReprEnum"
+form = "repr-enum"
+
+[[symbol]]
+modules = ["enum"]
+name = "member"
+form = "enum-member"
+
+[[symbol]]
+modules = ["enum"]
+name = "nonmember"
+form = "enum-nonmember"
+
+[[symbol]]
+modules = ["enum"]
+name = "auto"
+form = "enum-auto"

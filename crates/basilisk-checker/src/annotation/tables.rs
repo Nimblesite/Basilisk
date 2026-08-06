@@ -5,8 +5,8 @@
 //! Every table is built from the module's Ruff AST, never from source text:
 //! aliases keep a borrowed reference to their right-hand-side **expression**
 //! so the cascade expands them by evaluating a type expression, and imports
-//! keep the defining module plus the name as spelled there, so `from typing
-//! import Sequence as Seq` and `import typing as t` resolve identically.
+//! keep the defining module plus the name as spelled there, so an aliased
+//! `from`-import and an aliased module import record the same facts.
 
 use std::collections::{HashMap, HashSet};
 
@@ -28,7 +28,7 @@ pub(super) struct ImportedName {
     /// The defining module's dotted path (`typing`, `collections.abc`).
     pub(super) module: String,
     /// The name as spelled in the defining module — alias-independent, so
-    /// `from typing import Sequence as Seq` records `Sequence`.
+    /// `from m import A as B` records `A`.
     pub(super) original: String,
 }
 
@@ -177,8 +177,8 @@ impl<'m> Tables<'m> {
     }
 
     /// Is `expr` shaped like a type expression whose head names something this
-    /// module can resolve? Deliberately narrow: `X = 5` and `X = TypeVar("X")`
-    /// are values, not aliases.
+    /// module can resolve? Deliberately narrow: `X = 5` and `X = f("X")` are
+    /// values, not aliases.
     fn is_type_expression(&self, expr: &Expr) -> bool {
         match expr {
             Expr::Name(name) => self.names_a_type(name.id.as_str()),
@@ -194,7 +194,7 @@ impl<'m> Tables<'m> {
     /// Does a bare name denote a type — a builtin, a same-file class, another
     /// alias, or an imported symbol?
     fn names_a_type(&self, name: &str) -> bool {
-        super::builtins::is_builtin_type_name(&name.to_ascii_lowercase())
+        super::builtins::is_builtin_type_name(name)
             || self.nominal.contains(name)
             || self.aliases.contains_key(name)
             || self.imports.contains_key(name)

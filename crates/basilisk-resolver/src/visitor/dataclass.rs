@@ -1,14 +1,65 @@
 //! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
 //! Dataclass visitor functions.
 
-use ruff_python_ast::{Expr, Stmt, StmtClassDef};
+use ruff_python_ast::{Expr, ExprCall, Stmt, StmtClassDef};
 
+use crate::canonical::{BindingTable, TypingForm};
 use crate::scope::{AttributeInfo, ClassInfo};
 
 use super::annotations::annotation_is_kw_only;
 use super::class_info_ext::{
     expr_simple_name, parse_dataclass_transform_decorator, DcTransformFactory, FieldSpecOverload,
 };
+
+// ---------------------------------------------------------------------------
+// Dataclass field specifiers
+//
+// The callee is recognised by resolving it to its definition, so
+// `from dataclasses import field as f` and `dataclasses.field(...)` both work
+// and a local `def field(...)` is correctly not the dataclass specifier.
+// Keyword-argument NAMES at a call site are read directly: they need no import,
+// so reading one decides nothing about typing. Implements
+// [RESOLV-CANONICAL-BINDING].
+// ---------------------------------------------------------------------------
+
+/// The literal boolean passed to keyword `argument` of `call`, when present.
+fn keyword_bool(call: &ExprCall, argument: &str) -> Option<bool> {
+    call.arguments
+        .keywords
+        .iter()
+        .find(|keyword| {
+            keyword
+                .arg
+                .as_ref()
+                .is_some_and(|name| name.as_str() == argument)
+        })
+        .and_then(|keyword| match &keyword.value {
+            Expr::BooleanLiteral(literal) => Some(literal.value),
+            _ => None,
+        })
+}
+
+/// A dataclass field specifier call, if `value` is one.
+fn field_specifier_call<'a>(bindings: &BindingTable, value: &'a Expr) -> Option<&'a ExprCall> {
+    let Expr::Call(call) = value else {
+        return None;
+    };
+    bindings
+        .is_form(&call.func, TypingForm::DataclassField)
+        .then_some(call)
+}
+
+/// `Some(true)`/`Some(false)` when a field specifier sets `kw_only`.
+pub(super) fn field_kw_only_override(bindings: &BindingTable, value: &Expr) -> Option<bool> {
+    keyword_bool(field_specifier_call(bindings, value)?, "kw_only")
+}
+
+/// Whether a field specifier sets `init=False`.
+pub(super) fn field_init_is_false(bindings: &BindingTable, value: &Expr) -> bool {
+    field_specifier_call(bindings, value)
+        .and_then(|call| keyword_bool(call, "init"))
+        .is_some_and(|init| !init)
+}
 
 pub(super) fn apply_dataclass_transform(stmts: &[Stmt], classes: &mut [ClassInfo]) {
     let factories = collect_dc_transform_factories(stmts);

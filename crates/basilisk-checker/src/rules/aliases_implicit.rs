@@ -10,9 +10,7 @@
 //!
 //! - Literals, collection displays, comprehensions, lambdas, conditionals,
 //!   boolean operators, f-strings, and calls that are not recognised type
-//!   constructors (`TypeVar`, `ParamSpec`, `TypeVarTuple`, `NewType`,
-//!   `TypedDict`, `NamedTuple`, `TypeAliasType`, `type(...)`) all make
-//!   runtime values, not types.
+//!   constructors all make runtime values, not types.
 //! - Alias parameterization is checked against the alias's own type
 //!   parameters: arity, `ParamSpec` argument shape (PEP 612), and `TypeVar`
 //!   bounds through the module's subtyping context ([NARROWPLAN-SUBTYPING]).

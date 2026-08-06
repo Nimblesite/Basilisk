@@ -12,6 +12,7 @@ ruff_python_ast.workspace = true
 ruff_text_size.workspace  = true
 serde.workspace           = true
 thiserror                 = "2.0"
+toml.workspace            = true
 
 [dev-dependencies]
 basilisk-test-utils = { workspace = true, features = ["resolver"] }

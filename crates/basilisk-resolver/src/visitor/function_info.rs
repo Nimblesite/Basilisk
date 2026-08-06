@@ -402,7 +402,7 @@ pub(super) fn collect_name_refs_with_spans(expr: &Expr, out: &mut Vec<(String, S
 /// Recursively collect string literal references from an expression tree.
 ///
 /// Finds string literals used as forward references in type annotations
-/// (e.g. `"SomeClass"` in `Optional["SomeClass"]`).
+/// (e.g. `"SomeClass"` in `list["SomeClass"]`).
 pub(super) fn collect_string_refs_from_expr(expr: &Expr, out: &mut Vec<String>) {
     match expr {
         Expr::StringLiteral(s) => {

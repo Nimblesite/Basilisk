@@ -7,10 +7,10 @@
 //! declared type obtains that type here — from the Ruff AST annotation node,
 //! resolved through the cascade
 //!
-//! 1. type-alias table (PEP 695 `type X = ..`, `X: TypeAlias = ..`, implicit),
+//! 1. type-alias table (PEP 695 `type X = ..`, and implicit `X = ..`),
 //! 2. same-file class table,
 //! 3. import table,
-//! 4. typeshed / builtins,
+//! 4. builtins,
 //! 5. forward reference (a string annotation, parsed and resolved by 1–4),
 //!
 //! — never by pattern-matching annotation source text. Aliases are
@@ -207,7 +207,7 @@ impl<'m> AnnotationResolver<'m> {
         if let Some(imported) = self.imported_leaf(name) {
             return imported;
         }
-        builtins::leaf(&name.to_ascii_lowercase()).unwrap_or(InferredType::Unknown)
+        builtins::leaf(name).unwrap_or(InferredType::Unknown)
     }
 
     /// A dotted name: `mod.Class`.
@@ -237,8 +237,7 @@ impl<'m> AnnotationResolver<'m> {
         };
         let nested = frame.nested();
         if !self.shadows_special_form(&head) {
-            if let Some(ty) = forms::special_form(self, &head.to_ascii_lowercase(), &args, &nested)
-            {
+            if let Some(ty) = forms::special_form(self, &head, &args, &nested) {
                 return ty;
             }
         }
@@ -305,23 +304,23 @@ impl<'m> AnnotationResolver<'m> {
         Some(self.eval(entry.value, &frame.expanding(name, bindings)))
     }
 
-    /// A name bound by a `from`-import resolves to the leaf it names, or — for
-    /// a member with no modelled leaf — to that member as a **nominal** type:
-    /// it is a name the cascade *did* resolve, and calling it gradual would
-    /// silence judgments the nominal comparison can still make
-    /// ([#378](https://github.com/Nimblesite/Basilisk/issues/378)). Project and
-    /// third-party symbols stay gradual until the import cascade covers them —
-    /// the seam [#324](https://github.com/Nimblesite/Basilisk/issues/324)
-    /// fills, behind this same entry point.
+    /// A name bound by a `from`-import of a typing module resolves to that
+    /// member as a **nominal** type: it is a name the cascade *did* resolve,
+    /// and calling it gradual would silence judgments the nominal comparison
+    /// can still make
+    /// ([#378](https://github.com/Nimblesite/Basilisk/issues/378)). What the
+    /// member MEANS is not decided here and must not be: that is a question
+    /// about its declaration, and the mechanism that answers it lawfully does
+    /// not exist yet. Project and third-party symbols stay gradual until the
+    /// import cascade covers them — the seam
+    /// [#324](https://github.com/Nimblesite/Basilisk/issues/324) fills, behind
+    /// this same entry point.
     fn imported_leaf(&self, name: &str) -> Option<InferredType> {
         let imported = self.tables.imports.get(name)?;
         if !builtins::is_typing_module(&imported.module) {
             return Some(InferredType::Unknown);
         }
-        Some(
-            builtins::leaf(&imported.original.to_ascii_lowercase())
-                .unwrap_or_else(|| InferredType::Named(imported.original.clone())),
-        )
+        Some(InferredType::Named(imported.original.clone()))
     }
 
     /// Rewrite a spelling into the name the cascade knows it by: an

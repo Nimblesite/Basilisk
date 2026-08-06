@@ -377,6 +377,7 @@ dependencies = [
  "ruff_text_size",
  "serde",
  "thiserror",
+ "toml",
 ]
 
 [[package]]

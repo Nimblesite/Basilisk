@@ -4,12 +4,65 @@
 use ruff_python_ast::{Expr, Stmt, StmtAnnAssign};
 use ruff_text_size::Ranged;
 
+use crate::canonical::{BindingTable, TypingForm};
 use crate::scope::{
     InvalidStringAnnotation, InvalidStringAnnotationKind, RhsKind, Span, VariableInfo,
 };
 
 use super::class_info_ext::expr_simple_name;
 use super::core::{classify_rhs, text_range_to_span};
+
+// ---------------------------------------------------------------------------
+// Annotation qualifiers
+//
+// Each of these asks the binding table which DEFINITION an annotation refers
+// to. None of them looks at the characters at the use site, so an aliased
+// import (`from dataclasses import InitVar as IV`), a module-qualified use
+// (`dataclasses.InitVar[int]`), and a locally shadowed name are all answered
+// correctly. Implements [RESOLV-CANONICAL-BINDING].
+// ---------------------------------------------------------------------------
+
+/// Whether an annotation is the dataclass keyword-only sentinel.
+pub(super) fn annotation_is_kw_only(bindings: &BindingTable, ann: &Expr) -> bool {
+    bindings.is_form(ann, TypingForm::KwOnlySentinel)
+}
+
+/// Whether an annotation is `InitVar` or `InitVar[T]`.
+pub(super) fn annotation_is_init_var(bindings: &BindingTable, ann: &Expr) -> bool {
+    bindings.is_form(ann, TypingForm::InitVar)
+}
+
+/// Whether an annotation is the `Final` qualifier, bare or subscripted.
+pub(super) fn annotation_is_final(bindings: &BindingTable, ann: &Expr) -> bool {
+    bindings.is_form(ann, TypingForm::FinalQualifier)
+}
+
+/// Whether an annotation is the `ClassVar` qualifier, bare or subscripted.
+pub(super) fn annotation_is_class_var(bindings: &BindingTable, ann: &Expr) -> bool {
+    bindings.is_form(ann, TypingForm::ClassVar)
+}
+
+/// Whether a `ReadOnly` qualifier appears anywhere within an annotation.
+///
+/// Recurses through the composition forms an item type can be built from, so
+/// `Required[ReadOnly[int]]` and `ReadOnly[int] | None` are both found.
+pub(super) fn annotation_contains_readonly_expr(bindings: &BindingTable, expr: &Expr) -> bool {
+    if bindings.is_form(expr, TypingForm::ReadOnly) {
+        return true;
+    }
+    match expr {
+        Expr::Subscript(sub) => annotation_contains_readonly_expr(bindings, &sub.slice),
+        Expr::BinOp(bin) => {
+            annotation_contains_readonly_expr(bindings, &bin.left)
+                || annotation_contains_readonly_expr(bindings, &bin.right)
+        }
+        Expr::Tuple(tuple) => tuple
+            .elts
+            .iter()
+            .any(|element| annotation_contains_readonly_expr(bindings, element)),
+        _ => false,
+    }
+}
 
 pub(super) fn annotation_flags(expr: &Expr) -> (bool, bool, bool) {
     match expr {
