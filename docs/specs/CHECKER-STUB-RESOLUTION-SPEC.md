@@ -630,6 +630,23 @@ For #288, bound `str.join` removes the displayed receiver while using it to
 specialize every overload and return type, preserves `LiteralString` and `/`,
 and drives call checking from the same declaration—never a hand table.
 
+**A `.pyi` file is Python, and it is parsed as Python.** Stub indexing runs on
+the Ruff AST and resolves decorators, bases, and aliases through binding
+resolution ([RESOLV-CANONICAL](CHECKER-ARCHITECTURE-SPEC.md#RESOLV-CANONICAL)),
+exactly as `.py` source does. The recognition rules in
+[CHKARCH-RECOGNITION](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-RECOGNITION) apply
+here without relaxation: a stub may alias what it imports
+(`from typing import overload as _overload`), re-export under a different name,
+or reach a symbol through a module attribute, and a spelling comparison gets
+every one of those wrong. Typeshed does all three.
+
+This is the mandate that makes properties such as `StubFunction::is_overload`
+meaningful — the flag records that a decorator **resolved** to the
+specification's overload declaration, not that its characters matched. As of
+2026-08-06 that flag is unpopulated and `basilisk-stubs` does not compile; it is
+the first item of
+[ASTREBUILD-PHASE-COMPILE](../plans/CHECKER-AST-RECONSTRUCTION-PLAN.md#ASTREBUILD-PHASE-COMPILE).
+
 #### Re-exports {#STUBRES-PYI-REEXPORTS}
 
 The pinned interface rules say imported symbols are **“private by default”**,

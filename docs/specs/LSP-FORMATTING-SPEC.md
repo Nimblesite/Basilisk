@@ -77,6 +77,16 @@ Reimplemented in the binary on the Ruff AST we already own — **no `ruff check`
 
 Behavior parity with the corresponding Ruff fixers is the acceptance bar (regression-tested against representative fixtures). "Organize imports" ordering follows isort semantics.
 
+**All three operate on `StmtImport` / `StmtImportFrom` nodes and their spans.**
+Locating imports by scanning lines for `import ` or `from ` is forbidden
+([LSPARCH-ARCH-AST](LSP-ARCHITECTURE-SPEC.md#LSPARCH-ARCH-AST)) — it matches
+inside docstrings and comments, misses parenthesised multi-line imports, and
+makes the result depend on formatting. The text-scanning guards that formerly
+short-circuited these actions, and the `__all__` generator that discovered
+public names by scanning for `def ` / `class `, are deleted; "add `__all__`" is
+consequently unshipped and is rebuilt under
+[ASTREBUILD-PHASE-LSP](../plans/CHECKER-AST-RECONSTRUCTION-PLAN.md#ASTREBUILD-PHASE-LSP).
+
 ## Per-client wiring (thin) {#LSPFMT-CLIENTS}
 
 Everything substantive is server-side; clients only wire triggers and one opt-in:

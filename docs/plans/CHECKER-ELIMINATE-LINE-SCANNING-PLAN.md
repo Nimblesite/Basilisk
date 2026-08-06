@@ -1,5 +1,24 @@
 # Eliminate Checker Line Scanning {#LINESCANPLAN-ELIMINATION}
 
+> **Deletion complete (2026-08-06). Rebuild tracked elsewhere.** Every scanner
+> catalogued below has been removed; the rules that depended on them are
+> registered and inert. This plan is retained as the record of *what was deleted
+> and why*. The work of putting AST-driven implementations back is
+> [ASTREBUILD](CHECKER-AST-RECONSTRUCTION-PLAN.md#ASTREBUILD) — add nothing new
+> here.
+>
+> The scope also turned out to be wider than "checker line scanning": the same
+> mechanism was found throughout `basilisk-lsp` (move symbol, extract function,
+> add `__all__`, auto-import placement, import rewriting on rename), which this
+> plan never covered. Those are inventoried in
+> [ASTREBUILD-INVENTORY-LSP](CHECKER-AST-RECONSTRUCTION-PLAN.md#ASTREBUILD-INVENTORY-LSP).
+>
+> The normative rule these scanners violated is now written down as
+> [CHKARCH-RECOGNITION](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-RECOGNITION),
+> with the LSP surface at
+> [LSPARCH-ARCH-AST](../specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-ARCH-AST) and
+> [REFACTOR-AST](../specs/LSP-REFACTORING-SPEC.md#REFACTOR-AST).
+
 > **Integrity status (2026-08-06):** The raw fixture counts in this plan are
 > historical investigation records, not conformance percentages. Basilisk's
 > former 100% claim is withdrawn and the current level is temporarily unknown
@@ -68,67 +87,76 @@ holding the remaining honest gaps open:
   [NARROWPLAN-ANNOTATION-RESOLUTION](CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-ANNOTATION-RESOLUTION)
   rather than this plan, but it is the same root cause and the same fix shape.
 
-Structural keyword scanners remain in:
+Structural keyword scanners **were** in the list below. All are now deleted; the
+rules are registered and inert pending
+[ASTREBUILD-PHASE-RULES](CHECKER-AST-RECONSTRUCTION-PLAN.md#ASTREBUILD-PHASE-RULES):
 
-- `generics_variance_inference/`
-- `annotations_generators_2/mod.rs`
+- `generics_variance_inference/` — six submodules deleted
+- `annotations_generators_2/` — `annotation.rs`, `type_check.rs`, `yield_scan.rs`
+  deleted; the last was a hand-rolled Python lexer hunting the characters
+  `yield`
 - `literals_literalstring_helpers.rs`
 - `dataclasses_order.rs`
 - `generics_defaults_referential_2.rs`
+- `dataclasses_slots.rs` and `dataclasses_transform_class/` — the first keeps
+  its resolver-derived half
+- `protocols_subtyping.rs`, `tuples_index_2.rs`, `literals_semantics_2.rs`,
+  `specialtypes_never_2.rs`
+- `generics_type_erasure.rs` — keeps its `module_attr_assignments` half
 
-Other statement/body reconstruction remains in:
+Also deleted outside this plan's original scope: `basilisk-checker/src/ownership.rs`,
+whose own module documentation conceded its scan was textual and matched inside
+comments and strings.
 
-- `dataclasses_slots.rs` and `dataclasses_transform_class/helpers.rs`
-- `protocols_subtyping.rs`
-- `tuples_index_2.rs`
-- `literals_semantics_2.rs`
-- `specialtypes_never_2.rs`
-- `generics_type_erasure.rs`
-
-`rules/shared.rs::span_for_line` may read a line for diagnostic geometry. It must
-not infer Python structure.
+`rules/shared/text_scan.rs` retains `leading_indent`, `span_for_line`, and
+`split_top_level_commas` — line **geometry** for diagnostic placement, inferring
+no Python structure. `identifiers_followed_by` is deleted.
 
 ## AST migration {#LINESCANPLAN-AST-MIGRATION}
 
-- [ ] Replace class/function/type-alias discovery with the corresponding
-  `ResolvedModule` collections and Ruff AST spans.
-- [ ] Replace indentation-based body boundaries with AST statement/body ranges.
-- [ ] Replace operator, mutation, and call parsing with structured expression or
-  call records; extend the resolver when the required node is not exposed.
-- [ ] Add a string/comment regression fixture for each migrated rule before
-  deleting its scanner.
-- [x] Replace `aliases_type_statement::is_invalid_rhs` with AST type-expression
-  validation, covering the reported cases above plus operators other than `|`,
-  call expressions outside the sanctioned special forms, comparisons,
-  comprehensions, and literal displays.
-- [ ] Preserve the exact diagnostics for real code and establish a trustworthy
-  baseline across the pristine fixtures, AST-preserving mutations, and
-  independently derived cases. A historical raw run after the first rewrite
-  returned 140/141: `tuples_type_compat` requires either len()/match tuple
-  narrowing or an `assert_type` mismatch verdict on alias-typed values
-  (red-pinned in `tests/type_expr_structural_tests.rs`); its lines were
-  previously "passed" by a spurious text-scan diagnostic. That count is fixture
-  evidence only, not Basilisk's conformance level.
+Superseded. Rebuilding on the AST is
+[ASTREBUILD-PHASES](CHECKER-AST-RECONSTRUCTION-PLAN.md#ASTREBUILD-PHASES), which
+covers the resolver, the checker rules, the annotation-text layer, and the LSP
+in dependency order. One item completed under this plan is kept for the record:
 
-Migrate `generics_variance_inference` first: it owns the largest cluster of raw
-line and keyword scans. Then take `aliases_type_statement`, which is the only
-inventory entry with a confirmed user-visible miss. Then remove the smaller
-body scanners in the inventory above.
+- [x] `aliases_type_statement::is_invalid_rhs` replaced with AST type-expression
+  validation, covering operators other than `|`, call expressions outside the
+  sanctioned special forms, comparisons, comprehensions, and literal displays.
+
+One historical measurement, retained as fixture evidence and **not** a
+conformance level: a raw run after the first rewrite returned 140/141;
+`tuples_type_compat` requires either `len()`/`match` tuple narrowing or an
+`assert_type` mismatch verdict on alias-typed values (red-pinned in
+`tests/type_expr_structural_tests.rs`), and its lines had previously been
+"passed" by a spurious text-scan diagnostic — a scanner producing a *correct*
+count for a *wrong* reason, which is the whole reason raw counts are not
+evidence.
 
 ## Enforcement {#LINESCANPLAN-ENFORCEMENT}
 
-- [ ] Add a lint script that rejects new `.lines()` calls beneath
-  `crates/basilisk-checker/src/rules/`, with a narrow allowlist for documented
-  geometry helpers.
-- [ ] Reject keyword-prefix parsing of Python structure in checker production
-  code.
-- [ ] Wire the lint into the existing lint/CI path; do not add a Make target.
-- [ ] Keep the allowlist explicit and reviewed so it cannot grow silently.
+The rule is now normative in the specification
+([CHKARCH-RECOGNITION-BANNED](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-RECOGNITION-BANNED)),
+which is what review enforces against. Automated enforcement remains open:
+
+- [ ] Reject new `.lines()` calls and keyword-prefix parsing of Python structure
+  in production code across **all** crates — not only `basilisk-checker/rules`,
+  which is the scoping error that let the LSP accumulate the same mechanism
+  unnoticed.
+- [ ] Wire it into the existing lint/CI path; do not add a Make target.
+- [ ] Keep the allowlist explicit, documented, and reviewed so it cannot grow
+  silently. Current lawful entries: line geometry, `# basilisk:` directive
+  parsing, and Basilisk's own rendered stub-signature output.
+
+A lint cannot catch the semantic form of this defect — the deleted
+`denotes(expr, "TypeVar")` API would pass any text-based check. Behavioural
+tests are the real gate:
+[CHKARCH-RECOGNITION-VERIFY](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-RECOGNITION-VERIFY).
 
 ## Acceptance {#LINESCANPLAN-ACCEPTANCE}
 
-- No checker rule infers Python structure from raw lines.
+- No production code in any crate infers Python structure from raw source.
 - Docstrings, comments, and string literals containing `class`, `def`, `type`,
-  decorators, or imports produce no structural diagnostics.
-- Focused rule tests, `make lint`, `make test`, and the live conformance harness
-  pass without weakening any ratchet.
+  decorators, or imports produce no structural diagnostics and no code actions.
+- The enforcement lint above is wired in.
+- Delete this plan once those hold; the rebuild's own gate is
+  [ASTREBUILD-ACCEPTANCE](CHECKER-AST-RECONSTRUCTION-PLAN.md#ASTREBUILD-ACCEPTANCE).

@@ -287,6 +287,38 @@ the same resolved state.
 imports, calls, type parameters, attribute accesses, source text, and byte spans. Feature
 handlers consume this structure instead of scanning source when semantic data is available.
 
+### AST mandate {#LSPARCH-ARCH-AST}
+
+**Normative for every feature handler and code action in this crate.** Source
+text enters this pipeline once, at `basilisk_parser::parse_source`. Everything
+downstream consumes the AST, the `ResolvedModule`, and the binding table
+([RESOLV-CANONICAL](CHECKER-ARCHITECTURE-SPEC.md#RESOLV-CANONICAL)).
+
+A handler may **never** recover Python structure by matching characters:
+locating a definition by a line's prefix, finding the import block by scanning
+for `import ` / `from `, hand-lexing identifiers, maintaining a Python keyword
+table in Rust, or inferring scope from indentation bytes. Such code matched
+inside docstrings and string literals, missed multi-line constructs, and changed
+behaviour when the file was reformatted; all of it has been deleted rather than
+patched. The clause above says *when semantic data is available* — that is not a
+licence to fall back to scanning when it is not. A handler without the semantic
+data it needs returns nothing.
+
+`ResolvedModule::source` is for rendering: computing an edit range or a
+diagnostic span once the target node is known, and quoting code back to the
+user. It is not an input to a decision.
+
+Permitted, because none of it infers Python structure: line and column geometry;
+Basilisk's own `# basilisk:` directives, which are genuinely comments the AST
+does not carry; text Basilisk itself rendered and parses back for display, such
+as a formatted stub signature; and searching for the **user's own** selected
+identifier during rename, subject to
+[REFACTOR-RENAME-SCOPE](LSP-REFACTORING-SPEC.md#REFACTOR-RENAME-SCOPE).
+
+See [REFACTOR-AST](LSP-REFACTORING-SPEC.md#REFACTOR-AST) for the refactoring
+surface, and [REFACTOR-STATUS](LSP-REFACTORING-SPEC.md#REFACTOR-STATUS) for
+which actions are currently unshipped as a result.
+
 ### Server module structure {#LSPARCH-ARCH-MODSTRUCT}
 
 The crate is split by protocol feature (`hover`, `definition`, `references`, `completion`,

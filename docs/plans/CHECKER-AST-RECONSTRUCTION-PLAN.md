@@ -97,8 +97,8 @@ for f in $(grep -rl '_module: &ResolvedModule' . --include='*.rs'); do
 done
 ```
 
-That query returns 48 files; five are **not** part of this plan and must stay
-as they are — `unused_dependency.rs` and `stale_lock_file.rs` are pre-existing
+That query returns 49 files; six are **not** part of this plan and must stay as
+they are — `unused_dependency.rs` and `stale_lock_file.rs` are pre-existing
 skeletons awaiting workspace-level data, and the four `suppression_*.rs` rules
 are emitted by the suppression engine rather than from their own `check`.
 

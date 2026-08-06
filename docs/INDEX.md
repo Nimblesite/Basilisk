@@ -59,7 +59,8 @@ Plans contain only unfinished work. Delete a plan when its acceptance gate passe
 | [Type narrowing and inference](plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md) | The engine build-out and demolition order: delete every fitted text/shape-matching path, rebuild on the shared engine, hold pristine-fixture, mutation, and independent off-suite regressions throughout, and record only indicative performance measurements. |
 | [Runtime typeshed resolution](plans/CHECKER-TYPESHED-RUNTIME-PLAN.md) | Two open items: a socket-instrumented witness that checking is offline across CLI/LSP/MCP, and byte-exact per-artifact licensing verification inside the VSIX (binaries and wheels are already verified). |
 | [PyPI typeshed package pin](plans/CHECKER-TYPESHED-PYPI-PLAN.md) | Pin a PyPI typeshed distribution by wheel SHA-256, verify offline, auto-resolve from `uv.lock`; suppresses the source-status advisory (issue #312). |
-| [Eliminate line scanning](plans/CHECKER-ELIMINATE-LINE-SCANNING-PLAN.md) | Replace remaining raw-source rule scans with AST data. |
+| [AST reconstruction](plans/CHECKER-AST-RECONSTRUCTION-PLAN.md) | Rebuild what the spelling-cheat deletion removed, AST-driven throughout: restore the build, deliver binding resolution to consumers, rebuild the resolver collectors and 43 inert rules from the typing specification, demolish the annotation-text type layer, rebuild the deleted LSP refactorings, and re-establish honest conformance evidence. |
+| [Eliminate line scanning](plans/CHECKER-ELIMINATE-LINE-SCANNING-PLAN.md) | Deletion complete; only the cross-crate enforcement lint remains. The rebuild moved to the AST reconstruction plan. |
 | [WASM](plans/WASM-PLAN.md) | CI wasm build and size ratchet, multi-file in-memory VFS, and the playground site. |
 | [Advanced checker features](plans/CHECKER-ADVANCED-FEATURES-PLAN.md) | Dependency-hygiene rules, ownership and safety checks, plugin host, migration, and CI helpers. |
 

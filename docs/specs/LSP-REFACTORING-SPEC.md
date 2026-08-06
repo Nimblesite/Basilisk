@@ -7,6 +7,40 @@
 
 Deterministic, type-aware refactoring. Every refactoring is a structured transformation over the resolved AST and checker type information — no regex, no string hacking.
 
+## AST mandate {#REFACTOR-AST}
+
+**Normative, and it overrides every algorithm in this document.** A refactoring
+operates on parsed AST nodes and resolved symbols. It may **never** locate a
+definition, a statement boundary, an import, a scope, or a reference by matching
+characters in the source file. Banned without exception, in every code path:
+
+- Finding a definition by a line's leading characters (`strip_prefix("def ")`,
+  `starts_with("class ")`).
+- Finding the import block by scanning for `import ` / `from `.
+- Hand-lexing identifiers or maintaining a Python keyword table in Rust.
+- Determining scope or nesting by measuring indentation in bytes.
+- Locating an attribute reference by searching for `self.` + the attribute name.
+
+Each of these was implemented here and each has been **deleted**; see
+[REFACTOR-STATUS](#REFACTOR-STATUS). They were not merely imprecise — every one
+of them matched inside comments, docstrings, and string literals, missed
+constructs spanning multiple lines, and changed behaviour under reformatting
+alone. A refactoring that edits code it misidentified corrupts the user's file,
+which makes this stricter than the checker's equivalent rule, not looser:
+the checker's failure mode is a wrong diagnostic, a refactoring's is data loss.
+
+The parser has already produced every node these mechanisms tried to recover.
+Use it: `ruff_python_parser` for structure, `ResolvedModule` for symbols and
+imports, `BindingTable` for what a name refers to
+([RESOLV-CANONICAL](CHECKER-ARCHITECTURE-SPEC.md#RESOLV-CANONICAL)).
+
+Searching for the **user's own symbol** by name is not covered by this ban — a
+rename must find occurrences of the identifier the user selected. What is banned
+is hardcoding *Python's* vocabulary into Rust to infer structure.
+
+Permitted: line and column **geometry** for computing an edit range once the
+target node is known.
+
 ## Design Principles {#REFACTOR-PRINCIPLES}
 
 Invariants every refactoring must satisfy:
@@ -16,6 +50,27 @@ Invariants every refactoring must satisfy:
 3. **Cross-file** — operates across the workspace via the import graph.
 4. **Atomic undo** — returns a single `WorkspaceEdit` (one undo step).
 5. **Safe by default** — refactorings that could change runtime behavior are marked and require confirmation.
+6. **Structural** — satisfies [REFACTOR-AST](#REFACTOR-AST). A refactoring that cannot identify its target structurally offers no code action at all; it never guesses.
+
+## Implementation status {#REFACTOR-STATUS}
+
+This document specifies the target. As of 2026-08-06 the following actions are
+**not shipped**: their implementations violated [REFACTOR-AST](#REFACTOR-AST)
+and were deleted rather than patched. Rebuild order is
+[ASTREBUILD-PHASE-LSP](../plans/CHECKER-AST-RECONSTRUCTION-PLAN.md#ASTREBUILD-PHASE-LSP).
+
+| Section | Status |
+|---|---|
+| [REFACTOR-RENAME](#REFACTOR-RENAME) | Ships. Identifier, keyword-argument, and docstring occurrences only — the `self.attr` / `cls.attr` sweep in [REFACTOR-RENAME-SCOPE](#REFACTOR-RENAME-SCOPE) is deleted and unbuilt. |
+| [REFACTOR-RENAMEMOD](#REFACTOR-RENAMEMOD) | Not shipped. Path→module mapping survives; import rewriting is inert. |
+| [REFACTOR-EXTRACT-FUNC](#REFACTOR-EXTRACT-FUNC) | Not shipped. |
+| [REFACTOR-EXTRACT-VAR](#REFACTOR-EXTRACT-VAR) | Extract **variable** ships. Extract **constant** is deleted and unbuilt. |
+| [REFACTOR-MOVE](#REFACTOR-MOVE) | Not shipped. The `MOVE_SYMBOL` command is still advertised with no code action producing it, which violates [LSPARCH-CMDREG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CMDREG); it must be rebuilt or withdrawn. |
+| [REFACTOR-CONVERT](#REFACTOR-CONVERT) | Union/Optional syntax conversion and NamedTuple conversion are deleted and unbuilt. |
+| [REFACTOR-INLINE-VAR](#REFACTOR-INLINE-VAR), [REFACTOR-INLINE-FUNC](#REFACTOR-INLINE-FUNC), [REFACTOR-SIGNATURE](#REFACTOR-SIGNATURE), [REFACTOR-ABSTRACT](#REFACTOR-ABSTRACT) | Never implemented. |
+
+Unshipped behaviour is not advertised in the README, the website, or the
+user-facing docs until it works.
 
 ## Code Action Kinds {#REFACTOR-KINDS}
 
@@ -43,7 +98,14 @@ Renames identifiers across files using the import graph. Enhancements needed:
 
 ### Scope-Aware Rename {#REFACTOR-RENAME-SCOPE}
 
-The current whole-word text matching must become scope-aware:
+**Known gap.** The shipped implementation finds occurrences by whole-word text
+search over the source, with a mask excluding string literals and comments. It
+does not hardcode Python vocabulary — it searches for the *user's own* selected
+identifier — so it is not a [REFACTOR-AST](#REFACTOR-AST) violation of the kind
+that was deleted. It is still wrong: it cannot distinguish two unrelated
+bindings that share a name, so renaming a local `x` renames every other `x` in
+the file. It must be replaced with occurrences taken from resolved AST
+references, which is what makes the scope rules below expressible at all:
 
 - **Local variables**: rename only within the enclosing function/block scope.
 - **Parameters**: rename the parameter and all references within the function body. If the function has callers using keyword arguments, rename those too.
@@ -286,15 +348,26 @@ abstract_method_body = "raise"
 
 ## Priority Order {#REFACTOR-PRIORITY}
 
-Implementation order:
+Implementation order. Restoring deleted behaviour outranks new behaviour, and
+within that, user-visible breakage outranks silence — an action that produces a
+*wrong* edit is worse than one that is absent.
 
-1. **Rename Symbol** enhancements (scope-aware, validation)
-2. **Rename Module** (`workspace/willRenameFiles`)
-3. **Extract Function**
-4. **Extract Variable**
-5. **Move Symbol**
-6. **Implement Abstract Methods**
+1. **Auto-import insertion point** — currently hardcoded to line 0, so every
+   auto-import lands above the module docstring. Wrong output, shipped today.
+2. **Rename Symbol** — replace text occurrences with resolved AST references
+   ([REFACTOR-RENAME-SCOPE](#REFACTOR-RENAME-SCOPE)), then re-add the
+   `self.attr` / `cls.attr` sweep, then validation.
+3. **Rename Module** (`workspace/willRenameFiles`) — import rewriting from
+   `ImportInfo` spans.
+4. **Move Symbol** — or withdraw the orphaned `MOVE_SYMBOL` command.
+5. **Extract Function**
+6. **Extract Constant** and **add `__all__`**
 7. **Convert Between Constructs** (each conversion independent)
-8. **Inline Variable**
-9. **Change Signature**
-10. **Inline Function**
+8. **Implement Abstract Methods**
+9. **Inline Variable**
+10. **Change Signature**
+11. **Inline Function**
+
+Every item above ships only with tests that fail against a text-matching
+implementation: the same construct inside a docstring, inside a string literal,
+split across lines, and reformatted.
