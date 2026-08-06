@@ -1,13 +1,11 @@
-// Eleventy global data: benchmark results, read from the git-tracked per-machine
-// CSV that `make bench` generates (benchmarks/status/<machine>.csv).
+// Eleventy global data for withdrawn historical benchmark results, read from the
+// git-tracked per-machine CSV that `make bench` generated.
 //
-// The website renders MEASURED FACTS. This loader parses the CSV's header and
-// per-file timings for the benchmark page. It also derives each tool's median
-// fresh-process check for the home pages. There are no speedup ratios, "beats M
-// of N" tallies, or arbitrary outlier thresholds: published values are either
-// CSV measurements or direct medians of those measurements.
+// The integrity review has withdrawn these measurements from comparison. This
+// loader preserves the old table for transparency; derived medians and fastest
+// fields are historical implementation details and must not drive public claims.
 //
-// Primary machine selection (what the website shows):
+// Historical primary-machine selection (what the withdrawn table preserves):
 //   1. $BASILISK_BENCH_PRIMARY (slug)   2. benchmarks/status/.primary file
 //   3. otherwise rank by tool coverage (a CSV missing competitor columns must
 //      never win), then prefer `gha-*` (stable CI hardware), then alphabetical
@@ -79,7 +77,7 @@ function parseCsv(text) {
   });
   const allTools = [...msIdx.keys()];
   // Warm-cache variants (…-warm) aren't separate checkers, so exclude them from
-  // the cold medians used on the home pages. Their per-file values stay in rows.
+  // the historical cold medians. Their per-file values stay in rows.
   const tools = allTools.filter((t) => !t.endsWith("-warm"));
   const rows = dataLines.slice(1).map((line) => {
     const parts = line.split(",");
@@ -107,14 +105,9 @@ function median(nums) {
   return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
 }
 
-// Per-checker median cold full-file time, for the "how it compares" speed row.
-// Every checker's own median over the fixtures it reported — a direct order
-// statistic of the measured CSV values, NOT a comparison number: the page shows
-// each tool's median next to the others and lets the reader compare, rather than
-// asserting a build-time "N× faster" ratio. Warm/cache variants are excluded;
-// this is the fresh-process measurement without a persistent result-cache.
-// Self-measured and reproducible with `make bench`, so it cannot drift from the
-// CSV.
+// Historical per-checker median cold full-file time. This and `fastest` remain
+// available only to preserve the old data shape; neither is publishable while
+// the benchmark methodology and results are under integrity review.
 function computeToolMedians(rows, tools) {
   const ms = {};
   const text = {};
@@ -164,7 +157,16 @@ function pickPrimary(files) {
 }
 
 export default function () {
-  const empty = { available: [], primary: null, meta: {}, tools: [], rows: [], hasData: false };
+  const empty = {
+    available: [],
+    primary: null,
+    meta: {},
+    tools: [],
+    rows: [],
+    hasData: false,
+    withdrawn: true,
+    publicationStatus: "historical-withdrawn",
+  };
   if (!existsSync(STATUS_DIR)) return empty;
 
   const files = readdirSync(STATUS_DIR).filter((f) => f.endsWith(".csv")).sort();
@@ -174,12 +176,14 @@ export default function () {
   const parsed = parseCsv(readFileSync(join(STATUS_DIR, primary), "utf-8"));
   if (!parsed) return empty;
 
-  // Everything exposed is either a CSV value or a median of CSV values.
+  // Preserve the old measurements as explicitly withdrawn historical data.
   return {
     available: files.map((f) => f.replace(/\.csv$/, "")),
     primary: primary.replace(/\.csv$/, ""),
     ...parsed,
     toolMedians: computeToolMedians(parsed.rows, parsed.tools),
     hasData: parsed.rows.length > 0,
+    withdrawn: true,
+    publicationStatus: "historical-withdrawn",
   };
 }

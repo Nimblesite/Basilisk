@@ -1,10 +1,10 @@
 ---
 layout: layouts/docs.njk
 title: "Python Type Checker Performance Benchmarks"
-description: "Measured whole-file CLI processing times for Basilisk, Pyright, mypy, ty, Pyrefly and zuban, with every benchmark fixture linked to its source."
+description: "Historical Python type-checker benchmark figures, withdrawn from comparison while Basilisk audits and revalidates the methodology and results."
 keywords: basilisk benchmarks, python type checker speed, pyright vs basilisk, hyperfine, mypy ty pyrefly performance
 date: 2026-07-04
-dateModified: 2026-07-31
+dateModified: 2026-08-06
 author: The Basilisk Project
 eleventyNavigation:
   key: Benchmarks
@@ -13,21 +13,30 @@ permalink: /docs/benchmarks/
 ---
 <h1>Performance benchmarks</h1>
 
+<p class="bench-caveat">
+  <strong>These benchmark figures are withdrawn pending an integrity review.</strong>
+  Do not use the values below to compare Basilisk with other tools. The conformance failure exposed
+  shortcomings in our review process, so we are auditing the benchmark runner, fixtures, data pipeline,
+  and every performance claim before publishing new results. The table remains visible only as a
+  historical record. We will replace it with newly measured figures when the methodology and results
+  have been revalidated through the integrity review.
+</p>
+
 {% if benchmarks.hasData %}
 <p class="releases-intro">
-  Each row is one <strong>complete Python fixture file</strong>. Each value is the mean wall-clock
+  The table below is a withdrawn historical record. Each row is one <strong>complete Python fixture file</strong>. Each value is the mean wall-clock
   time for a fresh checker process to check that entire file, including startup, stub loading,
   analysis, and diagnostic output. It does <strong>not</strong> measure one typing rule. Lower is better.
 </p>
 
 <p class="bench-caveat">
-  <strong>Treat these numbers as indicative, not authoritative.</strong> They are currently produced by
+  <strong>Historical methodology note — not a validation of the figures.</strong> They were produced by
   running <code>make bench</code> on a contributor's local workstation, so every tool's timing carries
   that machine's background load — enough that a run taken under load can shift results by tens of
-  percent across the whole table at once. We are moving the benchmark onto dedicated, isolated
-  hardware in the CI pipeline so published figures come from a controlled environment and are
-  reproducible run to run. Until then, compare tools within a single run (they are all measured
-  back to back on the same machine) rather than comparing a figure here against one recorded elsewhere.
+  percent across the whole table at once. We will not treat that signal as publication evidence or a
+  CI pass/fail gate. Any replacement methodology must use controlled, repeatable conditions and state
+  its limits before new figures are published. No comparison should be made from this table while the
+  integrity review is open.
 </p>
 
 {% import "benchmark-section.njk" as benchmark %}

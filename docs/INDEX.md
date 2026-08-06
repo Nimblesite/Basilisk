@@ -68,3 +68,9 @@ Plans contain only unfinished work. Delete a plan when its acceptance gate passe
 | File | Contents |
 |---|---|
 | [Typing puzzles](puzzles/puzzles.md) | User-reported typing puzzles from X, with minimal repros, PEP-bug vs house-rule classification, and the resulting issues (#371, #378–#383). |
+
+## Conformance integrity
+
+| File | Contents |
+|---|---|
+| [Conformance integrity audit](CONFORMANCE-INTEGRITY-AUDIT.md#CHKARCH-CONFORMANCE-INTEGRITY-AUDIT) | Phase 1: the fitted alias predicates, measured impact, wider checker scan, remediation status, and process changes found by the 2026-08 audit. Linked from the site's [conformance correction](../website/src/docs/conformance.md). |

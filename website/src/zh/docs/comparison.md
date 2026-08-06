@@ -4,28 +4,22 @@ title: Python 类型检查工具对比
 description: "Basilisk 与 Pyright、mypy、ty、Pyrefly 等 Python 类型检查工具的对比：严格性、PEP 符合性、性能与功能。"
 keywords: basilisk vs pyright, python 类型检查工具对比, mypy vs basilisk, ty, pyrefly
 lang: zh
+dateModified: 2026-08-06
 ---
 
 # Python 类型检查工具对比
 
-Python 类型检查器的格局已经发生了重大变化。2025 年推出了三个基于 Rust 的新工具。它们的差异在于对类型规范的实现有多忠实、究竟是一个完整的语言服务器还是仅仅一个检查器，以及速度（我们[实测并公开发布](/docs/benchmarks/)，而非空口断言）。
+Python 类型检查器的格局已经发生了重大变化。它们的差异在于对类型规范的实现有多忠实、究竟是一个完整的语言服务器还是仅仅一个检查器，以及速度。Basilisk 之前公开的性能数据目前已[撤回并等待审查](/docs/benchmarks/)。
+
+<p class="bench-caveat"><strong>符合性更正：</strong>Basilisk 此前的结果已撤回，当前百分比暂时未知。应我们的请求，Basilisk 已从<a href="https://github.com/python/typing/blob/main/conformance/results/results.html">官方结果表</a>中移除，同时受影响的逻辑正在重新实现并接受独立稳健性验证。请勿使用旧得分或旧排名比较这些工具。</p>
 
 ## 根本问题
 
 在比较功能和性能之前，有一个问题决定了你究竟能否信任某个检查器的判断：
 
-**它究竟实现了官方类型规范的多少？**
+**除了用于衡量它的固定测试之外，它究竟实现了官方类型规范的多少？**
 
-| 工具 | PEP 符合性（官方套件¹） |
-|---|---|
-| **Basilisk** | **{{ conformanceOfficial.byId.basilisk.pct }}%（{{ conformanceOfficial.byId.basilisk.passLabel }}/{{ conformanceOfficial.byId.basilisk.total }}）** |
-| zuban | {{ conformanceOfficial.byId.zuban.pct }}% |
-| Pyrefly | {{ conformanceOfficial.byId.pyrefly.pct }}% |
-| Pyright | {{ conformanceOfficial.byId.pyright.pct }}% |
-| ty | {{ conformanceOfficial.byId.ty.pct }}% |
-| mypy | {{ conformanceOfficial.byId.mypy.pct }}% |
-
-以上每个得分都来自官方 python/typing 套件的**同一次运行**：Basilisk 以完美的 {{ conformanceOfficial.byId.basilisk.pct }}% 位居榜首，是唯一做到这一点的工具。不实现某个规范特性的检查器，就无法判断使用该特性的代码：它要么漏掉真实错误，要么凭空制造误报。Basilisk 的**默认**规则集*就是*类型规范：它只运行核心 PEP 符合性规则，别无其他，并在我们固定的提交上通过套件中的每一个文件。规则选择完全由配置驱动，因此默认就是核心 PEP 规则集，绝不更多。
+对于当前列出的检查器，请查看[官方实时结果表](https://github.com/python/typing/blob/main/conformance/results/results.html)。Basilisk 目前不在表中。旧结果无法通过保持语义不变的测试变异，因此在替换受影响实现期间，Basilisk 的诚实答案暂时是**未知**。详情见[符合性更正](/zh/docs/conformance/)。
 
 想要比规范更严格的检查？在配置中开启**可选的 Basilisk 规则**。它们默认关闭，并且按设计会标记规范*不*视为错误的东西（比如未注解的参数）, 所以开启它们实际上会*破坏*对规范的严格符合。这正是要点：当你的团队想要超出规范的检查时再启用它们，而不是强加给每个项目。
 
@@ -40,7 +34,7 @@ Python 类型检查器的格局已经发生了重大变化。2025 年推出了�
 | 注解快速修复（插入占位符） | ✅ `: Any` / `-> None` ² | ❌ ³ | ❌ ⁴ | 双击内联提示 ⁵ | ❌（代码操作） |
 | 自动插入*推断*类型 | ❌ | ❌ ³ | ❌ ⁴ | ❌ | ✅ CLI `pyrefly infer` ⁶ |
 | 超出规范的可选规则 | ✅ 配置 | strict 模式 ⁷ | `--strict` ⁴ | 仅严重级别 ⁸ | ✅ `strict` 预设 ⁹ |
-| PEP 符合性¹ | **{{ conformanceOfficial.byId.basilisk.pct }}%, 第一，唯一满分** | {{ conformanceOfficial.byId.pyright.pct }}% | {{ conformanceOfficial.byId.mypy.pct }}% | {{ conformanceOfficial.byId.ty.pct }}% | {{ conformanceOfficial.byId.pyrefly.pct }}% |
+| PEP 符合性¹ | **暂时未知；旧结果已撤回** | 见实时结果 | 见实时结果 | 见实时结果 | 见实时结果 |
 | 实现语言 | Rust | TypeScript ³ | Python/C ⁴ | Rust ¹⁰ | Rust ¹¹ |
 | 需要运行时 | 无 | Node.js ³ | Python ⁴ | 无 ¹⁰ | 无 ¹¹ |
 | 补全、悬停、跳转 | ✅ | ✅ ¹² | ❌ ⁴ | ✅ ¹³ | ✅ ¹⁴ |
@@ -54,7 +48,7 @@ Python 类型检查器的格局已经发生了重大变化。2025 年推出了�
 
 **来源：**
 
-¹ 完全通过得分来自[官方 python/typing 符合性套件]({{ conformanceOfficial.snapshot.source }})的一次运行，快照 [python/typing@`{{ conformanceOfficial.snapshot.sha }}`]({{ conformanceOfficial.snapshot.commitUrl }})（{{ conformanceOfficial.snapshot.dateLabel }}）：basilisk {{ conformanceOfficial.byId.basilisk.version }}、pyright {{ conformanceOfficial.byId.pyright.version }}、mypy {{ conformanceOfficial.byId.mypy.version }}、ty {{ conformanceOfficial.byId.ty.version }}、pyrefly {{ conformanceOfficial.byId.pyrefly.version }}、zuban {{ conformanceOfficial.byId.zuban.version }}。Basilisk 是唯一取得完美 {{ conformanceOfficial.byId.basilisk.pct }}% 的检查器。这些得分会随工具改进而变化，因此每个都链接到其实时结果目录，而非固定数字。
+¹ 当前列出的检查器请参见[官方 python/typing 实时结果](https://github.com/python/typing/blob/main/conformance/results/results.html)。Basilisk 在撤回旧结果后请求移除；只有在全新实现通过稳健性和变异验证后，才会发布当前百分比。
 
 ² Basilisk 的快速修复插入的是**占位符**注解（参数和属性为 `: Any`，返回值为 `-> None`；空集合变量为 `list[Any]` / `dict[str, Any]`），供你替换为真实类型。它不推断类型。参见[缺失注解规则](/zh/docs/rules/missing-annotations/)。
 
@@ -104,12 +98,12 @@ Python 类型检查器的格局已经发生了重大变化。2025 年推出了�
 
 ## Pyright
 
-**由微软开发。基于 TypeScript。在官方套件上 {{ conformanceOfficial.byId.pyright.pct }}% PEP 符合性（[来源]({{ conformanceOfficial.snapshot.source }})）：落后于 Basilisk 完美的 {{ conformanceOfficial.byId.basilisk.pct }}%。**
+**由微软开发，基于 TypeScript。当前符合性请参见[官方结果](https://github.com/python/typing/blob/main/conformance/results/results.html)。**
 
-Pyright 长期是符合性的领跑者，至今仍是最强的检查器之一。在当前官方套件上它得分 {{ conformanceOfficial.byId.pyright.pct }}%, 很强，但如今落后于 Basilisk（{{ conformanceOfficial.byId.basilisk.pct }}%）。它正确处理了绝大多数 PEP 类型功能，对于基于 TypeScript 的工具来说性能出色。
+Pyright 长期是符合性的领跑者，至今仍是最强的检查器之一。它处理广泛的 PEP 类型功能，并拥有成熟的编辑器生态系统。
 
 **Pyright 做得好的地方：**
-- 强大的 PEP 覆盖率（官方符合性套件 {{ conformanceOfficial.byId.pyright.pct }}%）
+- 强大的 PEP 覆盖率；请参见官方实时符合性结果
 - 出色的文档和错误消息
 - 通过 Pylance 深度集成 VS Code
 - 在大多数代码库中足够快用于交互使用
@@ -121,13 +115,13 @@ Pyright 长期是符合性的领跑者，至今仍是最强的检查器之一。
 - Pylance（VS Code 扩展）是专有的：其最丰富的功能不离开 VS Code
 - 无插件，无法添加框架特定的类型智能
 
-**Pyright 何时有意义：** Basilisk 现在在符合性上超过了 Pyright（官方套件 {{ conformanceOfficial.byId.basilisk.pct }}% 对 {{ conformanceOfficial.byId.pyright.pct }}%），同时还提供完整 LSP、集成调试器和性能分析器。如果您已经深度投入微软的 VS Code 生态系统并且不介意 Node.js 依赖，Pyright 仍是一个强大、成熟的选择。
+**Pyright 何时有意义：** 如果您已经深度投入微软的 VS Code 生态系统并且不介意 Node.js 依赖，Pyright 仍是一个强大、成熟的选择。
 
 ---
 
 ## mypy
 
-**原创。基于 Python/C。官方套件 {{ conformanceOfficial.byId.mypy.pct }}%（[来源]({{ conformanceOfficial.snapshot.source }})）：对比 Basilisk 完美的 {{ conformanceOfficial.byId.basilisk.pct }}%。**
+**原创，基于 Python/C。当前符合性请参见[官方结果](https://github.com/python/typing/blob/main/conformance/results/results.html)。**
 
 mypy 定义了 Python 类型检查的样子。多年来，其 `--strict` 标志是 Python 类型中"严格"含义的参考实现。
 
@@ -138,7 +132,7 @@ mypy 定义了 Python 类型检查的样子。多年来，其 `--strict` 标志�
 - 悠久的历史意味着处理了大多数边缘情况
 
 **mypy 不做的事情：**
-- 在[我们的实测基准](/docs/benchmarks/)中冷启动单文件检查最慢（其增量缓存可在重检时缩小差距）
+- 检查需要 Python 运行时
 - 守护进程模式（`dmypy`）在某些条件下不稳定
 - 不是语言服务器，没有补全、悬停或跳转到定义
 - 需要 Python 运行时
@@ -150,7 +144,7 @@ mypy 定义了 Python 类型检查的样子。多年来，其 `--strict` 标志�
 
 ## ty（Astral）
 
-**由 Ruff 团队构建。Rust + Salsa。官方套件 {{ conformanceOfficial.byId.ty.pct }}%（[来源]({{ conformanceOfficial.snapshot.source }})）：仍在成熟中，远落后于 Basilisk 完美的 {{ conformanceOfficial.byId.basilisk.pct }}%。**
+**由 Ruff 团队构建，使用 Rust + Salsa。当前符合性请参见[官方结果](https://github.com/python/typing/blob/main/conformance/results/results.html)。**
 
 ty 是最有趣的新入场者。它由创建 Ruff 的同一团队构建（现在是事实上的 Python linter），使用基于 Salsa 的增量架构，与 Basilisk 一样用 Rust 构建，并拥有 Astral 的工程速度支持。
 
@@ -161,17 +155,17 @@ ty 是最有趣的新入场者。它由创建 Ruff 的同一团队构建（现�
 - 亚 10 毫秒的增量速度（[PyTorch 上 4.7ms](https://astral.sh/blog/ty)，2025 年 12 月）
 
 **ty 尚不做的事情：**
-- 在[官方 python/typing 符合性套件]({{ conformanceOfficial.snapshot.source }})上得分 {{ conformanceOfficial.byId.ty.pct }}%, 远落后于 Basilisk 完美的 {{ conformanceOfficial.byId.basilisk.pct }}%；仍在成熟中
+- 类型实现仍在成熟中
 - 默认渐进类型
 - 无集成调试器或性能分析器
 
-**ty 何时有意义：** 如果您愿意押注 Astral 的开发速度并能容忍采用期间较低的类型覆盖率。ty 最终可能成为主要参与者；现在依赖它进行严格执行还为时过早。
+**ty 何时有意义：** 如果您重视 Astral 的工具生态，并愿意采用一个快速发展的检查器。
 
 ---
 
 ## Pyrefly（Meta）
 
-**在 Instagram 规模上经过生产测试。基于 Rust。官方套件 {{ conformanceOfficial.byId.pyrefly.pct }}% PEP 符合性（[来源]({{ conformanceOfficial.snapshot.source }})）：落后于 Basilisk 完美的 {{ conformanceOfficial.byId.basilisk.pct }}%。**
+**在 Instagram 规模上经过生产测试，基于 Rust。当前符合性请参见[官方结果](https://github.com/python/typing/blob/main/conformance/results/results.html)。**
 
 Pyrefly 由 Meta 构建，用于处理他们的 Python 代码库，世界上最大的代码库之一。它强调吞吐量（[1.85M LOC/秒，166 核 Meta 基础设施](https://pyrefly.org/)）而不是严格执行。
 
@@ -194,15 +188,15 @@ Pyrefly 由 Meta 构建，用于处理他们的 Python 代码库，世界上最�
 
 Basilisk 不是现有工具的更快版本。它占据了不同的位置：
 
-**Basilisk 独有的：**
-1. **唯一在官方 python/typing 套件上取得完美 {{ conformanceOfficial.byId.basilisk.pct }}% 的类型检查器**：开箱即 100% PEP 符合，并提供**可选的 Basilisk 规则**，可在配置中开启以获得比规范更严格的检查，除非你主动启用，它们从不运行，也从不影响符合性得分
+**Basilisk 的组合：**
+1. 默认启用类型规范规则，并提供**可选的 Basilisk 规则**以实现比规范更严格的检查。符合性实现正在重新构建，当前百分比暂时未知
 2. 注解快速修复，一键代码操作，为未注解的代码插入占位符注解（`: Any`、`-> None`），方便你填入真实类型，而不用手动找位置
 3. 在每款编辑器中完整的开源 LSP, 补全、悬停、跳转到定义、重构、调试和性能分析，在 VS Code 以及原生 Zed 和 Neovim 扩展中相同（Cursor、Windsurf 等的 Open VSX 即将推出；JetBrains 计划中）, 不仅仅在一个专有的 VS Code 扩展内
 4. 通过语言服务器代理的集成调试器和性能分析器
 5. WASM 插件系统（计划中）, 无需分叉即可扩展，设计安全
 
 **Basilisk 仍在成长的地方：**
-- Basilisk 正在积极开发中。它在我们[固定的提交](/zh/docs/conformance/)上通过官方套件的 {{ conformance.scorePct }}%（{{ conformance.pass }}/{{ conformance.total }}，错误*和*警告，最严格评分），{{ conformance.fp }} 处误报、{{ conformance.missed }} 处遗漏的必需错误。
+- Basilisk 正在积极开发中。此前的符合性结果已撤回；受影响逻辑正在从头实现，[当前百分比暂时未知](/zh/docs/conformance/)。
 - 插件生态系统：mypy 的 Django 和 SQLAlchemy 插件已经成熟。Basilisk 的 WASM 插件是计划中的。
 
-建议：开始新 Python 项目的团队从第一天起就能用 Basilisk 获得完全符合 PEP 的检查，它是官方套件上唯一取得满分的检查器，并可在准备好时开启比规范更严格的规则，且在每款编辑器中获得相同体验，而非局限于一个专有扩展。
+建议：根据 Basilisk 集成的开源编辑器工作流进行评估，并在您自己的代码上测试它。不要依据已撤回的符合性或基准测试数据做出选择。待全新实现和稳健性审查完成后，我们会发布新的符合性结果。

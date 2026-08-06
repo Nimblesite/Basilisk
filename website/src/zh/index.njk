@@ -1,25 +1,13 @@
 ---
 layout: layouts/base.njk
-title: "Basilisk —— 快速的 Python 类型检查器与语言服务器"
-description: "Basilisk 是用 Rust 构建的开源 Python 类型检查器与语言服务器：在官方 python/typing 符合性套件中取得 100%，并在我们公开的基准测试中最快。"
+title: "Basilisk —— Python 类型检查器与语言服务器"
+description: "Basilisk 是用 Rust 构建的开源 Python 类型检查器与语言服务器。符合性结果和基准测试数据已撤回，目前正在进行完整性审查。"
 keywords: "python 类型检查器, python type checker, python 类型检查, python 语言服务器, python language server, python 类型检查器对比, rust python 类型检查器, typing conformance, 类型检查器基准测试"
-imageAlt: "Basilisk Python 类型检查器与语言服务器，附公开的符合性结果与冷启动基准测试"
-dateModified: 2026-08-04
+imageAlt: "Basilisk Python 类型检查器与语言服务器"
+dateModified: 2026-08-06
 lang: zh
 permalink: /zh/
 ---
-
-{# 与英文首页逐字对应的声明门控（[WEBSITE-E2E-SMOKE]）：
-   “最快”只有在六款工具的中位数全部在场且 Basilisk 最低时才渲染；
-   “唯一”只有在官方快照中 Basilisk 是唯一满分者时才渲染。 #}
-{% set hasCompleteBenchmark = benchmarks.hasData
-  and benchmarks.toolMedians.ms.basilisk
-  and benchmarks.toolMedians.ms.pyright
-  and benchmarks.toolMedians.ms.mypy
-  and benchmarks.toolMedians.ms.ty
-  and benchmarks.toolMedians.ms.pyrefly
-  and benchmarks.toolMedians.ms.zuban %}
-{% set basiliskIsFastest = hasCompleteBenchmark and benchmarks.toolMedians.fastest == 'basilisk' %}
 
 <section class="hero">
   <div class="container">
@@ -28,14 +16,13 @@ permalink: /zh/
         <span class="hero__kicker">Python 类型检查器 &middot; 语言服务器</span>
 
         <h1 class="hero__headline">
-          {% if conformanceOfficial.basiliskIsSolePerfect %}唯一在官方 Python typing 套件中取得 {{ conformanceOfficial.basilisk.pct }}% 的 Python 类型检查器。{% elif conformance.hasData %}在官方 Python typing 套件中取得 {{ conformance.scorePct }}% 的 Python 类型检查器。{% else %}为速度与规范符合性打造的 Python 类型检查器。{% endif %}
-          {% if basiliskIsFastest %}<span class="hero__headline-accent">也是我们测过最快的。</span>{% endif %}
+          用 Rust 构建的开源 Python 类型检查器与语言服务器。
         </h1>
 
         <p class="hero__subheadline">
-          Basilisk 是用 Rust 构建的开源 Python 类型检查器与语言服务器。
-          {% if conformance.hasData and conformance.pass == conformance.total %}它是{% if conformanceOfficial.basiliskIsSolePerfect %}唯一{% endif %}通过<a href="{{ conformanceOfficial.snapshot.source }}" target="_blank" rel="noopener">官方 <code>python/typing</code> 符合性套件中每一个文件</a>的检查器，捕获 {{ conformance.caught }} 个必需错误，{{ conformance.fp }} 处误报。{% elif conformance.hasData %}它在<a href="/zh/docs/conformance/">官方 <code>python/typing</code> 符合性套件</a>中取得 {{ conformance.scorePct }}%。{% endif %}
-          {% if basiliskIsFastest %}在<a href="/docs/benchmarks/">我们公开的基准测试</a>中，它的冷启动全文件 CLI 检查中位耗时也低于所有其他检查器。{% endif %}
+          我们已撤回此前的符合性声明和公开的基准测试数据。应我们的请求，Basilisk
+          已从官方 <code>python/typing</code> 结果中移除。在重新实现针对测试特例的逻辑，
+          并通过稳健性测试与变异测试验证之前，当前符合性百分比暂时未知。
         </p>
 
         <div class="hero__cta-group">
@@ -65,40 +52,30 @@ permalink: /zh/
       </div>
     </div>
 
-    {% if conformance.hasData or benchmarks.hasData %}
-    <div class="hero__proof" aria-label="公开的类型检查器结果">
-      {% if conformance.hasData %}
+    <div class="hero__proof" aria-label="测量完整性审查">
       <div class="stat-card">
-        <span class="stat-card__num">{{ conformance.scorePct }}<span class="stat-card__unit">%</span></span>
-        <span class="stat-card__label">
-          {% if conformanceOfficial.basiliskIsSolePerfect %}官方榜单中唯一取得满分的检查器{% else %}官方类型符合性得分{% endif %}
-        </span>
+        <span class="stat-card__num">暂时未知</span>
+        <span class="stat-card__label">当前类型符合性</span>
         <span class="stat-card__sub">
-          {{ conformance.total }} 个文件中有 {{ conformance.pass }} 个通过套件未经修改的评分器，
-          遗漏的必需错误 {{ conformance.missed }} 处，误报 {{ conformance.fp }} 处。
-          <a href="{{ conformanceOfficial.snapshot.source }}" target="_blank" rel="noopener">官方结果，{{ conformanceOfficial.snapshot.date }}</a>。
+          之前的结果已撤回。应我们的请求，Basilisk 已从
+          <a href="https://github.com/python/typing/blob/main/conformance/results/results.html" target="_blank" rel="noopener">官方结果表</a>中移除。
+          待全新实现通过保持测试语义的变异验证后，我们会发布新的结果。
         </span>
       </div>
-      {% endif %}
-      {% if benchmarks.hasData and benchmarks.toolMedians.ms.basilisk %}
       <div class="stat-card">
-        <span class="stat-card__num">{{ benchmarks.toolMedians.ms.basilisk }}<span class="stat-card__unit">&nbsp;ms</span></span>
-        <span class="stat-card__label">
-          {% if basiliskIsFastest %}我们公开的冷启动基准测试中最快{% else %}公开的冷启动基准测试{% endif %}
-        </span>
+        <span class="stat-card__num">已撤回</span>
+        <span class="stat-card__label">公开的基准测试数据</span>
         <span class="stat-card__sub">
-          Basilisk 在 {{ benchmarks.meta.machine }} 上 {{ benchmarks.rows | length }} 个合成单文件基准用例的中位数。
-          全新进程 CLI 计时；不代表项目吞吐量或编辑器延迟。
+          基准测试数据也正在接受完整性审查，不应再用于工具比较。
+          为保持透明，历史表格会保留，直至方法与结果完成重新验证。
         </span>
       </div>
-      {% endif %}
     </div>
     <p class="hero__proof-cta">
-      符合性由官方 Python typing 评分器评定；性能为自测且可复现。
-      <a href="/zh/docs/conformance/">验证符合性得分 &rarr;</a>
-      <a href="/docs/benchmarks/">阅读基准测试方法 &rarr;</a>
+      两组数据均已撤回，等待全新实现和完整性审查。
+      <a href="/zh/docs/conformance/">阅读符合性更正 &rarr;</a>
+      <a href="/docs/benchmarks/">阅读基准测试说明 &rarr;</a>
     </p>
-    {% endif %}
   </div>
 </section>
 
