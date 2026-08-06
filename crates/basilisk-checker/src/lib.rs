@@ -48,7 +48,6 @@ pub mod incremental;
 pub mod incremental_defs;
 pub mod inference;
 pub mod narrow;
-pub mod ownership;
 pub mod param_infer;
 pub mod rule_catalog;
 pub mod rule_tags;
@@ -114,14 +113,7 @@ pub fn check_with_config(
     // [CHKARCH-VERSION-TARGET] every rule sees the configured target, plus a
     // shared line index so offset→line lookups (here and in rules) stay O(log n)
     // instead of rescanning the source per diagnostic / per function.
-    // Only starred-tuple analysis and inline suppression need byte→line
-    // lookups. Avoid allocating and populating an O(lines) index for the common
-    // case where neither feature appears.
-    let ctx = if has_inline_overrides || source.contains("*tuple[") {
-        context::CheckContext::from_config_with_source(config, source)
-    } else {
-        context::CheckContext::from_config(config)
-    };
+    let ctx = context::CheckContext::from_config_with_source(config, source);
     let raw = rules::run_all(module, &ctx);
 
     // Build the set of symbol names imported from unresolved modules.

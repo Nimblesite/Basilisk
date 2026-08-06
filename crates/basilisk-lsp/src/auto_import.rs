@@ -182,36 +182,6 @@ pub fn generate_import_text(symbol: &ExportedSymbol) -> String {
     format!("from {} import {}\n", symbol.module_path, symbol.name)
 }
 
-/// Find the byte offset where a new import should be inserted.
-///
-/// Scans the source for the last existing import statement and returns the
-/// byte offset of the line after it. If no imports exist, returns 0.
-#[must_use]
-pub fn find_import_insertion_offset(source: &str) -> usize {
-    let mut last_import_end = 0usize;
-    let mut in_import = false;
-
-    for (idx, line) in source.lines().enumerate() {
-        let trimmed = line.trim();
-        let line_start = source.lines().take(idx).map(|l| l.len() + 1).sum::<usize>();
-        let line_end = line_start + line.len() + 1;
-
-        if trimmed.starts_with("import ") || trimmed.starts_with("from ") {
-            last_import_end = line_end.min(source.len());
-            in_import = true;
-        } else if in_import && trimmed.is_empty() {
-            // Blank line after imports — good insertion point.
-            last_import_end = line_end.min(source.len());
-            break;
-        } else if in_import && !trimmed.starts_with('#') {
-            // First non-import, non-blank, non-comment line — insert before this.
-            break;
-        }
-    }
-
-    last_import_end
-}
-
 /// Derive a Python module path from a filesystem path relative to workspace roots.
 ///
 /// Converts `/workspace/src/mypackage/utils.py` → `mypackage.utils`
@@ -280,21 +250,7 @@ mod tests {
         assert_eq!(derive_module_path(&path, &roots), "main");
     }
 
-    #[test]
-    fn find_import_insertion_after_imports() {
-        let source = "import os\nfrom sys import path\n\nx = 1\n";
-        let offset = find_import_insertion_offset(source);
-        // Should be after the blank line following imports.
-        assert!(offset > 0);
-        assert!(offset <= source.len());
-    }
 
-    #[test]
-    fn find_import_insertion_no_imports() {
-        let source = "x = 1\ny = 2\n";
-        let offset = find_import_insertion_offset(source);
-        assert_eq!(offset, 0);
-    }
 
     #[test]
     fn generate_import_text_function() {
