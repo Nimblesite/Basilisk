@@ -32,7 +32,6 @@ pub(super) fn stub_method(function: &StmtFunctionDef, class_name: &str) -> StubF
             .returns
             .as_ref()
             .map(|annotation| expr_to_annotation(annotation)),
-        is_overload: decorators.iter().any(|decorator| decorator == "overload"),
         is_async: function.is_async,
         decorators,
         class_name: Some(class_name.to_owned()),

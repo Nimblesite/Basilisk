@@ -143,10 +143,6 @@ pub(crate) fn receiver_type_name(
         _ => return None,
     };
     if let Some(annotation) = span_text(annotation_span, source) {
-        let literal = annotation == "LiteralString" || annotation == "typing.LiteralString";
-        if literal {
-            return Some(("str".to_owned(), true));
-        }
         // The annotation names a CLASS; its type arguments do not change which
         // class that is. Ask the shared annotation helper — which decides on
         // the ruff AST — so `list[int]` keys the lookup as `list` instead of

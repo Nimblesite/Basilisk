@@ -74,16 +74,7 @@ pub fn type_name_at(resolved: &ResolvedModule, source: &str, byte_offset: usize)
 /// - `list[MyClass]` → `MyClass`
 /// - `MyClass | None` → `MyClass`
 fn extract_base_type(annotation: &str) -> &str {
-    // Handle `Optional[X]` or `X | None` patterns.
     let trimmed = annotation.trim();
-
-    // Strip `Optional[...]` wrapper.
-    if let Some(inner) = trimmed
-        .strip_prefix("Optional[")
-        .and_then(|s| s.strip_suffix(']'))
-    {
-        return extract_base_type(inner.trim());
-    }
 
     // Handle union `X | None` — take the non-None part.
     if trimmed.contains('|') {

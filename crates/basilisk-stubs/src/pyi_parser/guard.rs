@@ -68,14 +68,6 @@ pub(super) fn feasible_branches<'a>(
 fn evaluate_guard(expr: &Expr, target: Option<&StubTarget>) -> PossibleTruth {
     match expr {
         Expr::BooleanLiteral(literal) => PossibleTruth::from_bool(literal.value),
-        Expr::Name(name) if name.id.as_str() == "TYPE_CHECKING" => PossibleTruth::TRUE,
-        Expr::Attribute(attribute)
-            if attribute.attr.as_str() == "TYPE_CHECKING"
-                && matches!(attribute.value.as_ref(), Expr::Name(name)
-                    if matches!(name.id.as_str(), "typing" | "typing_extensions")) =>
-        {
-            PossibleTruth::TRUE
-        }
         Expr::UnaryOp(unary) if matches!(unary.op, UnaryOp::Not) => {
             let inner = evaluate_guard(&unary.operand, target);
             PossibleTruth {

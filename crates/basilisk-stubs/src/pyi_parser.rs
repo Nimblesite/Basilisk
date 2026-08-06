@@ -468,11 +468,8 @@ impl StubExtractor {
         Some(target)
     }
 
-    // Implements [STUBRES-PYI] — `@overload` is the one decorator that is
-    // significant for stub extraction: overload variants are grouped separately.
     fn visit_function(&mut self, func: &StmtFunctionDef, class_name: Option<&str>) {
         let decorators = extract_decorator_names(&func.decorator_list);
-        let is_overload = decorators.iter().any(|d| d == "overload");
         let params = extract_params(&func.parameters);
         let return_type = func.returns.as_ref().map(|ret| expr_to_annotation(ret));
 
@@ -481,7 +478,6 @@ impl StubExtractor {
             receiver: None,
             params,
             return_type,
-            is_overload,
             is_async: func.is_async,
             decorators,
             class_name: class_name.map(str::to_owned),

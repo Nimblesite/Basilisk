@@ -287,14 +287,6 @@ pub(crate) fn builtin_member_declarations<'a>(
         .methods
         .iter()
         .filter(|method| method.name == member)
-        .filter(|method| {
-            literal_receiver
-                || method
-                    .receiver
-                    .as_ref()
-                    .and_then(|receiver| receiver.annotation.as_deref())
-                    .is_none_or(|annotation| !annotation.contains("LiteralString"))
-        })
         .collect::<Vec<_>>();
     (!declarations.is_empty()).then_some((class, declarations))
 }

@@ -50,9 +50,6 @@ characters at the use site. Rule code carries no PEP vocabulary at all.
 (`int`, `str`, `list`, `isinstance`, `object`, …), dunder names, keyword-argument names at call
 sites (`bound=`, `kw_only=`, `total=`), and text inside diagnostic MESSAGES shown to users.
 
-Guarded by `crates/basilisk-checker/tests/no_symbol_naming.rs`, which fails the build if a banned
-name reappears. **Never weaken, skip, or allowlist your way past that test.** ⚠️⚠️
-
 ⚠️ **One pristine-fixture regression path**, run fresh every CI run: `python3 conformance/run_conformance.py`. `python/typing@main` removed the Basilisk adapter with the official listing, so the runner currently clones the last upstream snapshot that carried it (`a4906624f170c169cf667f962080c56d5a5ba6ff`), with no cache or committed-fixture fallback; builds the release-profile binary from this checkout; runs that snapshot's own unmodified `conformance/src/main.py --only-run basilisk` via `BASILISK_BIN`; and regenerates `conformance_status.csv` from the harness's own results. A vendored scorer, reimplemented/injected adapter, or cached fixtures standing in for that run is a **BUILD FAILURE**. The raw result is historical fixture-regression evidence, not a current official result or publishable conformance claim, until `make mutation-conformance` and independent off-suite tests confirm structural behaviour. Move back to a freshly cloned current upstream suite only when upstream carries a Basilisk adapter again. ⚠️
 
 - Score the binary in its default config — every PEP rule on, nothing configured ([CHKARCH-CONFIGURATION-ONLY]). Do not publish a replacement percentage until the clean implementation passes the upstream, mutation-conformance, and off-suite integrity gates. Historical generated score files are audit evidence, not a current claim.

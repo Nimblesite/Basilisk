@@ -301,9 +301,6 @@ fn constructor_union_members(return_type: &str) -> Vec<&str> {
 
 fn constructor_return_is_instance(return_type: &str, class_name: &str) -> bool {
     let return_type = return_type.trim().trim_matches(['\'', '"']);
-    if return_type.rsplit('.').next() == Some("Self") {
-        return true;
-    }
     let head = return_type.split('[').next().unwrap_or(return_type).trim();
     head.rsplit('.').next() == Some(class_name)
 }
