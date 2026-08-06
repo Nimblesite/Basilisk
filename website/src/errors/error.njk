@@ -16,7 +16,7 @@ pagination:
 permalink: "/errors/{{ rule.code }}/"
 eleventyComputed:
   title: "{{ rule.code }}: {{ rule.summary | safe }} — Basilisk"
-  description: "What Basilisk's {{ rule.code }} ({{ rule.summary | safe }}) diagnostic means and how to fix it — the PEP-conformant Python type checker."
+  description: "What Basilisk's {{ rule.code }} ({{ rule.summary | safe }}) Python diagnostic means, why it appears, and how to fix it."
 ---
 {% set stem = examples[rule.code] %}
 {% set ruleTag = rule.tags[1] | default('core') %}

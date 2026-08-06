@@ -23,22 +23,22 @@ CI that a visitor can navigate the site.
 - **Mobile docs submenu** — see [WEBSITE-MOBILE-DOCS-NAV].
 - **Mobile top nav** — the hamburger reveals the collapsed top nav.
 - **Homepage positioning** — the title, H1 and opening answer identify Basilisk
-  as a Python type checker and language server, with only measured, linked proof.
-- **Headline claims carry their proof** — the hero's two comparative claims (sole
-  perfect official conformance score, and lowest median cold full-file CLI time)
-  each sit beside the link that grades them: the official `python/typing` results
-  and the published benchmark. False positives are asserted at 0 — a ratchet per
-  [CHKARCH-CONFORMANCE] — while the caught-error count is left open, since
-  upstream adds test cases over time.
+  neutrally as a Python type checker and language server, without an unverified
+  speed or conformance claim.
+- **Integrity disclosure is unavoidable** — the hero states that the former
+  conformance and benchmark figures are withdrawn, the current conformance
+  percentage is temporarily unknown, Basilisk was removed from the official
+  results at its request, and clean reimplementation plus robustness/mutation
+  verification must finish before new figures are published. Both notices link
+  to their detailed correction pages.
 - **Social image matches its declared size** — the `og:image` URL resolves and
   the PNG's own IHDR dimensions equal the advertised `og:image:width`/`height`,
   so a re-exported image cannot silently desync from its metadata.
 - **The Chinese homepage is a translation, not a second pitch** — `/zh/` and `/`
   are asserted to produce an identical structural skeleton (section, stat-card,
-  bullet and button class lists, in order). The zh page repeats both gated
-  claims with the same proof links, and its `.hero__headline-accent` count must
-  equal the English page's, so one locale can never assert a comparative fact
-  the other has already retired.
+  bullet and button class lists, in order). The zh page repeats both withdrawal
+  notices and the temporarily unknown status, so one locale cannot retain a
+  claim the other has retracted.
 - **Homepage mobile usability** — no horizontal overflow and visible calls to
   action retain a minimum 48 px touch target on the iPhone SE viewport.
 
