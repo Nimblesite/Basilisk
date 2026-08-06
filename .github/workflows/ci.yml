@@ -187,9 +187,9 @@ jobs:
     # 16 MiB. The check and the deploy now build the same thing.
     env:
       RUSTFLAGS: "-D warnings -C link-arg=-zstack-size=16777216"
-    # 20, not 10: `npm run build` now compiles the checker to WebAssembly for
-    # the playground ([WASM-BUILD]) before Eleventy runs, and a cold wasm build
-    # of the parser + typeshed does not fit the old budget.
+    # 20, not 10: this job compiles the checker to WebAssembly for the
+    # playground ([WASM-BUILD]) before Eleventy runs, and a cold wasm build of
+    # the parser + typeshed does not fit the old budget.
     timeout-minutes: 20
     steps:
       # fetch-depth: 0 — mirrors deploy-pages.yml so the conformance over-time
@@ -240,6 +240,15 @@ jobs:
       # AND Open VSX), and PyPI cannot drift apart or be edited in place.
       - name: Check stamped conformance references and generated READMEs
         run: python3 scripts/gen_conformance_reference.py --check
+
+      # Separate from `npm run build` ON PURPOSE. The Eleventy build has no Rust
+      # dependency — every page but the playground renders from committed data —
+      # so a checker that does not compile can no longer take the whole site
+      # down, locally or here. The playground e2e below drives the real engine,
+      # so this job still builds it explicitly.
+      - name: Build playground engine (wasm)
+        working-directory: website
+        run: npm run build:wasm
 
       - name: Build site
         working-directory: website

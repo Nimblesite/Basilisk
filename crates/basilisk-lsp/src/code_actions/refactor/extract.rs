@@ -6,7 +6,6 @@ use std::collections::HashMap;
 
 use tower_lsp::lsp_types::{CodeAction, CodeActionKind, Position, Range, TextEdit, Url};
 
-use super::super::last_import_line;
 use super::helpers::{leading_indent_of_line, selected_text};
 
 /// Offer to extract the selected expression into a local variable.
@@ -184,66 +183,4 @@ fn byte_offset_to_lsp_position(source: &str, offset: usize) -> Position {
         line: u32::try_from(line).unwrap_or(u32::MAX),
         character: u32::try_from(character).unwrap_or(u32::MAX),
     }
-}
-
-/// Offer to extract the selected expression into a module-level constant.
-///
-/// Inserts `EXTRACTED_VALUE = <selection>` after the last import line and
-/// replaces the selection with `EXTRACTED_VALUE`.
-#[must_use]
-pub(in crate::code_actions) fn extract_constant(
-    uri: &Url,
-    source: &str,
-    range: &Range,
-) -> Option<CodeAction> {
-    let selected = selected_text(source, range)?;
-    if selected.is_empty() || selected.contains('\n') {
-        return None;
-    }
-
-    let const_name = "EXTRACTED_VALUE";
-    let insert_line = last_import_line(source);
-    let insert_text = format!("{const_name} = {selected}\n");
-
-    let insert_pos = Position {
-        line: insert_line,
-        character: 0,
-    };
-
-    // Determine how many lines the insertion adds so we can adjust the
-    // replacement range when the selection is on or after the insertion point.
-    let selection_shift = u32::from(range.start.line >= insert_line);
-
-    let edits = vec![
-        TextEdit {
-            range: Range {
-                start: insert_pos,
-                end: insert_pos,
-            },
-            new_text: insert_text,
-        },
-        TextEdit {
-            range: Range {
-                start: Position {
-                    line: range.start.line + selection_shift,
-                    character: range.start.character,
-                },
-                end: Position {
-                    line: range.end.line + selection_shift,
-                    character: range.end.character,
-                },
-            },
-            new_text: const_name.to_owned(),
-        },
-    ];
-
-    let mut changes = HashMap::new();
-    let _ = changes.insert(uri.clone(), edits);
-
-    Some(super::super::code_action_with_changes(
-        "Extract constant (basilisk)".to_owned(),
-        CodeActionKind::new("refactor.extract.constant"),
-        changes,
-        false,
-    ))
 }

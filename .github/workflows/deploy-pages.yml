@@ -37,8 +37,8 @@ jobs:
   deploy:
     name: Build and deploy
     runs-on: ubuntu-latest
-    # 20, not 10: `npm run build` now compiles the checker to WebAssembly for
-    # the playground ([WASM-BUILD]) before Eleventy runs. Kept in step with the
+    # 20, not 10: this job compiles the checker to WebAssembly for the
+    # playground ([WASM-BUILD]) before Eleventy runs. Kept in step with the
     # same budget in ci.yml's website job.
     timeout-minutes: 20
     environment:
@@ -73,6 +73,15 @@ jobs:
       - name: Install dependencies
         working-directory: website
         run: npm ci
+
+      # Separate from `npm run build` ON PURPOSE. The Eleventy build has no Rust
+      # dependency — every page but the playground renders from committed data —
+      # so a checker that does not compile must not be able to take the whole
+      # site down. The deployed site DOES ship a working playground, so this job
+      # runs the engine build explicitly and fails here if it breaks.
+      - name: Build playground engine (wasm)
+        working-directory: website
+        run: npm run build:wasm
 
       - name: Build site
         working-directory: website

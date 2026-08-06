@@ -383,11 +383,18 @@ Tests: `crates/basilisk-checker/tests/checker/version_target_tests.rs`.
 
 ## Ownership and safety analysis {#CHKARCH-SAFETY}
 
-Status: planned, opt-in, and not wired into the checker pipeline. The
-scaffolding lives in `basilisk-checker`'s `ownership` module — there is no
-separate crate for it, and it registers no rule; shipping PEP rules must not
-reuse these anchors or diagnostic descriptions. Its scan is textual, so it must
-be rebuilt on the Ruff AST before any rule is registered against it.
+Status: planned, opt-in, unimplemented, and not wired into the checker pipeline.
+There is no scaffolding: the former `basilisk-checker::ownership` module was
+**deleted**, because it reconstructed definitions and parameter uses by scanning
+raw source lines for `def ` and for `Annotated` metadata spellings — the
+mechanism [CHKARCH-RECOGNITION-BANNED](#CHKARCH-RECOGNITION-BANNED) forbids
+outright, and one whose own module documentation conceded it saw those
+characters inside comments and string literals. It registered no rule, so
+nothing user-facing was lost.
+
+Any future implementation starts from the Ruff AST and
+[CHKARCH-RECOGNITION](#CHKARCH-RECOGNITION), never from the deleted code.
+Shipping PEP rules must not reuse these anchors or diagnostic descriptions.
 
 These are Basilisk rules. The concepts are borrowed from
 [Mojo's ownership model](https://docs.modular.com/mojo/manual/values/ownership),
@@ -426,6 +433,138 @@ All metadata uses standard Python typing constructs, all rules are off by
 default, and the implementation plan is
 [CHECKER-ADVANCED-FEATURES-PLAN.md](../plans/CHECKER-ADVANCED-FEATURES-PLAN.md).
 
+## Symbol recognition — AST and resolution only {#CHKARCH-RECOGNITION}
+
+**Normative, and it overrides every other section of this specification.** No
+part of Basilisk may decide what a Python expression *means* by examining the
+characters written at the use site. Meaning is a property of the **definition**
+an expression resolves to, and it is derived from the parsed AST plus binding
+resolution — in the checker, in the resolver, in the LSP, in stub parsing, in
+every crate, without exception.
+
+This is not a style preference. Character matching is wrong on the language's
+own terms: `from typing import ClassVar as CV` is a `ClassVar` though the
+characters differ, and a module's own `class ClassVar:` is not one though the
+characters match. Basilisk previously scored 100% on the `python/typing`
+conformance suite with recognition fitted to the fixtures' spellings; the score
+collapsed under AST-preserving mutation, the claim was withdrawn, and the
+project was removed from the official results table. That failure is the reason
+this section is normative — see the
+[integrity audit](../CONFORMANCE-INTEGRITY-AUDIT.md) and the
+[spelling-cheat inventory](../CONFORMANCE-SPELLING-CHEAT-INVENTORY.md).
+
+### Canonical resolution {#RESOLV-CANONICAL}
+
+The single lawful mechanism, implemented in `basilisk-resolver`'s `canonical`
+module. Recognition is a two-step question, and both steps are mandatory:
+
+1. **Which definition does this expression refer to?** Answered from the
+   module's own imports and bindings ([RESOLV-CANONICAL-BINDING](#RESOLV-CANONICAL-BINDING)),
+   producing a `CanonicalSymbol` — a fully-qualified `(module, name)` definition
+   site.
+2. **What does the specification define at that site?** Answered by the registry
+   ([RESOLV-CANONICAL-REGISTRY](#RESOLV-CANONICAL-REGISTRY)), producing a
+   `TypingForm`.
+
+`TypingForm` is **Basilisk's own vocabulary**. Every variant is the *answer*
+resolution produces, never the *question* a caller asks. A caller that can pass
+a name has already broken the contract, so no API in this path accepts one.
+
+### Binding resolution {#RESOLV-CANONICAL-BINDING}
+
+`BindingTable` is built once per module from its AST and records what each local
+name refers to: symbols bound by `from X import A [as B]`, modules bound by
+`import X [as Y]`, star-imported modules, and names **shadowed** by a local
+`class`, `def`, or assignment. Imports are collected at any nesting depth,
+because an import under `if TYPE_CHECKING:` or inside a `try`/`except
+ImportError` fallback still binds at module level.
+
+Lookups unwrap the forms a symbol is used through — subscript (`Final[int]`),
+call (`TypeVar("T")`), and dotted module access (`t.ClassVar`) — and follow
+dotted paths so `collections.abc.Callable` resolves through the `collections`
+binding. A shadowed name resolves to nothing, which is the correct answer: it is
+not the specification's symbol.
+
+### The specification registry {#RESOLV-CANONICAL-REGISTRY}
+
+The mapping from definition site to `TypingForm` lives in
+`crates/basilisk-resolver/resources/typing_symbols.toml` **as data**. Python
+spellings appear in that file and in no Rust source file.
+
+Adding or changing a recognised symbol is a data edit. If implementing a rule
+appears to require typing a Python symbol name into Rust, the correct fix is a
+registry entry — never a comparison, however it is wrapped.
+
+`crates/basilisk-resolver/tests/canonical_registry.rs` validates that every
+registry entry resolves to a real declaration in bundled typeshed. An entry
+naming a symbol typeshed does not declare is a **build failure**; that test is
+what prevents the registry itself from degenerating into a spelling table.
+
+### Banned mechanisms {#CHKARCH-RECOGNITION-BANNED}
+
+Illegal in production code in every crate, in every form — as a comparison, a
+match arm, a constant array, a function argument, or behind any API that takes
+one. Delete on sight:
+
+| Mechanism | Example |
+|---|---|
+| Comparing a use-site name to a typing symbol | `name.id.as_str() == "TypeVar"` |
+| Matching a base or decorator spelling | `matches!(base, "Protocol" \| "Generic")` |
+| A constant table of spellings | `const FORMS: &[&str] = &["Final", …]` |
+| Passing the name into a resolver API | `denotes(resolver, expr, "ClassVar")` |
+| Scanning raw source for language vocabulary | `source.lines()` + `starts_with("def ")` |
+| Hand-lexing Python | manual quote/comment skipping to find `yield` |
+| Matching rendered annotation text | `slice_span(src, span).starts_with("tuple[")` |
+
+The last row is the same defect one level down and is condemned by
+[TYPEINF-LEGACY](CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-LEGACY); its removal is
+[ASTREBUILD-PHASE-TYPEEXPR](../plans/CHECKER-AST-RECONSTRUCTION-PLAN.md#ASTREBUILD-PHASE-TYPEEXPR).
+
+Wrapping a banned mechanism in a helper, a trait, or a resolver does not launder
+it. The test is whether the code works only because a human typed Python's
+vocabulary into Rust.
+
+### Permitted {#CHKARCH-RECOGNITION-PERMITTED}
+
+These decide nothing about typing, so naming them is lawful:
+
+- **True builtins** (`int`, `str`, `list`, `isinstance`, `object`) and dunder
+  names — they need no import, so a name cannot be rebound by one.
+- **Keyword-argument names at call sites** (`bound=`, `kw_only=`, `total=`) —
+  part of a signature already identified by resolution.
+- **Basilisk's own directive syntax** (`# basilisk:`, `# type:`) — genuinely
+  comments, which the AST does not carry, so parsing them from text is the only
+  possible mechanism.
+- **Basilisk's own rendered output** — text this codebase produced, such as a
+  stub signature it formatted, parsed back for display.
+- **Line geometry** — computing a span or indentation for a diagnostic's
+  location, provided no Python structure is inferred from it.
+- **Diagnostic message text** shown to users.
+
+### Abstention over guessing {#CHKARCH-RECOGNITION-ABSTAIN}
+
+When resolution cannot answer, the rule emits nothing. A silent rule is a
+tracked gap; a rule that guesses from spelling is a false conformance claim. A
+rule may never be disabled, unregistered, or deleted to move a number
+([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)) — an unimplementable
+rule stays registered and inert until it can be built lawfully.
+
+### Verification {#CHKARCH-RECOGNITION-VERIFY}
+
+Conformance on pristine fixtures cannot distinguish lawful recognition from
+fitted recognition — that is precisely how the withdrawn claim survived review.
+Every rule therefore carries tests that a spelling-based implementation fails:
+the same program with the import **aliased**, accessed **dotted** through a
+module, **shadowed** by a local definition, and **reformatted**. A verdict that
+changes under any of these is a defect, whatever the fixture score says. The
+suite-level equivalent is the mutation gate
+([CHKARCH-CONFORMANCE-MUTATION](#CHKARCH-CONFORMANCE-MUTATION)).
+
+Current implementation status and the rebuild order are tracked in
+[ASTREBUILD](../plans/CHECKER-AST-RECONSTRUCTION-PLAN.md#ASTREBUILD).
+
+---
+
 ## Diagnostic Rules {#CHKARCH-DIAG}
 
 ### Design Philosophy {#CHKARCH-DIAG-PHILOSOPHY}
@@ -435,6 +574,10 @@ Every diagnostic must be:
 2. **Clear** -- explains what is wrong and why
 3. **Actionable** -- suggests at least one fix
 4. **Stable** -- error codes are never renumbered or reused
+5. **Structural** -- every verdict is derived from the AST and resolution per
+   [CHKARCH-RECOGNITION](#CHKARCH-RECOGNITION). A rule that reaches its verdict
+   from source text is not a rule; it is a measurement of how the file happened
+   to be written.
 
 ### Error Code System {#CHKARCH-DIAG-CODES}
 
@@ -640,8 +783,8 @@ Source Files (.py)
   Windsurf / Zed /
   Neovim
 
-  (planned: basilisk-checker::ownership — ownership / immutability /
-   coercion analysis — is not yet wired into the pipeline.)
+  (planned: ownership / immutability / coercion analysis — unimplemented,
+   see CHKARCH-SAFETY.)
 ```
 
 All stages are backed by:
@@ -650,6 +793,17 @@ All stages are backed by:
 | basilisk-db      |  Salsa incremental computation database
 +------------------+
 ```
+
+**The AST is the only input to every stage below the parser.** Source text
+enters this pipeline exactly once, at `ruff_python_parser`. Downstream stages
+consume the parsed tree, the symbol table, and the binding table
+([RESOLV-CANONICAL-BINDING](#RESOLV-CANONICAL-BINDING)); they do not re-read the
+file to reconstruct what the parser already produced. `ResolvedModule::source`
+exists to render diagnostic spans and quote code back to the user, not to reach
+a verdict. Any stage that re-derives structure from characters is duplicating
+the parser and will disagree with it — inside string literals, inside comments,
+across line continuations, and under reformatting
+([CHKARCH-RECOGNITION-BANNED](#CHKARCH-RECOGNITION-BANNED)).
 
 ### Parse Nesting-Depth Guard {#CHKARCH-ARCH-PARSEDEPTH}
 
@@ -695,9 +849,9 @@ real-binary crash-safety tests in
 basilisk/
   crates/
     basilisk-parser/       # Python AST parsing (wraps or extends ruff_python_parser)
-    basilisk-resolver/     # Name resolution, scope analysis, import resolution
-    basilisk-checker/      # Core type checking engine (incl. ownership:
-                           #   planned safety analysis, unwired)
+    basilisk-resolver/     # Name resolution, scope analysis, import resolution,
+                           #   canonical symbol recognition (RESOLV-CANONICAL)
+    basilisk-checker/      # Core type checking engine
     basilisk-lsp/          # Language Server Protocol implementation
     basilisk-cli/          # Command-line interface
     basilisk-stubs/        # Stub generation, loading, registry client

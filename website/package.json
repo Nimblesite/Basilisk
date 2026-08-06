@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Website for Basilisk, the open-source Python type checker and language server built in Rust.",
   "scripts": {
-    "build": "npm run build:wasm && eleventy",
+    "build": "eleventy",
     "build:wasm": "npx --yes wasm-pack build ../crates/basilisk-wasm --target web --release --out-dir ../../website/src/assets/wasm --out-name basilisk_wasm",
     "start": "eleventy --serve --watch",
     "clean": "rm -rf _site",

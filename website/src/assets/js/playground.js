@@ -15,7 +15,23 @@ function sourceFromHash() {
   try { return LZString.decompressFromEncodedURIComponent(encoded) || samples.generics; } catch { return samples.generics; }
 }
 
+// The engine is a build ARTEFACT of this site, not a source file: `npm run
+// build` is pure Eleventy, and `npm run build:wasm` compiles the checker into
+// /assets/wasm ([WASM-BUILD]). A site served without that step has every page
+// except a working playground, so a missing engine is reported as a normal
+// state here rather than left as an unhandled rejection with a stuck spinner.
+const ENGINE_HINT = "Run `npm run build:wasm` in website/ to compile the checker into /assets/wasm.";
 const loadEngine = () => enginePromise ||= import("/assets/wasm/basilisk_wasm.js").then(async (module) => { await module.default(); return module; });
+
+function reportEngineFailure(error) {
+  ui.status.className = "engine-status is-error";
+  ui.status.innerHTML = "<span></span>Engine unavailable";
+  ui.list.innerHTML = `<li class="diagnostics-empty"><strong>Could not start Basilisk</strong><p></p><p></p></li>`;
+  const [detail, hint] = ui.list.querySelectorAll("p");
+  detail.textContent = String(error?.message || error);
+  hint.textContent = ENGINE_HINT;
+}
+
 const marker = (item) => ({ severity: monaco.MarkerSeverity.Error, message: item.message, code: item.code || undefined, startLineNumber: item.line, startColumn: item.col, endLineNumber: item.end_line, endColumn: Math.max(item.end_col, item.col + 1), source: "Basilisk" });
 
 function renderDiagnostics(diagnostics) {
@@ -55,10 +71,7 @@ async function checkCode() {
     ui.status.className = "engine-status is-ready";
     ui.status.innerHTML = "<span></span>Engine ready · running locally";
   } catch (error) {
-    ui.status.className = "engine-status is-error";
-    ui.status.textContent = "Engine failed to load";
-    ui.list.innerHTML = `<li class="diagnostics-empty"><strong>Could not start Basilisk</strong><p></p></li>`;
-    ui.list.querySelector("p").textContent = String(error.message || error);
+    reportEngineFailure(error);
   } finally { ui.button.disabled = false; }
 }
 
@@ -69,7 +82,7 @@ window.require(["vs/editor/editor.main"], () => {
   editor.addAction({ id: "basilisk.check", label: "Check with Basilisk", keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter], run: checkCode });
   editor.onDidChangeCursorPosition(({ position }) => { byId("cursor-line").textContent = position.lineNumber; byId("cursor-col").textContent = position.column; });
   ui.button.addEventListener("click", checkCode);
-  loadEngine().then(() => { ui.status.className = "engine-status is-ready"; ui.status.innerHTML = "<span></span>Engine ready · running locally"; });
+  loadEngine().then(() => { ui.status.className = "engine-status is-ready"; ui.status.innerHTML = "<span></span>Engine ready · running locally"; }, reportEngineFailure);
 });
 
 byId("share-code").addEventListener("click", async (event) => {

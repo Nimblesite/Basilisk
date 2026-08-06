@@ -266,9 +266,13 @@ fn build_auto_import_items(
         CompletionItemKind, CompletionItemLabelDetails, InsertTextFormat, Range,
     };
 
+    // The import statement is inserted at the top of the file. The previous
+    // insertion point came from scanning the source for lines whose characters
+    // began with `import ` or `from `, which the project's first standing rule
+    // forbids; recovering it structurally is pending.
+    let insert_pos = tower_lsp::lsp_types::Position::new(0, 0);
+
     let candidates = auto_import::suggest_imports(symbol_index, prefix);
-    let insert_offset = auto_import::find_import_insertion_offset(source);
-    let insert_pos = byte_offset_to_position(source, insert_offset);
 
     candidates
         .into_iter()
