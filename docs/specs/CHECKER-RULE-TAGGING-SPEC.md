@@ -9,7 +9,7 @@ category, everything else with plain descriptive labels.
 - **Authoritative source (code):** [`crates/basilisk-checker/src/rule_tags.rs`](../../crates/basilisk-checker/src/rule_tags.rs)
 - **Conformance test (tests):** [`crates/basilisk-checker/tests/rule_tags_tests.rs`](../../crates/basilisk-checker/tests/rule_tags_tests.rs)
 - **Related:** [CHKARCH-DIAG](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG) (diagnostic rules),
-  [CHKARCH-CONFORMANCE](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE) (conformance scoring)
+  [CHKARCH-CONFORMANCE](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE) (how the conformance number is measured, and why it is not a target)
 
 ## Tag Model {#CHKTAG-MODEL}
 

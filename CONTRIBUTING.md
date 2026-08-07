@@ -28,12 +28,12 @@ This isn't hypothetical. Checker logic was fitted to the conformance fixtures, t
 Agents optimise whatever you measure, and every number here is reachable without doing the underlying work: **conformance, coverage, mutation score, assertions, lint, benchmarks.** Re-derive any metric change before you believe it — agents cannot grade their own homework. What to look for:
 
 - **Text-matched logic** — the big one. A rule keyed on raw source text or hard-coded symbol spellings instead of resolved AST symbols scores well and fails on real code. Rename an import (`from typing import Final as F`) or reformat a file: the diagnostics must not change.
-- **Silence instead of analysis** — a rule disabled, deleted, or unregistered so it stops firing.
+- **Silence instead of analysis** — a rule disabled or quietly unregistered so it stops firing, with the loss undisclosed. Deleting a text-matched rule is the opposite and is what we want: it comes with a failing test and a report saying what went. Judge it by whether the hole is visible afterwards.
 - **Weakened tests** — failing tests deleted, assertions cut or watered down so "green" means nothing.
 - **Scoreboard or gate edits** — a hand-edited `conformance_status.csv`, or a lowered threshold (`coverage-thresholds.json`, the mutation or benchmark baselines).
-- **Measuring less** — excluded diagnostic codes, skipped fixtures, narrowed mutation scope. A high percentage over part of the suite is not a percentage.
+- **Measuring less** — excluded diagnostic codes, skipped fixtures, narrowed mutation scope. A high percentage over part of the suite is not a percentage. Ask for the denominator every time: the mutation score is 100% over 161 mutants of an ~82k-LOC crate, because scope is opt-in.
 
-Metrics move only the *honest* way — coverage and mutation up, false positives down — because the work got better, never because someone changed how we count ([CHKARCH-CONFORMANCE]).
+Metrics move only the *honest* way — because the work got better, never because someone changed how we count ([CHKARCH-CONFORMANCE]). The one number expected to **fall** is conformance: removing rules that never analysed anything lowers it, and that drop is progress, reported rather than avoided.
 
 ### 2. Test it for real — on real, large codebases
 
@@ -101,7 +101,7 @@ You convert the specs to code and tests and keep all three in sync. The standing
 2. **Delete the offending code.**
 3. **Tell the user what you deleted and why.**
 
-What gets built back is the user's call, not yours.
+What gets built back is the user's call, not yours. **A failing test that pins real incorrect behaviour is worth more than a passing fixture carried by logic that does not analyse code** — the first records what Basilisk can't do, the second falsely claims it can.
 
 **The non-negotiables** (full detail in `CLAUDE.md`):
 

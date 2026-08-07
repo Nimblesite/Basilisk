@@ -17,7 +17,7 @@ There is no universal **best Python type checker** for every codebase. The right
 
 The Python type checker landscape has changed significantly. The tools differ in how faithfully they implement the typing spec, in whether they're a complete language server or only a checker, and in speed. Basilisk's previously published performance measurements are currently [withdrawn pending review](/docs/benchmarks/).
 
-<p class="bench-caveat"><strong>Conformance correction:</strong> Basilisk's former result is withdrawn and its current percentage is temporarily unknown. Basilisk has been removed from the <a href="https://github.com/python/typing/blob/main/conformance/results/results.html">official results table</a> at our request while affected logic is rebuilt and stress-tested beyond the exact suite fixtures. Do not use the old score or leaderboard position to compare these tools.</p>
+<p class="bench-caveat"><strong>Conformance correction:</strong> Basilisk's former result is withdrawn and its current percentage is temporarily unknown. Basilisk has been removed from the <a href="https://github.com/python/typing/blob/main/conformance/results/results.html">official results table</a> at our request while every rule is audited and the ones that matched source text are deleted. Do not use the old score or leaderboard position to compare these tools.</p>
 
 ## The fundamental question
 
@@ -195,14 +195,14 @@ Pyrefly was built by Meta to handle their Python codebase, one of the largest in
 Basilisk is not a faster version of an existing tool. It occupies a different position:
 
 **Basilisk combines:**
-1. Typing-spec rules enabled by default, plus **opt-in Basilisk rules** for checking stricter than the spec. The conformance implementation is currently being rebuilt and its percentage is temporarily unknown.
+1. Typing-spec rules enabled by default, plus **opt-in Basilisk rules** for checking stricter than the spec. Those rules are currently under audit — the ones that decided from source text are being deleted — and the percentage is temporarily unknown.
 2. Annotation quick-fixes, one-click code actions that insert a placeholder annotation (`: Any`, `-> None`) on unannotated code, so you can fill in the real type instead of finding the spot by hand
 3. A complete, open-source LSP in every editor, completions, hover, go-to-definition, refactoring, debugging, and profiling, the same in VS Code, plus native Zed and Neovim extensions (Open VSX for Cursor, Windsurf, and others coming very soon; JetBrains planned), not just inside one proprietary VS Code extension
 4. Integrated debugger and profiler brokered through the language server
 5. WASM plugin system (planned), extensible without forking, secure by design
 
 **Where Basilisk is still growing:**
-- Basilisk is under active development. Its former conformance result is withdrawn; affected logic is being reimplemented from scratch and the [current percentage is temporarily unknown](/docs/conformance/).
+- Basilisk is under active development. Its former conformance result is withdrawn; rules that matched source text instead of analysing code are being deleted, and the [current percentage is temporarily unknown](/docs/conformance/).
 - Plugin ecosystem: mypy's Django and SQLAlchemy plugins are mature. Basilisk's WASM plugins are planned.
 
 The recommendation: evaluate Basilisk for its integrated open-source editor workflow and test it against your own code. Do not choose it on the basis of the withdrawn conformance or benchmark figures. A new conformance result will be published when the clean implementation and robustness review are complete.

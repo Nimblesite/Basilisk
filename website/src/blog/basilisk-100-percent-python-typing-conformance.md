@@ -1,7 +1,7 @@
 ---
 layout: layouts/blog.njk
 title: "Retracted: Basilisk's Former Typing Conformance Result"
-description: "Retraction of Basilisk's former Python typing conformance claim, why the result was untrustworthy, and how the affected implementation is being rebuilt and verified."
+description: "Retraction of Basilisk's former Python typing conformance claim, why the result was untrustworthy, and why the affected rules are being deleted rather than repaired."
 date: 2026-07-11
 dateModified: 2026-08-06
 author: Christian Findlay
@@ -16,16 +16,16 @@ excerpt: "Basilisk has retracted its former conformance claim and requested remo
 keywords: python type checker, python typing conformance, python/typing conformance results, basilisk, mypy, pyright, ty, pyrefly, zuban, pep conformance, strict typing
 faq:
   - q: "Which Python type checker has the highest conformance score?"
-    a: "Basilisk is not currently listed in the official python/typing results. Its former result is withdrawn and its actual percentage is temporarily unknown while affected logic is rebuilt and verified. Check the live official table for currently listed tools."
+    a: "Basilisk is not currently listed in the official python/typing results. Its former result is withdrawn and its actual percentage is temporarily unknown while every rule is audited and the ones that matched source text are deleted. Check the live official table for currently listed tools."
   - q: "What is the python/typing conformance suite?"
     a: "It is the official test suite maintained by the Python Typing community. Its harness records how a checker behaves on the suite's exact fixtures. That is valuable evidence, but a raw suite result alone does not establish faithful implementation of the full specification; mutation robustness and independent off-suite cases are also required."
   - q: "Is a 100% conformance score the same as being the best type checker?"
     a: "No. A suite score describes the covered fixtures; it is not proof of specification correctness by itself, as Basilisk's retraction demonstrates. It also does not capture editor integration, error quality, ecosystem support, or independently validated performance."
   - q: "How is Basilisk's conformance score measured?"
-    a: "There is no current Basilisk conformance score. A future result will require the unmodified python/typing harness, semantics-preserving mutation testing, and independent off-suite cases derived from the specification, after the affected implementation has been rebuilt."
+    a: "There is no current Basilisk conformance score. A future result will require the unmodified python/typing harness, semantics-preserving mutation testing, and independent off-suite cases derived from the specification, and only after the audit has finished removing rules that decided from source text rather than resolved symbols."
 ---
 
-> **Retraction — 6 August 2026:** We withdraw every conformance claim in this post. Basilisk's source contained logic fitted to the exact conformance fixtures, so the former perfect result did not establish specification conformance. We asked for Basilisk to be removed from the official results table, and it has been removed. The current percentage is temporarily unknown while the offending implementation is deleted, rebuilt from the specification, and tested against semantics-preserving mutations. The original article is retained below only as a public record; its score, ranking, pass counts, and conclusions must not be relied on. Read the [full correction](/docs/conformance/).
+> **Retraction — 6 August 2026:** We withdraw every conformance claim in this post. Basilisk's source contained logic fitted to the exact conformance fixtures, so the former perfect result did not establish specification conformance. We asked for Basilisk to be removed from the official results table, and it has been removed. The current percentage is temporarily unknown, and we are not trying to restore it: we are auditing every rule and deleting the ones that matched the spelling of code rather than its meaning, which will push the number lower before anything improves. The original article is retained below only as a public record; its score, ranking, pass counts, and conclusions must not be relied on. Read the [full correction](/docs/conformance/).
 
 Python has a genuinely good type system now, and most developers still do not realize it. A Python type checker works a lot like the TypeScript compiler. Type-checked Python is to regular Python what TypeScript is to JavaScript. The annotations have been in the language for a decade, the specification is mature, and the tooling has caught up.
 
@@ -87,7 +87,7 @@ If conformance is not the whole story, why did we make 100% a hard requirement r
 
 Because the alternative is a checker that is confidently wrong some of the time, and a checker that is confidently wrong is worse than no checker at all. The problem with Python typing was never the syntax. The problem was enforcement. A type hint that is never checked is a comment. A type hint that is checked by a tool with gaps is a comment that occasionally lies to you.
 
-Basilisk enables its typing-spec rules by default, with no `--strict` flag to remember. We claimed the old score proved those rules implemented the specification correctly. It did not; that implementation is now being rebuilt and verified.
+Basilisk enables its typing-spec rules by default, with no `--strict` flag to remember. We claimed the old score proved those rules implemented the specification correctly. It did not, and the rules that cannot show they analyse code are being deleted rather than repaired.
 
 ## How the withdrawn score was produced
 
