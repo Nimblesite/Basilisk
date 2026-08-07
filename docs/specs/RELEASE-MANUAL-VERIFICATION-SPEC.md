@@ -240,9 +240,13 @@ publishing on a compatible host:
 
 1. [ ] `/ci-prep` green — one complete clean run, zero failures, start to
    finish ([RELEASE-CI-PREP](#RELEASE-CI-PREP)). Nothing below starts until it is.
-2. [ ] `make conformance` — 100% / 0 false positives against a fresh
-   `python/typing@main` clone.
-3. [ ] `make bench` — no fixture slower than the committed baseline.
+2. [ ] `make conformance` — a live run against a fresh `python/typing@main`
+   clone. Record what it reports and compare it to the previous release's
+   record; an unexplained change is a regression to investigate. A drop
+   explained by a deliberate deletion is expected and is noted in the release
+   record. **The figure is never published or quoted**
+   ([CHKARCH-CONFORMANCE](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE)).
+3. [ ] `make bench` — indicative only, gates nothing; record the numbers.
 4. [ ] `python3 scripts/verify_release_attribution.py --policy-only` passes and
    licence manifests are current (`npm run licenses:check` in
    `vscode-extension/`).

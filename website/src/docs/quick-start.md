@@ -83,9 +83,10 @@ Found 3 diagnostics (3 errors).
 Out of the box, Basilisk enables every currently registered PEP-tagged rule at
 **error** severity; optional house rules are separate. That describes the
 default configuration, not completeness or correctness. Basilisk's actual
-conformance level is temporarily unknown while affected rules are rebuilt from
-the [Python type system specification](https://typing.python.org/en/latest/spec/index.html)
-and independently validated. See the [conformance correction](/docs/conformance/).
+conformance level is temporarily unknown while every rule is audited against the
+[Python type system specification](https://typing.python.org/en/latest/spec/index.html)
+and the ones that matched source text instead of analysing code are deleted.
+Expect fewer rules, not more. See the [conformance correction](/docs/conformance/).
 
 ## Step 2 — Fix the errors
 

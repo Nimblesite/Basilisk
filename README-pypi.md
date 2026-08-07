@@ -10,9 +10,8 @@
 <p align="center"><strong>English</strong> · <a href="https://github.com/Nimblesite/Basilisk/blob/main/README.zh.md">简体中文</a></p>
 
 <p align="center">
-  <strong>The only Python type checker scoring 100% on the official <a href="https://github.com/python/typing/blob/main/conformance/results/results.html"><code>python/typing</code> conformance suite</a> — and the fastest we&rsquo;ve measured.</strong><br>
-  Complete open-source Python dev environment in <strong>Rust</strong>: type checker, language server, debugger, profiler, plus VS Code, Cursor, Zed &amp; Neovim extensions. Strict by default.
-  Weighing up the <a href="https://www.basilisk-python.dev/docs/comparison/">best Python type checker</a> for your codebase? Start with the scoreboard.
+  <strong>An open-source Python type checker and language server, built in Rust.</strong><br>
+  One extension for the whole workflow &mdash; diagnostics, autocomplete, refactoring, formatting, debugging, and profiling &mdash; driven by a single bundled binary.
 </p>
 
 > **You are reading the `basilisk-python` wheel listing** — the Basilisk CLI packaged for `pip`/`uv`. The distribution is named `basilisk-python` because `basilisk` was taken on PyPI; the installed command is still `basilisk`.
@@ -23,55 +22,62 @@
   <a href="https://www.basilisk-python.dev/docs/quick-start/">Quick Start</a> &nbsp;&bull;&nbsp;
   <a href="https://www.basilisk-python.dev/docs/rules/">Rules</a> &nbsp;&bull;&nbsp;
   <a href="https://www.basilisk-python.dev/docs/refactoring/">Refactoring</a> &nbsp;&bull;&nbsp;
-  <a href="https://www.basilisk-python.dev/docs/comparison/">Compare</a> &nbsp;&bull;&nbsp;
   <a href="https://github.com/Nimblesite/Basilisk">GitHub</a>
 </p>
-
-<p align="center">
-  <a href="https://www.basilisk-python.dev/docs/conformance/"><strong><!--g:score-->100.0%<!--/g:score--> PEP conformance</strong></a> &mdash; <!--g:pass-->141<!--/g:pass--> of <!--g:total-->141<!--/g:total--> tests in the official
-  <a href="https://github.com/python/typing/tree/a4906624f170c169cf667f962080c56d5a5ba6ff/conformance"><code>python/typing</code></a>
-  conformance suite (commit <code><!--g:short-->a490662<!--/g:short--></code>), scored on the wheel-installed CLI in its default config by the real upstream harness.
-  We target <code>python/typing@main</code> and ratchet the score up only.
-</p>
-
-## The only 100% checker &mdash; and the fastest according to our benchmarks
-
-Basilisk is the **only** Python type checker with a perfect score on the official
-[`python/typing` conformance suite](https://github.com/python/typing/blob/main/conformance/results/results.html):
-**<!--g:score-->100.0%<!--/g:score-->** (<!--g:pass-->141<!--/g:pass-->/<!--g:total-->141<!--/g:total--> files, <!--g:caught-->970<!--/g:caught--> required errors caught, <!--g:fp-->0<!--/g:fp--> false positives),
-measured by the real upstream harness on the wheel-installed CLI in its default config.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/Nimblesite/Basilisk/main/images/screenshot.png" alt="Basilisk in action — type checking, diagnostics, and refactoring in the editor" width="900">
 </p>
 
-And it is the **fastest checker we&rsquo;ve measured** &mdash; median cold full-file check, from scratch:
+**The current type checker contains inaccuracies and you should not use it as part of your dev pipeline. We are working on removing any misleading analyzers ASAP. Please read below**
 
-| Type checker | Median cold check |
-| --- | --- |
-| ⚡ **Basilisk** | **<!--g:benchBasilisk-->12<!--/g:benchBasilisk--> ms** |
-| zuban | <!--g:benchZuban-->28<!--/g:benchZuban--> ms |
-| ty | <!--g:benchTy-->39<!--/g:benchTy--> ms |
-| Pyrefly | <!--g:benchPyrefly-->111<!--/g:benchPyrefly--> ms |
-| Pyright | <!--g:benchPyright-->582<!--/g:benchPyright--> ms |
-| mypy | <!--g:benchMypy-->605<!--/g:benchMypy--> ms |
+## We are auditing the checker and deleting what doesn't hold up
 
-Median cold full-file check across <!--g:benchCount-->26<!--/g:benchCount--> single-construct typing-spec stress fixtures on an <!--g:benchMachine-->Apple M4 Max<!--/g:benchMachine--> &mdash; lower is better. Basilisk&rsquo;s warm re-check drops to ~<!--g:benchWarm-->5<!--/g:benchWarm--> ms. Every figure is produced by [`hyperfine`](https://github.com/sharkdp/hyperfine) and committed per machine, so nothing here is hand-typed. **Clone the repo, run `make bench` on your own hardware, and send us the CSV &mdash; independent audits are welcome.** [Full benchmarks &amp; methodology &rarr;](https://www.basilisk-python.dev/docs/benchmarks/)
+We withdrew our 100% conformance claim and our benchmark figures, and asked to be
+[removed from the official `python/typing` results](https://github.com/python/typing/blob/main/conformance/results/results.html).
+The cause was checker logic fitted to the contents of conformance test files
+instead of implementing the typing specification generally: rules that matched
+the *spelling* of code rather than its meaning. Rename an import or reformat a
+file and the answer changed. A score produced that way is not evidence.
 
-## Everything in one extension
+**So we are auditing every rule and deleting the ones that don't do real type
+checking.** Not rewriting them, not patching them, not marking them TODO —
+deleting them, with a failing test left behind so the gap is visible instead of
+hidden. A rule stays only if it decides from the resolved syntax tree and gives
+the same answer when the code is spelled differently.
 
-One extension replaces Pylance and gives you the whole workflow — no Node.js, no Python runtime, no pip, no npm. A single bundled Rust binary drives it all:
+That means Basilisk gets **smaller** before it gets better. Expect fewer rules,
+fewer diagnostics, and a lower conformance number. We will report each drop
+rather than avoid it. What is left will be code that is honest about what it
+does — nothing else.
 
-- **Strict-by-default diagnostics** — inline as you type, incremental analysis powered by Salsa (the rust-analyzer engine)
+We have not yet decided whether to rebuild the deleted analysis from the
+specification or to drive the extension with an established open-source checker.
+Either way, no new figure gets published until it survives off-suite and
+mutation testing.
+
+[Read the full correction &rarr;](https://www.basilisk-python.dev/docs/conformance/) &nbsp;&bull;&nbsp;
+[Integrity audit &rarr;](https://github.com/Nimblesite/Basilisk/blob/main/docs/CONFORMANCE-INTEGRITY-AUDIT.md)
+
+## What you get
+
+One extension covers the whole Python workflow. A single bundled Rust binary
+drives it — no Node.js, no npm, no `pip install`:
+
+- **Diagnostics as you type** — incremental analysis powered by [Salsa](https://github.com/salsa-rs/salsa)
 - **Autocomplete, hover, go-to-definition, find references, rename**
 - **Refactoring code actions** — extract, inline, move symbol, organize imports
-- **Integrated debugging** — F5 to debug via bundled debugpy; no separate extension
+- **Integrated debugging** — F5 to debug via bundled [debugpy](https://github.com/microsoft/debugpy); no separate extension
 - **Integrated profiling** — CPU heat map, flame graph, and a memory dashboard with leak detection
 - **Activity panel** — module tree with per-module type-health coverage, plus feature toggles
 - **Inlay hints** and **Ruff** formatting/import-organization, built in
 - **Standard-library types from [typeshed](https://github.com/python/typeshed)** — a complete `stdlib/` snapshot is compiled into the binary, so hover and diagnostics work offline with no configuration
 
-Every diagnostic teaches: rustc-style output with a `help`, a `note`, and a link to a per-rule explainer, so a red squiggle always tells you *why*. Basilisk **starts strict** and stays strict — the unconfigured default enables the complete typing-spec rule set, and strictness is dialled per rule, never by a mode.
+Strictness is configured **per rule**, never by a mode: the unconfigured default
+enables the typing-spec rule set, and each rule can be graded down to
+`warning`/`info` so a codebase can adopt type safety incrementally. Every
+diagnostic carries a `help`, a `note`, and a link to a per-rule explainer, so a
+red squiggle tells you *why*.
 
 ## Install
 

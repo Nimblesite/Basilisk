@@ -4,12 +4,15 @@ Specs: [TYPEINF-OVERVIEW](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-OVERVI
 [TYPEINF-TARGET](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-TARGET), and
 [CHKARCH-INFERENCE](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-INFERENCE).
 
-Basilisk already passes the typing conformance suite. This plan therefore has two
+Basilisk's rules largely decide from source text rather than resolved symbols
+([CONFORMANCE-INTEGRITY-AUDIT](../CONFORMANCE-INTEGRITY-AUDIT.md)), so a passing
+suite is not evidence that the inference under them works. This plan has two
 tracks that share one implementation:
 
 1. **Consolidation** — merge duplicated rule-local inference into shared
-   components and improve editor/user behavior without weakening the
-   zero-false-positive gate.
+   components and improve editor/user behavior. Where consolidation uncovers a
+   rule that matches text instead of analysing code, that rule is deleted rather
+   than consolidated ([CHKARCH-TEXT-MATCHED-LOGIC](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TEXT-MATCHED-LOGIC)).
 2. **A substantially more powerful inference engine** — bidirectional
    (synthesis + checking) typing over a subtype-constraint solver, per the
    target architecture in
@@ -42,19 +45,22 @@ environment, expression inferrer, constraint solver, or subtype context.
   must become powerful enough (bidirectional context, constraint solving,
   bounded type-level evaluation) that PEP 827's conditional/mapped types have a
   sound home if adopted later.
-- Preserve the gradual guarantee as a testable invariant, keep the
-  zero-false-positive conformance gate, and hold both benchmark ratchets
-  ([CHKARCH-TESTING-BENCH](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING-BENCH)).
-- **Winning is the exit criterion, not an aspiration — and integration comes
-  first.** Basilisk MUST end this plan with measurably better type inference
-  than pyright, mypy, ty, pyrefly, and zuban, wired into the shipped checker —
-  a lead held by a detached engine counts for nothing. The plan is not
-  complete while any competitor leads any axis in
-  [NARROWPLAN-TARGETS](#NARROWPLAN-TARGETS); the mechanism that makes the
-  claim honest, enforceable, and permanent is the post-integration scoreboard
-  ratchet in [NARROWPLAN-SCOREBOARD](#NARROWPLAN-SCOREBOARD), which starts
-  only after [NARROWPLAN-INTEGRATION](#NARROWPLAN-INTEGRATION) has the engine
-  behind live diagnostics.
+- Preserve the gradual guarantee as a testable invariant, and keep false
+  positives on real code falling. Benchmarks are indicative and gate nothing
+  ([CHKARCH-TESTING-BENCH](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING-BENCH));
+  the conformance run is recorded, not gated
+  ([CHKARCH-CONFORMANCE](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE)).
+- **Correctness first; comparison last.** The exit criterion is inference that
+  is right on Python it has never seen, wired into the shipped checker — an
+  engine that is not behind live diagnostics counts for nothing. Comparative
+  axes in [NARROWPLAN-TARGETS](#NARROWPLAN-TARGETS) are direction, not a
+  finish line, and the scoreboard in
+  [NARROWPLAN-SCOREBOARD](#NARROWPLAN-SCOREBOARD) starts only after
+  [NARROWPLAN-INTEGRATION](#NARROWPLAN-INTEGRATION). **No scoreboard on this
+  plan may become a target.** This repo has already been through a metric that
+  outranked the analysis under it; a self-built harness that Basilisk both
+  authors and is graded by is the same shape of risk, and it is worth less than
+  a single failing test that pins real incorrect behaviour.
 
 **Non-goals**
 
@@ -328,23 +334,33 @@ protection has expired. Wire it in.**
 being deleted and never by an `#[allow]` — each stays `pub` from the crate
 root, which is what keeps the workspace's `dead_code = "deny"` satisfied.
 
-### What is NOT on the demolition list — read this before touching anything
+### The boundary — read this before touching anything
 
-Ripping out legacy *mechanism* is mandatory. Weakening the *checker* is
-forbidden, and nothing in this section licenses it:
+Ripping out legacy *mechanism* is mandatory. The boundary is **intent and
+disclosure**, not whether code disappears:
 
-- **Never delete, disable, or unregister a rule.** Not one. The rule survives;
-  its guts get replaced. See [CHKARCH-CONFORMANCE].
-- **Never remove a diagnostic.** Post-migration output is identical or
-  strictly better — same code, same span, same or clearer message.
-- **Never touch the scoreboard.** 100% / 0 false positives against a freshly
-  cloned `python/typing` harness is the prime directive and outranks this
-  entire plan. A migration that drops the number is reverted, not negotiated.
+- **A rule that decides from source text gets deleted, not migrated.** Failing
+  test, delete, report — [CHKARCH-TEXT-MATCHED-LOGIC](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TEXT-MATCHED-LOGIC).
+  Wiring such a rule to the engine "so the diagnostic survives" preserves a
+  claim that was never true, and hides the hole behind a green run. **A failing
+  test that pins real incorrect behaviour is worth more than a passing fixture
+  carried by logic that does not analyse code.**
+- **A rule that genuinely analyses code keeps its diagnostic across the
+  migration** — same code, same span, same or clearer message. Losing one of
+  those silently is the failure this bullet guards.
+- **Deleting a rule to move a number is dishonest; deleting text-matched logic
+  is required.** The difference shows in what you do next: the honest deletion
+  leaves a failing test behind, is reported to the user, and is expected to
+  *lower* the conformance number. Report the drop. Never revert the deletion,
+  refit the rule, or edit a threshold to get green
+  ([CHKARCH-CONFORMANCE](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE)).
 - **Never add an alternate checking mode**, feature flag, or "new engine"
   toggle. There is one code path. Basilisk has no modes.
 
-If replacing a rule's guts costs a required error, the engine is not ready for
-that rule yet — **fix the engine**, then come back. Do not ship the loss.
+If wiring a rule that really does analyse code would cost a required error, the
+engine is not ready for it yet — fix the engine, then come back. That is a
+different situation from a text-matching rule, which goes regardless of what the
+engine can do today.
 
 ### Order of demolition — every step closes filed bugs
 
@@ -376,14 +392,26 @@ sequenced checkboxes live in the checklist
 
 ### Gates that stay armed the entire time
 
-Non-negotiable, every step, no exceptions:
+Every step, no exceptions:
 
-- Live conformance run: **100% / 0 FP**, freshly cloned harness
-  ([CHKARCH-CONFORMANCE-MODE]).
-- `make bench`: no fixture slower than the committed baseline
-  ([CHKARCH-TESTING-BENCH]). The walker is real production cost the
-  moment step 1 lands — record the baseline **in that same change**.
-- `make test` fail-fast, coverage ratchet up, mutation ratchet up.
+- **Semantics-preserving mutation** over every migrated rule: aliased imports,
+  reformatting, reordering → byte-for-byte identical diagnostics
+  ([CHKARCH-TESTING-SEMANTIC-MUTATION](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING-SEMANTIC-MUTATION)).
+  This is the gate that decides whether a migration produced analysis or moved
+  the text matching somewhere less visible. It does not exist yet
+  ([LINESCANPLAN-SEMANTIC-MUTATION](CHECKER-ELIMINATE-LINE-SCANNING-PLAN.md#LINESCANPLAN-SEMANTIC-MUTATION));
+  until it does, every migrated rule is unverified and must be described that way.
+- **Off-suite tests** for every migrated rule, derived from the typing spec and
+  real code, **never** from `conformance/tests/`.
+- A live conformance run, **recorded not gated**: it detects unintended
+  regressions in rules that were working. A drop traced to a deliberate deletion
+  is reported and kept ([CHKARCH-CONFORMANCE](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE)).
+- `make bench`: indicative only, gates nothing ([CHKARCH-TESTING-BENCH]). The
+  walker is real production cost the moment step 1 lands — record the baseline
+  **in that same change**.
+- `make test` fail-fast, coverage ratchet up, mutation ratchet up — read against
+  its scope denominator, never as a standalone score
+  ([CHKARCH-TESTING-MUTATION-RATCHET](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING-MUTATION-RATCHET)).
 - Torture golden gate green.
 
 ### The cost defect that blocked all of this — FIXED
@@ -490,10 +518,16 @@ seeded (below, first checklist item) stays live because it scores the *shipped
 checker*; the remaining axes are built only after the wiring they would
 measure exists.
 
-Basilisk MUST end this plan with better type inference than every
-officially-recognized competitor. "Better" is defined operationally and
-enforced exactly the way this repo already enforces conformance and speed —
-self-measured, reproducible, write-always, ratcheted:
+**A scoreboard is a diagnostic instrument, never an objective.** Basilisk both
+authors this harness and is graded by it, which is the same configuration that
+produced the fitted predicates in
+[CONFORMANCE-INTEGRITY-AUDIT](../CONFORMANCE-INTEGRITY-AUDIT.md): when the only
+metric that can move is one the code can be shaped to, shaping it is the cheapest
+way to move it. So every axis below carries the same standing condition — **a
+score that rises without the analysis under it improving is a regression**, and
+an axis is worth abandoning the moment it starts driving the work instead of
+reporting on it. "Better" is defined operationally, measured the way this repo
+measures speed — self-measured, reproducible, write-always:
 
 - **Definition.** Basilisk is superior on an axis when it scores strictly
   better than the LATEST official release of every officially-recognized
@@ -513,12 +547,12 @@ self-measured, reproducible, write-always, ratcheted:
   unconditionally** (WRITE-ALWAYS); a separate read-only gate compares against
   the committed baseline (GATE-SEPARATELY). A run that measured a score but
   didn't record it is a lie.
-- **Ratchet.** Once Basilisk takes the lead on an axis, the lead becomes a CI
-  gate: falling behind any competitor on a led axis is a build failure. Leads
-  only accumulate. The plan exits only when Basilisk leads **all five axes
-  simultaneously** while the 100%/0-FP conformance gate and the speed
-  benchmark stay healthy — the inference lead must never be bought by
-  regressing conformance or performance, and vice versa.
+- **Reported, not ratcheted.** Scores are recorded and read by a human. A lead
+  does **not** become a CI gate: a build that fails on a comparative number
+  makes losing the number more expensive than losing the analysis, which is the
+  incentive this repo is removing, not adding. A regression on an axis is a
+  question to investigate, and the answer is sometimes "we deleted logic that
+  was never analysing anything" — which is progress, and is recorded as such.
 - **Moving targets.** Because the harness pulls latest competitor releases,
   the lead is continuously re-proven against competitors as they improve —
   never against frozen versions. If a competitor release takes back an axis,
@@ -586,8 +620,11 @@ self-measured, reproducible, write-always, ratcheted:
   mypy, ty, pyrefly, and zuban on **every** axis in
   [NARROWPLAN-TARGETS](#NARROWPLAN-TARGETS), and the per-axis ratchet is wired
   into CI so the lead cannot silently erode.
-- `make test`, mutation/coverage ratchets, benchmarks for touched hot paths, and
-  the live 141/141 conformance gate all pass with zero false positives.
+- Every surviving rule passes semantics-preserving mutation
+  ([CHKARCH-TESTING-SEMANTIC-MUTATION](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING-SEMANTIC-MUTATION))
+  and carries off-suite tests; `make test`, the mutation/coverage ratchets, and
+  benchmarks for touched hot paths are green. The conformance run is recorded
+  with whatever it reports.
 
 ## Checklist {#NARROWPLAN-CHECKLIST}
 
@@ -633,8 +670,15 @@ self-measured, reproducible, write-always, ratcheted:
 
 Prerequisite for Stage 2; see
 [NARROWPLAN-ANNOTATION-RESOLUTION](#NARROWPLAN-ANNOTATION-RESOLUTION). Each box
-lands with a regression test that fails before it and passes after, and holds
-the conformance ratchets (100% / 0 false positives) at every step.
+lands with a regression test that fails before it and passes after, tested on
+Python the upstream suite does not contain, and records what the conformance run
+reported afterwards.
+
+> **Figures in completed (`[x]`) entries below are historical records** of runs
+> made when the pass percentage was a gate. They are kept because they say what
+> was actually measured at the time. They are **not** an acceptance criterion for
+> new work, not a bar to restore, and not for publication — the claim they came
+> from is withdrawn ([CHKARCH-CONFORMANCE](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE)).
 
 **The test step is part of the box, never a phase at the end.** A box is `[x]`
 only when its own nested `[x] Test:` line names a test that (a) was written and
@@ -1376,6 +1420,16 @@ before the stage is declared closed:
   outright. An annotation is a type expression the engine evaluates — never a
   string a rule slices out of the file. Fixes #379; retires the mechanism
   behind #383.
+
+  **Migration is not the only disposal, and often not the right one.** Where a
+  consumer can be pointed at the engine and the rule's *meaning* is preserved,
+  migrate it. Where the text scan **was** the rule — where there is no analysis
+  underneath to reconnect — the entry belongs to
+  [LINESCANPLAN-DISPOSAL](CHECKER-ELIMINATE-LINE-SCANNING-PLAN.md#LINESCANPLAN-DISPOSAL):
+  failing test, delete, report. Do not migrate a text scan into an engine call
+  that reproduces the same spelling-dependent verdict; that hides the defect
+  behind a better-looking call site. A migrated rule is only done once it passes
+  semantics-preserving mutation.
   *Measured state (2026-08-05, after the Step 7a pass):
   `InferredType::from_annotation` call sites in rules **11 → 2**.
   MIGRATED to the cascade, each verified at 4067/0 + 141/141:
@@ -1525,7 +1579,17 @@ before the stage is declared closed:
 - [x] Keep every rule registered and every diagnostic intact through the whole
   demolition. The mechanism dies; the checking does not. A migration that
   costs a required error means the engine is not ready — **fix the engine**,
-  never ship the loss ([CHKARCH-CONFORMANCE]). Held: `all_rules()` still
+  never ship the loss ([CHKARCH-CONFORMANCE]).
+
+  > **Superseded for text-matched rules.** This box records what was held while
+  > the directive was "no rule ever goes". It now applies only to rules that
+  > genuinely analyse code. A rule that decides from source text is deleted, not
+  > migrated — failing test, delete, report
+  > ([CHKARCH-TEXT-MATCHED-LOGIC](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TEXT-MATCHED-LOGIC)).
+  > Rule count and conformance are both expected to fall, and both drops get
+  > reported rather than prevented.
+
+  Held: `all_rules()` still
   registers **166** rules, no rule source was deleted or unregistered, no
   suppressing config exists, and conformance stayed 141/141 with 0 missed
   through every step. The directive was exercised for real and obeyed
@@ -1571,8 +1635,9 @@ before the stage is declared closed:
   carries information: a display oracle that rendered `Any` for everything
   would satisfy the acceptances but fails here. A second inference path for
   displays would be caught by every case in the file.
-- [ ] `make test`, mutation/coverage ratchets, benchmarks for touched hot
-  paths, and the live conformance gate all pass with zero false positives.
+- [ ] `make test`, mutation/coverage ratchets, and benchmarks for touched hot
+  paths are green; every surviving rule passes semantics-preserving mutation
+  and off-suite tests; the conformance run is recorded with whatever it reports.
   *Measured 2026-08-05 after the subtyping/Step-8/Step-7a pass — green:*
   *workspace `cargo test --workspace` **7253 / 0** (checker 4067, resolver
   625, and every other crate), `cargo clippy --workspace --all-targets`
@@ -1687,11 +1752,15 @@ detached engine.
 - [ ] Wire the utahplt/ifT narrowing benchmark, the higher-order corpus, the
   gradual-guarantee differential suite, and the incremental-latency
   measurement into the scoreboard.
-- [ ] Add per-axis ratchet entries: once Basilisk leads an axis, falling
+- [ ] ~~Add per-axis ratchet entries~~ — **dropped.** Scores are recorded and
+  read, never gated ([NARROWPLAN-SCOREBOARD](#NARROWPLAN-SCOREBOARD)). Retained
+  below only to show what was removed and why: a CI gate on a comparative number
+  makes losing the number more expensive than losing the analysis. Original
+  wording: once Basilisk leads an axis, falling
   behind any competitor on that axis fails CI; leads only accumulate.
-- [ ] Take and hold the lead on **all five axes simultaneously**, with the
-  100%/0-FP conformance gate green and the speed benchmark healthy in the same
-  run.
+- [ ] Measure and record all five axes in one run, alongside the speed benchmark
+  and the conformance result. A lead is reported, never gated; an axis that
+  starts driving the work instead of describing it is dropped.
 - [ ] Enforce claims discipline: every better-than-competitor claim in docs, website,
   or marketing traces to the current committed scoreboard run and states the
   methodology.

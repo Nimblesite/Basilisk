@@ -9,9 +9,9 @@ claimed a retired typeshed behaviour months after the others were corrected.
 
 There is now exactly **one** README per language, and the published files are
 **identical except for a single line** that says which artifact you are looking
-at. Everything else — the conformance claim, the benchmark table, the install
-options, the feature list, the typeshed section, the acknowledgments — is one
-body of text, generated to every storefront by `scripts/gen_readmes.py`.
+at. Everything else — the withdrawal notice, the install options, the feature
+list, the typeshed section, the acknowledgments — is one body of text, generated
+to every storefront by `scripts/gen_readmes.py`.
 
 ## Source {#README-SOURCE}
 
@@ -64,12 +64,17 @@ The generator applies three transforms, in order:
 
 ## Stamped values {#README-STAMPED}
 
-The conformance and benchmark figures are not typed by hand anywhere. They are
-`<!--g:NAME-->value<!--/g:NAME-->` markers stamped into the **source** by
-`scripts/gen_conformance_reference.py` from `conformance_report.json` and the
-committed benchmark CSVs ([CHKARCH-CONFORMANCE](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE)).
-Generation runs after stamping, so every storefront quotes the same
-self-measured number.
+**No conformance or benchmark figure appears in any README, and none is stamped.**
+Both claims are withdrawn ([CHKARCH-CONFORMANCE](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE)),
+so every `<!--g:NAME-->value<!--/g:NAME-->` marker has been removed from the
+sources and `scripts/gen_conformance_reference.py` now has nothing to stamp. The
+machinery is retained, not retired, so that a *future* measured value can only
+ever reach a README by generation rather than by hand.
+
+Re-introducing a marker for a conformance figure is forbidden regardless of what
+the harness reports. A benchmark marker may return only when the number is
+measured on isolated hardware and carries its indicative-only caveat
+([CHKARCH-TESTING-BENCH](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING-BENCH)).
 
 ## Drift guard {#README-DRIFT}
 

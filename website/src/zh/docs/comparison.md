@@ -11,7 +11,7 @@ dateModified: 2026-08-06
 
 Python 类型检查器的格局已经发生了重大变化。它们的差异在于对类型规范的实现有多忠实、究竟是一个完整的语言服务器还是仅仅一个检查器，以及速度。Basilisk 之前公开的性能数据目前已[撤回并等待审查](/docs/benchmarks/)。
 
-<p class="bench-caveat"><strong>符合性更正：</strong>Basilisk 此前的结果已撤回，当前百分比暂时未知。应我们的请求，Basilisk 已从<a href="https://github.com/python/typing/blob/main/conformance/results/results.html">官方结果表</a>中移除，同时受影响的逻辑正在重新实现并接受独立稳健性验证。请勿使用旧得分或旧排名比较这些工具。</p>
+<p class="bench-caveat"><strong>符合性更正：</strong>Basilisk 此前的结果已撤回，当前百分比暂时未知。应我们的请求，Basilisk 已从<a href="https://github.com/python/typing/blob/main/conformance/results/results.html">官方结果表</a>中移除，同时我们正在逐条审计规则，并删除那些只匹配源文本、并未做真正类型检查的规则。请勿使用旧得分或旧排名比较这些工具。</p>
 
 ## 根本问题
 
@@ -48,7 +48,7 @@ Python 类型检查器的格局已经发生了重大变化。它们的差异在�
 
 **来源：**
 
-¹ 当前列出的检查器请参见[官方 python/typing 实时结果](https://github.com/python/typing/blob/main/conformance/results/results.html)。Basilisk 在撤回旧结果后请求移除；只有在全新实现通过稳健性和变异验证后，才会发布当前百分比。
+¹ 当前列出的检查器请参见[官方 python/typing 实时结果](https://github.com/python/typing/blob/main/conformance/results/results.html)。Basilisk 在撤回旧结果后请求移除；只有在审计完成、并通过稳健性和变异验证后，才会发布当前百分比。
 
 ² Basilisk 的快速修复插入的是**占位符**注解（参数和属性为 `: Any`，返回值为 `-> None`；空集合变量为 `list[Any]` / `dict[str, Any]`），供你替换为真实类型。它不推断类型。参见[缺失注解规则](/zh/docs/rules/missing-annotations/)。
 
@@ -199,4 +199,4 @@ Basilisk 不是现有工具的更快版本。它占据了不同的位置：
 - Basilisk 正在积极开发中。此前的符合性结果已撤回；受影响逻辑正在从头实现，[当前百分比暂时未知](/zh/docs/conformance/)。
 - 插件生态系统：mypy 的 Django 和 SQLAlchemy 插件已经成熟。Basilisk 的 WASM 插件是计划中的。
 
-建议：根据 Basilisk 集成的开源编辑器工作流进行评估，并在您自己的代码上测试它。不要依据已撤回的符合性或基准测试数据做出选择。待全新实现和稳健性审查完成后，我们会发布新的符合性结果。
+建议：根据 Basilisk 集成的开源编辑器工作流进行评估，并在您自己的代码上测试它。不要依据已撤回的符合性或基准测试数据做出选择。待审计与稳健性审查完成后，我们会发布新的符合性结果。

@@ -24,7 +24,7 @@ faq:
   - q: "What is the performance cost of free-threaded Python?"
     a: "According to the Python 3.14 release notes, the single-threaded performance penalty in free-threaded mode is now roughly 5-10%, depending on the platform and C compiler used, a significant improvement over earlier builds."
   - q: "How does Basilisk help with all of this?"
-    a: "Basilisk enables its typing-spec rules by default, with no strict flag to remember. Its former conformance result has been withdrawn, however, and its actual percentage is temporarily unknown while affected logic is reimplemented and verified."
+    a: "Basilisk enables its typing-spec rules by default, with no strict flag to remember. Its former conformance result has been withdrawn, however, and its actual percentage is temporarily unknown while every rule is audited and the ones that matched source text are deleted."
 ---
 
 Free-threaded Python stopped being an experiment. As of Python 3.14, released on October 7, 2025, the free-threaded (no-GIL) build is officially supported, not experimental, under [PEP 779](https://peps.python.org/pep-0779/) ([Python 3.14 release notes, python.org](https://docs.python.org/3/whatsnew/3.14.html)). If you have been half-watching the "no-GIL" story for the last few years, this is the moment it went real.
@@ -81,7 +81,7 @@ You do not need to wait for Phase III or rewrite anything to get ahead of this. 
 
 Basilisk is our answer to the "enforcement is optional" problem. It is an open-source Python type checker and language server built in Rust, with its typing-spec rules enabled and no `--strict` flag to forget.
 
-**Correction:** Basilisk's former conformance result is withdrawn. Test-specific implementation logic made that number untrustworthy, Basilisk has been removed from the official results at our request, and its current percentage is temporarily unknown. See the [conformance correction](/docs/conformance/) for the clean reimplementation and robustness-testing work now underway.
+**Correction:** Basilisk's former conformance result is withdrawn. Test-specific implementation logic made that number untrustworthy, Basilisk has been removed from the official results at our request, and its current percentage is temporarily unknown. See the [conformance correction](/docs/conformance/) for the audit-and-delete work now underway.
 
 A few honest boundaries so you know exactly what you are getting:
 
@@ -119,4 +119,4 @@ According to the [Python 3.14 release notes](https://docs.python.org/3/whatsnew/
 
 ### How does Basilisk help with all of this?
 
-Basilisk is a Python type checker whose typing-spec rules are enabled by default, with no strict flag to forget. Its former conformance result is withdrawn and its current percentage is temporarily unknown while affected logic is rebuilt and verified; evaluate it against your own code rather than relying on the old figure.
+Basilisk is a Python type checker whose typing-spec rules are enabled by default, with no strict flag to forget. Its former conformance result is withdrawn and its current percentage is temporarily unknown while rules that matched source text are deleted; evaluate it against your own code rather than relying on the old figure.

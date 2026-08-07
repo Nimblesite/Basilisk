@@ -4,11 +4,15 @@
 
 Zed editor extension for Basilisk — WASM-based Python type checking and language server integration.
 
-Basilisk is the only Python type checker scoring 100% on the [official `python/typing` conformance suite](https://github.com/python/typing/blob/main/conformance/results/results.html) — and the fastest we've measured. A complete, open-source Python dev environment in Rust: type checker, language server, debugger, profiler, plus VS Code, Cursor, Zed & Neovim extensions. Strict by default.
+Basilisk is an open-source Python type checker and language server built in Rust: diagnostics, autocomplete, refactoring, debugging, and profiling, with strictness configured per rule.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/Nimblesite/Basilisk/main/website/src/assets/images/zed-screenshot.png" alt="Basilisk in the Zed editor — Python type checking and diagnostics inline" width="900">
 </p>
+
+**The current type checker contains inaccuracies and you should not use it as part of your dev pipeline. We are working on removing any misleading analyzers ASAP. Please read below**
+
+> **We withdrew the typing conformance results.** The 100% claim and the benchmark figures are retracted, and Basilisk was [removed from the official results](https://github.com/python/typing/blob/main/conformance/results/results.html) at our request. Whether we rebuild the checker from the specification or drive the extension with an established open-source checker, we are building Basilisk into an accurate Python development experience. [Read the correction](https://www.basilisk-python.dev/docs/conformance/).
 
 ## Install
 

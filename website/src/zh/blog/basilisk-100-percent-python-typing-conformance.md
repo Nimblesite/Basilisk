@@ -1,7 +1,7 @@
 ---
 layout: layouts/blog.njk
 title: "已撤回：Basilisk 此前的类型符合性结果"
-description: "撤回 Basilisk 此前的 Python typing 符合性声明，说明该结果为何不可信，以及如何重新实现并验证受影响逻辑。"
+description: "撤回 Basilisk 此前的 Python typing 符合性声明，说明该结果为何不可信，以及受影响的规则为何是被删除而不是被修补。"
 date: 2026-07-11
 dateModified: 2026-08-06
 author: Christian Findlay
@@ -17,13 +17,13 @@ excerpt: "Basilisk 已撤回此前的符合性声明，并请求从官方结果�
 keywords: python类型检查器, python类型符合性, python/typing符合性结果, basilisk, mypy, pyright, ty, pyrefly, zuban, pep符合性, 严格类型
 faq:
   - q: "哪个 Python 类型检查器的符合性分数最高？"
-    a: "Basilisk 目前不在官方 python/typing 结果中。此前的结果已撤回；在受影响逻辑完成重新实现和验证之前，实际百分比暂时未知。其他工具请查看官方实时结果表。"
+    a: "Basilisk 目前不在官方 python/typing 结果中。此前的结果已撤回；在完成规则审计、删除依据源文本判断的规则之前，实际百分比暂时未知。其他工具请查看官方实时结果表。"
   - q: "什么是 python/typing 符合性测试套件？"
     a: "这是由 Python Typing 社区维护的官方测试套件。它使用自己的评分工具记录检查器在确切测试用例上的行为。这是有价值的证据，但原始套件结果本身不能证明完整规范已被忠实实现；还必须通过保持语义的变异和独立的套件外用例验证。"
   - q: "100% 的符合性分数是否等于是最好的类型检查器？"
     a: "不。套件分数只描述被覆盖的测试用例；正如 Basilisk 此次撤回所证明的，它本身不能证明规范实现正确。它也无法反映编辑器集成、错误信息质量、生态系统支持或经过独立验证的性能。"
   - q: "Basilisk 的符合性分数是如何测量的？"
-    a: "Basilisk 目前没有可发布的符合性分数。受影响实现完成重建后，未来结果必须同时通过未经修改的 python/typing 评分工具、保持语义的变异测试，以及依据规范独立设计的套件外用例。"
+    a: "Basilisk 目前没有可发布的符合性分数。只有在审计完成、依据源文本而非已解析符号判断的规则被删除之后，未来结果才可能发布，并且必须同时通过未经修改的 python/typing 评分工具、保持语义的变异测试，以及依据规范独立设计的套件外用例。"
 ---
 
 > **撤回说明——2026 年 8 月 6 日：**我们撤回本文中的所有符合性声明。Basilisk 源码中存在针对确切符合性测试用例实现的逻辑，因此此前的满分结果不能证明规范符合性。我们请求从官方结果表中移除 Basilisk，现已完成移除。在删除有问题的实现、根据规范重新构建并通过保持语义的变异测试之前，当前百分比暂时未知。下方原文仅作为公开历史记录保留；其中的得分、排名、通过数量和结论均不可依赖。请阅读[完整更正](/zh/docs/conformance/)。
@@ -102,6 +102,6 @@ Basilisk 默认启用类型规范规则，无需记住 `--strict` 标志。我�
 
 你可以在[符合性页面](/zh/docs/conformance/)阅读当前更正和修复计划，并在 [python/typing 结果页面]({{ conformanceOfficial.historical.snapshot.source }})上看到 Basilisk 已不再列出。
 
-请把 Basilisk 指向你自己的代码，并在 [GitHub](https://github.com/Nimblesite/Basilisk/issues) 上报告分歧。旧得分不能替代这种真实检验。只有在全新实现通过更广泛的回归用例和保持语义的变异后，我们才会发布替代结果。
+请把 Basilisk 指向你自己的代码，并在 [GitHub](https://github.com/Nimblesite/Basilisk/issues) 上报告分歧。旧得分不能替代这种真实检验。只有在审计完成、留下的代码通过更广泛的回归用例和保持语义的变异后，我们才会发布替代结果。
 
 Python 的类型系统已经足够好、值得信任有一段时间了。现在，工具也可以了。

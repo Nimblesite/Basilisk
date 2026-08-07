@@ -13,7 +13,7 @@ linked to an active plan.
 
 | File | Purpose |
 |---|---|
-| [Checker architecture](specs/CHECKER-ARCHITECTURE-SPEC.md) | Configuration, rules, diagnostics, analysis pipeline, CLI, and quality gates. |
+| [Checker architecture](specs/CHECKER-ARCHITECTURE-SPEC.md) | Configuration, rules, diagnostics, analysis pipeline, CLI, and quality gates — including [CHKARCH-TEXT-MATCHED-LOGIC](specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TEXT-MATCHED-LOGIC), the failing-test → delete → report rule that governs any code deciding from source text. |
 | [Type inference](specs/CHECKER-TYPE-INFERENCE-SPEC.md) | The bidirectional/constraint inference engine — the checker's single type oracle — its narrowing contracts, research grounding, and the condemned legacy mechanisms under demolition. |
 | [Stub resolution](specs/CHECKER-STUB-RESOLUTION-SPEC.md) | Pinned typing-spec import order, custom typeshed, offline pin verification against the store, a PyPI-package wheel pin, the segregated download component, bundled stdlib ZIP, and generation. |
 | [Checker MCP service](specs/CHECKER-MCP-SPEC.md) | Packaged stdio lifecycle and the structured typeshed source/status tool. |
@@ -56,10 +56,10 @@ Plans contain only unfinished work. Delete a plan when its acceptance gate passe
 | [Formatting](plans/LSP-FORMATTING-PLAN.md) | VS Code default-formatter opt-in and published-artifact verification. |
 | [AI-assisted LSP](plans/LSP-AI-PLAN.md) | First opt-in provider slice and privacy/safety gate. |
 | [Activity panel](plans/EXTENSION-ACTIVITY-PANEL-PLAN.md) | Settings wiring, Modules-panel context menus and multi-select, and remaining cross-editor/test quality. |
-| [Type narrowing and inference](plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md) | The engine build-out and the demolition order: wire the bidirectional engine into every rule, delete every legacy text/shape-matching path, hold the conformance gate throughout and keep an eye on the benchmark. |
+| [Type narrowing and inference](plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md) | The engine build-out and the demolition order: wire the bidirectional engine into rules that genuinely analyse code, delete the rest rather than migrating them, and record what each deletion costs. |
 | [Runtime typeshed resolution](plans/CHECKER-TYPESHED-RUNTIME-PLAN.md) | Two open items: a socket-instrumented witness that checking is offline across CLI/LSP/MCP, and byte-exact per-artifact licensing verification inside the VSIX (binaries and wheels are already verified). |
 | [PyPI typeshed package pin](plans/CHECKER-TYPESHED-PYPI-PLAN.md) | Pin a PyPI typeshed distribution by wheel SHA-256, verify offline, auto-resolve from `uv.lock`; suppresses the source-status advisory (issue #312). |
-| [Eliminate line scanning](plans/CHECKER-ELIMINATE-LINE-SCANNING-PLAN.md) | Replace remaining raw-source rule scans with AST data. |
+| [Delete checker text matching](plans/CHECKER-ELIMINATE-LINE-SCANNING-PLAN.md) | The inventory of rules that decide from source text, the failing-test → delete → report disposal, and the unbuilt semantics-preserving mutation harness. |
 | [WASM](plans/WASM-PLAN.md) | CI wasm build and size ratchet, multi-file in-memory VFS, and the playground site. |
 | [Advanced checker features](plans/CHECKER-ADVANCED-FEATURES-PLAN.md) | Dependency-hygiene rules, ownership and safety checks, plugin host, migration, and CI helpers. |
 
