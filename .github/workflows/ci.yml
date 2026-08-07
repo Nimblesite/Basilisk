@@ -78,8 +78,31 @@ jobs:
           ACTOR: ${{ github.actor }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
         run: |
           set -euo pipefail
+          # ── `docs-only` label: explicit, per-PR opt-out ────────────────────
+          # A human adds this label when a PR carries nothing the code matrix
+          # would meaningfully exercise. It is deliberately a LABEL and not a
+          # path rule: the decision is visible on the PR, attributable to the
+          # person who made it, and removed by removing the label. No PR without
+          # it is affected, so no gate is weakened for anybody else.
+          # NOT for a PR that changes checker behaviour — a green tick here means
+          # "nobody looked", and the deletion work ahead needs the matrix to run.
+          case ",$LABELS," in
+            *,docs-only,*)
+              {
+                echo "core=false"
+                echo "vscode=false"
+                echo "nvim=false"
+                echo "zed=false"
+                echo "code=false"
+                echo "website=false"
+              } >> "$GITHUB_OUTPUT"
+              echo "docs-only label present — skipping every code and website job."
+              exit 0
+              ;;
+          esac
           # Dependabot PRs are swept into `dependabot-upgrades` by
           # dependabot-automerge.yml and never merge into main directly, so the
           # heavy matrix would only burn minutes on a bump we discard. CI runs
