@@ -3,141 +3,171 @@
 
 Code here must comfortably pass review at a top-tier engineering org. Fix shortcomings as you find them.
 
-# Conformance Is the Prime Directive
+# Accuracy Is the Prime Directive
 
-Target: **100% conformance** with the [Python typing spec](https://typing.python.org/en/latest/spec/index.html), measured ONLY by the [python/typing conformance suite](https://github.com/python/typing/tree/main/conformance/tests) — nothing else. This outranks every other concern in this file. Read the [conformance README](https://github.com/python/typing/blob/main/conformance/README.md) carefully. Python-version boundaries apply only where the typing spec, an accepted PEP, or Python language semantics defines one; Basilisk has no canonical Python release.
+Basilisk must be correct on Python it has never seen. Every rule decides from the resolved AST — bindings, types, symbol identity — never from how the source happens to be spelled. `from typing import Final as F` behaves identically to `typing.Final`; reformatting a file changes no diagnostic.
 
-⚠️ **Never touch the scoreboard — move the number by FIXING the checker.** FORBIDDEN: disabling/deleting/unregistering any rule, deleting rule source (`crates/basilisk-checker/src/rules/*.rs`), removing rules from `all_rules()`, rule-suppressing config (the legacy `basilisk.json` is no longer read), hand-editing `conformance/conformance_status.csv`, loosening `coverage-thresholds.json` (`threshold` / `max_false_positives`). See [CHKARCH-CONFORMANCE], [CHKARCH-CONFORMANCE-MODE]. ⚠️
+Basilisk was **removed from the python/typing conformance results** on 2026-08-05, at its own author's request — [python/typing#2330](https://github.com/python/typing/pull/2330), reverting [#2316](https://github.com/python/typing/pull/2316). The reason: *"Many of Basilisk's rules match against raw source text and hard-coded typing symbol names instead of resolved symbols on the AST."* Semantics-preserving edits to the suite — renaming imports, adjusting whitespace — broke **113 of 141 test files**. The score was real; the checker under it was not.
 
-⚠️ **One conformance path**, run fresh every CI run: `python3 conformance/run_conformance.py`. No step skippable — (1) `git clone` the tests **and** the harness from `python/typing@main` HEAD, no cache/committed fixtures; (2) clean `cargo build --release` from THIS checkout, never the PyPI wheel, never instrumented; (3) run the suite's OWN unmodified `conformance/src/main.py --only-run basilisk` (its `type_checker.py` ships the official `BasiliskTypeChecker`) against that binary via `BASILISK_BIN`, failing hard on ANY false positive or missed required error (100% / 0 FP); (4) regenerate `conformance_status.csv` from the harness's own `results/basilisk/*.toml`. A vendored scorer, reimplemented/injected adapter, cached fixtures, or committed results standing in for a live run is a **BUILD FAILURE**. ⚠️
+Conformance is a downstream sample of that accuracy, and one this codebase is overfitted to. A change that lifts the conformance number without improving analysis of arbitrary Python is a regression.
 
-- The score is the binary in its default config — every PEP rule on, nothing configured ([CHKARCH-CONFIGURATION-ONLY]). Never quote a number produced any other way.
-- **Precision is the whole game.** A file passes iff the upstream `errors_diff` is empty: an error on EVERY `# E` line, EVERY `# E[tag]` group satisfied, NOTHING on an unmarked line.
-- **Every failure is a false positive, not a miss.** The checker already catches every required error; files fail because a strict house rule fires on spec-valid code. Fix by teaching the checker to recognise the valid construct — never by missing a required error or silencing a rule ([CHKARCH-CONFORMANCE-MODE]).
-- **Ratchets, always.** Pass-% only up, FP ceiling only down (`coverage-thresholds.json`). Moving a ratchet the wrong way means the change isn't done. (Benchmark times are NOT a ratchet — see [CHKARCH-TESTING-BENCH].)
-- Basilisk is listed in the [official results](https://github.com/python/typing/blob/main/conformance/results/results.html) at 100%. Dropping below is ⛔️ ILLEGAL.
+## Text-matched logic — test, delete, report
+
+A rule whose behaviour depends on the *spelling* of its input rather than the *meaning* is broken, whatever it scores. Finding and removing it outranks every other task here. Find it by:
+
+- Raw source-text matching — `.contains` / `starts_with` / `ends_with` on user code (131 of 145 rule files today).
+- Hard-coded symbol spellings instead of resolved identity: `t == "typing.Final"`, `text.starts_with("Callable[")`, `import.module == "typing"`.
+- Any regex over Python source.
+- Logic keyed to a test fixture: rule files named after conformance tests (`generics_base_class_2.rs`, `constructors_call_init`), branches for shapes only the suite contains, comments citing a test file as justification.
+- Detection that fires on formatting — line breaks, spacing, quote style, comment text, statement order.
+
+On encountering it, do exactly three things — **do not fix it, do not rewrite it, do not leave a TODO**:
+
+1. **Write a test that fails** because of the incorrect code — pin the real defect: an aliased import, a reformatted source, a shape the conformance suite never contains.
+2. **Delete the offending code.**
+3. **Tell the user what you deleted and why**, and that the test is now failing.
+
+Replacing it is not your call. The point is to surface every one of these so the user can acknowledge it and decide what gets built back. A checker with fewer rules and visible failing tests is the correct outcome; a diagnostic that only fires on one spelling looks like coverage and isn't.
+
+## What a correct rule looks like
+
+The yardstick for judging code — not licence to go and fix it:
+
+- Decides on the **resolved semantic model** from `basilisk-resolver`, never tokens or text. Parses with `ruff_python_parser`.
+- Named for the **typing-spec concept** it implements, not a test file.
+- Survives **semantics-preserving mutation**: aliased imports, reformatting, reordering → identical diagnostics. Rules without that coverage are unverified.
+- Tested against Python the conformance suite has never contained.
+
+## Direction of travel
+
+Background, not a directive: strip text-matched logic, establish which rules genuinely analyse code, and rebuild around those — deliberately, with the user, not as a side effect of some other task. Anything that can't be made to work on the AST gets removed rather than propped up; a smaller trustworthy checker beats a large unreliable one. Analysis Basilisk can't do reliably may be delegated to an external engine. Deletion is a legitimate outcome.
+
+## Conformance's role
+
+`python3 conformance/run_conformance.py` stays honest: fresh `git clone` from `python/typing@main`, clean `cargo build --release` from THIS checkout, the suite's own unmodified `src/main.py --only-run basilisk` via `BASILISK_BIN`. A vendored scorer, injected adapter, cached fixtures, or committed results standing in for a live run is a **BUILD FAILURE**. The number is a regression detector, never an objective:
+
+- **Never publish, quote, or market a conformance figure** — nothing may imply Basilisk is in the official results.
+- **Never re-submit to python/typing** until the mutation harness passes clean and an external audit has run.
+- Never move the number by touching the scoreboard: disabling rules, deleting source to dodge a failure, rule-suppressing config, hand-editing `conformance/conformance_status.csv`, loosening `coverage-thresholds.json` ([CHKARCH-CONFORMANCE]).
+- **A drop caused by removing text-matched logic is progress.** Record it and say so plainly — never restore the code or fake a pass to hold a ratchet.
 
 # Design Principles
 
-One IDE extension = a complete, fast Python workflow. The LSP drives all functionality — extensions only react to LSP signals (commands, state changes) and NEVER register a command the LSP doesn't advertise.
+One IDE extension = a complete, fast Python workflow. The LSP drives all functionality — extensions only react to LSP signals and NEVER register a command the LSP doesn't advertise.
 
-Basilisk has **no modes** — behaviour is per-rule configuration ([CHKARCH-CONFIGURATION-ONLY]). The default enables every PEP typing-spec rule and nothing else; opinionated house-style rules (require-annotation `BSK-0001/0002/0004`, require-`@override` `BSK-0025`, redundant-annotation `BSK-0050`, explicit-`Any` nudge `BSK-0014`) are opt-in. Every diagnostic must teach — explain why, not just what.
+**No modes** — behaviour is per-rule configuration ([CHKARCH-CONFIGURATION-ONLY]). Default: every PEP typing-spec rule and nothing else; house-style rules (`BSK-0001/0002/0004` require-annotation, `BSK-0025` require-`@override`, `BSK-0050` redundant-annotation, `BSK-0014` explicit-`Any`) are opt-in. Every diagnostic teaches — why, not just what.
 
-# Documentation Honesty — No Unsubstantiated Claims
+# Documentation Honesty
 
-Trust is the product. Applies **everywhere** — specs, plans, README, website, marketing, code comments.
+Trust is the product. Applies everywhere — specs, plans, README, website, marketing, code comments.
 
-- **Every empirical or comparative claim about the outside world** (stats, adoption, competitor capability/performance/conformance numbers, market facts, attributed quotes) MUST carry an inline link to the authoritative source that actually makes that claim. Link it or delete it — NEVER invent or approximate. A value that drifts (a competitor's conformance %, a download size) links to its live source, never a frozen figure.
-- **Self-measured, reproducible metrics are exempt** (e.g. our conformance score from the unmodified `python/typing` scorer) — but state how they're measured and don't compare them against numbers from a different methodology.
-- **Book screenshots are direct release evidence.** Any visual that shows Basilisk, an editor, a terminal, diagnostics, controls, or product output MUST be captured from the book's pinned released build. NEVER mock, redraw, reconstruct, generate, or hand-compose product UI, even under a label such as diagram, wireframe, or conceptual map. Cropping, uniform publication resizing, and external callouts are allowed; repainting, replacing, or compositing product pixels or text is not. If a real capture is unavailable, omit the visual. Follow [`book/VISUAL-DESIGN-SYSTEM.md`](book/VISUAL-DESIGN-SYSTEM.md#screenshot-contract).
-
+- **Every claim about the outside world** (stats, adoption, competitor numbers, market facts, quotes) carries an inline link to the source making it. Link it or delete it. Drifting values link live, never frozen.
+- **Self-measured metrics** state how they're measured, are reproducible, and are never compared across methodologies. Conformance isn't publishable at all (above).
+- **Book screenshots are release evidence** — captured from the book's pinned released build; never mocked, redrawn, generated, or hand-composed, not even labelled "diagram". Crop and resize freely; never repaint product pixels. No real capture → omit it. See [`book/VISUAL-DESIGN-SYSTEM.md`](book/VISUAL-DESIGN-SYSTEM.md#screenshot-contract).
 
 # Documentation Structure
 
-The spec-ID web is the fabric of this repository and is non-negotiable:
+The spec-ID web is non-negotiable:
 
-- Every spec section has a unique, non-numeric, hierarchical ID (`[GROUP-TOPIC]` / `[GROUP-TOPIC-DETAIL]`).
-- Code references its spec ID in comments (e.g. `// Implements [LSP-HOVER]`) so `grep [LSP-` walks spec → code → tests in one shot. Tests cross-reference both the spec ID and the code.
-- Find code, tests, or specs that aren't linked? Add the missing ID or reference.
-- `docs/INDEX.md` — full index. `docs/specs/[COMPONENT]-[FEATURE]-SPEC.md`, `docs/plans/[COMPONENT]-[FEATURE]-PLAN.md`.
-- `docs/specs/LSP-ARCHITECTURE-SPEC.md` is the **single source of truth** for all shared LSP/DAP/config/commands; editor-specific specs point back to it.
+- Every spec section has a unique, non-numeric, hierarchical ID (`[GROUP-TOPIC-DETAIL]`).
+- Code cites its spec ID in comments (`// Implements [LSP-HOVER]`) so `grep [LSP-` walks spec → code → tests; tests cross-reference both. Anything unlinked gets the missing ID.
+- `docs/INDEX.md` indexes `docs/specs/[COMPONENT]-[FEATURE]-SPEC.md` and `docs/plans/[COMPONENT]-[FEATURE]-PLAN.md`. `docs/specs/LSP-ARCHITECTURE-SPEC.md` is the **single source of truth** for shared LSP/DAP/config/commands.
 
 # Rules
 
-Build scripts live in the Makefile. [Pyrefly](https://pyrefly.org/en/docs/) and [Pyright](https://microsoft.github.io/pyright/#/) are reference implementations to compare against — NEVER copy from their code.
+Build scripts live in the Makefile. [Pyrefly](https://pyrefly.org/en/docs/) and [Pyright](https://microsoft.github.io/pyright/#/) are references to compare against — NEVER copy their code.
 
-- **Top priority: reduce duplication.** Run `deslop:find-similar` BEFORE writing new code and `deslop:top-offenders` after changing code. Merge duplicates; keep it DRY.
-- Aggressively hoist shared code into shared crates/modules/packages. Use [lspkit](https://crates.io/crates/lspkit) where possible.
-- Centralize all global state: one global-state file per app, no state outside it. All mutable state uses Signals — no stale state on screen.
+- **Never parse with strings or regex** — `ruff_python_parser` and the resolver only.
+- **After correctness, reduce duplication.** `deslop:find-similar` before writing new code, `deslop:top-offenders` after. Merge duplicates.
+- Hoist shared code into shared crates/modules. Use [lspkit](https://crates.io/crates/lspkit) where possible.
+- One global-state file per app. All mutable state uses Signals — no stale state on screen.
 - Keep dependency versions in sync across `.github/workflows/ci.yml` and `.devcontainer/Dockerfile`.
-- Define spec models in [typeDiagram markup](https://typediagram.dev/docs/language-reference.html); generate ADTs with the [typeDiagram code generator](https://typediagram.dev/docs/cli.html) pointed at the markup.
+- Define spec models in [typeDiagram markup](https://typediagram.dev/docs/language-reference.html); generate ADTs with its [code generator](https://typediagram.dev/docs/cli.html).
 - Don't use Git unless asked.
-- Treat legacy code as code to be removed — there is no legacy code in this codebase.
-- Avoid regex to parse anything, use ruff.
-- Keep files under 500 LOC; break up larger files. Move files rather than copying them.
-- Use your judgment — do NOT stop to ask the user questions.
-- NEVER kill a VS Code process (including in the browser) — it disrupts active debugging and test sessions.
+- Legacy code is code to be removed; there is none here.
+- Files under 500 LOC. Move files rather than copying.
+- Use your judgment — do NOT stop to ask questions. (Reporting a deletion isn't a question; report and continue.)
+- NEVER kill a VS Code process — it disrupts active debugging and test sessions.
 - Bug Fix Process: [fix bug skill](.claude/skills/fix-bug/SKILL.md)
 
 ## Git & Branch Discipline
 
-Git is off-limits unless explicitly asked. When git IS used:
+Off-limits unless explicitly asked. When git IS used:
 
-- **NEVER push to `main` directly.** Every change ships via PR → CI green → merge.
-- **NEVER list the agent as a commit co-author** — no `Co-Authored-By` trailer, no agent attribution.
-- **Work on exactly ONE branch.** Reuse the existing feature branch; if multiple exist, merge them into one before any other work.
-- **Worktrees are forbidden** — never run `git worktree`.
-- **NEVER close anything you did not open** — no issue, PR, discussion, or review thread, however stale. Including auto-close keywords: write `Refs #123`, never `Closes/Fixes #123`.
+- **NEVER push to `main`** — every change ships via PR → CI green → merge.
+- **NEVER list the agent as co-author** — no `Co-Authored-By`, no agent attribution.
+- **Exactly ONE branch.** Reuse the feature branch; merge multiples into one first.
+- **Worktrees are forbidden.**
+- **NEVER close anything you did not open** — write `Refs #123`, never `Closes/Fixes #123`.
 
 ## Testing
 
-- Target 100% coverage on every measure. Each PR MUST INCREASE overall coverage or it is a failure.
-- NEVER delete a failing test, remove a failure-causing assertion, reduce assertiveness, or ignore tests. Broken or missing functionality gets MORE failing tests, never fewer.
-- Mutation score only increases; widen scope over time by adding `#[mutation_safe]` tests over more rules/functions. The gate ([CHKARCH-TESTING-MUTATION-RATCHET], baseline `mutation_testing/mutation_scores.json`) fails CI if the viable mutant pool shrinks, caught drops, missed/timeout rise, or kill rate drops.
-- `make test` is FAIL-FAST — NEVER use `--no-fail-fast`.
-- `make test` always computes and enforces coverage. The threshold lives in `coverage-thresholds.json` at the repo root — not env vars, not GH repo variables, not CI YAML. Ratchet only; below threshold fails the pipeline.
-- VSIX tests must not call `whenCommandReady` or `vscode.commands.getCommands(true)` to check existence — the core code does that. Assert through the UI or, worst case, internal VSIX state.
+- Tests exercise **meaning, not spelling**: every rule test gets an aliased-import and a reformatted variant, with identical diagnostics.
+- Target 100% coverage on every measure. Each PR MUST increase overall coverage.
+- NEVER delete a failing test, remove a failure-causing assertion, reduce assertiveness, or ignore tests. Broken functionality gets MORE failing tests, never fewer.
+- Mutation score only increases; widen scope with `#[mutation_safe]` tests. The gate ([CHKARCH-TESTING-MUTATION-RATCHET], `mutation_testing/mutation_scores.json`) fails CI if the mutant pool shrinks, caught drops, missed/timeout rise, or kill rate drops.
+- `make test` is FAIL-FAST — never `--no-fail-fast`. It enforces coverage from `coverage-thresholds.json` at the repo root, not env vars or CI YAML. Ratchet only.
+- VSIX tests must not call `whenCommandReady` or `getCommands(true)` to check existence — assert through the UI, or worst case internal VSIX state.
 
 ## Benchmarks
 
-Performance is a feature, but the benchmark is **indicative, not a gate** ([CHKARCH-TESTING-BENCH]). It runs on a developer workstation against whatever else that machine is doing; background load moves every tool in the table together and can shift absolute times by tens of percent between two runs of identical code. **Nothing in CI passes or fails on a benchmark number, and no gate is to be reintroduced** — a pass/fail built on that signal fails honest work and waves through real regressions depending on what else was running.
+The benchmark is **indicative, not a gate** ([CHKARCH-TESTING-BENCH]) — it runs on a workstation against whatever else that machine is doing, shifting absolute times by tens of percent between identical runs. **Nothing in CI passes or fails on a benchmark number, and no gate is to be reintroduced.**
 
-- Run `make bench` whenever you touch checker hot paths (resolver visitors, rule `check` loops, new conformance logic). Every run does `cargo clean` + a fresh `--release` build and pulls the latest official release of each competitor (pyright, mypy, ty, pyrefly, zuban) before timing.
-- **Write always.** Measured numbers go to `benchmarks/status/<machine>.csv` immediately and unconditionally — after every fixture and again at the end (`benchmarks/summarize.py`). A run that measured a number but didn't record it is a lie.
-- **Read it correctly.** Compare tools *within* one run — they are measured back to back on the same machine, so machine speed cancels. Never compare a number against one recorded on a different machine or at a different time. To answer a real performance question, measure both revisions on one quiet machine in one sitting.
-- The published website figures carry this caveat explicitly; see `website/src/docs/benchmarks.njk`.
+- Run `make bench` when touching checker hot paths. Each run does `cargo clean` + a fresh `--release` build and pulls the latest release of each competitor (pyright, mypy, ty, pyrefly, zuban).
+- **Write always.** Numbers go to `benchmarks/status/<machine>.csv` after every fixture and at the end (`benchmarks/summarize.py`). Measuring without recording is a lie.
+- **Read correctly.** Compare tools *within* one run, never across machines or times. See `website/src/docs/benchmarks.njk`.
 
-## Logging Standards
+## Logging
 
-- **Structured logging only** — `tracing` + `tracing-subscriber`, never `println!`/`eprintln!` for diagnostics. If you can't see what's happening, add more logging.
-- Log at entry/exit of significant operations (`error|warn|info|debug|trace`), with structured fields not interpolation: `tracing::info!(user_id = 42, action = "checkout")`.
-- VS Code extension: detailed logs go to a file in the extension's state folder AND to the Output Channel.
-- **NEVER log PII** (names, emails, phone, IPs) or secrets — log `"key: present"` or a truncated hash.
+- **Structured only** — `tracing` + `tracing-subscriber`, never `println!`/`eprintln!`. Can't see what's happening? Add more logging.
+- Log entry/exit of significant operations with structured fields: `tracing::info!(user_id = 42, action = "checkout")`.
+- VS Code extension: detailed logs to a file in the extension's state folder AND the Output Channel.
+- **NEVER log PII** or secrets — log `"key: present"` or a truncated hash.
 
-## Rust Quality Standards
+## Rust Quality
 
-- Run clippy and fmt routinely; fix violations promptly. All lints at highest strictness (Cargo.toml `[lints]`). Add lints if in doubt; never remove them.
-- `unsafe` is forbidden (`unsafe_code = "deny"`). `unwrap()` is always a violation — use `?` with proper error types. No `panic!`, `todo!`, `unimplemented!` — handle every case and return `Result<T, E>`.
-- `Result<T, E>` and `Option<T>` everywhere; early returns with `?`. Expressions over statements (`match`, `if let`, iterator chains). Pattern matching over casting or unwrapping. Pure functions; minimize side effects.
-- Small, focused functions (<20 lines) with low cognitive complexity (clippy::cognitive_complexity enabled). Descriptive names (no single letters except in closures). Group related functionality into modules; document public APIs.
+- Clippy and fmt routinely. All lints at highest strictness (Cargo.toml `[lints]`). Add lints if in doubt; never remove them.
+- `unsafe` is forbidden (`unsafe_code = "deny"`). `unwrap()` is always a violation — use `?` with proper error types. No `panic!`, `todo!`, `unimplemented!`.
+- `Result<T, E>` / `Option<T>` everywhere; early returns with `?`. Expressions over statements. Pattern matching over casting. Pure functions.
+- Functions <20 lines, low cognitive complexity. Descriptive names (no single letters outside closures). Group into modules; document public APIs.
 
 # Too Many Cooks — Multi-Agent Coordination
 
-Register before starting work. Coordinator dictates orders through plans and messages and delegates; others follow and check messages regularly. Lock files before editing, never edit locked files, and respond to messages promptly.
+Register before starting work. The coordinator dictates orders through plans and messages; others follow and check messages regularly. Lock files before editing, never edit locked files, respond promptly.
 
 # Website
 
-- **Minimize CSS classes**; name them after what the element IS, not what section it's in. Avoid LLM-default colors (e.g. purple) — use RNG and color wheels.
+**Minimize CSS classes**; name them after what the element IS, not what section it's in. Avoid LLM-default colors (e.g. purple) — use RNG and color wheels.
 
 ## Per-diagnostic error pages (`/errors/BSK-XXXX/`)
 
-Every diagnostic ends with `see: https://www.basilisk-python.dev/errors/BSK-XXXX` (the `docs_url` on each rule's `ErrorCode`). Pages are generated for all codes from checker source — `[WEBSITE-ERROR-PAGES]` (`docs/specs/WEBSITE-ERROR-PAGES-SPEC.md`). The single source is `website/src/_data/rules.json`:
+Every diagnostic ends with `see: https://www.basilisk-python.dev/errors/BSK-XXXX` (each rule's `ErrorCode.docs_url`). Pages generate from checker source — `[WEBSITE-ERROR-PAGES]`. Single source is `website/src/_data/rules.json`:
 
 ```bash
-python3 scripts/gen_rules_reference.py --data   # writes website/src/_data/rules.json
+python3 scripts/gen_rules_reference.py --data
 ```
 
-It extracts the `//! BSK-XXXX:` summary + doc-comment body (prose and ```python examples) from each `crates/basilisk-checker/src/rules/*.rs`. **Rerun it after adding or renaming a rule** — CI regenerates and `diff`s `rules.json` (`[WEBSITE-ERROR-PAGES-DRIFT]`), and rule-source edits count as website changes so the guard runs. The same data drives the `/docs/rules/` table and counts. Pages render via `website/src/errors/error.njk`; a worked-example screenshot appears automatically for any code in `screenshots/shots.mjs`.
+It extracts the `//! BSK-XXXX:` summary + doc-comment body from each `crates/basilisk-checker/src/rules/*.rs`. **Rerun after adding or renaming a rule** — CI regenerates and `diff`s it (`[WEBSITE-ERROR-PAGES-DRIFT]`). The same data drives `/docs/rules/`. Pages render via `website/src/errors/error.njk`; screenshots appear for any code in `screenshots/shots.mjs`.
 
 # Architecture
 
-Strict-by-default Python type checker and comprehensive LSP in **Rust**. Users can flick errors down to warnings and adopt type safety incrementally, or just use the LSP for autofixes, formatting, debugging, and profiling.
+Strict-by-default Python type checker and comprehensive LSP in **Rust**. Users can flick errors down to warnings and adopt type safety incrementally, or use the LSP alone for autofixes, formatting, debugging, and profiling.
 
 - **Parser**: `ruff_python_parser`. **Incremental**: Salsa — sub-10ms incremental checks.
-- **Formatting**: `ruff_python_formatter` embedded in-process ([LSPFMT-ENGINE]); import hygiene reimplemented natively on the Ruff AST ([LSPFMT-IMPORTS]). The `ruff` CLI is NOT a runtime dependency — never spawn it.
-- **Concurrency**: Tokio in the LSP server (request multiplexing + `spawn_blocking`); analysis is single-threaded on one dedicated large-stack thread ([LSPARCH-ARCH-STACK]).
+- **Formatting**: `ruff_python_formatter` in-process ([LSPFMT-ENGINE]); import hygiene native on the Ruff AST ([LSPFMT-IMPORTS]). The `ruff` CLI is NOT a runtime dependency — never spawn it.
+- **Concurrency**: Tokio in the LSP server; analysis single-threaded on one dedicated large-stack thread ([LSPARCH-ARCH-STACK]).
 - **No Pyright/mypy/Node.js** — zero TypeScript or Python runtime.
 
 ## Migration to `lspkit`
 
-Cross-cutting LSP scaffolding here is being distilled into the generic `lspkit-*` workspace in [`Nimblesite/lsp_toolkit`](https://github.com/Nimblesite/lsp_toolkit). Prefer `lspkit-*` crates for new LSP infrastructure; when changing existing scaffolding, flag in the PR description if the patch duplicates `lspkit` and reference the upstream crate.
+LSP scaffolding is being distilled into the `lspkit-*` workspace in [`Nimblesite/lsp_toolkit`](https://github.com/Nimblesite/lsp_toolkit). Prefer `lspkit-*` for new infrastructure; flag in the PR if a patch duplicates it.
 
 | Current path | Toolkit crate |
 |---|---|
-| `crates/basilisk-lsp/src/server/mod.rs:96` tower-lsp `Server` setup | `lspkit-server` (hand-rolled JSON-RPC + `Dispatcher` + `Capabilities`; no `tower-lsp` dependency) |
-| `crates/basilisk-lsp/src/workspace.rs:39–116` `WorkspaceIndex` + import-graph invalidation | `lspkit-vfs` + consumer-side index |
-| `crates/basilisk-lsp/src/server/handlers/{navigation,features}.rs` | `lspkit-server::Dispatcher::register` per method name |
-| `crates/basilisk-lsp/src/server/init.rs:224–242` diagnostic publication | `lspkit-server::diagnostics::DiagnosticsBus` |
-| `crates/basilisk-lsp/src/server/mod.rs:61,64` debounce + file-watcher loop | `lspkit-live::watcher::FileWatcher` + `lspkit-live::scheduler::spawn` |
-| `crates/basilisk-lsp/src/config.rs:35–100` `WorkspaceConfig` loader | `lspkit-config::load_from_ancestor` |
-| `crates/basilisk-lsp/tests/lsp/ws_test_common.rs` E2E fixture | not yet in toolkit (v0.1 follow-up) |
+| `crates/basilisk-lsp/src/server/mod.rs:96` tower-lsp `Server` | `lspkit-server` |
+| `crates/basilisk-lsp/src/workspace.rs:39–116` `WorkspaceIndex` | `lspkit-vfs` + consumer-side index |
+| `crates/basilisk-lsp/src/server/handlers/{navigation,features}.rs` | `lspkit-server::Dispatcher::register` |
+| `crates/basilisk-lsp/src/server/init.rs:224–242` diagnostics | `lspkit-server::diagnostics::DiagnosticsBus` |
+| `crates/basilisk-lsp/src/server/mod.rs:61,64` debounce + watcher | `lspkit-live::watcher` + `lspkit-live::scheduler` |
+| `crates/basilisk-lsp/src/config.rs:35–100` `WorkspaceConfig` | `lspkit-config::load_from_ancestor` |
+| `crates/basilisk-lsp/tests/lsp/ws_test_common.rs` E2E fixture | not yet in toolkit |

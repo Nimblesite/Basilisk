@@ -6,11 +6,15 @@
 
 为 Basilisk 打造的一流 Neovim 插件 —— 零配置的 Python 类型检查、调试、性能分析与测试探索。
 
-唯一在官方 [`python/typing` 符合性套件](https://github.com/python/typing/blob/main/conformance/results/results.html)中取得 100% 满分的 Python 类型检查器 —— 也是我们测过的最快的。使用 Rust 构建的完整开源 Python 开发环境：类型检查器、语言服务器、调试器与性能分析器，并提供 VS Code、Cursor、Zed 与 Neovim 扩展。默认严格。
+Basilisk 是用 Rust 打造的开源 Python 类型检查器与语言服务器：诊断、自动补全、重构、调试与性能分析，严格程度按规则配置。
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/Nimblesite/Basilisk/main/website/src/assets/images/screenshot.png" alt="Basilisk in action — type checking, diagnostics, and refactoring in the editor" width="900">
 </p>
+
+**当前的类型检查器存在不准确之处，请勿将其用于你的开发流水线。我们正在尽快移除任何具有误导性的分析器。详情请见下文**
+
+> **我们撤回了类型一致性结果。** 100% 的宣称与基准测试数字均已撤回，并主动请求[从官方结果中移除](https://github.com/python/typing/blob/main/conformance/results/results.html)。无论是按规范重建检查器，还是让扩展由一个成熟的开源检查器驱动，我们都在把 Basilisk 打造成准确的 Python 开发体验。[阅读更正](https://www.basilisk-python.dev/zh/docs/conformance/)。
 
 ## 在 Basilisk 中的角色
 

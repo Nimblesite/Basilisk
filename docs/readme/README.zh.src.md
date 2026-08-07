@@ -12,8 +12,8 @@
 <p align="center"><a href="{{altLangHref}}">English</a> · <strong>简体中文</strong></p>
 
 <p align="center">
-  <strong>唯一在官方 <a href="https://github.com/python/typing/blob/main/conformance/results/results.html"><code>python/typing</code> 一致性测试套件</a>上取得 100% 的 Python 类型检查器 —— 也是我们测得最快的。</strong><br>
-  用 <strong>Rust</strong> 打造的完整开源 Python 开发环境：类型检查器、语言服务器、调试器、性能分析器，以及 VS Code、Cursor、Zed 与 Neovim 扩展。默认严格。
+  <strong>用 Rust 打造的开源 Python 类型检查器与语言服务器。</strong><br>
+  一个扩展覆盖整套工作流 —— 诊断、自动补全、重构、格式化、调试与性能分析 —— 全部由单一捆绑的二进制文件驱动。
 </p>
 
 <!--v:github-->
@@ -29,57 +29,47 @@
   <a href="https://www.basilisk-python.dev/zh/docs/quick-start/">快速上手</a> &nbsp;&bull;&nbsp;
   <a href="https://www.basilisk-python.dev/zh/docs/rules/">规则</a> &nbsp;&bull;&nbsp;
   <a href="https://www.basilisk-python.dev/zh/docs/refactoring/">重构</a> &nbsp;&bull;&nbsp;
-  <a href="https://www.basilisk-python.dev/zh/docs/comparison/">对比</a> &nbsp;&bull;&nbsp;
   <a href="https://github.com/Nimblesite/Basilisk">GitHub</a>
 </p>
-
-<p align="center">
-  <a href="https://www.basilisk-python.dev/zh/docs/conformance/"><strong>PEP 一致性 <!--g:score-->100.0%<!--/g:score--></strong></a> &mdash; 官方
-  <a href="https://github.com/python/typing/tree/a4906624f170c169cf667f962080c56d5a5ba6ff/conformance"><code>python/typing</code></a>
-  一致性套件（提交 <code><!--g:short-->a490662<!--/g:short--></code>）<!--g:total-->141<!--/g:total--> 项测试中通过 <!--g:pass-->141<!--/g:pass--> 项，
-  由真实的上游评分器在默认配置下对 wheel 安装的 CLI 评出。
-  我们以 <code>python/typing@main</code> 为目标，且分数只升不降。
-</p>
-
-## 唯一 100% 的检查器 &mdash; 按我们的基准测试也是最快的
-
-Basilisk 是**唯一**在官方
-[`python/typing` 一致性套件](https://github.com/python/typing/blob/main/conformance/results/results.html)
-上取得满分的 Python 类型检查器：**<!--g:score-->100.0%<!--/g:score-->**
-（<!--g:pass-->141<!--/g:pass-->/<!--g:total-->141<!--/g:total--> 个文件，捕获 <!--g:caught-->970<!--/g:caught--> 处必需错误，<!--g:fp-->0<!--/g:fp--> 个误报），
-由真实的上游评分器在默认配置下对 wheel 安装的 CLI 测得。
 
 <p align="center">
   <img src="images/screenshot.png" alt="Basilisk 实战 —— 编辑器中的类型检查、诊断与重构" width="900">
 </p>
 
-它也是**我们测得最快的检查器** &mdash; 从零开始的整文件冷检查中位数：
+**当前的类型检查器存在不准确之处，请勿将其用于你的开发流水线。我们正在尽快移除任何具有误导性的分析器。详情请见下文**
 
-| 类型检查器 | 冷检查中位数 |
-| --- | --- |
-| ⚡ **Basilisk** | **<!--g:benchBasilisk-->12<!--/g:benchBasilisk--> ms** |
-| zuban | <!--g:benchZuban-->28<!--/g:benchZuban--> ms |
-| ty | <!--g:benchTy-->39<!--/g:benchTy--> ms |
-| Pyrefly | <!--g:benchPyrefly-->111<!--/g:benchPyrefly--> ms |
-| Pyright | <!--g:benchPyright-->582<!--/g:benchPyright--> ms |
-| mypy | <!--g:benchMypy-->605<!--/g:benchMypy--> ms |
+## 我们撤回了类型一致性结果
 
-在 <!--g:benchMachine-->Apple M4 Max<!--/g:benchMachine--> 上对 <!--g:benchCount-->26<!--/g:benchCount--> 个单一构造的类型规范压力用例测得的整文件冷检查中位数 &mdash; 越低越好。Basilisk 的热重检查可降至约 <!--g:benchWarm-->5<!--/g:benchWarm--> ms。每个数字都由 [`hyperfine`](https://github.com/sharkdp/hyperfine) 产生并按机器提交，没有一个是手写的。**克隆仓库，在你自己的硬件上运行 `make bench`，并把 CSV 发给我们 &mdash; 欢迎独立复核。** [完整基准与方法论 &rarr;](https://www.basilisk-python.dev/zh/docs/benchmarks/)
+我们撤回了 100% 的一致性宣称与基准测试数字，并主动请求
+[从官方 `python/typing` 结果中移除](https://github.com/python/typing/blob/main/conformance/results/results.html)。
+原因是检查器中存在针对一致性测试文件内容而写的逻辑，而不是对类型规范的通用实现；
+这样得出的分数并不能作为证据。当前的百分比**暂时未知**。
 
-## 一个扩展，覆盖全部
+我们正在决定是按规范重建检查器，还是让扩展由一个成熟的开源检查器驱动。**无论走哪
+条路，我们都在把 Basilisk 打造成准确的 Python 开发体验** —— 而新的数字只有在经受住
+套件之外的用例与变异测试后才会发布。
 
-一个扩展即可取代 Pylance 并提供完整工作流 —— 无需 Node.js、无需 Python 运行时、无需 pip、无需 npm。一切由单一捆绑的 Rust 二进制文件驱动：
+[阅读完整更正 &rarr;](https://www.basilisk-python.dev/zh/docs/conformance/) &nbsp;&bull;&nbsp;
+[完整性审计 &rarr;](docs/CONFORMANCE-INTEGRITY-AUDIT.md)
 
-- **默认严格的诊断** —— 随输入实时呈现，由 Salsa（rust-analyzer 的引擎）提供增量分析
+## 你能得到什么
+
+一个扩展即可覆盖整套 Python 工作流。一切由单一捆绑的 Rust 二进制文件驱动 ——
+无需 Node.js、无需 npm、无需 `pip install`：
+
+- **随输入实时诊断** —— 由 [Salsa](https://github.com/salsa-rs/salsa) 提供增量分析
 - **自动补全、悬停信息、跳转到定义、查找引用、重命名**
 - **重构代码操作** —— 提取、内联、移动符号、整理导入
-- **集成调试** —— 按 F5 即可通过捆绑的 debugpy 调试；无需额外扩展
+- **集成调试** —— 按 F5 即可通过捆绑的 [debugpy](https://github.com/microsoft/debugpy) 调试；无需额外扩展
 - **集成性能分析** —— CPU 热力图、火焰图，以及带泄漏检测的内存面板
 - **活动面板** —— 模块树与逐模块的类型健康度覆盖率，并可切换功能开关
 - 内置 **Inlay hints** 与 **Ruff** 格式化／导入整理
 - **来自 [typeshed](https://github.com/python/typeshed) 的标准库类型** —— 完整的 `stdlib/` 快照已编译进二进制文件，因此悬停与诊断在离线且零配置的情况下依然可用
 
-每条诊断都有教育意义：rustc 风格的输出，附带 `help`、`note` 以及指向每条规则详解页的链接，因此一条红色波浪线总能告诉你*为什么*。Basilisk **一开始就严格**并始终严格 —— 未配置的默认值即启用完整的类型规范规则集，严格程度按规则微调，而不是靠模式切换。
+严格程度按**规则**配置，而不是靠模式切换：未配置的默认值即启用类型规范规则集，
+每条规则都可以降级为 `warning`/`info`，让代码库能够渐进地采用类型安全。每条诊断
+都附带 `help`、`note` 以及指向每条规则详解页的链接，因此一条红色波浪线总能告诉你
+*为什么*。
 
 ## 安装
 
