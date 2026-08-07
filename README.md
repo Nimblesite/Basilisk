@@ -14,6 +14,8 @@
   One extension for the whole workflow &mdash; diagnostics, autocomplete, refactoring, formatting, debugging, and profiling &mdash; driven by a single bundled binary.
 </p>
 
+> **You are reading the Basilisk source repository** — the checker, language server, editor extensions, and website all live here.
+
 <p align="center">
   <a href="https://www.basilisk-python.dev">Website</a> &nbsp;&bull;&nbsp;
   <a href="https://www.basilisk-python.dev/docs/installation/">Install</a> &nbsp;&bull;&nbsp;
@@ -29,17 +31,30 @@
 
 **The current type checker contains inaccuracies and you should not use it as part of your dev pipeline. We are working on removing any misleading analyzers ASAP. Please read below**
 
-## We withdrew the typing conformance results
+## We are auditing the checker and deleting what doesn't hold up
 
 We withdrew our 100% conformance claim and our benchmark figures, and asked to be
 [removed from the official `python/typing` results](https://github.com/python/typing/blob/main/conformance/results/results.html).
 The cause was checker logic fitted to the contents of conformance test files
-instead of implementing the typing specification generally, and a score produced
-that way is not evidence. The current percentage is **temporarily unknown**.
+instead of implementing the typing specification generally: rules that matched
+the *spelling* of code rather than its meaning. Rename an import or reformat a
+file and the answer changed. A score produced that way is not evidence.
 
-We are
-building Basilisk into an accurate Python development experience** — and a new
-figure gets published only once it survives off-suite and mutation testing.
+**So we are auditing every rule and deleting the ones that don't do real type
+checking.** Not rewriting them, not patching them, not marking them TODO —
+deleting them, with a failing test left behind so the gap is visible instead of
+hidden. A rule stays only if it decides from the resolved syntax tree and gives
+the same answer when the code is spelled differently.
+
+That means Basilisk gets **smaller** before it gets better. Expect fewer rules,
+fewer diagnostics, and a lower conformance number. We will report each drop
+rather than avoid it. What is left will be code that is honest about what it
+does — nothing else.
+
+We have not yet decided whether to rebuild the deleted analysis from the
+specification or to drive the extension with an established open-source checker.
+Either way, no new figure gets published until it survives off-suite and
+mutation testing.
 
 [Read the full correction &rarr;](https://www.basilisk-python.dev/docs/conformance/) &nbsp;&bull;&nbsp;
 [Integrity audit &rarr;](docs/CONFORMANCE-INTEGRITY-AUDIT.md)

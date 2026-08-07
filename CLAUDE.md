@@ -105,10 +105,13 @@ Off-limits unless explicitly asked. When git IS used:
 
 ## Testing
 
-- Tests exercise **meaning, not spelling**: every rule test gets an aliased-import and a reformatted variant, with identical diagnostics.
-- Target 100% coverage on every measure. Each PR MUST increase overall coverage.
+Tests must **enforce behaviour**, not work around the gaps in it. Judge a test by what it would catch, never by whether it's green.
+
+- Tests exercise **meaning, not spelling**: every rule test gets an aliased-import and a reformatted variant, with identical diagnostics. The harness that would enforce this across the suite ([CHKARCH-TESTING-SEMANTIC-MUTATION]) **does not exist yet** — until it does, every rule is unverified and must be described that way.
+- Test against Python the conformance suite has never contained. A test copied from `conformance/tests/` cannot detect a rule fitted to `conformance/tests/`.
 - NEVER delete a failing test, remove a failure-causing assertion, reduce assertiveness, or ignore tests. Broken functionality gets MORE failing tests, never fewer.
-- Mutation score only increases; widen scope with `#[mutation_safe]` tests. The gate ([CHKARCH-TESTING-MUTATION-RATCHET], `mutation_testing/mutation_scores.json`) fails CI if the mutant pool shrinks, caught drops, missed/timeout rise, or kill rate drops.
+- Target 100% coverage on every measure. Each PR MUST increase overall coverage. Line coverage proves execution, never assertion — a rule at 100% coverage and zero real assertions is the normal failure, not an edge case.
+- Mutation score only increases; widen scope with `#[mutation_safe]` tests. The gate ([CHKARCH-TESTING-MUTATION-RATCHET], `mutation_testing/mutation_scores.json`) fails CI if the mutant pool shrinks, caught drops, missed/timeout rise, or kill rate drops. **Read the denominator before the rate:** scope is opt-in, so the committed 100% covers 161 mutants out of an ~82k-LOC crate; timeouts are credited as kills; survivors are aggregated into a count. Never narrow scope to protect a rate, and never kill a mutant by asserting on incidental output instead of the behaviour it changed.
 - `make test` is FAIL-FAST — never `--no-fail-fast`. It enforces coverage from `coverage-thresholds.json` at the repo root, not env vars or CI YAML. Ratchet only.
 - VSIX tests must not call `whenCommandReady` or `getCommands(true)` to check existence — assert through the UI, or worst case internal VSIX state.
 

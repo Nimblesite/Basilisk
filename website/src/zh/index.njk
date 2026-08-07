@@ -20,9 +20,10 @@ permalink: /zh/
         </h1>
 
         <p class="hero__subheadline">
-          我们已撤回此前的符合性声明和公开的基准测试数据。应我们的请求，Basilisk
-          已从官方 <code>python/typing</code> 结果中移除。在重新实现针对测试特例的逻辑，
-          并通过稳健性测试与变异测试验证之前，当前符合性百分比暂时未知。
+          我们已撤回此前的符合性声明和公开的基准测试数据，应我们的请求，Basilisk
+          已从官方 <code>python/typing</code> 结果中移除。我们正在逐条审计规则，
+          并<strong>删除</strong>那些只匹配源文本、并未做真正类型检查的规则。
+          Basilisk 会先变小，再变好；留下来的，将是对自己所做之事诚实的代码。
         </p>
 
         <div class="hero__cta-group">
@@ -59,7 +60,8 @@ permalink: /zh/
         <span class="stat-card__sub">
           之前的结果已撤回。应我们的请求，Basilisk 已从
           <a href="https://github.com/python/typing/blob/main/conformance/results/results.html" target="_blank" rel="noopener">官方结果表</a>中移除。
-          待全新实现通过保持测试语义的变异验证后，我们会发布新的结果。
+          我们并不打算把它恢复回去 —— 删除那些本来就没在做分析的规则，会先把它拉得更低，
+          我们会如实报告这个下降，而不是设法回避。
         </span>
       </div>
       <div class="stat-card">
@@ -72,7 +74,7 @@ permalink: /zh/
       </div>
     </div>
     <p class="hero__proof-cta">
-      两组数据均已撤回，等待全新实现和完整性审查。
+      审计期间，两组数据均已撤回。
       <a href="/zh/docs/conformance/">阅读符合性更正 &rarr;</a>
       <a href="/docs/benchmarks/">阅读基准测试说明 &rarr;</a>
     </p>
