@@ -120,6 +120,18 @@ the prefix would leave provenance unchanged; [CHKTAG-TESTS] asserts convention
 and self-declared set agree both ways. PEP rules are named after their
 conformance test (e.g. `aliases_newtype`) with no `BSK` prefix.
 
+> **This naming is a known hazard.** Naming a rule after the fixture it is scored
+> on invites the rule to be *about* that fixture: it makes "does the file pass?"
+> read as the rule's definition, and a rule file named `generics_base_class_2.rs`
+> has no name left to describe the typing-spec concept it owes. Fixture-shaped
+> naming is one of the detection signatures in
+> [CHKARCH-TEXT-MATCHED-LOGIC](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TEXT-MATCHED-LOGIC),
+> and the numeric `_2` / `_3` suffixes are the tell: they enumerate fixtures, not
+> concepts. The convention stands for now because the codes are user-visible and
+> renaming them is a breaking change the user has not scoped — **but a rule's
+> name is never evidence that it implements anything.** Judge the rule by whether
+> it decides on the resolved model, never by whether its fixture passes.
+
 ## Invariants {#CHKTAG-INVARIANTS}
 
 Enforced by [CHKTAG-TESTS] over the full, live rule set:

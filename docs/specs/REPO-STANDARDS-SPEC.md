@@ -18,7 +18,9 @@ in the file it governs, so the citation resolves in one hop.
 `.deslop.toml` at the repository root is the **single source of truth** for this
 repo's duplication budget. It is committed and PR-reviewed, and
 `[threshold] max_duplication_percent` is ratcheted **down** only — the same
-one-way discipline the coverage and conformance gates use.
+one-way discipline the coverage gate uses. (The conformance block in
+`coverage-thresholds.json` is deliberately *not* on that footing; see
+[COVERAGE-THRESHOLDS-JSON-CONFORMANCE](#COVERAGE-THRESHOLDS-JSON-CONFORMANCE).)
 
 `[defaults] exclude` drops paths during discovery, so excluded files are never
 analysed and never contribute to the measured percentage
@@ -95,11 +97,21 @@ value is forbidden; a project that cannot meet its number gets more tests.
 ### Conformance block {#COVERAGE-THRESHOLDS-JSON-CONFORMANCE}
 
 The same file carries the `conformance` block (`threshold` and
-`max_false_positives`), which is enforced by the real `python/typing` harness
-rather than by the coverage scripts. Its policy — pass percentage up only,
-false-positive ceiling down only, and no rule may be disabled to move either —
-is normative in
-[CHKARCH-CONFORMANCE](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE).
+`max_false_positives`), enforced by the real `python/typing` harness rather than
+by the coverage scripts.
+
+**This block is a known contradiction, recorded rather than papered over.** A
+pass-percentage floor over a fixed corpus the checker was developed against is
+the incentive the integrity audit identified behind the fitted predicates
+([§6.3](../CONFORMANCE-INTEGRITY-AUDIT.md)): it makes the *expected, correct* drop
+from deleting text-matched logic fail the build. Policy is set by
+[CHKARCH-CONFORMANCE](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE) — the
+number is a regression detector, never a target. Whether the floor comes out is
+the user's decision and not an agent's. Until they decide: **make the deletion,
+report the drop and the failing gate, and stop there.** Do not restore the code,
+refit the rule, or edit the threshold to get green.
+
+Unlike the coverage thresholds above, this block is **not** something to ratchet.
 
 ## Committed editor directories {#GITIGNORE-RULES}
 

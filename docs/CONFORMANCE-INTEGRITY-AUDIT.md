@@ -210,6 +210,11 @@ The exception is `is_assignable_to_bound`, where `_ => true` is not a documented
 
 ## 5. Remediation status — measured, not asserted
 
+> **Note on §5.1.** It records a rewrite made before the current policy. Rewriting is no
+> longer the response to text-matched logic — deletion is (§7). §5.1 is kept because its
+> measurement is the clearest evidence for *why*: a rewrite that fixes the headline case
+> and leaves the rule broken still reads as a fix.
+
 ### 5.1 `aliases_type_statement` — rewritten, **partially** effective
 
 The rule now validates the `StmtTypeAlias` value node structurally on the Ruff AST. All 13 conformance cases are rejected for the right structural reasons, and it catches forms the text scanner never could.
@@ -263,11 +268,41 @@ Unchanged from `main` except for routing `is_assignable_to_bound` through a `Sub
 
 ## 7. What we are changing
 
-- **Off-suite regression tests are mandatory** for every rewritten rule, with cases derived from the spec grammar and explicitly **not** from `conformance/tests/`. This is the only control that catches the defect class.
-- **Ban hardcoded symbol names as behavioural triggers.** A rule may not key on a specific identifier spelling unless the spec names that symbol.
-- **`_ => true` requires justification.** An accept-all arm must state which types it defers and to which path, or it is an unimplemented check and must not ship as one.
-- **Finish the AST migration.** Category B is the enabling condition; the tracked plans are [`CHECKER-ELIMINATE-LINE-SCANNING-PLAN.md`](plans/CHECKER-ELIMINATE-LINE-SCANNING-PLAN.md) and [`CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md`](plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md). `aliases_implicit.rs` was in neither inventory; it has been added to the line-scanning plan as part of this audit.
-- **Report the number honestly, including if it drops.** If removing fitted predicates costs conformance points, we publish the lower number.
+The correction is **audit and deletion**, not repair. Code that decides from the
+spelling of its input rather than its meaning is removed, and what survives is code
+that analyses Python. Nothing here is rewritten in place: rewriting preserves the claim
+that the rule worked, and that claim is what has to go.
+
+- **Text-matched logic is deleted, not fixed.** On finding it: write a test that fails
+  because of it, delete the code, and report what went and why — no fix, no rewrite, no
+  TODO ([CHKARCH-TEXT-MATCHED-LOGIC](specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TEXT-MATCHED-LOGIC)).
+  **A failing test that pins real incorrect behaviour is worth more than a passing
+  fixture carried by logic that does not analyse code.** What gets built back is a
+  deliberate, separate decision.
+- **A smaller checker is the expected outcome, and an acceptable one.** Rule count,
+  diagnostic coverage, and the conformance number are all expected to fall. Each drop is
+  reported. None is reverted, and none is a reason to keep code that was never doing the
+  work.
+- **The pass-percentage floor is the mechanism that caused this** (§6.3) and is no
+  longer a target ([CHKARCH-CONFORMANCE](specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE)).
+  No conformance figure is published or quoted, and there is no re-submission to
+  `python/typing` until the semantics-preserving mutation harness passes clean and an
+  external audit has run.
+- **Build the control that would have caught this.** Semantics-preserving mutation —
+  aliased imports, reformatting, reordering, consistent renaming → identical diagnostics
+  ([CHKARCH-TESTING-SEMANTIC-MUTATION](specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING-SEMANTIC-MUTATION)).
+  It does not exist yet, which is why every green run reinforced the wrong conclusion.
+  Until it does, no rule is verified.
+- **Off-suite tests are mandatory** for every surviving rule, derived from the spec
+  grammar and real code, explicitly **not** from `conformance/tests/`.
+- **Ban hardcoded symbol names as behavioural triggers.** A rule may not key on a
+  specific identifier spelling unless the spec names that symbol.
+- **`_ => true` is an unimplemented check.** An accept-all arm either states which cases
+  it defers and to which path, or it is deleted along with the rule that relies on it.
+- **Finish the AST work.** Category B is the enabling condition; the tracked plans are
+  [`CHECKER-ELIMINATE-LINE-SCANNING-PLAN.md`](plans/CHECKER-ELIMINATE-LINE-SCANNING-PLAN.md)
+  and [`CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md`](plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md).
+  `aliases_implicit.rs` was in neither inventory; it was added as part of this audit.
 
 ## 8. Issue index
 

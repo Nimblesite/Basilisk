@@ -29,6 +29,8 @@ On encountering it, do exactly three things — **do not fix it, do not rewrite 
 
 Replacing it is not your call. The point is to surface every one of these so the user can acknowledge it and decide what gets built back. A checker with fewer rules and visible failing tests is the correct outcome; a diagnostic that only fires on one spelling looks like coverage and isn't.
 
+**A failing test that pins real incorrect behaviour is worth more than a passing fixture carried by logic that does not analyse code.** The first is an accurate map of what Basilisk cannot yet do; the second is a false claim that it can. Given the choice, take the failing test — every time.
+
 ## What a correct rule looks like
 
 The yardstick for judging code — not licence to go and fix it:
@@ -48,8 +50,9 @@ Background, not a directive: strip text-matched logic, establish which rules gen
 
 - **Never publish, quote, or market a conformance figure** — nothing may imply Basilisk is in the official results.
 - **Never re-submit to python/typing** until the mutation harness passes clean and an external audit has run.
-- Never move the number by touching the scoreboard: disabling rules, deleting source to dodge a failure, rule-suppressing config, hand-editing `conformance/conformance_status.csv`, loosening `coverage-thresholds.json` ([CHKARCH-CONFORMANCE]).
-- **A drop caused by removing text-matched logic is progress.** Record it and say so plainly — never restore the code or fake a pass to hold a ratchet.
+- Never move the number by touching the scoreboard: rule-suppressing config, deleting source to dodge a failure, hand-editing `conformance/conformance_status.csv`, loosening `coverage-thresholds.json` ([CHKARCH-CONFORMANCE]).
+- **A drop caused by removing text-matched logic is progress.** Record it and say so plainly — never restore the code or fake a pass to hold a ratchet. The boundary is intent: deleting a rule to reach a number hides the loss; deleting text-matched logic leaves a failing test behind and reports the drop.
+- `coverage-thresholds.json` still gates the pass percentage at 100 with zero false positives, so the first honest deletion fails `make test`. That floor is the incentive that caused the fitting; removing it is the user's call. Until they decide: **delete anyway, report the drop and the failing gate, and stop there.**
 
 # Design Principles
 

@@ -113,9 +113,13 @@ and no new code may be written against any of them:
   `subtyping::SubtypingContext` as the **single** subtyping judgment.
 
 While a legacy path still exists in the tree it is an implementation debt, not
-a design. Deleting it must never delete a rule, drop a diagnostic, or cost a
-required conformance error ([CHKARCH-CONFORMANCE](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE));
-if the engine cannot yet carry a rule, the engine gets fixed first.
+a design. Removing it must not silently drop a diagnostic from a rule that
+genuinely analyses code — if the engine cannot yet carry such a rule, the engine
+gets fixed first. A rule whose verdict came from the text all along is a
+different case: it is deleted, with a failing test left behind and the loss
+reported ([CHKARCH-TEXT-MATCHED-LOGIC](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TEXT-MATCHED-LOGIC)).
+Neither case is decided by what it costs a conformance run
+([CHKARCH-CONFORMANCE](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE)).
 
 ### [TYPEINF-ANNOTATION-RESOLUTION] Annotation name resolution {#TYPEINF-ANNOTATION-RESOLUTION}
 
@@ -977,7 +981,9 @@ Subtyping is decided by `InferredType::is_assignable_to(&self, other)` in `crate
 
 Module-context equivalences that `is_assignable_to` cannot see run as ordered rescues in `rules/assignment_compatibility` after it returns false: expected-type literal-collection checking, the enum literal expansion (`enum_expand.rs`, needing the module's enum-member environment), then callable-signature rescue — all over the skip/alias/schema environment built once per module by `skip_names::SkipNames::collect`.
 
-`Named` types (user classes and unparameterised imports) compare by base name before `[`: `Foo[int]` and `Foo[float]` are treated as compatible. This is deliberate — without whole-program generic variance analysis, stricter matching would emit false positives, and the conformance gate holds `max_false_positives` at zero.
+`Named` types (user classes and unparameterised imports) compare **by the source text before the `[`**: `Foo[int]` and `Foo[float]` are treated as compatible. Stated plainly, that is not a subtyping judgment — it is a string prefix comparison over a rendered type, and generic argument compatibility is **unimplemented**. It is a `_ => true` in different clothing: every mismatch inside the brackets is accepted, so `list[int]` assigned from `list[str]` passes.
+
+Two things about it are on the record. First, it is text matching by [CHKARCH-TEXT-MATCHED-LOGIC](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TEXT-MATCHED-LOGIC): the verdict follows the spelling of the type, and an alias or a re-export changes it. Second, the justification previously given here — that stricter matching would raise false positives against a zero-false-positive conformance gate — is not a reason to leave a check unimplemented; it is a reason the gate was the wrong instrument. Whole-program variance analysis is the real fix, and until it exists this comparison must be described as missing rather than as deliberate conservatism.
 
 Nominal MRO walking and structural Protocol/TypedDict compatibility are decided today by the per-conformance-area rule modules (`rules/protocols_*`, `rules/typeddicts_*`, and the class-bases-walking `is_subtype_of` helper in `rules/generics_basic_3/helpers.rs`). The shared home now exists — `crates/basilisk-checker/src/subtyping.rs` (`SubtypingContext`: cycle-guarded nominal walk, structural Protocol satisfaction, `TypedDict` schemas, declared variance, `Callable` kinds) — and the rule modules migrate onto it behind the parity pins in `tests/subtyping_context_tests.rs` and the in-module `helper_parity_tests` at the Integration stage ([NARROWPLAN-SUBTYPING](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-SUBTYPING)).
 
