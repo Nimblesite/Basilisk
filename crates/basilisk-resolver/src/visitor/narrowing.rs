@@ -356,30 +356,6 @@ fn extract_membership_guard(
 /// strings, decimal ints (including negated), and booleans. Anything else —
 /// including strings containing a double quote — is skipped rather than
 /// approximated.
-fn literal_source_text(expr: &Expr) -> Option<String> {
-    match expr {
-        Expr::StringLiteral(lit) => {
-            let value = lit.value.to_str();
-            (!value.contains('"')).then(|| format!("\"{value}\""))
-        }
-        Expr::NumberLiteral(num) => match &num.value {
-            ruff_python_ast::Number::Int(int) => int.as_i64().map(|n| n.to_string()),
-            _ => None,
-        },
-        Expr::BooleanLiteral(lit) => Some(if lit.value { "True" } else { "False" }.to_owned()),
-        Expr::UnaryOp(unary) if matches!(unary.op, ruff_python_ast::UnaryOp::USub) => {
-            match unary.operand.as_ref() {
-                Expr::NumberLiteral(num) => match &num.value {
-                    ruff_python_ast::Number::Int(int) => int.as_i64().map(|n| (-n).to_string()),
-                    _ => None,
-                },
-                _ => None,
-            }
-        }
-        _ => None,
-    }
-}
-
 /// Extract a narrowing guard from an `assert` statement's test expression.
 // Implements [TYPEINF-NARROWING-ASSERT] — `assert isinstance(x, T)` /
 // `assert x is not None` narrows for all subsequent code in the flow path.
@@ -438,16 +414,6 @@ fn extract_assert_guard(test: &Expr) -> Option<NarrowingGuardKind> {
 /// Extract type names from an isinstance second argument.
 ///
 /// Handles both `isinstance(x, int)` and `isinstance(x, (int, str))`.
-fn extract_type_names(expr: &Expr) -> Vec<String> {
-    match expr {
-        Expr::Name(_) | Expr::Attribute(_) | Expr::Subscript(_) => {
-            vec![annotation_source_text(expr)]
-        }
-        Expr::Tuple(tup) => tup.elts.iter().map(annotation_source_text).collect(),
-        _ => Vec::new(),
-    }
-}
-
 /// Extract the simple name from an expression, if it's a bare `Name` node.
 fn expr_simple_name(expr: &Expr) -> Option<String> {
     match expr {
@@ -462,22 +428,6 @@ fn is_wildcard_pattern(pattern: &ruff_python_ast::Pattern) -> bool {
 }
 
 /// Extract the type name from a match case pattern.
-fn extract_match_pattern_type(pattern: &ruff_python_ast::Pattern) -> Option<String> {
-    match pattern {
-        ruff_python_ast::Pattern::MatchClass(cls) => Some(annotation_source_text(&cls.cls)),
-        ruff_python_ast::Pattern::MatchValue(val) => Some(annotation_source_text(&val.value)),
-        ruff_python_ast::Pattern::MatchAs(p) if p.name.is_none() && p.pattern.is_none() => {
-            // Wildcard — no narrowing
-            None
-        }
-        ruff_python_ast::Pattern::MatchAs(p) => {
-            // `case x as name:` — extract inner pattern type
-            p.pattern.as_deref().and_then(extract_match_pattern_type)
-        }
-        _ => None,
-    }
-}
-
 /// Compute the span covering all statements in a body.
 fn body_span(stmts: &[Stmt]) -> Span {
     if stmts.is_empty() {
