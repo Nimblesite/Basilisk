@@ -51,7 +51,10 @@ class Circle:
     let make = method(&stub, "Circle", "make");
     assert_eq!(make.receiver, None);
     assert_eq!(make.params.len(), 1);
-    assert_eq!(make.params.first().map(|param| param.name.as_str()), Some("radius"));
+    assert_eq!(
+        make.params.first().map(|param| param.name.as_str()),
+        Some("radius")
+    );
 }
 
 /// `import builtins` + `@builtins.staticmethod` is the same builtin reached
@@ -70,7 +73,10 @@ class Circle:
     let make = method(&stub, "Circle", "make");
     assert_eq!(make.receiver, None);
     assert_eq!(make.params.len(), 1);
-    assert_eq!(make.params.first().map(|param| param.name.as_str()), Some("radius"));
+    assert_eq!(
+        make.params.first().map(|param| param.name.as_str()),
+        Some("radius")
+    );
 }
 
 /// A bare `@staticmethod` with no import is the builtin fallback.
@@ -86,7 +92,10 @@ class Circle:
     let make = method(&stub, "Circle", "make");
     assert_eq!(make.receiver, None);
     assert_eq!(make.params.len(), 1);
-    assert_eq!(make.params.first().map(|param| param.name.as_str()), Some("radius"));
+    assert_eq!(
+        make.params.first().map(|param| param.name.as_str()),
+        Some("radius")
+    );
 }
 
 /// A stub that defines its own `staticmethod` earlier in the module has
@@ -105,7 +114,9 @@ class Circle:
     );
     let area = method(&stub, "Circle", "area");
     assert_eq!(
-        area.receiver.as_ref().map(|receiver| receiver.name.as_str()),
+        area.receiver
+            .as_ref()
+            .map(|receiver| receiver.name.as_str()),
         Some("self")
     );
     assert!(area.params.is_empty());
@@ -128,7 +139,10 @@ def staticmethod(func): ...
     let make = method(&stub, "Circle", "make");
     assert_eq!(make.receiver, None);
     assert_eq!(make.params.len(), 1);
-    assert_eq!(make.params.first().map(|param| param.name.as_str()), Some("radius"));
+    assert_eq!(
+        make.params.first().map(|param| param.name.as_str()),
+        Some("radius")
+    );
 }
 
 /// A real builtin import after an earlier local definition becomes the
@@ -148,7 +162,10 @@ class Circle:
     let make = method(&stub, "Circle", "make");
     assert_eq!(make.receiver, None);
     assert_eq!(make.params.len(), 1);
-    assert_eq!(make.params.first().map(|param| param.name.as_str()), Some("radius"));
+    assert_eq!(
+        make.params.first().map(|param| param.name.as_str()),
+        Some("radius")
+    );
 }
 
 /// Parentheses, line breaks, and a module alias do not change the resolved
@@ -169,7 +186,10 @@ class Circle:
     let make = method(&stub, "Circle", "make");
     assert_eq!(make.receiver, None);
     assert_eq!(make.params.len(), 1);
-    assert_eq!(make.params.first().map(|param| param.name.as_str()), Some("radius"));
+    assert_eq!(
+        make.params.first().map(|param| param.name.as_str()),
+        Some("radius")
+    );
 }
 
 /// An undecorated method always binds its first parameter as the receiver.
@@ -183,7 +203,9 @@ class Circle:
     );
     let area = method(&stub, "Circle", "area");
     assert_eq!(
-        area.receiver.as_ref().map(|receiver| receiver.name.as_str()),
+        area.receiver
+            .as_ref()
+            .map(|receiver| receiver.name.as_str()),
         Some("self")
     );
     assert!(area.params.is_empty());

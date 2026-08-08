@@ -393,6 +393,11 @@ impl BindingTable {
     /// This is how `@staticmethod` is recognised without an import, while
     /// `from builtins import staticmethod as sm` resolves by its binding and
     /// a module-level `def staticmethod(…)` stops both.
+    ///
+    /// The rebind test is positional, matching Python's sequential module
+    /// execution: a use *before* the module's first rebinding of the name
+    /// still refers to the builtin; only a binding at or before the use site
+    /// suppresses it.
     #[must_use]
     pub fn form_of_with_builtins(&self, expr: &Expr) -> Option<TypingForm> {
         if let Some(form) = self.form_of(expr) {
@@ -401,7 +406,10 @@ impl BindingTable {
         let Expr::Name(name) = expr else {
             return None;
         };
-        if self.binds_name(name.id.as_str()) {
+        if self
+            .binding_at(name.id.as_str(), name.range().start())
+            .is_some()
+        {
             return None;
         }
         crate::form::builtin_form_of_name(name.id.as_str())
