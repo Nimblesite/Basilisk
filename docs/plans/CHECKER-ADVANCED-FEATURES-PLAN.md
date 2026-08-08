@@ -10,7 +10,11 @@
 Concrete-but-unbuilt checker capabilities that the architecture spec describes and that had
 no owning plan. These are real planned features (not bloat), captured here as ordered TODOs
 so each spec section is referenced by a plan rather than left orphaned. None of this blocks
-the prime directive (PEP conformance) — it is opt-in surface area beyond the spec rules.
+the prime directive (accuracy on unseen Python) — it is opt-in surface area beyond the
+typing-spec rules, and it waits behind the text-matching audit
+([LINESCANPLAN-DISPOSAL](CHECKER-ELIMINATE-LINE-SCANNING-PLAN.md#LINESCANPLAN-DISPOSAL)).
+New rules added here must decide on the resolved model from day one; anything that would
+ship as a text scan does not ship.
 
 ---
 

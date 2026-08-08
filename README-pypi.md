@@ -10,8 +10,8 @@
 <p align="center"><strong>English</strong> · <a href="https://github.com/Nimblesite/Basilisk/blob/main/README.zh.md">简体中文</a></p>
 
 <p align="center">
-  <strong>Open-source Python type checking and developer tooling in Rust.</strong><br>
-  Complete open-source Python dev environment in <strong>Rust</strong>: type checker, language server, debugger, profiler, plus VS Code, Cursor, Zed &amp; Neovim extensions. Strict by default.
+  <strong>An open-source Python type checker and language server, built in Rust.</strong><br>
+  One extension for the whole workflow &mdash; diagnostics, autocomplete, refactoring, formatting, debugging, and profiling &mdash; driven by a single bundled binary.
 </p>
 
 > **You are reading the `basilisk-python` wheel listing** — the Basilisk CLI packaged for `pip`/`uv`. The distribution is named `basilisk-python` because `basilisk` was taken on PyPI; the installed command is still `basilisk`.
@@ -22,38 +22,89 @@
   <a href="https://www.basilisk-python.dev/docs/quick-start/">Quick Start</a> &nbsp;&bull;&nbsp;
   <a href="https://www.basilisk-python.dev/docs/rules/">Rules</a> &nbsp;&bull;&nbsp;
   <a href="https://www.basilisk-python.dev/docs/refactoring/">Refactoring</a> &nbsp;&bull;&nbsp;
-  <a href="https://www.basilisk-python.dev/docs/comparison/">Compare</a> &nbsp;&bull;&nbsp;
   <a href="https://github.com/Nimblesite/Basilisk">GitHub</a>
 </p>
-
-<p align="center">
-  <strong>Current conformance: temporarily unknown.</strong> The former result and all published benchmark figures have been withdrawn pending a clean reimplementation and audit.
-</p>
-
-## Conformance and benchmark results withdrawn
-
-> **Integrity notice:** We have retracted Basilisk&rsquo;s former 100% conformance claim. The result was not trustworthy: parts of the checker had been fitted to the exact text of upstream tests, and the score was not stable under semantics-preserving mutations such as consistent renames. At our request, Basilisk has been removed from the official [`python/typing` results table](https://github.com/python/typing/blob/main/conformance/results/results.html). Its actual conformance level is temporarily unknown.
->
-> We have also withdrawn every published benchmark figure and performance ranking while we audit the measurement pipeline. We are deleting the fitted checker code and reimplementing the affected logic from the Python typing specification. Before we publish a replacement score or seek relisting, mutation tests &mdash; including semantics-preserving renames &mdash; must show that the result is robust, and independent off-suite cases derived from the specification must confirm the repaired behavior. We will publish new conformance and benchmark results as soon as they are trustworthy, even if they are lower or slower than the figures withdrawn here. [Read the conformance audit and recovery plan &rarr;](https://www.basilisk-python.dev/docs/conformance/)
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/Nimblesite/Basilisk/main/images/screenshot.png" alt="Basilisk in action — type checking, diagnostics, and refactoring in the editor" width="900">
 </p>
 
-## Everything in one extension
+> ## ⚠️ Do not use Basilisk's type checker in your pipeline
+>
+> **The type checker still contains code that isn't doing real type checking, and
+> it is not yet trustworthy.** Some rules decide from the way code is *spelled*
+> rather than what it means, so they can be wrong in both directions — a false
+> error on correct code, or silence where there is a genuine bug. Until the audit
+> below is finished, don't gate CI on `basilisk check`, don't block a merge with
+> it, and don't read a clean run as a clean codebase.
+>
+> The rest of Basilisk — language server, refactoring, formatting, debugging,
+> profiling — does not depend on those rules and is unaffected.
 
-One extension replaces Pylance and gives you the whole workflow — no Node.js, no Python runtime, no pip, no npm. A single bundled Rust binary drives it all:
+## Restoring trust: audit, delete, and lean on a checker that works
 
-- **Strict-by-default diagnostics** — inline as you type, incremental analysis powered by Salsa (the rust-analyzer engine)
+We withdrew our former conformance claim and our benchmark figures, and asked to be
+[removed from the official `python/typing` results](https://github.com/python/typing/blob/main/conformance/results/results.html).
+The cause was checker logic fitted to the contents of conformance test files
+instead of implementing the typing specification generally: rules that matched
+the *spelling* of code rather than its meaning. Rename an import or reformat a
+file and the answer changed. A score produced that way is not evidence.
+
+**This was a mistake and a failure to verify.** Our process treated the score as
+the goal, matching text raises a score faster than real analysis does, and we
+published without ever asking whether a rule still held when the same program was
+spelled differently. Basilisk's author has published a
+[personal account and apology](https://www.christianfindlay.com/blog/basilisk-conformance-apology).
+
+**So we are auditing every rule and deleting the ones that don't do real type
+checking.** Not rewriting them, not patching them, not marking them TODO —
+deleting them, with a failing test left behind so the gap is visible instead of
+hidden. A rule stays only if it decides from the resolved syntax tree and gives
+the same answer when the code is spelled differently.
+
+**Where a rule can't be made reliable in a straightforward way, we will depend on
+a different, established type checker rather than ship our own unreliable version
+of it.** An answer from an engine that has earned trust is worth more to you than
+a Basilisk-branded one that hasn't. No replacement figure gets published until it
+survives off-suite and mutation testing.
+
+That means Basilisk gets **smaller** before it gets better. Expect fewer rules,
+fewer diagnostics, and a lower conformance number. We will report each drop
+rather than avoid it. What is left will be code that is honest about what it
+does — nothing else.
+
+### Basilisk is much more than a type checker
+
+Type checking is one part of it. The rest is a complete Python workflow in a
+single Rust binary — language server, refactoring, formatting, integrated
+debugging, profiling, and the editor extensions — and none of it rests on the
+rules under audit. That is what we are sharpening while the audit runs: make the
+parts that are genuinely useful solid, and remove anything that could hand you a
+misleading result. The point of getting smaller is to end up with a tool you can
+believe.
+
+[Read the full correction &rarr;](https://www.basilisk-python.dev/docs/conformance/) &nbsp;&bull;&nbsp;
+[Integrity audit &rarr;](https://github.com/Nimblesite/Basilisk/blob/main/docs/CONFORMANCE-INTEGRITY-AUDIT.md)
+
+## What you get
+
+One extension covers the whole Python workflow. A single bundled Rust binary
+drives it — no Node.js, no npm, no `pip install`:
+
+- **Diagnostics as you type** — incremental analysis powered by [Salsa](https://github.com/salsa-rs/salsa)
 - **Autocomplete, hover, go-to-definition, find references, rename**
 - **Refactoring code actions** — extract, inline, move symbol, organize imports
-- **Integrated debugging** — F5 to debug via bundled debugpy; no separate extension
+- **Integrated debugging** — F5 to debug via bundled [debugpy](https://github.com/microsoft/debugpy); no separate extension
 - **Integrated profiling** — CPU heat map, flame graph, and a memory dashboard with leak detection
 - **Activity panel** — module tree with per-module type-health coverage, plus feature toggles
 - **Inlay hints** and **Ruff** formatting/import-organization, built in
 - **Standard-library types from [typeshed](https://github.com/python/typeshed)** — a complete `stdlib/` snapshot is compiled into the binary, so hover and diagnostics work offline with no configuration
 
-Every diagnostic teaches: rustc-style output with a `help`, a `note`, and a link to a per-rule explainer, so a red squiggle always tells you *why*. Basilisk **starts strict** and stays strict — the unconfigured default enables every currently registered PEP-tagged rule, and strictness is dialled per rule, never by a mode. That is a configuration property, not evidence that those rules are complete or correct.
+Strictness is configured **per rule**, never by a mode: the unconfigured default
+enables the typing-spec rule set, and each rule can be graded down to
+`warning`/`info` so a codebase can adopt type safety incrementally. Every
+diagnostic carries a `help`, a `note`, and a link to a per-rule explainer, so a
+red squiggle tells you *why*.
 
 ## Install
 

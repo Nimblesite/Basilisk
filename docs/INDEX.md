@@ -13,7 +13,7 @@ linked to an active plan.
 
 | File | Purpose |
 |---|---|
-| [Checker architecture](specs/CHECKER-ARCHITECTURE-SPEC.md) | Configuration, rules, diagnostics, analysis pipeline, CLI, and quality gates. |
+| [Checker architecture](specs/CHECKER-ARCHITECTURE-SPEC.md) | Configuration, rules, diagnostics, analysis pipeline, CLI, and quality gates — including [CHKARCH-TEXT-MATCHED-LOGIC](specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TEXT-MATCHED-LOGIC), the failing-test → delete → report rule that governs any code deciding from source text. |
 | [Type inference](specs/CHECKER-TYPE-INFERENCE-SPEC.md) | The bidirectional/constraint inference engine — the checker's single type oracle — its narrowing contracts, research grounding, and the condemned legacy mechanisms under demolition. |
 | [Stub resolution](specs/CHECKER-STUB-RESOLUTION-SPEC.md) | Pinned typing-spec import order, custom typeshed, offline pin verification against the store, a PyPI-package wheel pin, the segregated download component, bundled stdlib ZIP, and generation. |
 | [Checker MCP service](specs/CHECKER-MCP-SPEC.md) | Packaged stdio lifecycle and the structured typeshed source/status tool. |
@@ -56,11 +56,10 @@ Plans contain only unfinished work. Delete a plan when its acceptance gate passe
 | [Formatting](plans/LSP-FORMATTING-PLAN.md) | VS Code default-formatter opt-in and published-artifact verification. |
 | [AI-assisted LSP](plans/LSP-AI-PLAN.md) | First opt-in provider slice and privacy/safety gate. |
 | [Activity panel](plans/EXTENSION-ACTIVITY-PANEL-PLAN.md) | Settings wiring, Modules-panel context menus and multi-select, and remaining cross-editor/test quality. |
-| [Type narrowing and inference](plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md) | The engine build-out and demolition order: delete every fitted text/shape-matching path, rebuild on the shared engine, hold pristine-fixture, mutation, and independent off-suite regressions throughout, and record only indicative performance measurements. |
+| [Type narrowing and inference](plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md) | The engine build-out and the demolition order: wire the bidirectional engine into rules that genuinely analyse code, delete the rest rather than migrating them, and record what each deletion costs. |
 | [Runtime typeshed resolution](plans/CHECKER-TYPESHED-RUNTIME-PLAN.md) | Two open items: a socket-instrumented witness that checking is offline across CLI/LSP/MCP, and byte-exact per-artifact licensing verification inside the VSIX (binaries and wheels are already verified). |
 | [PyPI typeshed package pin](plans/CHECKER-TYPESHED-PYPI-PLAN.md) | Pin a PyPI typeshed distribution by wheel SHA-256, verify offline, auto-resolve from `uv.lock`; suppresses the source-status advisory (issue #312). |
-| [AST reconstruction](plans/CHECKER-AST-RECONSTRUCTION-PLAN.md) | Rebuild what the spelling-cheat deletion removed, AST-driven throughout: restore the build, deliver binding resolution to consumers, rebuild the resolver collectors and 43 inert rules from the typing specification, demolish the annotation-text type layer, rebuild the deleted LSP refactorings, and re-establish honest conformance evidence. |
-| [Eliminate line scanning](plans/CHECKER-ELIMINATE-LINE-SCANNING-PLAN.md) | Deletion complete; only the cross-crate enforcement lint remains. The rebuild moved to the AST reconstruction plan. |
+| [Delete checker text matching](plans/CHECKER-ELIMINATE-LINE-SCANNING-PLAN.md) | The inventory of rules that decide from source text, the failing-test → delete → report disposal, and the unbuilt semantics-preserving mutation harness. |
 | [WASM](plans/WASM-PLAN.md) | CI wasm build and size ratchet, multi-file in-memory VFS, and the playground site. |
 | [Advanced checker features](plans/CHECKER-ADVANCED-FEATURES-PLAN.md) | Dependency-hygiene rules, ownership and safety checks, plugin host, migration, and CI helpers. |
 
@@ -74,5 +73,4 @@ Plans contain only unfinished work. Delete a plan when its acceptance gate passe
 
 | File | Contents |
 |---|---|
-| [Conformance integrity audit](CONFORMANCE-INTEGRITY-AUDIT.md#CHKARCH-CONFORMANCE-INTEGRITY-AUDIT) | Phase 1: the fitted alias predicates, measured impact, wider checker scan, remediation status, and process changes found by the 2026-08 audit. |
-| [Spelling-cheat inventory](CONFORMANCE-SPELLING-CHEAT-INVENTORY.md) | Phase 2 [AUDIT-SPELLING-INVENTORY]: the full pre-deletion inventory of every site that recognised typing symbols by source spelling instead of resolving imports — ~154 resolver sites, ~277 checker sites — with the deletion mandate and rules of engagement. |
+| [Conformance integrity audit](CONFORMANCE-INTEGRITY-AUDIT.md#CHKARCH-CONFORMANCE-INTEGRITY-AUDIT) | Phase 1: the fitted alias predicates, measured impact, wider checker scan, remediation status, and process changes found by the 2026-08 audit. Linked from the site's [conformance correction](../website/src/docs/conformance.md). |

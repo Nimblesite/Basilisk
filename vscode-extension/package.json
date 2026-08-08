@@ -1,7 +1,7 @@
 {
   "name": "basilisk",
   "displayName": "Basilisk",
-  "description": "Open-source Python development environment in Rust: type checker, language server, debugger, profiler, and editor tooling for VS Code, Cursor, and Windsurf.",
+  "description": "An open-source Python type checker and language server built in Rust: diagnostics, autocomplete, go-to-definition, refactoring, formatting, integrated debugging, and profiling in one extension. Strictness is configured per rule, so a codebase can adopt type safety incrementally.",
   "version": "0.0.0-PLACEHOLDER",
   "publisher": "Nimblesite",
   "license": "SEE LICENSE IN LICENSE.txt",
@@ -38,9 +38,7 @@
     "go to definition",
     "rust",
     "basilisk",
-    "lsp",
-    "pep conformance",
-    "conformance"
+    "lsp"
   ],
   "activationEvents": [
     "onLanguage:python",

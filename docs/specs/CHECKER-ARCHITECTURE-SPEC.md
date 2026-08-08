@@ -10,7 +10,7 @@ Basilisk has **no modes** (no `--strict`, no `off`/`basic`/`standard`/`strict` d
 
 Configuration **grades**; commands **select**. The config file never chooses commands, and there are no presets, mutation intents, or rule-family booleans. Strict-by-default is delivered by the LSP's one-time two-line seed — `"basilisk" = "error"` — never by hidden defaults ([LSPARCH-CONFIG-SEEDING](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-SEEDING)).
 
-No PEP rule may be disabled, deleted, or unregistered to move the conformance number ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)).
+No PEP rule may be disabled, deleted, or unregistered **to move a conformance number** ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)). Deleting a rule **because it decides from source text rather than resolved symbols** is a different act and a required one — failing test, delete, report ([CHKARCH-TEXT-MATCHED-LOGIC](#CHKARCH-TEXT-MATCHED-LOGIC)).
 
 ### The partition {#CHKARCH-COMMANDS}
 
@@ -264,7 +264,7 @@ configuration/editor behavior is specified by
 
 ### Python Typing PEP Coverage {#CHKARCH-PEPS}
 
-Basilisk's **target** is complete conformance with the Python typing specification. The previous 100% claim is retracted: fixture-specific predicates allowed the unmodified `python/typing` scorer to pass while semantics-preserving mutations exposed substantial failures. Basilisk has been removed from the official results table and its current conformance percentage is **unknown** while the affected implementation is removed and rebuilt from the specification. A replacement result may be published only after the pristine fixture regression ([CHKARCH-CONFORMANCE](#CHKARCH-CONFORMANCE)), the AST-preserving mutation gate ([CHKARCH-CONFORMANCE-MUTATION](#CHKARCH-CONFORMANCE-MUTATION)), and independent off-suite coverage agree for the repaired rules. See the [integrity audit](../CONFORMANCE-INTEGRITY-AUDIT.md).
+Basilisk's target is to **implement the Python typing specification** — to decide these PEPs correctly on Python it has never seen. The PEPs below name the analysis each rule owes; passing a fixture that exercises one is evidence, not achievement. A rule that reaches the right verdict on the upstream test file and the wrong verdict on an aliased import, a reformatted source, or a spelling the suite never contains has not implemented its PEP, and the table's "Required" is a statement of intent about the analysis, never about a score. Where the two disagree, the specification wins and the number is discarded ([CHKARCH-CONFORMANCE](#CHKARCH-CONFORMANCE)).
 
 #### Foundation PEPs {#CHKARCH-PEPS-FOUNDATION}
 
@@ -570,14 +570,53 @@ Current implementation status and the rebuild order are tracked in
 ### Design Philosophy {#CHKARCH-DIAG-PHILOSOPHY}
 
 Every diagnostic must be:
-1. **Precise** -- exact location (file, line, column, span)
-2. **Clear** -- explains what is wrong and why
-3. **Actionable** -- suggests at least one fix
-4. **Stable** -- error codes are never renumbered or reused
-5. **Structural** -- every verdict is derived from the AST and resolution per
-   [CHKARCH-RECOGNITION](#CHKARCH-RECOGNITION). A rule that reaches its verdict
-   from source text is not a rule; it is a measurement of how the file happened
-   to be written.
+1. **Semantic** -- decided from the resolved model, never from source text ([CHKARCH-TEXT-MATCHED-LOGIC](#CHKARCH-TEXT-MATCHED-LOGIC))
+2. **Precise** -- exact location (file, line, column, span)
+3. **Clear** -- explains what is wrong and why
+4. **Actionable** -- suggests at least one fix
+5. **Stable** -- error codes are never renumbered or reused
+
+### Text-matched logic — test, delete, report {#CHKARCH-TEXT-MATCHED-LOGIC}
+
+A rule whose behaviour depends on the **spelling** of its input rather than its
+**meaning** is broken, whatever it scores. `from typing import Final as F` must behave
+identically to `typing.Final`; reformatting a file must change no diagnostic. Removing
+this logic outranks every other checker task.
+
+**Detection signatures:**
+
+- Raw source-text matching — `.contains` / `starts_with` / `ends_with` on user code.
+- Hard-coded symbol spellings instead of resolved identity: `t == "typing.Final"`,
+  `text.starts_with("Callable[")`, `import.module == "typing"`.
+- Any regex over Python source.
+- Logic keyed to a fixture: rule files named after upstream test files, branches for
+  shapes only that suite contains, comments citing a test file as justification.
+- Detection that fires on formatting — line breaks, spacing, quote style, comment
+  text, statement order.
+- An accept-all fallback (`_ => true`) standing in for the remainder of the type
+  system, rather than deferring a named set of cases to a named path.
+
+**On encountering it, do exactly three things — do not fix it, do not rewrite it, do
+not leave a TODO:**
+
+1. **Write a test that fails** because of the code — pin the real defect: an aliased
+   import, a reformatted source, a shape the fixture never contains.
+2. **Delete the offending code.**
+3. **Tell the user what you deleted and why**, and that the test is now failing.
+
+Replacing it is not an agent's call. The point is to surface each one so the user can
+acknowledge it and decide what gets built back. **A failing test that pins real
+incorrect behaviour is worth more than a passing fixture carried by logic that does not
+analyse code** — the first records what Basilisk cannot do, the second falsely claims
+it can. A checker with fewer rules and visible failing tests is the correct outcome; a
+diagnostic that only fires on one spelling looks like coverage and isn't.
+
+**What a correct rule looks like** — the yardstick for judging code, not licence to go
+and fix it: it decides on the resolved semantic model from `basilisk-resolver`, parses
+with `ruff_python_parser`, is named for the typing-spec concept it implements rather
+than a test file, survives semantics-preserving mutation
+([CHKARCH-TESTING-SEMANTIC-MUTATION](#CHKARCH-TESTING-SEMANTIC-MUTATION)), and is
+tested against Python the upstream suite has never contained.
 
 ### Error Code System {#CHKARCH-DIAG-CODES}
 
@@ -1049,11 +1088,11 @@ the database's memory footprint scales with the workspace (every analysed
 file's inputs and memos stay resident for the session — the standard
 incremental-engine trade).
 
-**Scope — the CLI/conformance path is deliberately unchanged.** The batch CLI
-(`process_file`) still runs the direct pipeline, so this work **cannot affect the
-conformance score**. Routing the CLI (and the LSP's bulk scan) through the engine
-is future work — the CLI is the conformance path (must prove byte-for-byte parity
-first) and, being one-shot, reuses no memos. The engine is a public API
+**Scope — the batch CLI path is deliberately unchanged.** The batch CLI
+(`process_file`) still runs the direct pipeline, so this work cannot change any
+diagnostic it emits. Routing the CLI (and the LSP's bulk scan) through the engine is
+future work: it must first prove byte-for-byte diagnostic parity on real Python, and
+being one-shot it reuses no memos. The engine is a public API
 (`basilisk_checker::{BasiliskDatabase, SourceFile, ConfigInput, ConfigValue,
 SearchPathsInput, WorkspaceFiles, ModuleExports, checked_file,
 file_diagnostics, resolved_module, module_exports, cross_resolved_module,
@@ -1527,62 +1566,121 @@ a design target, not a claim of existing measurement.
 |---|---|---|
 | Unit tests | `cargo test` per crate | Crate-level correctness |
 | Integration tests | Multi-file scenarios | Cross-module type checking |
-| Conformance tests | Pristine and AST-preserving mutations of a Python typing fixture snapshot, plus independently derived cases | Regression evidence while the trustworthy conformance level is re-established; no raw fixture percentage is a conformance claim |
+| Semantics-preserving mutation | Aliased imports, reformatting, reordering over rule tests | **The accuracy gate** — proves a rule decides on meaning, not spelling ([CHKARCH-TESTING-SEMANTIC-MUTATION]) |
+| Off-suite rule tests | Python the upstream suite has never contained | Proves a rule generalises beyond its fixture |
+| Conformance tests | Python typing test suite, run live | Regression detector only — never a target ([CHKARCH-CONFORMANCE]) |
 | Golden file tests | Expected diagnostic output | Diagnostic regression |
 | Fuzzing | `cargo-fuzz` | Crash resistance, soundness |
 | Property tests | `proptest` crate | Type system invariants |
 | Benchmarks | `make bench` (hyperfine, `benchmarks/run.sh`) vs Pyright/mypy/ty/Pyrefly/Zuban | Indicative performance tracking, written to `benchmarks/status/<machine>.csv` immediately, every run. **Gates nothing** — developer-machine numbers, compared between tools within one run ([CHKARCH-TESTING-BENCH]) |
 
-### PEP Conformance Evidence {#CHKARCH-CONFORMANCE}
+A test is judged by what it would catch, never by whether it is green. **A failing
+test that pins real incorrect behaviour is worth more than a passing fixture carried
+by logic that does not analyse code**, so a suite gets *more* failing tests when
+Basilisk is found to be wrong, never fewer. Never delete a failing test, remove a
+failure-causing assertion, reduce assertiveness, or mark a test ignored.
 
-> **Integrity status (2026-08-06):** Basilisk retracted its former 100%
-> conformance claim and was removed from the official `python/typing` results.
-> The actual conformance level is temporarily unknown while the fitted checker
-> paths are deleted and rebuilt from the specification. The upstream project
-> also removed its Basilisk adapter when it removed the listing, so a run of
-> `python/typing@main` cannot currently score Basilisk.
+### Semantics-preserving mutation — the accuracy gate {#CHKARCH-TESTING-SEMANTIC-MUTATION}
 
-The pristine-suite result is still useful as **internal fixture-regression
-evidence**, but it is not a current official result and is not proof of
-specification conformance. Until an upstream adapter exists again, Basilisk
-clones the last upstream snapshot that carried that adapter
-(`a4906624f170c169cf667f962080c56d5a5ba6ff`) and runs
-that snapshot's own unmodified harness. Pinning the snapshot makes the pristine
-and mutated runs comparable; it does not preserve or revive the retracted score.
+> **Status: specified, not built.** No harness in this repo performs these mutations
+> today, which is exactly why text-matched logic survived every green run. Building it
+> is owned by [LINESCANPLAN-SEMANTIC-MUTATION](../plans/CHECKER-ELIMINATE-LINE-SCANNING-PLAN.md#LINESCANPLAN-SEMANTIC-MUTATION).
+> Until it exists, **every rule is unverified against this gate** and no rule may be
+> described as spec-implementing on the strength of a fixture alone.
 
-Trustworthy evidence has three independent layers:
+The one gate that can distinguish a rule that analyses code from a rule that matches
+text. It takes each rule test and re-runs it over inputs that are *semantically
+identical and textually different*; the diagnostics must be **byte-for-byte the same**.
 
-1. **Pristine fixture regression.** Freshly clone the declared upstream
-   snapshot, build the release-profile binary, and run the snapshot's own
-   `conformance/src/main.py --only-run basilisk`. Keep its strict per-file and
-   false-positive assertions as a regression guard.
-2. **AST-preserving mutation robustness.** Run the same harness and fixture
-   snapshot after consistent symbol renames and irrelevant formatting changes.
-   A structural implementation must preserve its verdicts.
-3. **Specification-derived off-suite tests.** Every repaired rule needs cases
-   selected independently from the typing specification and real-world code,
-   not copied or mechanically adapted from the fixture text.
+Required mutations, each applied independently and in combination:
 
-The raw report in `conformance/conformance_status.csv` and the website data file
-is retained for audit and engineering use. It must remain labelled historical
-and withdrawn. A future public percentage may be published only after the
-fitted implementation has been replaced and all three evidence layers support
-it; a lower result will be published as measured.
+| Mutation | Example |
+|---|---|
+| Import aliasing | `from typing import Final as F`, `import typing as t` |
+| Import form | `typing.Final` ↔ `from typing import Final` ↔ re-export through a local module |
+| Reformatting | line breaks, indentation width, trailing commas, parenthesisation |
+| Quote and string style | `'…'` ↔ `"…"`, implicit concatenation, raw/f-prefixes on non-type strings |
+| Identifier renaming | consistent rename of every class, type variable, alias, and parameter |
+| Statement reordering | independent statements, class members, and imports permuted |
+| Comment and whitespace churn | comments added, removed, and moved |
 
-> ⛔️ **DISABLING, DELETING, OR UNREGISTERING A RULE TO MOVE A SCORE IS FORBIDDEN.**
-> The binary is scored in its **full default configuration with EVERY core
-> PEP/conformance rule enabled** — no Basilisk config (any format; the legacy
-> `basilisk.json` is no longer read), no per-rule override, no "spec-conformance mode",
-> no skipped fixtures, no deleting rule source (`src/rules/*.rs`), no removing rules
-> from `all_rules()`. The binary is scored over a **fresh `python/typing` clone**
-> whose tree holds no Basilisk config of any format, so nothing of ours can silence a rule;
-> deleting the rules themselves is the **same crime by another route** and equally
-> forbidden — as is hand-editing `conformance/conformance_status.csv` or loosening
-> the `coverage-thresholds.json` fixture-regression guard (`threshold` /
-> `max_false_positives`). A
-> strict default firing on valid code is a **real conformance gap to FIX in the
-> checker**, never to hide. Any attempt to fit or manipulate a score is an
-> integrity failure and blocks publication.
+Rules:
+
+- **A rule whose diagnostics move under any of these is broken.** The finding is
+  handled by [CHKARCH-TEXT-MATCHED-LOGIC](#CHKARCH-TEXT-MATCHED-LOGIC) — failing test,
+  delete, report — never by teaching the harness to tolerate the difference.
+- **The harness may never mutate an expected result to match observed output.** The
+  expectation is the unmutated run's diagnostics; only the input varies.
+- **Coverage is reported as a fraction of rules exercised**, and the uncovered
+  remainder is named in the report. A score over a hand-picked subset says nothing
+  about the rest, and reporting only the covered fraction is how a partial measure
+  reads as a complete one.
+- **Never re-submit to `python/typing` until this gate passes clean** and an external
+  audit has run ([CHKARCH-CONFORMANCE](#CHKARCH-CONFORMANCE)).
+
+### PEP Conformance Measurement {#CHKARCH-CONFORMANCE}
+
+**The number is a regression detector, never an objective.** It samples one
+fixed corpus that the checker was historically developed against, so it cannot
+tell you whether a rule analyses code — only whether today's binary agrees with
+yesterday's on 141 files it has already seen. Optimising it is the failure mode
+that produced [CHKARCH-CONFORMANCE-INTEGRITY-AUDIT](../CONFORMANCE-INTEGRITY-AUDIT.md).
+Accuracy on unseen Python is the objective; this measurement is downstream of it
+and overfitted to it.
+
+Three consequences, all normative:
+
+- **Never publish, quote, or market a conformance figure**, in the specs, the
+  README, the website, a commit message, or a PR description. Nothing may imply
+  Basilisk appears in the official `python/typing` results — it was
+  [removed at its own author's request](https://github.com/python/typing/pull/2330).
+- **Never re-submit to `python/typing`** until
+  [CHKARCH-TESTING-SEMANTIC-MUTATION](#CHKARCH-TESTING-SEMANTIC-MUTATION) passes
+  clean and an external audit has run.
+- **A drop caused by deleting text-matched logic is progress.** Record it, say so
+  plainly, and move on. Never restore the deleted code, re-fit a rule to the
+  fixture, or fake a pass to hold a ratchet. **There is no pass-percentage floor
+  and no ratchet on this number** — a threshold on a corpus the code was fitted
+  to rewards fitting, which is precisely how the defect arose
+  ([§6.3](../CONFORMANCE-INTEGRITY-AUDIT.md)).
+
+When the measurement *is* taken, it is taken honestly or not at all. It comes
+from **RUNNING the real `python/typing` harness** — the suite's own
+`conformance/src/main.py` driving its built-in `BasiliskTypeChecker` — against the
+compiled binary, never a Basilisk reimplementation. A vendored scorer, an injected
+adapter, cached fixtures, or a committed result standing in for a live run is a
+**BUILD FAILURE**.
+
+**The mechanism — in order, no step skippable:**
+
+1. **Freshly clone** the tests **and** the harness/calculator from
+   `python/typing@main`'s **latest** commit — `git clone --depth 1
+   https://github.com/python/typing`. No cache, no committed fixtures, no vendored
+   calculator.
+2. **Freshly build a CLEAN release** `basilisk` binary from THIS checkout's source
+   — `cargo build --release`, un-instrumented, byte-for-byte what ships. Never the
+   PyPI wheel (a prior version), never an instrumented build.
+3. **Run the suite's OWN `conformance/src/main.py --only-run basilisk`** against
+   that binary (pointed at it via `BASILISK_BIN`) and record what it reports.
+4. **Regenerate `conformance/conformance_status.csv`** from the harness's OWN
+   `results/basilisk/*.toml` — the committed record is always a product of the live
+   run, never hand-authored.
+
+> ⛔️ **Never move the number by touching the scoreboard.** The binary runs in its
+> **full default configuration with every `pep` rule enabled** — no Basilisk config
+> (any format; the legacy `basilisk.json` is no longer read), no per-rule override,
+> no "spec-conformance mode", no skipped fixtures. Equally forbidden: hand-editing
+> `conformance/conformance_status.csv`, and loosening or tightening a threshold to
+> match a run.
+>
+> **Deleting a rule is not on this list, and that is deliberate.** Deleting a rule
+> that decides from source text rather than resolved symbols is the *required*
+> action ([CHKARCH-TEXT-MATCHED-LOGIC](#CHKARCH-TEXT-MATCHED-LOGIC)) — write the
+> failing test, delete the code, tell the user. The distinction is intent, and it is
+> visible in what happens to the number: deleting analysis you cannot trust is
+> expected to *lower* it and you report the drop; deleting a rule to dodge a failure
+> is dishonest. If the rule genuinely analyses code and merely fires on valid input,
+> that is a real gap to fix in the checker, not to silence.
 
 - **Runner — the upstream snapshot's real harness, nothing else**:
   [`conformance/run_conformance.py`](../../conformance/run_conformance.py) is the
@@ -1596,13 +1694,13 @@ it; a lower result will be published as measured.
   mypy, pyrefly, ty, zuban and pycroscope. From those real results the runner only
   *reports*: it writes `conformance/conformance_status.csv` and **records the exact
   graded commit hash** in
-  [`website/src/_data/conformance_report.json`](../../website/src/_data/conformance_report.json),
-  so every recorded number is pinned *by hash*. While the integrity audit is open,
-  these files are audit evidence and must not be presented as current conformance.
-  There is **NO vendored calculator and NO cached-fixtures fallback** — a build
-  in which the pinned upstream harness could not be cloned and run is a **BUILD
-  FAILURE**, by design. When upstream restores an adapter, the declared ref may
-  return to `main`, with the exact graded commit still recorded. (The only
+  [`website/src/_data/conformance_report.json`](../../website/src/_data/conformance_report.json)
+  so any run is traceable to the upstream tree it ran against. That file is a local
+  record, **not a publication source**: the site's `_data/conformance.js` reads it only
+  to render the withdrawn historical run, and no current figure is published from it.
+  There is **NO
+  vendored calculator and NO cached-fixtures fallback** — a build in which the real
+  harness could not be cloned and run is a **BUILD FAILURE**, by design. (The only
   auxiliary number not in the toml, `caught` = required errors matched, is taken
   from upstream's own `get_expected_errors` imported live from the fresh clone — the
   official function on the official tests, never a copy.)
@@ -1617,106 +1715,123 @@ it; a lower result will be published as measured.
   Basilisk config of any format, so nothing of ours can silence a conformance rule. Opt-in
   Basilisk-specific rules remain off by the same ordinary default
   ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)).
-- **Pristine fixture-regression gate**: `make test` (via
-  [`scripts/test-rust.sh`](../../scripts/test-rust.sh))
+- **Where it runs**: `make test` (via [`scripts/test-rust.sh`](../../scripts/test-rust.sh))
   builds the `basilisk` binary, then runs
-  `python3 conformance/run_conformance.py --gate` on it — which runs the REAL
-  pinned upstream harness and delegates the strict per-file / zero-false-positive check to
+  `python3 conformance/run_conformance.py --gate` on it — the REAL harness, with the
+  pass/false-positive comparison delegated to
   [`conformance/assert_wheel_conformance.py`](../../conformance/assert_wheel_conformance.py)
   over the harness's OWN `results/basilisk/*.toml`. There is **no Rust conformance
-  test** and **no in-repo scorer**: the score is the real suite's own verdict on the
-  compiled binary. The pass-percentage floor and false-positive ceiling live in
-  `coverage-thresholds.json` (`conformance.threshold`,
-  `conformance.max_false_positives`). These values protect the fixture baseline;
-  they are not a public conformance percentage. Per-file results are written to
-  `conformance/conformance_status.csv`.
-- **Publication status**: the former 100% claim is withdrawn and the current
-  conformance percentage is **unknown**. The historical CSV and JSON report remain
-  reproducible records of what the fixture scorer returned, not proof that the
-  underlying rules were implemented. Publish the next result — including a lower
-  one — only after the fitted implementation has been replaced and the upstream,
-  mutation-conformance, and off-suite gates establish a trustworthy baseline.
+  test** and **no in-repo scorer**: the result is the real suite's own verdict on the
+  compiled binary. Per-file results land in `conformance/conformance_status.csv`.
+- **Known contradiction — `coverage-thresholds.json` still gates this number.**
+  Its `conformance` block carries `threshold` (a pass-percentage floor) and
+  `max_false_positives`, and `--gate` enforces both. That floor is the mechanism the
+  integrity audit identified as the incentive behind the fitted predicates
+  ([§6.3](../CONFORMANCE-INTEGRITY-AUDIT.md)): it makes the *expected, correct* drop
+  from deleting a text-matched rule fail the build, which is the pressure that
+  produces fitting in the first place. Removing that floor is the user's call and is
+  not an agent's to make. **Until they decide, a deletion that lowers the number is
+  still the right action** — make the deletion, report the drop and the failing gate,
+  and stop there. Do not restore the code, refit the rule, or edit the threshold to
+  get green.
+- **No current figure is recorded here, by policy.** Reading one out of a spec is
+  how a withdrawn number keeps circulating. `conformance_status.csv` holds the last
+  live run for whoever needs it; the specs quote nothing.
 
-#### AST-preserving conformance mutation gate {#CHKARCH-CONFORMANCE-MUTATION}
+#### No "spec-conformance mode" — the harness runs the genuine default config {#CHKARCH-CONFORMANCE-MODE}
 
-`python3 conformance/run_mutation_conformance.py` clones the upstream suite fresh,
-applies the vendored semantics-preserving mutation set, and runs the upstream
-harness against the same release binary. The mutations consistently rename imported
-typing symbols and vary irrelevant formatting without changing the programs' AST
-meaning. A verdict that changes under those transformations exposes fixture-text
-coupling and cannot support a conformance claim.
-
-The committed `conformance/mutation_conformance_baseline.json` is a ratchet: the
-mutated-suite pass rate may only rise. It is a remediation floor, not a public
-conformance percentage. CI must run this gate independently of the raw upstream
-suite, and every affected rule also needs off-suite tests selected from the typing
-specification rather than copied or mechanically adapted from upstream fixtures.
-
-#### No "spec-conformance mode" — the scorer runs the genuine default config {#CHKARCH-CONFORMANCE-MODE}
-
-There is **no** conformance mode, and there never will be. The scorer runs the binary
-in exactly the configuration a user gets out of the box — the **default config, in
-which every PEP-tagged rule is enabled** ([CHKARCH-CONFIGURATION-ONLY](#CHKARCH-CONFIGURATION-ONLY))
-— with no Basilisk config of any format (the legacy `basilisk.json` is no longer
-read), no per-rule override, and no special scoring path. Basilisk's
-opinionated *house-style* rules (require-annotations `BSK-0001`/`BSK-0002`/`BSK-0004`,
+There is **no** conformance mode, and there never will be. The harness runs the binary
+in exactly the configuration a user gets out of the box — the **default config, which
+is the pure PEP set** ([CHKARCH-CONFIGURATION-ONLY](#CHKARCH-CONFIGURATION-ONLY)) —
+with no Basilisk config of any format (the legacy `basilisk.json` is no longer read),
+no per-rule override, and no special measurement path. Basilisk's opinionated
+*house-style* rules (require-annotations `BSK-0001`/`BSK-0002`/`BSK-0004`,
 require-`@override` `BSK-0025`, redundant-annotation `BSK-0050`, the explicit-`Any`
-nudge `BSK-0014`) are **opt-in and off by default**, so they never run during scoring
-and can neither pad nor sink the raw suite result. That result describes the genuine
-out-of-the-box configuration, but it remains fixture-specific until the robustness
-gate corroborates it. Any shortfall or mutation-sensitive pass is a real checker bug
-to fix, never something to paper over by silencing a rule.
+nudge `BSK-0014`) are **opt-in and off by default**, so they never run during a
+measurement and can neither pad nor sink it.
 
-⛔️ **Disabling, deleting, or unregistering a conformance (PEP) rule to move the number
-is forbidden** — as is hand-editing `conformance_status.csv` or loosening the
-`coverage-thresholds.json` gate (`threshold` / `max_false_positives`) to match a faked
-run. This has been attempted twice, back when the house rules still ran by default and
-counted toward the score. First, a revision wrote a `basilisk.json` that turned six
-rules off before scoring and reported a **fake 100%**; that was removed, and the
-scorer now runs the binary over a **fresh `python/typing` clone** whose tree contains
-no Basilisk config of any format (the legacy `basilisk.json` is no longer read at
-all), so no config can silence a rule. Second — when config-disabling
-was blocked — a revision tried to
-*delete the offending rule source files outright* and unregister them from
-`all_rules()`, then re-report a **fake 100%**: the same lie by another route. **Deleting
-a rule to dodge the config guard is the identical offence.**
+⛔️ **Configuring a rule off before measuring is forbidden**, as is hand-editing
+`conformance_status.csv` or moving a threshold to match a run. Both have been
+attempted: a revision once wrote a `basilisk.json` that turned six rules off before
+measuring and reported a fake result, and when that route was closed, another deleted
+the rule sources and unregistered them from `all_rules()` to reach the same figure.
+The measurement now runs over a **fresh `python/typing` clone** whose tree holds no
+Basilisk config of any format, so no configuration can silence a rule.
 
-The path to 100% is to make the checker **correct**, never to silence a rule at score
-time: implement the spec features it still misses, and teach its conformance rules to
-stop firing on spec-valid code (recognising inferred return types, honouring `# E`-free
-lines) so the false positives fall on their own merits. Anyone may relax rules *in their
-own project* via config; the **conformance scorer never does**.
+That history is why deletion needs an explicit boundary, and it is a boundary of
+**intent and disclosure**, not of mechanism:
+
+- **Deleting a rule to reach a number is dishonest** — the deletion is hidden, the
+  figure is reported as if the analysis still existed, and nothing fails.
+- **Deleting a rule that decides from source text is required** — the deletion is the
+  point, a failing test is left behind to mark the hole, the drop is reported, and
+  nobody claims the analysis exists ([CHKARCH-TEXT-MATCHED-LOGIC](#CHKARCH-TEXT-MATCHED-LOGIC)).
+
+**A failing test that pins real incorrect behaviour is worth more than a passing
+fixture carried by logic that does not analyse code.** The first is an accurate map of
+what Basilisk cannot yet do; the second is a false claim that it can. Given the choice,
+take the failing test every time.
+
+Anyone may relax rules *in their own project* via config; a measurement run never does.
 
 ### Mutation Testing Ratchet {#CHKARCH-TESTING-MUTATION-RATCHET}
 
-Mutation testing proves the test suite actually asserts behaviour. Scope only ever **grows** toward all Rust code:
+Mutation testing exists to prove the suite **asserts** behaviour rather than merely
+executing it. The current regime does not prove that, and the reasons are structural
+rather than accidental. They are recorded here because a metric whose limits are
+undocumented reads as a guarantee.
 
-- **Scope is test-driven.** `#[mutation_safe(rule = "<rule-slug>", fns = "fn_a|fn_b")]`
-  attributes on e2e tests drive the `cargo mutants` examine regex
-  (`scripts/mutation_examine_re.py`). `<rule-slug>` is the rule's path stem under
-  `crates/basilisk-checker/src/rules/` (file like `aliases_implicit` or directory
-  like `assignment_compatibility`); omitting `fns` scopes the whole file. Adding
-  these tests is the only way to widen scope.
-- **Baseline is ratcheted.** `mutation_testing/mutation_scores.json` is the committed
-  baseline; `mutation_testing/mutants_report.py::regression_messages` fails the build
-  when `kill_rate` drops below the baseline or the absolute floor, when `detected`
-  (`caught` + `timeout`) drops **while the viable pool did not grow**, or when
-  `timeout` rises. (`unviable` mutants don't compile and are excluded.) Absolute
-  `missed` is deliberately *not* a signal: widening scope mutates more code, so a
-  larger raw `missed` against a smaller-pool baseline is expected — `kill_rate` is
-  the size-independent guard. Both `make mutation-test` and the CI shard merge
-  enforce the same function.
-- **A timeout may never rise.** A `timeout` is credited as a kill (the PIT/Stryker
-  convention: a terminating suite made non-terminating *has* been detected). That
-  credit is only honest while timeouts come from hung code rather than slowness —
-  and the mutants that time out are structurally the likely *survivors*, since a
-  killed mutant exits at the first failing test binary while an uncaught one runs
-  the whole suite. So a rise in `timeout` is itself a build failure: it means
-  mutants were credited as killed without being evaluated. Fix the budget or the
-  suite's speed ([`.cargo/mutants.toml`](../../.cargo/mutants.toml)); never absorb it.
-- **Direction.** End state is the full workspace under mutation
-  (`make mutation-test ALL=1`); until then each checker-logic PR leaves the viable
-  pool the same size or larger.
+**How it works today.** `#[mutation_safe(rule = "<rule-slug>", fns = "fn_a|fn_b")]`
+attributes on e2e tests drive the `cargo mutants` examine regex
+(`scripts/mutation_examine_re.py`). `<rule-slug>` is the rule's path stem under
+`crates/basilisk-checker/src/rules/` (file like `aliases_implicit` or directory like
+`assignment_compatibility`); omitting `fns` scopes the whole file.
+`mutation_testing/mutation_scores.json` holds the committed baseline and
+`mutants_report.py::regression_messages` fails the build when `kill_rate` drops below
+the baseline or the absolute floor, when `detected` drops while the viable pool did
+not grow, or when `timeout` rises. Both `make mutation-test` and the CI shard merge
+call the same function.
+
+**Three ways the number overstates what is proven.** Each is a correction owed, not a
+convention to preserve:
+
+1. **Scope is opt-in, so the pool is self-selected.** Only annotated files are
+   examined. The committed baseline is 161 mutants at a 100% kill rate; the checker
+   crate alone is ~82k LOC across 307 files, 246 of them rules. A perfect score over a
+   chosen sliver is not a statement about the crate, and reporting it without the
+   denominator makes a partial measure read as a complete one. **Correction owed:**
+   report kill rate *and* the fraction of mutable surface examined, and name the
+   unexamined remainder. Un-annotated code is **unverified**, and must be described
+   that way rather than omitted.
+2. **A timeout is credited as a kill.** `detected = caught + timeout`, on the
+   PIT/Stryker convention that a terminating suite made non-terminating has been
+   detected. But a timed-out mutant was never evaluated, and timeouts are structurally
+   biased toward *survivors*: a killed mutant exits at the first failing test binary
+   while an uncaught one runs the whole suite. Crediting them inflates the rate with
+   the mutants most likely to have lived. **Correction owed:** report `timeout` as its
+   own unevaluated category, outside the numerator. Until then a rise in `timeout` is a
+   build failure — it means mutants were credited without being run. Fix the budget or
+   the suite's speed ([`.cargo/mutants.toml`](../../.cargo/mutants.toml)); never absorb it.
+3. **Survivors are aggregated away.** Absolute `missed` is deliberately not a signal,
+   because widening scope mutates more code and a larger raw `missed` is expected. That
+   is sound arithmetic and poor engineering: every surviving mutant is a specific
+   behaviour no assertion pins, and a count cannot be acted on. **Correction owed:**
+   enumerate survivors by file, function, and mutation in the report, so each is a
+   fixable item rather than a number to keep flat.
+
+**Rules that stand regardless:**
+
+- **Never widen the mutant pool by weakening what is mutated**, and never narrow scope
+  to protect a rate. Scope only grows; each checker-logic PR leaves the viable pool the
+  same size or larger. End state is the full workspace (`make mutation-test ALL=1`).
+- **Never tune a test to kill a mutant without asserting the behaviour** the mutant
+  changed. A kill obtained by asserting on incidental output is the same defect as a
+  rule that matches text — it moves a number without proving meaning.
+- **A high kill rate over rules that decide from source text proves nothing.** It shows
+  the tests pin the text-matching, which is the behaviour being deleted. Mutation score
+  is meaningful only over rules that pass
+  [CHKARCH-TESTING-SEMANTIC-MUTATION](#CHKARCH-TESTING-SEMANTIC-MUTATION); it never
+  substitutes for it.
 
 ### Benchmark — Indicative, Not a Gate {#CHKARCH-TESTING-BENCH}
 

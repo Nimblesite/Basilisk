@@ -1,37 +1,28 @@
-# Eliminate Checker Line Scanning {#LINESCANPLAN-ELIMINATION}
+# Delete Checker Text Matching {#LINESCANPLAN-ELIMINATION}
 
-> **Deletion complete (2026-08-06). Rebuild tracked elsewhere.** Every scanner
-> catalogued below has been removed; the rules that depended on them are
-> registered and inert. This plan is retained as the record of *what was deleted
-> and why*. The work of putting AST-driven implementations back is
-> [ASTREBUILD](CHECKER-AST-RECONSTRUCTION-PLAN.md#ASTREBUILD) — add nothing new
-> here.
->
-> The scope also turned out to be wider than "checker line scanning": the same
-> mechanism was found throughout `basilisk-lsp` (move symbol, extract function,
-> add `__all__`, auto-import placement, import rewriting on rename), which this
-> plan never covered. Those are inventoried in
-> [ASTREBUILD-INVENTORY-LSP](CHECKER-AST-RECONSTRUCTION-PLAN.md#ASTREBUILD-INVENTORY-LSP).
->
-> The normative rule these scanners violated is now written down as
-> [CHKARCH-RECOGNITION](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-RECOGNITION),
-> with the LSP surface at
-> [LSPARCH-ARCH-AST](../specs/LSP-ARCHITECTURE-SPEC.md#LSPARCH-ARCH-AST) and
-> [REFACTOR-AST](../specs/LSP-REFACTORING-SPEC.md#REFACTOR-AST).
+Checker rules must decide from the Ruff AST and `ResolvedModule` data.
+Reconstructing Python structure with `source.lines()` plus `starts_with`, `find`,
+or `contains` is parser duplication: it classifies strings and comments as code,
+and it makes a diagnostic depend on how the source is spelled rather than what it
+means.
 
-> **Integrity status (2026-08-06):** The raw fixture counts in this plan are
-> historical investigation records, not conformance percentages. Basilisk's
-> former 100% claim is withdrawn and the current level is temporarily unknown
-> while the scanners catalogued here are deleted and the affected logic is
-> rebuilt structurally from the specification.
+**This plan deletes that logic. It does not replace it.** Every entry below is
+handled by [CHKARCH-TEXT-MATCHED-LOGIC](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TEXT-MATCHED-LOGIC):
 
-Checker rules must consume Ruff AST or `ResolvedModule` data. Reconstructing
-Python structure with `source.lines()` plus `starts_with`, `find`, or `contains`
-is parser duplication and can classify strings or comments as code.
+1. **Write a test that fails** because of the code — an aliased import, a
+   reformatted source, a shape the upstream fixture never contains.
+2. **Delete the offending code.**
+3. **Tell the user what you deleted and why**, and that the test is now failing.
 
-The original docstring failure in `generics_syntax_scoping` is fixed and covered
-by a regression test. This plan tracks the remaining rule-level scanners; line
-geometry and suppression-comment parsing are the only permitted exceptions.
+Do not fix it, do not rewrite it, do not leave a TODO. **A failing test that pins
+real incorrect behaviour is worth more than a passing fixture carried by logic
+that does not analyse code.** Expect the rule count and the conformance number to
+fall; report both drops plainly and never restore the code to hold either.
+Deciding what gets built back is the user's, separately and deliberately.
+
+The suggested AST replacements recorded below are **evidence of what the deleted
+code failed to do**, kept so the user can scope a rebuild. They are not work
+items in this plan.
 
 ## Current inventory {#LINESCANPLAN-INVENTORY}
 
@@ -42,12 +33,14 @@ rg -n '\.lines\(\)' crates/basilisk-checker/src/rules
 rg -n 'starts_with\("(class |def |async def |type |@|import |from )' \
   crates/basilisk-checker/src/rules
 rg -n 'slice_span\(.*source' crates/basilisk-checker/src/rules
+rg -n '\.(contains|starts_with|ends_with)\(' crates/basilisk-checker/src/rules
 ```
 
-The third query is new. The first two find rules that reconstruct *statements*
-from lines, but they miss rules that slice a span out of the source and then
-pattern-match the resulting **expression** text — which is the same defect one
-level down, and is not caught by either keyword query.
+The first two find rules that reconstruct *statements* from lines. The third
+finds rules that slice a span out of the source and pattern-match the resulting
+**expression** text — the same defect one level down. The fourth is the widest
+net and returns the most: text predicates appear in the large majority of rule
+files, so the inventory below is a starting set, not the full extent.
 
 Expression-text scanners — **RESOLVED** (see
 [`CONFORMANCE-INTEGRITY-AUDIT.md`](../CONFORMANCE-INTEGRITY-AUDIT.md)). The
@@ -56,36 +49,39 @@ shared structural judge lives in `rules/shared/type_expr.rs`
 verdicts under import renames and whitespace mutation, with `red_pin_` tests
 holding the remaining honest gaps open:
 
-- `aliases_type_statement.rs` — DONE. The rule validates the `StmtTypeAlias`
-  value node through the shared judge; attribute access on a `Subscript`
-  (`list[int].attr`) is rejected
-  ([#379](https://github.com/Nimblesite/Basilisk/issues/379)).
-- `aliases_implicit.rs` — DONE. `is_invalid_rhs`, its private
-  `has_top_level_token` / `paren_has_top_level_comma` copies, the
-  `match_indices("TypeAlias as ")` import scan
-  ([#412](https://github.com/Nimblesite/Basilisk/issues/412)), the
-  uppercase-first-letter implicit-alias heuristic
-  ([#411](https://github.com/Nimblesite/Basilisk/issues/411)), the
-  `looks_like_type_expression` character blacklist, the ParamSpec shape guess
-  ([#409](https://github.com/Nimblesite/Basilisk/issues/409)), and the
-  three-name `is_assignable_to_bound`
-  ([#410](https://github.com/Nimblesite/Basilisk/issues/410)) are all deleted.
-  Alias-hood resolves through the annotation cascade; type parameters,
-  ParamSpec positions (with the PEP 612 single-parameter auto-wrap), variadic
-  arity (PEP 646), and bounds (via the module subtyping context, abstaining on
-  unknown names) are computed from the AST.
-- `annotations_forward_refs/type_checks.rs` and
-  `qualifiers_annotated/helpers.rs` — DONE. The `is_invalid_type_annotation` /
-  `is_invalid_type_expr` text families (including the last two
-  `starts_with("eval(")` copies) are deleted; both rules judge annotation
-  nodes via a span→AST index, and forward-reference strings are parsed and
-  judged as expressions. The orphaned `text_scan::contains_top_level_comma` /
-  `paren_has_top_level_comma` helpers are deleted with them
-  ([#408](https://github.com/Nimblesite/Basilisk/issues/408)).
+- `aliases_type_statement.rs` — `is_invalid_rhs` classifies the RHS of a
+  `type X = ...` statement by substring and prefix tests (`starts_with('[')`,
+  `contains("lambda")`, `has_top_level_token(rhs, " or ")`, …). It is an
+  allow-by-default list of textual shapes, so `type A = "the" + "thing"`,
+  `type B = list["of genshin"]`, and `type D = list[int].attr` all pass
+  silently, while a name containing the substring `lambda` is a false positive
+  waiting to happen ([#379](https://github.com/Nimblesite/Basilisk/issues/379)).
+  *What a real rule would have done:* type-expression grammar validation over the
+  `StmtTypeAlias` value node — `Name`, dotted `Attribute` chains, `Subscript` of
+  an allowed base, `BinOp(|)`, `None`, and forward-reference strings that
+  themselves parse as type expressions; everything else rejected, including
+  attribute access on a `Subscript`. Validation is eager at binding time — PEP 695
+  lazy evaluation defers *name resolution*, never *well-formedness*.
+- `aliases_implicit.rs` — carries a verbatim duplicate of the same
+  `is_invalid_rhs` scanner, plus three further text heuristics: implicit
+  aliases are detected by an uppercase-first-letter naming test
+  ([#411](https://github.com/Nimblesite/Basilisk/issues/411)), `TypeAlias as X`
+  imports are recovered by `match_indices` over raw import text duplicating the
+  real name cascade ([#412](https://github.com/Nimblesite/Basilisk/issues/412)),
+  and `looks_like_type_expression` gates on a character blacklist. The
+  parameterization checks layered on top are fitted to the same fixture — the
+  ParamSpec check is a shape guess that never locates the ParamSpec position
+  ([#409](https://github.com/Nimblesite/Basilisk/issues/409)) and
+  `is_assignable_to_bound` accepts every bound outside `int`/`float`/`complex`
+  ([#410](https://github.com/Nimblesite/Basilisk/issues/410)). *What a real rule
+  would have done:* validate the RHS expression node against the type-expression
+  grammar and resolve alias-hood from binding information, never from name
+  spelling. See [#408](https://github.com/Nimblesite/Basilisk/issues/408) and
+  [`CONFORMANCE-INTEGRITY-AUDIT.md`](../CONFORMANCE-INTEGRITY-AUDIT.md).
 - `returns_compatibility.rs` — builds the declared type from annotation source
   text via `InferredType::from_annotation`. Owned by
   [NARROWPLAN-ANNOTATION-RESOLUTION](CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-ANNOTATION-RESOLUTION)
-  rather than this plan, but it is the same root cause and the same fix shape.
+  rather than this plan, but it is the same root cause and the same disposal.
 
 Structural keyword scanners **were** in the list below. All are now deleted; the
 rules are registered and inert pending
@@ -112,25 +108,41 @@ comments and strings.
 `split_top_level_commas` — line **geometry** for diagnostic placement, inferring
 no Python structure. `identifiers_followed_by` is deleted.
 
-## AST migration {#LINESCANPLAN-AST-MIGRATION}
+## Disposal {#LINESCANPLAN-DISPOSAL}
 
-Superseded. Rebuilding on the AST is
-[ASTREBUILD-PHASES](CHECKER-AST-RECONSTRUCTION-PLAN.md#ASTREBUILD-PHASES), which
-covers the resolver, the checker rules, the annotation-text layer, and the LSP
-in dependency order. One item completed under this plan is kept for the record:
+- [ ] For every inventory entry: failing test → delete → report. One rule per
+  change, so each deletion and its drop are individually visible.
+- [ ] The failing test must fail on **meaning, not spelling** — an aliased
+  import, a reformatted source, or a construct the upstream suite omits. A test
+  that only reproduces the fixture proves nothing.
+- [ ] Record each deletion in the report: what went, which test now fails, and
+  what the conformance run did afterwards. A drop is the expected outcome and is
+  reported, never absorbed.
+- [ ] Extend the inventory as the sweep widens. It was built from four queries
+  and the fourth alone matches most rule files, so treat every unlisted rule as
+  unaudited rather than clean.
+- [ ] Never re-derive a deleted check from the same text predicates under a new
+  name. If the analysis is worth having, the user scopes it as new work against
+  the resolved model.
 
-- [x] `aliases_type_statement::is_invalid_rhs` replaced with AST type-expression
-  validation, covering operators other than `|`, call expressions outside the
-  sanctioned special forms, comparisons, comprehensions, and literal displays.
+## Semantics-preserving mutation harness {#LINESCANPLAN-SEMANTIC-MUTATION}
 
-One historical measurement, retained as fixture evidence and **not** a
-conformance level: a raw run after the first rewrite returned 140/141;
-`tuples_type_compat` requires either `len()`/`match` tuple narrowing or an
-`assert_type` mismatch verdict on alias-typed values (red-pinned in
-`tests/type_expr_structural_tests.rs`), and its lines had previously been
-"passed" by a spurious text-scan diagnostic — a scanner producing a *correct*
-count for a *wrong* reason, which is the whole reason raw counts are not
-evidence.
+Specified by
+[CHKARCH-TESTING-SEMANTIC-MUTATION](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING-SEMANTIC-MUTATION)
+and **not built**. It is the only gate that distinguishes a rule that analyses
+code from a rule that matches text, and its absence is why this logic survived
+every green run. Until it exists, no rule may be described as spec-implementing
+on the strength of a fixture alone.
+
+- [ ] Build the harness: re-run each rule test over semantically identical,
+  textually different input (aliased imports, alternate import forms,
+  reformatting, quote style, consistent renaming, statement reordering, comment
+  churn) and require **byte-for-byte identical diagnostics**.
+- [ ] Report coverage as a fraction of rules exercised, and **name the uncovered
+  remainder**. A score over a hand-picked subset says nothing about the rest.
+- [ ] Wire it into `make test`. A rule whose diagnostics move under mutation is
+  handled by the three-step disposal above — never by teaching the harness to
+  tolerate the difference, and never by mutating the expectation to match output.
 
 ## Enforcement {#LINESCANPLAN-ENFORCEMENT}
 
@@ -154,9 +166,10 @@ tests are the real gate:
 
 ## Acceptance {#LINESCANPLAN-ACCEPTANCE}
 
-- No production code in any crate infers Python structure from raw source.
+- No checker rule infers Python structure from raw source text.
 - Docstrings, comments, and string literals containing `class`, `def`, `type`,
-  decorators, or imports produce no structural diagnostics and no code actions.
-- The enforcement lint above is wired in.
-- Delete this plan once those hold; the rebuild's own gate is
-  [ASTREBUILD-ACCEPTANCE](CHECKER-AST-RECONSTRUCTION-PLAN.md#ASTREBUILD-ACCEPTANCE).
+  decorators, or imports produce no structural diagnostics.
+- The semantics-preserving mutation harness runs in `make test` and every
+  surviving rule passes it.
+- The set of deletions, the tests left failing behind them, and the resulting
+  conformance drop are all on the record.

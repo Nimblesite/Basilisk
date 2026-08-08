@@ -15,7 +15,7 @@ eleventyNavigation:
 
 Basilisk is an open-source **Python type checker and language server** built in Rust. It adds code intelligence, formatting, type-aware refactoring, testing, debugging, and CPU and memory profiling to your editor. Its default rules are intended to implement the Python typing specification, and that implementation is currently undergoing an integrity review.
 
-**Conformance correction:** Basilisk's former result is withdrawn, its current percentage is temporarily unknown, and it has been removed from the official `python/typing` results at our request. We are rebuilding affected logic from scratch and will publish a new result after robustness and mutation verification. Read the [full correction](/docs/conformance/).
+**Conformance correction:** Basilisk's former result is withdrawn, its current percentage is temporarily unknown, and it has been removed from the official `python/typing` results at our request. We are auditing every rule and deleting the ones that matched source text instead of doing real type checking. Expect the number to fall first; a new result gets published only after robustness and mutation verification. Read the [full correction](/docs/conformance/).
 
 Extensions ship for **VS Code**, **Cursor**, **Windsurf**, **Zed**, and **Neovim**; any editor that speaks the Language Server Protocol can use the same server. JetBrains support is planned. Feature coverage varies per editor — see [the integration matrix](/docs/installation/#integration-status-by-editor).
 
@@ -53,7 +53,7 @@ Basilisk puts type checking, language features, formatting, debugging, and profi
 
 ## Typing-spec rules by default, configurable from there
 
-Basilisk's behaviour is decided entirely by **configuration**, and the default configuration enables the **core PEP rule set** — the rules the official typing-conformance suite grades. These rules aim to follow the specification with no strictness flag required, but the withdrawn result means their actual conformance is temporarily unknown while they are audited and reimplemented where necessary.
+Basilisk's behaviour is decided entirely by **configuration**, and the default configuration enables the **core PEP rule set** — the rules the official typing-conformance suite grades. These rules aim to follow the specification with no strictness flag required, but the withdrawn result means their actual conformance is temporarily unknown while they are audited and deleted where they turn out to decide from source text.
 
 Stricter-than-spec checking is **opt-in**. Basilisk also ships extra rules the spec doesn't define — *require an annotation* on every parameter and return, a redundant-annotation warning, a missing-`@override` nudge, an explicit-`Any` nudge. They stay **off** until you enable them in config. Because they flag code the spec considers valid, turning them on deliberately trades strict spec conformance for a stricter standard of your team's choosing — a per-project choice, never a default.
 
@@ -70,13 +70,13 @@ This keeps the default focused on spec-derived rules while letting each team dia
 
 ## Project status
 
-Basilisk is under **active development** — the core checker, LSP server, and editor extensions are working. Its former conformance result is withdrawn while affected checker logic is rebuilt and verified. Autocomplete, go-to-definition, hover, diagnostics, inlay hints, refactoring, debugging, and profiling are shipping today.
+Basilisk is under **active development** — the core checker, LSP server, and editor extensions are working. Its former conformance result is withdrawn while checker rules are audited and the ones that matched source text are deleted. Autocomplete, go-to-definition, hover, diagnostics, inlay hints, refactoring, debugging, and profiling are shipping today.
 
 | Phase | Milestone | Status |
 |---|---|---|
 | 1 | Parser, resolver, type checker, CLI | Complete |
 | 2 | LSP server, editor extensions (VS Code, Cursor, Zed, Neovim) | Complete |
-| 3 | Clean PEP-rule reimplementation, robustness and mutation verification, gradual adoption | In progress |
+| 3 | Audit and delete text-matched rules, build semantics-preserving mutation testing, gradual adoption | In progress |
 | 4 | WASM plugins, Django/Pydantic/SQLAlchemy | Planned |
 | 5 | SARIF/JUnit output, JetBrains extension | Planned |
 | 6 | Plugin marketplace, community stubs, ecosystem | Planned |

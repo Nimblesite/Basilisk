@@ -1,6 +1,6 @@
 [package]
 name        = "basilisk-cli"
-description = "Basilisk CLI — an open-source Python type checker and language server written in Rust."
+description = "Basilisk CLI — an open-source Python type checker and language server built in Rust: diagnostics, refactoring, formatting, integrated debugging, and profiling. Strictness is configured per rule, so a codebase can adopt type safety incrementally."
 version.workspace    = true
 edition.workspace    = true
 license.workspace    = true

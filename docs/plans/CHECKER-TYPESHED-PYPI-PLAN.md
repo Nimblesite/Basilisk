@@ -99,14 +99,14 @@ installed `site-packages` tree (the stored wheel is the source).
 
 ## Verification policy {#TYPESHEDPYPI-CI}
 `make test` (fail-fast, coverage ratchet up), clippy + fmt at strictest, `make lint` (incl.
-`scripts/check-dependency-shape.sh` — `basilisk-stubs` still links no HTTP client), and `deslop`
-remain required. The pristine conformance fixture result is a strict regression
-check, but it is not sufficient evidence of conformance; the AST-preserving
-mutation suite and independently derived off-suite cases are mandatory before
-any future public result.
+`scripts/check-dependency-shape.sh` — `basilisk-stubs` still links no HTTP client), `deslop`, and
+the conformance run recorded unchanged (advisories are environment status, not Python
+diagnostics, so they never enter the diagnostic stream) — all green.
 
-`make bench` records indicative measurements for human review. It is not a CI
-gate, and this plan makes no current performance claim from its output.
+`make bench` also ran against the branch, but its outstanding regression is
+**not attributable to this plan** and is tracked as its own task; see
+[Cross-cutting gates](#cross-cutting-gates) for the evidence. This plan neither claims a benchmark
+result nor licenses re-baselining to slower numbers.
 
 ## TODO {#TYPESHEDPYPI-TODO}
 
@@ -198,8 +198,5 @@ gate, and this plan makes no current performance claim from its output.
   - **The `rustls`/`ureq` dyld hypothesis is disproven**, and any note repeating it is wrong: `basilisk-cli` already depended on `basilisk-typeshed-fetch` on `main`, so the TLS stack was linked into the binary that produced the 6.2 ms baseline.
   - **The committed baseline is stale, not just slow**: it was last written by `009f2556` (2026-07-18) while `main` has since merged through `e3e97d30` (2026-08-01, #377). Many merged PRs sit between the baseline and this branch, so nothing attributes the delta to this branch without a same-machine A/B of `main` HEAD vs this branch.
   - **Part of the delta is environmental**: the two runs pin identical competitor versions, and pyright/mypy/ty/pyrefly/zuban all shifted 3–10 % between them — real, but far short of basilisk's ~50 % on the fast fixtures, so a genuine fixed per-process cost remains to be found.
-  - At the time, the team treated recovery rather than re-baselining as the exit
-    condition. That note is retained as history, not an active benchmark gate.
-- [x] The pristine conformance fixtures ran green inside `_test_rust` at the
-  time. That raw fixture outcome is historical regression evidence only; it
-  does not establish the current conformance level.
+  - Recovering the cost — not re-baselining — is the exit condition, and it belongs to the benchmark task, not to this one. The benchmark itself gates nothing ([CHKARCH-TESTING-BENCH](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING-BENCH)); it is read by a human, and no number here passes or fails a build.
+- [x] Conformance run unchanged (advisories are environment status, never Python diagnostics, so they never enter the diagnostic stream; conformance fixtures ran green inside `_test_rust`).

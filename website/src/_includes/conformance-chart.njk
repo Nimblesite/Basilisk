@@ -1,8 +1,13 @@
 {#
-  Historical withdrawn PEP-conformance chart retained for integrity auditing.
-  rendering the history of conformance/conformance_status.csv in EVERY locale.
-  Pure inline SVG (no JS, no chart library), data-driven from _data/conformance.js
-  (which reads the file's real git history). Pages supply only translated prose.
+  PEP-conformance over-time chart, rendering the history of
+  conformance/conformance_status.csv in EVERY locale. Pure inline SVG (no JS, no
+  chart library), data-driven from _data/conformance.js (which reads the file's
+  real git history). Pages supply only translated prose.
+
+  NO PAGE RENDERS THIS TODAY. The score it charts is withdrawn, so both locales'
+  conformance pages dropped the import; the macro and its `historical.chart` data
+  are retained for the integrity audit and for whatever replaces the withdrawn
+  figure. Delete both together if that replacement never needs a chart.
 
   WHITESPACE: this macro is embedded inside MARKDOWN pages. markdown-it ends a
   raw-HTML block at the first blank line, so the rendered SVG MUST contain no

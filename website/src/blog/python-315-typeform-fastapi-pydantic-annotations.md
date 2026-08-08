@@ -140,7 +140,7 @@ Basilisk is an open-source Python type checker and language server that adds cod
 
 All three Python 3.15 typing PEPs have conformance test files in the official suite. We previously published pass counts for those files and used them to assert support. **Those figures and that support claim are withdrawn.** Test-specific implementation logic elsewhere in the checker demonstrated that a pass against an exact fixture was not enough to establish a general implementation.
 
-Basilisk's support status for `TypeForm`, `closed` / `extra_items`, and `disjoint_base` is therefore being revalidated as part of the clean reimplementation and integrity audit. Until those rules pass semantics-preserving mutations and broader cases that were not present in the suite, do not rely on the old table. See the [conformance correction](/docs/conformance/) for the publication bar we will apply to the replacement result.
+Basilisk's support status for `TypeForm`, `closed` / `extra_items`, and `disjoint_base` is therefore being revalidated as part of the integrity audit, and any rule that turns out to match source text is deleted rather than repaired. Until those rules pass semantics-preserving mutations and broader cases that were not present in the suite, do not rely on the old table. See the [conformance correction](/docs/conformance/) for the publication bar we will apply to the replacement result.
 
 ## What to do before October
 

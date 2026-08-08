@@ -9,9 +9,9 @@ claimed a retired typeshed behaviour months after the others were corrected.
 
 There is now exactly **one** README per language, and the published files are
 **identical except for a single line** that says which artifact you are looking
-at. Everything else — the metrics retraction and status notice, the install
-options, the feature list, the typeshed section, the acknowledgments — is one
-body of text, generated to every storefront by `scripts/gen_readmes.py`.
+at. Everything else — the withdrawal notice, the install options, the feature
+list, the typeshed section, the acknowledgments — is one body of text, generated
+to every storefront by `scripts/gen_readmes.py`.
 
 ## Source {#README-SOURCE}
 
@@ -90,19 +90,17 @@ The generator applies three transforms, in order:
 
 ## Withdrawn values and future stamping {#README-STAMPED}
 
-While [README-METRICS-WITHDRAWAL](#README-METRICS-WITHDRAWAL) is active, the
-canonical README sources intentionally contain no stamped conformance or
-benchmark values. `scripts/gen_readmes.py` propagates the shared retraction text
-unchanged to every target.
+**No conformance or benchmark figure appears in any README, and none is stamped.**
+Both claims are withdrawn ([CHKARCH-CONFORMANCE](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE)),
+so every `<!--g:NAME-->value<!--/g:NAME-->` marker has been removed from the
+sources and `scripts/gen_conformance_reference.py` now has nothing to stamp. The
+machinery is retained, not retired, so that a *future* measured value can only
+ever reach a README by generation rather than by hand.
 
-If trustworthy figures are restored later, they MUST NOT be typed by hand.
-`<!--g:NAME-->value<!--/g:NAME-->` markers in the **canonical sources**, stamped
-by `scripts/gen_conformance_reference.py` from `conformance_report.json` and the
-committed benchmark CSVs, remain the only permitted publication path
-([CHKARCH-CONFORMANCE](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE)).
-Generation must run after stamping so every storefront receives the same
-self-measured values. Restoring figures also requires replacing this temporary
-withdrawal contract with acceptance criteria for the validated methodology.
+Re-introducing a marker for a conformance figure is forbidden regardless of what
+the harness reports. A benchmark marker may return only when the number is
+measured on isolated hardware and carries its indicative-only caveat
+([CHKARCH-TESTING-BENCH](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING-BENCH)).
 
 ## Drift guard {#README-DRIFT}
 

@@ -10,8 +10,8 @@
 <p align="center"><a href="README.md">English</a> · <strong>简体中文</strong></p>
 
 <p align="center">
-  <strong>使用 Rust 构建的开源 Python 类型检查与开发工具。</strong><br>
-  用 <strong>Rust</strong> 打造的完整开源 Python 开发环境：类型检查器、语言服务器、调试器、性能分析器，以及 VS Code、Cursor、Zed 与 Neovim 扩展。默认严格。
+  <strong>用 Rust 打造的开源 Python 类型检查器与语言服务器。</strong><br>
+  一个扩展覆盖整套工作流 —— 诊断、自动补全、重构、格式化、调试与性能分析 —— 全部由单一捆绑的二进制文件驱动。
 </p>
 
 > **你正在阅读 Basilisk 的源码仓库** —— 检查器、语言服务器、编辑器扩展与网站都在这里。
@@ -22,38 +22,80 @@
   <a href="https://www.basilisk-python.dev/zh/docs/quick-start/">快速上手</a> &nbsp;&bull;&nbsp;
   <a href="https://www.basilisk-python.dev/zh/docs/rules/">规则</a> &nbsp;&bull;&nbsp;
   <a href="https://www.basilisk-python.dev/zh/docs/refactoring/">重构</a> &nbsp;&bull;&nbsp;
-  <a href="https://www.basilisk-python.dev/zh/docs/comparison/">对比</a> &nbsp;&bull;&nbsp;
   <a href="https://github.com/Nimblesite/Basilisk">GitHub</a>
 </p>
-
-<p align="center">
-  <strong>当前一致性水平：暂时未知。</strong> 此前的一致性结果及所有已公布的基准测试数据均已撤回，待从头重做相关实现并完成审计。
-</p>
-
-## 已撤回一致性与基准测试结果
-
-> **诚信说明：** 我们已撤回 Basilisk 此前“100% 一致性”的说法。该结果并不可信：检查器的部分规则针对上游测试文件的具体文本进行了拟合；面对不改变程序语义的变异（例如一致地重命名类型变量），分数无法保持稳定。应我们的要求，Basilisk 已从官方 [`python/typing` 结果表](https://github.com/python/typing/blob/main/conformance/results/results.html)中移除。目前真实的一致性水平暂时未知。
->
-> 在完成测量流程审计之前，我们也撤回所有已公布的基准测试数据与性能排名。我们正在删除这些针对测试拟合的代码，并依据 Python 类型规范从头重写受影响的逻辑。在公布新分数或申请重新收录之前，包括语义保持重命名在内的变异测试必须证明结果足够稳健，并由依据规范独立设计的套件外用例确认修复后的行为。一旦得出可信结论，我们就会公布新的一致性与基准测试结果，即使结果低于或慢于此次撤回的数据也会如实发布。[查看一致性审计与修复计划 &rarr;](https://www.basilisk-python.dev/zh/docs/conformance/)
 
 <p align="center">
   <img src="images/screenshot.png" alt="Basilisk 实战 —— 编辑器中的类型检查、诊断与重构" width="900">
 </p>
 
-## 一个扩展，覆盖全部
+> ## ⚠️ 请勿在流水线中使用 Basilisk 的类型检查器
+>
+> **类型检查器中仍然存在没有做真正类型检查的代码，它目前还不值得信任。** 有些规则
+> 依据的是代码的**写法**而不是含义，因此两个方向上都可能出错 —— 既可能对正确的代码
+> 报出虚假错误，也可能对真实的缺陷保持沉默。在下文所述的审计完成之前，请不要用
+> `basilisk check` 作为 CI 的门禁，不要用它拦截合并，也不要把一次干净的运行结果当作
+> 代码库是干净的。
+>
+> Basilisk 的其余部分 —— 语言服务器、重构、格式化、调试、性能分析 —— 并不依赖这些
+> 规则，因此不受影响。
 
-一个扩展即可取代 Pylance 并提供完整工作流 —— 无需 Node.js、无需 Python 运行时、无需 pip、无需 npm。一切由单一捆绑的 Rust 二进制文件驱动：
+## 重建信任：审计、删除，并倚重真正可靠的检查器
 
-- **默认严格的诊断** —— 随输入实时呈现，由 Salsa（rust-analyzer 的引擎）提供增量分析
+我们撤回了此前的一致性宣称与基准测试数字，并主动请求
+[从官方 `python/typing` 结果中移除](https://github.com/python/typing/blob/main/conformance/results/results.html)。
+原因是检查器中存在针对一致性测试文件内容而写的逻辑，而不是对类型规范的通用实现：
+那些规则匹配的是代码的**写法**，而不是代码的含义。改一个导入别名或重新格式化文件，
+结论就会变。这样得出的分数并不能作为证据。
+
+**这是一个错误、一次验证上的失职。** 我们的流程把分数当成了目标，而匹配文本比真正做
+分析更快地提高分数；我们在发布之前，始终没有问过这样一个问题 —— 同一个程序换一种
+写法时，这条规则是否依然成立。Basilisk 作者已发表
+[个人说明与致歉](https://www.christianfindlay.com/blog/basilisk-conformance-apology)。
+
+**因此，我们正在逐条审计规则，并删除那些没有做真正类型检查的规则。** 不是重写，不是
+打补丁，也不是标一个 TODO —— 是删除，并留下一个失败的测试，让这个缺口可见而不是被
+掩盖。一条规则只有在依据已解析的语法树做判断、并且在代码换一种写法时给出相同结论的
+情况下，才会保留。
+
+**如果一条规则无法以直截了当的方式做到可靠，我们会转而依赖另一个成熟的类型检查器，
+而不是端出我们自己那份不可靠的实现。** 一个已经赢得信任的引擎给出的答案，对你而言
+比一个挂着 Basilisk 名号却没有赢得信任的答案更有价值。在通过套件之外的用例与变异
+测试之前，我们不会发布任何替代数字。
+
+这意味着 Basilisk 会**先变小，再变好**。规则会更少，诊断会更少，一致性数字也会更低。
+每一次下降我们都会如实报告，而不是设法回避。留下来的，将是对自己所做之事诚实的代码
+—— 仅此而已。
+
+### Basilisk 远不只是一个类型检查器
+
+类型检查只是其中一部分。其余部分是装在单个 Rust 二进制文件里的完整 Python 工作流
+—— 语言服务器、重构、格式化、集成调试、性能分析，以及各个编辑器扩展 —— 它们都不
+建立在正在接受审计的规则之上。这正是我们在审计期间着力打磨的地方：把真正有用的部分
+做扎实，并移除任何可能给出误导性结果的东西。变小的意义，是最终得到一个你可以信赖的
+工具。
+
+[阅读完整更正 &rarr;](https://www.basilisk-python.dev/zh/docs/conformance/) &nbsp;&bull;&nbsp;
+[完整性审计 &rarr;](docs/CONFORMANCE-INTEGRITY-AUDIT.md)
+
+## 你能得到什么
+
+一个扩展即可覆盖整套 Python 工作流。一切由单一捆绑的 Rust 二进制文件驱动 ——
+无需 Node.js、无需 npm、无需 `pip install`：
+
+- **随输入实时诊断** —— 由 [Salsa](https://github.com/salsa-rs/salsa) 提供增量分析
 - **自动补全、悬停信息、跳转到定义、查找引用、重命名**
 - **重构代码操作** —— 提取、内联、移动符号、整理导入
-- **集成调试** —— 按 F5 即可通过捆绑的 debugpy 调试；无需额外扩展
+- **集成调试** —— 按 F5 即可通过捆绑的 [debugpy](https://github.com/microsoft/debugpy) 调试；无需额外扩展
 - **集成性能分析** —— CPU 热力图、火焰图，以及带泄漏检测的内存面板
 - **活动面板** —— 模块树与逐模块的类型健康度覆盖率，并可切换功能开关
 - 内置 **Inlay hints** 与 **Ruff** 格式化／导入整理
 - **来自 [typeshed](https://github.com/python/typeshed) 的标准库类型** —— 完整的 `stdlib/` 快照已编译进二进制文件，因此悬停与诊断在离线且零配置的情况下依然可用
 
-每条诊断都有教育意义：rustc 风格的输出，附带 `help`、`note` 以及指向每条规则详解页的链接，因此一条红色波浪线总能告诉你*为什么*。Basilisk **一开始就严格**并始终严格 —— 未配置的默认值会启用当前已注册的所有 PEP 标签规则，严格程度按规则微调，而不是靠模式切换。这只是配置行为，并不证明这些规则的实现完整或正确。
+严格程度按**规则**配置，而不是靠模式切换：未配置的默认值即启用类型规范规则集，
+每条规则都可以降级为 `warning`/`info`，让代码库能够渐进地采用类型安全。每条诊断
+都附带 `help`、`note` 以及指向每条规则详解页的链接，因此一条红色波浪线总能告诉你
+*为什么*。
 
 ## 安装
 

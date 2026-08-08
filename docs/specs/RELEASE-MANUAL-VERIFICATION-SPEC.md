@@ -240,19 +240,14 @@ publishing on a compatible host:
 
 1. [ ] `/ci-prep` green — one complete clean run, zero failures, start to
    finish ([RELEASE-CI-PREP](#RELEASE-CI-PREP)). Nothing below starts until it is.
-2. [ ] `make conformance` — record the raw fixture result against a fresh clone
-   of the declared historical `python/typing` snapshot that still carries the
-   removed Basilisk adapter. A pristine-suite pass is necessary regression
-   evidence but is not a current official result or, by itself, evidence of
-   specification conformance. Return to `main` only after upstream restores an
-   adapter.
-3. [ ] `make mutation-conformance` — no regression under AST-preserving import
-   renames and formatting changes, with off-suite regression coverage for every
-   repaired rule ([CHKARCH-CONFORMANCE-MUTATION](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE-MUTATION)).
-4. [ ] `make bench` — record the indicative result. Do not block or approve a
-   release from noisy workstation timings, and do not publish a comparative
-   figure while the benchmark audit is open.
-5. [ ] `python3 scripts/verify_release_attribution.py --policy-only` passes and
+2. [ ] `make conformance` — a live run against a fresh `python/typing@main`
+   clone. Record what it reports and compare it to the previous release's
+   record; an unexplained change is a regression to investigate. A drop
+   explained by a deliberate deletion is expected and is noted in the release
+   record. **The figure is never published or quoted**
+   ([CHKARCH-CONFORMANCE](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE)).
+3. [ ] `make bench` — indicative only, gates nothing; record the numbers.
+4. [ ] `python3 scripts/verify_release_attribution.py --policy-only` passes and
    licence manifests are current (`npm run licenses:check` in
    `vscode-extension/`).
 6. [ ] Draft notes from `git log <prev-tag>..HEAD`, create the tag locally, and

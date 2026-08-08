@@ -19,10 +19,15 @@ permalink: /
         </h1>
 
         <p class="hero__subheadline">
-          We have withdrawn both our former conformance claim and our published benchmark figures.
-          Basilisk was removed from the official <code>python/typing</code> results at our request,
-          and its current conformance percentage is temporarily unknown while we replace
-          test-specific implementations and verify the new work with robustness and mutation testing.
+          <strong>Don't put the type checker in your pipeline yet.</strong> It still contains code
+          that isn't doing real type checking, so it is not yet trustworthy.
+          We have withdrawn both our former conformance claim and our published benchmark figures,
+          and Basilisk was removed from the official <code>python/typing</code> results at our request.
+          We are now auditing every rule and <strong>deleting</strong> the ones that match source text
+          instead of doing real type checking. Expect Basilisk to get smaller before it gets better;
+          what is left will be code that is honest about what it does. Our current conformance
+          percentage is temporarily unknown, and no replacement figure gets published until it
+          survives robustness and mutation testing.
         </p>
 
         <div class="hero__cta-group">
@@ -59,7 +64,8 @@ permalink: /
         <span class="stat-card__sub">
           The former result is retracted. At our request, Basilisk has been
           <a href="https://github.com/python/typing/blob/main/conformance/results/results.html" target="_blank" rel="noopener">removed from the official results table</a>.
-          We will publish a new result when the clean implementation is robust to semantics-preserving mutations.
+          We are not trying to restore it — deleting rules that never analysed anything will push it
+          lower first, and we will report that drop rather than avoid it.
         </span>
       </div>
       <div class="stat-card">
@@ -72,8 +78,9 @@ permalink: /
       </div>
     </div>
     <p class="hero__proof-cta">
-      Both sets of figures are withdrawn pending a clean reimplementation and integrity review.
+      Both sets of figures are withdrawn while the audit runs.
       <a href="/docs/conformance/">Read the conformance correction &rarr;</a>
+      <a href="https://www.christianfindlay.com/blog/basilisk-conformance-apology">Read the author&rsquo;s apology &rarr;</a>
       <a href="/docs/benchmarks/">Read the benchmark notice &rarr;</a>
     </p>
   </div>
