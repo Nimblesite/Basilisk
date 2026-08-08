@@ -9,7 +9,7 @@ use basilisk_resolver::ResolvedModule;
 
 use crate::types::InferredType;
 
-use super::{alias_match, enum_expand};
+use super::{alias_match, enum_expand, typeddict_struct};
 
 /// Names that E0014 must skip to avoid false positives.
 pub(super) struct SkipNames {
@@ -25,6 +25,10 @@ pub(super) struct SkipNames {
     /// `G = list["G[T]" | T]`, keyed by lowercase name. Used to validate
     /// literal assignments against a specialised recursive alias (`G[str]`).
     pub(super) generic_aliases: std::collections::HashMap<String, alias_match::GenericAlias>,
+    /// Effective field schemas (class name → fields) for every `TypedDict`,
+    /// used for PEP 705 structural assignability of `TypedDict`-to-`TypedDict`
+    /// assignments instead of name equality.
+    pub(super) typeddict_schemas: typeddict_struct::TdSchemas,
     /// Enum class name → member names (lowercase), for the enum literal
     /// expansion equivalence ([TYPEINF-SUBTYPING-UNION]).
     pub(super) enum_members: enum_expand::EnumMembers,
@@ -38,6 +42,7 @@ impl SkipNames {
             typeddict_extra_items: collect_extra_items_typeddict_names(module),
             value_aliases: alias_match::collect_value_aliases(module),
             generic_aliases: alias_match::collect_generic_aliases(module),
+            typeddict_schemas: typeddict_struct::build_typeddict_schemas(module),
             enum_members: enum_expand::collect_enum_member_sets(module),
         }
     }

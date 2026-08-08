@@ -10,11 +10,13 @@ pub(crate) mod module_types;
 pub(crate) mod oracle;
 pub(crate) mod returns_judge;
 mod runtime_names;
+mod text_scan;
 mod type_expr;
 pub(crate) mod typing_form;
 
 pub(crate) use class_walks::{class_name_map, class_or_base_matches, method_name_map};
 pub(crate) use runtime_names::{runtime_value_names, type_constructor_names};
+pub(crate) use text_scan::split_top_level_commas;
 pub(crate) use type_expr::{
     annotation_is_type_alias, is_type_expression, ExprIndex, StringPolicy, TypeExprJudge,
 };
@@ -95,6 +97,38 @@ pub(crate) fn class_generic_param_names(cls: &ruff_python_ast::StmtClassDef) -> 
                 .collect()
         })
         .unwrap_or_default()
+}
+
+/// A `*args` or `**kwargs` parameter slot in a parsed signature.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) enum StarParam {
+    /// The signature has no such parameter.
+    #[default]
+    Absent,
+    /// Present without an annotation (implicitly `Any`).
+    Untyped,
+    /// Present with an annotation.
+    Typed(String),
+}
+
+impl StarParam {
+    /// `true` when the parameter exists in the signature.
+    pub(crate) fn is_present(&self) -> bool {
+        !matches!(self, StarParam::Absent)
+    }
+
+    /// The annotation text; `None` for absent or untyped (gradual `Any`).
+    pub(crate) fn ty(&self) -> Option<&str> {
+        match self {
+            StarParam::Typed(ty) => Some(ty),
+            StarParam::Absent | StarParam::Untyped => None,
+        }
+    }
+
+    /// Build from an optional annotation of a present parameter.
+    pub(crate) fn from_annotation(annotation: Option<String>) -> StarParam {
+        annotation.map_or(StarParam::Untyped, StarParam::Typed)
+    }
 }
 
 // ---------------------------------------------------------------------------

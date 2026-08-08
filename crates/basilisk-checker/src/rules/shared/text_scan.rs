@@ -14,30 +14,3 @@
 /// Returns slices into the original string (no allocation for the parts
 /// themselves). Callers that need trimmed/owned values can chain
 /// `.iter().map(|p| p.trim().to_owned())`.
-pub(crate) fn split_top_level_commas(s: &str) -> Vec<&str> {
-    let mut parts = Vec::new();
-    let mut depth: usize = 0;
-    let mut in_string: Option<char> = None;
-    let mut start = 0;
-    for (idx, ch) in s.char_indices() {
-        match in_string {
-            Some(quote) => {
-                if ch == quote {
-                    in_string = None;
-                }
-            }
-            None => match ch {
-                '\'' | '"' => in_string = Some(ch),
-                '[' | '(' | '{' => depth += 1,
-                ']' | ')' | '}' => depth = depth.saturating_sub(1),
-                ',' if depth == 0 => {
-                    parts.push(&s[start..idx]);
-                    start = idx + 1;
-                }
-                _ => {}
-            },
-        }
-    }
-    parts.push(&s[start..]);
-    parts
-}

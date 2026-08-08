@@ -28,6 +28,7 @@ mod sig_model;
 mod sig_subtype;
 mod skip_names;
 mod tuple_check;
+mod typeddict_struct;
 mod typeform_check;
 
 use enum_expand::enum_expansion_assignable;
@@ -348,12 +349,49 @@ fn check_vars(
                 }
             }
 
+            // TypedDict → TypedDict: use PEP 705 structural assignability rather
+            // than name equality, which would flag every structurally-valid
+            // cross-name assignment (`v: A = b` where `b: B`). Genuine mismatches
+            // still fire. Only reachable when the RHS resolves to a TypedDict-typed
+            // name (e.g. a parameter), so module-level checks are unaffected.
+            // The grounded-target abstention shields only NEWLY-visible
+            // surfaces (calls, attributes, unannotated names) — surfaces the
+            // rule always judged (literals, displays, annotated-parameter
+            // names) keep their full judgment even against a target the
+            // module cannot ground, e.g. `x: Literal[Answer.Yes] = a`.
             let judged_before_engine = legacy_inference_surface(var, oracle, params);
+            if let (Some(decl), Some(inf)) = (&declared_nominal, nominal_name(&inferred_type)) {
+                if let (Some(target), Some(src)) = (
+                    skip.typeddict_schemas.get(decl.as_str()),
+                    skip.typeddict_schemas.get(inf.as_str()),
+                ) {
+                    // A schema rejection is only evidence on a surface the
+                    // pre-engine rule judged (an annotated-parameter name) —
+                    // a newly-visible name abstains, because the schema
+                    // comparison does not model every consistency rule
+                    // (extra-items, closedness) the spec allows
+                    // ([CHKARCH-CONFORMANCE-MODE]).
+                    return if typeddict_struct::typeddict_assignable(src, target)
+                        || !judged_before_engine
+                    {
+                        None
+                    } else {
+                        Some((
+                            var,
+                            annotation_text.to_owned(),
+                            inferred_type,
+                            declared_type,
+                        ))
+                    };
+                }
+            }
+
             if inferred_type.is_assignable_to(&declared_type)
                 || literal_collection_assignable(var, oracle, &inferred_type, &declared_type, skip)
                 || enum_expansion_assignable(&inferred_type, &declared_type, &skip.enum_members)
                 || (!judged_before_engine && !declared_target_judgeable(resolver, &declared_type))
                 || (!judged_before_engine && resolver.is_structural_target(&inferred_type))
+                || (!judged_before_engine && inferred_is_typeddict(&inferred_type, skip))
                 || nominal_subclass_assignable(&inferred_type, &declared_type, subtyping)
             {
                 None

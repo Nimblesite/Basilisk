@@ -15,7 +15,9 @@ mod final_readonly_ext;
 mod function_info;
 mod generics;
 mod historical;
+mod key_lambda;
 mod module_level;
+mod narrowing;
 mod pep695_scoping;
 mod protocol;
 mod protocol_ext;
@@ -158,7 +160,9 @@ fn collect_analysis_results(
         module_bare_assignments: assigns::collect_module_bare_assignments(stmts),
         module_attr_assignments: assigns::collect_module_attr_assignments(stmts),
         final_issues: final_readonly_ext::collect_final_violations(bindings, stmts, classes),
-        float_param_int_attr_accesses: Vec::new(),
+        float_param_int_attr_accesses: module_level::collect_float_param_int_attr_accesses(
+            stmts, source,
+        ),
         literal_string_enum_mismatches: Vec::new(),
         readonly_issues: final_readonly::collect_readonly_violations(stmts, classes, source),
         protocol_self_issues: Vec::new(),
@@ -169,7 +173,7 @@ fn collect_analysis_results(
         type_alias_defs: type_alias::collect_type_alias_defs(stmts),
         unhashable_hash_calls: unhashable::collect_unhashable_hash_calls(stmts, classes),
         protocol_rtc_issues: Vec::new(),
-        generator_issues: Vec::new(),
+        generator_issues: module_level::collect_generator_violations(functions, source),
     }
 }
 
@@ -194,7 +198,8 @@ fn build_resolved_module(
     // and depended on the equally-deleted `TypeVar` census. Inert pending
     // [ASTREBUILD-PHASE-RESOLVER].
     let type_alias_type_violations = Vec::new();
-    let tuple_index_violations = Vec::new();
+    let tuple_index_violations =
+        key_lambda::collect_key_lambda_tuple_violations(stmts, &functions, &module_vars);
     ResolvedModule {
         bindings: crate::scope::ModuleBindings::new(bindings),
         functions,

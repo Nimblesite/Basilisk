@@ -17,7 +17,6 @@ use crate::scope::{
 };
 
 use super::core::text_range_to_span;
-use super::function_info::annotation_source_text;
 
 /// Collect all narrowing guards from a function body.
 pub(super) fn collect_narrowing_guards(stmts: &[Stmt]) -> Vec<NarrowingGuard> {
