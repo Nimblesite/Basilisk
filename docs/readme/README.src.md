@@ -40,16 +40,35 @@
   <img src="images/screenshot.png" alt="Basilisk in action — type checking, diagnostics, and refactoring in the editor" width="900">
 </p>
 
-**The current type checker contains inaccuracies and you should not use it as part of your dev pipeline. We are working on removing any misleading analyzers ASAP. Please read below**
+> ## ⚠️ Do not use Basilisk's type checker in your pipeline
+>
+> **The type checker still contains code that isn't doing real type checking, and
+> it is not yet trustworthy.** Some rules decide from the way code is *spelled*
+> rather than what it means, so they can be wrong in both directions — a false
+> error on correct code, or silence where there is a genuine bug. Until the audit
+> below is finished, don't gate CI on `basilisk check`, don't block a merge with
+> it, and don't read a clean run as a clean codebase.
+>
+> The rest of Basilisk — language server, refactoring, formatting, debugging,
+> profiling — does not depend on those rules and is unaffected.
 
-## We are auditing the checker and deleting what doesn't hold up
+## Restoring trust: audit, delete, and lean on a checker that works
 
-We withdrew our 100% conformance claim and our benchmark figures, and asked to be
+We withdrew our former conformance claim and our benchmark figures, and asked to be
 [removed from the official `python/typing` results](https://github.com/python/typing/blob/main/conformance/results/results.html).
 The cause was checker logic fitted to the contents of conformance test files
 instead of implementing the typing specification generally: rules that matched
 the *spelling* of code rather than its meaning. Rename an import or reformat a
 file and the answer changed. A score produced that way is not evidence.
+
+**This was a mistake and a failure to verify — not an attempt to game the suite.**
+Nobody set out to defeat the conformance tests, and nothing was concealed from
+`python/typing`: the submission ran the suite's own unmodified harness, with
+default configuration and every rule enabled. Our process treated the score as
+the goal, matching text raises a score faster than real analysis does, and we
+published without ever asking whether a rule still held when the same program was
+spelled differently. Basilisk's author has published a
+[personal account and apology](https://www.christianfindlay.com/blog/basilisk-conformance-apology).
 
 **So we are auditing every rule and deleting the ones that don't do real type
 checking.** Not rewriting them, not patching them, not marking them TODO —
@@ -57,15 +76,26 @@ deleting them, with a failing test left behind so the gap is visible instead of
 hidden. A rule stays only if it decides from the resolved syntax tree and gives
 the same answer when the code is spelled differently.
 
+**Where a rule can't be made reliable in a straightforward way, we will depend on
+a different, established type checker rather than ship our own unreliable version
+of it.** An answer from an engine that has earned trust is worth more to you than
+a Basilisk-branded one that hasn't. No replacement figure gets published until it
+survives off-suite and mutation testing.
+
 That means Basilisk gets **smaller** before it gets better. Expect fewer rules,
 fewer diagnostics, and a lower conformance number. We will report each drop
 rather than avoid it. What is left will be code that is honest about what it
 does — nothing else.
 
-We have not yet decided whether to rebuild the deleted analysis from the
-specification or to drive the extension with an established open-source checker.
-Either way, no new figure gets published until it survives off-suite and
-mutation testing.
+### Basilisk is much more than a type checker
+
+Type checking is one part of it. The rest is a complete Python workflow in a
+single Rust binary — language server, refactoring, formatting, integrated
+debugging, profiling, and the editor extensions — and none of it rests on the
+rules under audit. That is what we are sharpening while the audit runs: make the
+parts that are genuinely useful solid, and remove anything that could hand you a
+misleading result. The point of getting smaller is to end up with a tool you can
+believe.
 
 [Read the full correction &rarr;](https://www.basilisk-python.dev/docs/conformance/) &nbsp;&bull;&nbsp;
 [Integrity audit &rarr;](docs/CONFORMANCE-INTEGRITY-AUDIT.md)

@@ -38,9 +38,7 @@
     "go to definition",
     "rust",
     "basilisk",
-    "lsp",
-    "pep conformance",
-    "conformance"
+    "lsp"
   ],
   "activationEvents": [
     "onLanguage:python",

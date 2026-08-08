@@ -19,6 +19,14 @@ We found checker logic fitted to the exact contents of conformance test files ra
 
 A passing result from code developed against the exact fixtures is not evidence, so the fix is not a better score.
 
+## This was a mistake, not an attempt to game the suite
+
+We didn't set out to defeat the conformance suite. What actually happened is duller. Our development process named the conformance score as the thing to build against, and matching source text raises that score faster than real analysis does, so that is the direction the code drifted — one plausible-looking rule at a time. We then published and submitted on the strength of a green run, without ever running the one check that would have exposed it: does this rule still hold when the same program is spelled differently? That check did not exist, and building it is part of the remediation below. The suite cannot catch this class of defect by construction, because it is the artefact the code was fitted to, so every green run reinforced a conclusion we had no basis for.
+
+We believed the number meant what we said it meant. We were wrong, and we were wrong because we failed to verify it. Basilisk's author has published a [personal account and apology](https://www.christianfindlay.com/blog/basilisk-conformance-apology) taking responsibility in his own words.
+
+We also did not find this ourselves. It was reported from outside, in [issue #379](https://github.com/Nimblesite/Basilisk/issues/379), with a public reproduction. That is its own finding, and we record it as one.
+
 ## What we are doing
 
 **We are auditing every rule and deleting the ones that don't do real type checking.** Not rewriting them, not patching them, not marking them TODO — deleting them, and leaving a failing test behind so the gap is visible rather than hidden. A rule stays only if it decides from the resolved syntax tree and returns the same diagnostics when the same program is spelled differently.
@@ -31,7 +39,9 @@ The consequences are deliberate, and we would rather state them up front than ha
 
 What is left will be code that is honest about what it does — nothing else.
 
-Whether the deleted analysis gets rebuilt from the specification, or the extension ends up driven by an established open-source checker, is a decision we have not made yet. Either way, no replacement percentage gets published until it survives the robustness testing described below.
+**Where a rule can't be made reliable in a straightforward way, we will depend on a different, established type checker rather than ship our own unreliable version of it.** An answer from an engine that has earned trust is worth more to you than a Basilisk-branded one that hasn't. No replacement percentage gets published until it survives the robustness testing described below.
+
+Type checking is one part of Basilisk. The rest — language server, refactoring, formatting, integrated debugging, profiling, and the editor extensions — does not rest on the rules under audit, and that is what we are sharpening while the audit runs: make the parts that are genuinely useful solid, and remove anything that could hand you a misleading result.
 
 <p class="conf-links">
   <a href="https://github.com/python/typing/blob/main/conformance/results/results.html" target="_blank" rel="noopener"><strong>Current python/typing results ↗</strong></a>
