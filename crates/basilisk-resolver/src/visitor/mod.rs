@@ -69,6 +69,7 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
     let collected = collect_analysis_results(module, &bindings, &classes, &functions);
     build_resolved_module(
         module,
+        bindings,
         functions,
         classes,
         module_vars,
@@ -183,6 +184,7 @@ fn collect_analysis_results(
 )]
 fn build_resolved_module(
     module: &ParsedModule,
+    bindings: basilisk_canonical::BindingTable,
     functions: Vec<crate::scope::FunctionInfo>,
     classes: Vec<crate::scope::ClassInfo>,
     module_vars: Vec<crate::scope::VariableInfo>,
@@ -212,6 +214,7 @@ fn build_resolved_module(
         ),
     );
     ResolvedModule {
+        bindings: crate::scope::ModuleBindings::new(bindings),
         functions,
         classes,
         module_vars,
