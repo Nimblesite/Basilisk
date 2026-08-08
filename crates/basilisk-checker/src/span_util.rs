@@ -19,3 +19,18 @@ pub fn text_range_to_span(range: ruff_text_size::TextRange) -> basilisk_resolver
         end: range.end().to_u32(),
     }
 }
+
+/// The source text of an AST node, for diagnostic MESSAGES only — never for a
+/// verdict ([ASTREBUILD-LAW]).
+#[must_use]
+pub fn node_message_text<'a>(source: &'a str, node: &impl ruff_text_size::Ranged) -> &'a str {
+    slice_span(source, text_range_to_span(node.range()))
+        .unwrap_or("<expression>")
+        .trim()
+}
+
+/// The diagnostic span of an AST node.
+#[must_use]
+pub fn node_span(node: &impl ruff_text_size::Ranged) -> basilisk_resolver::Span {
+    text_range_to_span(node.range())
+}
