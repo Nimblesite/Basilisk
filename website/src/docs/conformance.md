@@ -19,9 +19,9 @@ We found checker logic fitted to the exact contents of conformance test files ra
 
 A passing result from code developed against the exact fixtures is not evidence, so the fix is not a better score.
 
-## This was a mistake, not an attempt to game the suite
+## How this happened
 
-We didn't set out to defeat the conformance suite. What actually happened is duller. Our development process named the conformance score as the thing to build against, and matching source text raises that score faster than real analysis does, so that is the direction the code drifted — one plausible-looking rule at a time. We then published and submitted on the strength of a green run, without ever running the one check that would have exposed it: does this rule still hold when the same program is spelled differently? That check did not exist, and building it is part of the remediation below. The suite cannot catch this class of defect by construction, because it is the artefact the code was fitted to, so every green run reinforced a conclusion we had no basis for.
+Our development process named the conformance score as the thing to build against, and matching source text raises that score faster than real analysis does, so that is the direction the code drifted — one plausible-looking rule at a time. We then published and submitted on the strength of a green run, without ever running the one check that would have exposed it: does this rule still hold when the same program is spelled differently? That check did not exist, and building it is part of the remediation below. The suite cannot catch this class of defect by construction, because it is the artefact the code was fitted to, so every green run reinforced a conclusion we had no basis for.
 
 We believed the number meant what we said it meant. We were wrong, and we were wrong because we failed to verify it. Basilisk's author has published a [personal account and apology](https://www.christianfindlay.com/blog/basilisk-conformance-apology) taking responsibility in his own words.
 

@@ -50,10 +50,7 @@ instead of implementing the typing specification generally: rules that matched
 the *spelling* of code rather than its meaning. Rename an import or reformat a
 file and the answer changed. A score produced that way is not evidence.
 
-**This was a mistake and a failure to verify — not an attempt to game the suite.**
-Nobody set out to defeat the conformance tests, and nothing was concealed from
-`python/typing`: the submission ran the suite's own unmodified harness, with
-default configuration and every rule enabled. Our process treated the score as
+**This was a mistake and a failure to verify.** Our process treated the score as
 the goal, matching text raises a score faster than real analysis does, and we
 published without ever asking whether a rule still held when the same program was
 spelled differently. Basilisk's author has published a

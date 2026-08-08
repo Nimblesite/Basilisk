@@ -19,8 +19,8 @@ faq:
     a: "No. Basilisk was removed from the official results table at our own request, and we have not asked to be re-listed. We will not submit again until the audit is finished, semantics-preserving mutation testing passes clean, and someone outside the project has reviewed the work."
   - q: "What is Basilisk's current conformance percentage?"
     a: "We do not publish one, and we ask that no figure be attributed to us. Any number we produced before the audit was measured against fixtures our own code had been fitted to, so it did not measure what we said it measured. We expect an honest figure to be lower than the withdrawn one, and we will say so plainly when we can measure it properly."
-  - q: "Was the original result an attempt to game the conformance suite?"
-    a: "No. It was a verification failure. Our development process named the suite score as the target to build against, and matching source text raises that score faster than real analysis does, so the code drifted that way. Nobody set out to defeat the suite and nothing was concealed from python/typing; the submission ran the suite's own unmodified harness. We did not run the check that would have caught the problem before we published, and that is our responsibility. Basilisk's author has published a personal account at https://www.christianfindlay.com/blog/basilisk-conformance-apology."
+  - q: "How did this happen?"
+    a: "It was a verification failure. Our development process named the suite score as the target to build against, and matching source text raises that score faster than real analysis does, so the code drifted that way. We did not run the check that would have caught the problem before we published, and that is our responsibility. Basilisk's author has published a personal account at https://www.christianfindlay.com/blog/basilisk-conformance-apology."
   - q: "Should I use Basilisk's type checker in CI?"
     a: "Not yet. Until the audit is finished, do not gate CI on it, do not block a merge with it, and do not read a clean run as a clean codebase. The rest of Basilisk — the language server, refactoring, formatting, debugging, and profiling — does not depend on the rules under audit."
 ---
@@ -66,11 +66,9 @@ A suite result produced by code developed against that suite's exact fixtures do
 measure specification conformance. The file passes and the rule is not implemented.
 That is why the correction is deletion rather than a better score.
 
-## This was a mistake, not an attempt to game the suite
+## How this happened
 
-We didn't set out to defeat the conformance suite, and nothing was concealed from
-`python/typing`. The submission ran the suite's own unmodified harness, with
-Basilisk's default configuration and every specification rule enabled. When the defect was demonstrated, we asked for our own removal.
+When the defect was demonstrated, we asked for our own removal.
 
 Our development process named the conformance score as the thing to build against, and matching source text raises that score faster than real analysis does — so that is the direction the code drifted, one plausible-looking rule at a time. Then we published and submitted the result on the
 strength of a green run, without ever running the one check that would have exposed
@@ -80,8 +78,7 @@ That check did not exist. It still doesn't — building it is part of the remedi
 The conformance suite cannot catch this class of defect by construction, because it is
 the very artefact the code was fitted to, so every green run reinforced a conclusion
 we had no basis for. We believed the number meant what we said it meant. We were
-wrong, and we were wrong because we did not verify it, not because we were trying to
-get away with something.
+wrong, and we were wrong because we did not verify it.
 
 It was also **not us who found it**. It was reported from outside, in
 [issue #379](https://github.com/Nimblesite/Basilisk/issues/379), from a public
