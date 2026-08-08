@@ -13,10 +13,7 @@ use basilisk_resolver::{AttributeInfo, ClassInfo, ResolvedModule, RhsKind};
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
-use super::{
-    guards::{is_enum_class, is_namedtuple_class, is_protocol_class},
-    Rule,
-};
+use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-0005",
@@ -62,7 +59,7 @@ impl Rule for MissingAttributeAnnotation {
             .classes
             .iter()
             .filter(|class| {
-                !is_enum_class(class) && !is_protocol_class(class) && !is_namedtuple_class(class)
+                !class.is_enum && !class.is_protocol && !class.is_namedtuple
             })
             .for_each(|class| {
                 check_class(

@@ -20,7 +20,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use basilisk_resolver::{evaluate, parse_static_condition, BranchTruth, ResolvedModule};
+use basilisk_resolver::{evaluate, parse_static_condition, BindingTable, BranchTruth, ResolvedModule};
 use ruff_python_ast::{Expr, Stmt};
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
@@ -114,14 +114,19 @@ fn collect_excluded_members(
 
 /// Collect names assigned inside an `if`-guard that is statically false at the
 /// target (and recurse into live branches for nested guards).
-fn collect_dead_branch_members(stmts: &[Stmt], target: (u32, u32), out: &mut HashSet<String>) {
+fn collect_dead_branch_members(
+    bindings: &BindingTable,
+    stmts: &[Stmt],
+    target: (u32, u32),
+    out: &mut HashSet<String>,
+) {
     for stmt in stmts {
         let Stmt::If(if_stmt) = stmt else {
             continue;
         };
-        match evaluate(&parse_static_condition(&if_stmt.test), target) {
+        match evaluate(&parse_static_condition(bindings, &if_stmt.test), target) {
             BranchTruth::AlwaysFalse => collect_assigned_names(&if_stmt.body, out),
-            _ => collect_dead_branch_members(&if_stmt.body, target, out),
+            _ => collect_dead_branch_members(bindings, &if_stmt.body, target, out),
         }
     }
 }

@@ -54,10 +54,10 @@ impl Rule for NoMatchingOverload {
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        // Overload membership is a binding question ([#380]).
-        let Some(resolver) = types.annotations() else {
+        // Bail on parse errors — those are reported separately as BSK-0000.
+        if types.annotations().is_none() {
             return;
-        };
+        }
         let source = &module.source;
         let path = &module.path;
 
@@ -95,7 +95,7 @@ impl Rule for NoMatchingOverload {
             if func.name != "__getitem__" {
                 continue;
             }
-            if !super::shared::overload_decorated(resolver, &func.decorators) {
+            if !func.is_overload {
                 continue;
             }
             let Some(class_name) = func.class_name.as_deref() else {

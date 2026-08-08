@@ -23,7 +23,7 @@ use basilisk_resolver::{ClassInfo, FunctionInfo, ResolvedModule};
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
-use super::{guards::is_protocol_class, Rule};
+use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-0025",
@@ -104,7 +104,7 @@ fn is_protocol_transitively<'a>(
     class_map: &HashMap<&str, &'a ClassInfo>,
 ) -> bool {
     super::shared::class_or_base_matches(cls, &|name| class_map.get(name).copied(), &|candidate| {
-        is_protocol_class(candidate)
+        candidate.is_protocol
     })
 }
 
@@ -116,7 +116,7 @@ fn check_class(
     out: &mut Vec<Diagnostic>,
 ) {
     // Skip if this class itself is a Protocol.
-    if is_protocol_class(child) {
+    if child.is_protocol {
         return;
     }
 
