@@ -1,5 +1,7 @@
 //! Tests for [`tuples_index_2`] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for tuples_index_2: Tuple index out of range.
+//!
+//! Regression coverage for [#284](https://github.com/Nimblesite/Basilisk/issues/284),
+//! grounded in [PEP 484 tuple types](https://peps.python.org/pep-0484/#the-typing-module).
 
 use super::common::*;
 
@@ -26,7 +28,12 @@ def f(v: tuple[int, str, float]) -> None:
     x = v[4]
 ";
     let diags = run(source)?;
-    let _ = codes(&diags);
+    assert_rule_count(
+        &diags,
+        "tuples_index_2",
+        1,
+        "index 4 is outside a fixed three-element tuple parameter",
+    );
     Ok(())
 }
 
@@ -37,11 +44,16 @@ def f(v: tuple[int, str, float]) -> None:
     x = v[-4]
 ";
     let diags = run(source)?;
-    let _ = codes(&diags);
+    assert_rule_count(
+        &diags,
+        "tuples_index_2",
+        1,
+        "index -4 is outside a fixed three-element tuple parameter",
+    );
     Ok(())
 }
 
-// Regression for GitHub #284: the body scan for a tuple-annotated parameter
+// Regression for https://github.com/Nimblesite/Basilisk/issues/284: the body scan for a tuple-annotated parameter
 // ran from the function's `def` to the next column-0 line — inside a class
 // every method is indented, so the scan bled into LATER methods. A 2-tuple
 // parameter named `pair` in one method's nested function flagged `pair[2]`

@@ -4,6 +4,8 @@
 //! `assert_type(expr, Type)` is a static-analysis directive that verifies the
 //! inferred type of `expr` equals `Type`. Two judgments feed it
 //! ([NARROWPLAN-INTEGRATION] Step 5):
+//! this is the normative behavior required by the
+//! [typing directive specification](https://typing.python.org/en/latest/spec/directives.html#assert-type).
 //!
 //! - the resolver's flow-narrowed comparison of declared parameter types
 //!   (`type_mismatch` on [`basilisk_resolver::AssertTypeCallInfo`]), and
@@ -13,6 +15,13 @@
 //!   DISJOINT (neither assignable to the other), so spelling variance and
 //!   literal widening can never manufacture a false positive
 //!   ([CHKARCH-CONFORMANCE-MODE]).
+//!
+//! Generic calls must first substitute their solved type arguments throughout
+//! the return type under [PEP 695 § Generic functions](https://peps.python.org/pep-0695/#generic-functions).
+//! Leaking an unsolved parameter such as `T` into `tuple[T, T]`, or treating a
+//! lowercase type parameter differently, is tracked by
+//! [#419](https://github.com/Nimblesite/Basilisk/issues/419) and pinned in
+//! `tests/runtime_type_safety_regressions_tests.rs`.
 //!
 //! ```python
 //! from typing import assert_type

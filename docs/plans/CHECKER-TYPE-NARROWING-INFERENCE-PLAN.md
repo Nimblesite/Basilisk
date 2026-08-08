@@ -382,7 +382,13 @@ sequenced checkboxes live in the checklist
    outermost positions ([NARROWPLAN-CALLSITES](#NARROWPLAN-CALLSITES)) —
    fixes #381, #382, and the position half of #335.
 5. `directives_assert_type` / `directives_reveal_type` = the hover oracle,
-   byte for byte — fixes #290 (solved generics surface everywhere).
+   byte for byte — fixes #290 (solved generics surface everywhere). Valid
+   `reveal_type` reporting remains open in
+   [#418](https://github.com/Nimblesite/Basilisk/issues/418) under the
+   [typing directive specification](https://typing.python.org/en/latest/spec/directives.html#reveal-type),
+   and recursive PEP 695 call substitution remains open in
+   [#419](https://github.com/Nimblesite/Basilisk/issues/419) under
+   [PEP 695 § Generic functions](https://peps.python.org/pep-0695/#generic-functions).
 6. `BSK-0001` consults `param_infer` before demanding an inferable
    annotation — fixes #317.
 7. Text-matching long tail: `slice_span` ~80 consumers → 0 — fixes #379 and
@@ -1391,7 +1397,15 @@ before the stage is declared closed:
   the oracle and fires on a provably disjoint, fully-grounded verdict —
   `assert_type(make(), str)` with `make() -> int` fires
   (`tests/checker/directives_assert_type_oracle_tests.rs`, 5 tests), while
-  literal widening, untyped callees, and unsolved generics abstain. PEP 675
+  literal widening and untyped callees abstain. The previous abstention for
+  unsolved generics is an explicitly open implementation gap, not completion:
+  [#419](https://github.com/Nimblesite/Basilisk/issues/419) requires recursive
+  return substitution under
+  [PEP 695](https://peps.python.org/pep-0695/#generic-functions), and
+  [#418](https://github.com/Nimblesite/Basilisk/issues/418) requires valid
+  `reveal_type` calls to emit the inferred type under the
+  [typing directive specification](https://typing.python.org/en/latest/spec/directives.html#reveal-type).
+  Both are pinned red in `tests/runtime_type_safety_regressions_tests.rs`. PEP 675
   provenance survives display widening (`Literal["x"]` renders
   `LiteralString`), pinning the #290 hover regression. Conformance stayed
   141/141 with 0 FP through the change.

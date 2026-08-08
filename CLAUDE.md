@@ -11,6 +11,14 @@ Basilisk is a strict Python type checker written in Rust. It must be correct on 
 
 **Not the job: raising the conformance score.** That number is what caused this. A change that lifts it without improving analysis of arbitrary Python is a regression.
 
+RULE PRIORITY: 
+
+1) PEP RULES THAT WERE ALREADY WORKING CORRECTLY BEFORE THE CULL
+2) PEP RULES THAT WERE SOMEHWHAT CORRECT
+3) PEP RULES THAT WERE NOT CORRECT MUST BE FLAGGED AS MOSTLY BROKEN. THESE ARE NOT A PRIORITY RIGHT NOW
+
+OTHER RULES LIKE BASILISK RULES ARE ONLY TO BE WORKED ON IF THEY ARE SIMPLE AND EASY TO FIX
+
 ## Why
 
 Basilisk was **removed from the python/typing conformance results** on 2026-08-05, at its own author's request — [python/typing#2330](https://github.com/python/typing/pull/2330), reverting [#2316](https://github.com/python/typing/pull/2316). The reason: *"Many of Basilisk's rules match against raw source text and hard-coded typing symbol names instead of resolved symbols on the AST."* Semantics-preserving edits to the suite — renaming imports, adjusting whitespace — broke **113 of 141 test files**. The score was real; the checker under it was not.

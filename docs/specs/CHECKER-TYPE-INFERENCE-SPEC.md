@@ -525,6 +525,17 @@ z: float = first([1, 2, 3])  # T solved to int; int assignable to float ✓
 
 > **Authority**: [PEP 484 §Generics](https://peps.python.org/pep-0484/#generics).
 
+PEP 695 generic function calls must solve a type parameter from the argument
+and substitute it recursively through the complete return annotation. The
+required `tuple[T, T]`, `list[T]`, union, and lowercase-parameter cases are
+tracked by [#419](https://github.com/Nimblesite/Basilisk/issues/419) and pinned
+by `crates/basilisk-checker/tests/runtime_type_safety_regressions_tests.rs`.
+Abstaining from `assert_type` is not implementation of this obligation: the
+same fixture pairs an exact accepted assertion with a deliberately wrong
+assertion that must emit exactly one diagnostic.
+
+> **Authority**: [PEP 695 § Generic functions](https://peps.python.org/pep-0695/#generic-functions), [typing spec — `assert_type`](https://typing.python.org/en/latest/spec/directives.html#assert-type).
+
 ### [TYPEINF-GENERICS-CONSTRAINED] Constrained TypeVars {#TYPEINF-GENERICS-CONSTRAINED}
 
 The current call-rule path validates that an argument is compatible with one

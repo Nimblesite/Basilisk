@@ -252,6 +252,13 @@ pub enum TypingForm {
     TypeClass,
     /// `types.NoneType` — the type of `None`.
     NoneTypeClass,
+    // Builtin narrowing functions
+    /// `isinstance` — the builtin instance check, a narrowing guard.
+    IsinstanceFunction,
+    /// `issubclass` — the builtin subclass check, a narrowing guard.
+    IssubclassFunction,
+    /// `hasattr` — the builtin attribute probe, a narrowing guard.
+    HasattrFunction,
     // Enumerations
     /// `enum.Enum` — the enumeration base class.
     EnumBase,

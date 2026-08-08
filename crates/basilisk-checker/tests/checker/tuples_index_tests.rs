@@ -1,4 +1,9 @@
 //! Tests for [`tuples_index`] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
+//!
+//! Regression coverage for [#284](https://github.com/Nimblesite/Basilisk/issues/284),
+//! grounded in [PEP 484 tuple types](https://peps.python.org/pep-0484/#the-typing-module):
+//! a fixed tuple has a statically known element count and literal indexing must
+//! respect that count at every expression position.
 // Integration tests for tuples_index: Tuple index out of bounds.
 
 use super::common::*;
@@ -20,8 +25,8 @@ y = t[1]
 
 #[test]
 fn positive_out_of_bounds() -> Result<(), Box<dyn std::error::Error>> {
-    // Module-level miss found by the torture corpus (tuple_index.py, GitHub
-    // #284 family): the spec's tuples chapter requires an error for an
+    // Module-level miss found by the torture corpus (tuple_index.py,
+    // https://github.com/Nimblesite/Basilisk/issues/284): the spec's tuples chapter requires an error for an
     // out-of-range literal index on a fixed-length tuple, at every scope.
     let source = r#"
 t: tuple[int, str, bool] = (1, "a", True)
@@ -92,7 +97,7 @@ z = t[-2]
     Ok(())
 }
 
-// Follow-up to GitHub #284: an out-of-range index on a `key=` lambda's
+// Follow-up to https://github.com/Nimblesite/Basilisk/issues/284: an out-of-range index on a `key=` lambda's
 // parameter was never actually checked — the old textual scan only ever
 // matched it by accident (against the wrong function's annotation). The
 // lambda parameter's tuple length comes from the iterable argument.

@@ -620,3 +620,20 @@ form = "type-class"
 modules = ["types"]
 name = "NoneType"
 form = "none-type-class"
+
+# Builtin narrowing functions
+
+[[symbol]]
+modules = ["builtins"]
+name = "isinstance"
+form = "isinstance-function"
+
+[[symbol]]
+modules = ["builtins"]
+name = "issubclass"
+form = "issubclass-function"
+
+[[symbol]]
+modules = ["builtins"]
+name = "hasattr"
+form = "hasattr-function"
