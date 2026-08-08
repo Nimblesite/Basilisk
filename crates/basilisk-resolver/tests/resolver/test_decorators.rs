@@ -30,3 +30,30 @@ fn collects_decorator_with_plain_name() -> Result<(), Box<dyn std::error::Error>
         .contains(&"overload".to_string()));
     Ok(())
 }
+
+#[test]
+fn builtin_decorator_flags_do_not_depend_on_spelling() -> Result<(), Box<dyn std::error::Error>> {
+    let bare = resolve_src(
+        &"class C:\n    @staticmethod\n    def f() -> None: ...\n".to_owned(),
+    )?;
+    let aliased = resolve_src(
+        &concat!(
+            "from builtins import staticmethod as sm\n",
+            "class C:\n",
+            "    @sm\n",
+            "    def f() -> None: ...\n",
+        )
+        .to_owned(),
+    )?;
+    let bare_method = bare.functions.iter().find(|function| function.name == "f");
+    let aliased_method = aliased
+        .functions
+        .iter()
+        .find(|function| function.name == "f");
+    assert!(bare_method.is_some_and(|method| method.is_staticmethod));
+    assert!(
+        aliased_method.is_some_and(|method| method.is_staticmethod),
+        "aliasing a builtin decorator must not change its resolved meaning"
+    );
+    Ok(())
+}

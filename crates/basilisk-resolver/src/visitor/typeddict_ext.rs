@@ -210,21 +210,6 @@ fn check_dict_value_types(
             continue;
         };
 
-        // Primitive literal value — check type directly.
-        if let Some(actual) = expr_literal_type_name(&item.value) {
-            if !typeddict_field_type_compatible(actual, expected) {
-                out.push(TypedDictKeyViolation {
-                    span: text_range_to_span(span_range),
-                    class_name: class_name.to_owned(),
-                    kind: TypedDictKeyViolationKind::WrongSubscriptValueType {
-                        key,
-                        expected: expected.clone(),
-                    },
-                });
-            }
-            continue;
-        }
-
         // Nested dict literal — if the expected type is a TypedDict, recurse.
         if let Expr::Dict(nested_dict) = &item.value {
             if let Some((nested_fields, nested_types, _, _)) = fields.get(expected.as_str()) {
@@ -305,41 +290,6 @@ fn subscript_key_literal(slice: &Expr) -> Option<String> {
         Expr::StringLiteral(key_str) => Some(key_str.value.to_string()),
         _ => None,
     }
-}
-
-/// Return the inferred type name for a literal expression, or `None` if not a literal.
-pub(super) fn expr_literal_type_name(expr: &Expr) -> Option<&'static str> {
-    match expr {
-        Expr::StringLiteral(_) | Expr::FString(_) => Some("str"),
-        Expr::NumberLiteral(n) => Some(match n.value {
-            ruff_python_ast::Number::Float(_) => "float",
-            ruff_python_ast::Number::Complex { .. } => "complex",
-            ruff_python_ast::Number::Int(_) => "int",
-        }),
-        Expr::BooleanLiteral(_) => Some("bool"),
-        Expr::NoneLiteral(_) => Some("None"),
-        _ => None,
-    }
-}
-
-/// Return `true` if an actual literal type is compatible with an expected `TypedDict` field type.
-///
-/// Qualifier-wrapped spellings (`Required[int]`, `ReadOnly[int]`) are never
-/// unwrapped here — the text stripper that did so was deleted as spelling
-/// logic, so such fields simply do not match and produce no diagnostic until
-/// the type-expression layer replaces this comparison
-/// ([ASTREBUILD-PHASE-TYPEEXPR]).
-pub(super) fn typeddict_field_type_compatible(actual: &str, expected: &str) -> bool {
-    let expected = expected.trim();
-    // A union field accepts a value matching any member (`year: int | None`).
-    if expected.contains('|') {
-        return expected
-            .split('|')
-            .any(|member| typeddict_field_type_compatible(actual, member));
-    }
-    actual == expected
-        || (actual == "bool" && expected == "int")
-        || (actual == "int" && expected == "float")
 }
 
 /// Collect `isinstance`/`issubclass`-on-`TypedDict` violations from

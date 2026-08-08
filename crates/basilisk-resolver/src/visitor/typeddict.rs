@@ -7,8 +7,6 @@ use crate::scope::{ClassInfo, TypedDictKeyViolation, TypedDictKeyViolationKind};
 
 use super::class_info_ext::expr_simple_name;
 use super::core::{check_td_stmts, text_range_to_span};
-use super::typeddict_ext::{expr_literal_type_name, typeddict_field_type_compatible};
-
 /// Split `s` at every top-level comma, respecting `[](){}` nesting.
 ///
 /// Returns trimmed slices into the original string.
@@ -35,9 +33,8 @@ pub(super) fn split_top_level_args(inner: &str) -> Vec<&str> {
 ///
 /// Detects:
 /// - Subscript assignments with invalid keys: `movie["director"] = "Ridley Scott"`
-/// - Subscript assignments with wrong value type: `movie["year"] = "1982"`
 /// - Annotated dict literal assignments with invalid or missing keys
-/// - Regular dict assignments to `TypedDict` variables with wrong keys/types
+/// - Regular dict assignments to `TypedDict` variables with wrong keys
 /// - Subscript read access with invalid keys: `print(movie["unknown"])`
 /// - Disallowed method calls: `movie.clear()`
 /// - Delete operations on required `TypedDict` keys: `del movie["name"]`
@@ -140,8 +137,7 @@ pub(super) fn td_check_subscript_assign(
         let Some(class_name) = var_type.get(&var_name) else {
             continue;
         };
-        let Some((all_fields, field_types, _, has_extra_items)) = fields.get(class_name.as_str())
-        else {
+        let Some((all_fields, _, _, has_extra_items)) = fields.get(class_name.as_str()) else {
             continue;
         };
         let Expr::StringLiteral(key_str) = sub.slice.as_ref() else {
@@ -154,19 +150,6 @@ pub(super) fn td_check_subscript_assign(
                 class_name: class_name.clone(),
                 kind: TypedDictKeyViolationKind::InvalidSubscriptKey { key },
             });
-        } else if let Some(expected) = field_types.get(key.as_str()) {
-            if let Some(actual) = expr_literal_type_name(&node.value) {
-                if !typeddict_field_type_compatible(actual, expected) {
-                    out.push(TypedDictKeyViolation {
-                        span: text_range_to_span(node.range()),
-                        class_name: class_name.clone(),
-                        kind: TypedDictKeyViolationKind::WrongSubscriptValueType {
-                            key,
-                            expected: expected.clone(),
-                        },
-                    });
-                }
-            }
         }
     }
 }
