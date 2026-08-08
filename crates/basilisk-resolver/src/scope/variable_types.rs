@@ -3,6 +3,16 @@
 
 use super::{rhs::RhsKind, span::Span};
 
+/// The builtin descriptor a class-body assignment's RHS call applies, decided
+/// from the callee's resolved binding — never from its spelling.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DescriptorKind {
+    /// The wrapped callable consumes no implicit receiver.
+    StaticMethod,
+    /// The wrapped callable consumes `cls` on every access path.
+    ClassMethod,
+}
+
 /// A module-level or class-body variable assignment.
 #[derive(Debug, Clone, PartialEq)]
 pub struct VariableInfo {
@@ -50,14 +60,16 @@ pub struct AttributeInfo {
     ///
     /// In enum class bodies, lambda attributes are non-members.
     pub rhs_is_lambda: bool,
-    /// The descriptor wrapper name when the right-hand-side is a call to
-    /// `staticmethod(...)` or `classmethod(...)`, else `None`.
+    /// The descriptor wrapper when the right-hand-side is a call whose callee
+    /// resolves to the builtin `staticmethod` or `classmethod`, else `None`.
     ///
-    /// In enum class bodies, static/class method descriptors are non-members;
-    /// in ordinary class bodies the wrapper decides which implicit receiver a
-    /// bound callable consumes
+    /// Resolved through the module's bindings with the builtin fallback, so an
+    /// aliased import is recognised and a module-local shadow is not
+    /// ([RESOLV-CANONICAL-BINDING]). In enum class bodies, static/class method
+    /// descriptors are non-members; in ordinary class bodies the wrapper
+    /// decides which implicit receiver a bound callable consumes
     /// ([#382](https://github.com/Nimblesite/Basilisk/issues/382)).
-    pub rhs_descriptor: Option<String>,
+    pub rhs_descriptor: Option<DescriptorKind>,
     /// The simple name of the callable this attribute binds, when the
     /// right-hand-side is a bare name (`m = f`) or a descriptor wrapper around
     /// one (`s = staticmethod(g)`), else `None`. Class-body assignments of

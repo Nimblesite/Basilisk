@@ -5,7 +5,7 @@ use ruff_python_ast::{Expr, Stmt, StmtAnnAssign, StmtAssign, StmtClassDef, StmtI
 use ruff_text_size::Ranged;
 
 use crate::canonical::{BindingTable, TypingForm};
-use crate::scope::{AttributeInfo, FunctionInfo, MatchStmtInfo, RhsKind};
+use crate::scope::{AttributeInfo, DescriptorKind, FunctionInfo, MatchStmtInfo, RhsKind};
 use crate::static_condition::{parse_static_condition, StaticCondition};
 use crate::visitor::class_info_ext::decorator_name;
 
@@ -225,15 +225,19 @@ fn ann_attribute(
 /// descriptor wrapper (if any) and the simple name of the callable bound.
 ///
 /// `m = f` → `(None, Some("f"))`; `s = staticmethod(g)` →
-/// `(Some("staticmethod"), Some("g"))`; anything else → names absent ([#382]).
-fn rhs_callable_binding(value: &Expr) -> (Option<String>, Option<String>) {
+/// `(Some(StaticMethod), Some("g"))`; anything else → both absent ([#382]).
+/// The wrapper is the callee's resolved binding with the builtin fallback, so
+/// an aliased import counts and a module-local shadow does not.
+fn rhs_callable_binding(
+    bindings: &BindingTable,
+    value: &Expr,
+) -> (Option<DescriptorKind>, Option<String>) {
     match value {
         Expr::Name(name) => (None, Some(name.id.to_string())),
         Expr::Call(call) => {
-            let wrapper = match call.func.as_ref() {
-                Expr::Name(n) if n.id == "staticmethod" || n.id == "classmethod" => {
-                    n.id.to_string()
-                }
+            let wrapper = match bindings.form_of_with_builtins(&call.func) {
+                Some(TypingForm::StaticMethod) => DescriptorKind::StaticMethod,
+                Some(TypingForm::ClassMethod) => DescriptorKind::ClassMethod,
                 _ => return (None, None),
             };
             let bound = match call.arguments.args.as_ref() {
@@ -254,7 +258,7 @@ fn assign_attributes(
     attributes: &mut Vec<AttributeInfo>,
 ) {
     let rhs_is_lambda = matches!(&*assign.value, Expr::Lambda(_));
-    let (rhs_descriptor, rhs_name) = rhs_callable_binding(&assign.value);
+    let (rhs_descriptor, rhs_name) = rhs_callable_binding(bindings, &assign.value);
     for target in &assign.targets {
         if let Some(name) = expr_simple_name(target) {
             attributes.push(AttributeInfo {
@@ -266,7 +270,7 @@ fn assign_attributes(
                 rhs_kind: classify_rhs(&assign.value),
                 rhs_span: Some(text_range_to_span(assign.value.range())),
                 rhs_is_lambda,
-                rhs_descriptor: rhs_descriptor.clone(),
+                rhs_descriptor,
                 rhs_name: rhs_name.clone(),
                 is_readonly: false,
                 is_final: false,

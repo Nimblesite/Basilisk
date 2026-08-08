@@ -7,7 +7,12 @@
 > `basilisk-resolver`, and `basilisk-stubs` compile clean under workspace lints
 > and the build now stops in `basilisk-checker`. The registry-load defect that
 > silently emptied the `TypingForm` index is fixed and pinned by
-> `crates/basilisk-canonical/tests/canonical_registry.rs`. Deleted resolver
+> `crates/basilisk-canonical/tests/canonical_registry.rs`. The binding table is
+> now scope- and order-correct (position-aware events, module frame only,
+> star-import materialisation, builtin fallback), pinned by
+> `crates/basilisk-canonical/tests/binding_table.rs`; the [0c](#ASTREBUILD-PHASE-COMPILE-DECORATORS)
+> resolver mechanism landed, so the function-binary failure in the 161 below
+> has since been fixed and its pin passes. Deleted resolver
 > collectors are stubbed to empty vectors (inert, never satisfied), pinned by
 > **161 failing resolver tests** (462 pass; measured per-binary on 2026-08-08:
 > annotation 14, class 8, function 1, misc 11, mutant 31, protocol 25,
