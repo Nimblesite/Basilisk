@@ -204,10 +204,13 @@ fn flip_comparison(operator: CmpOp) -> CmpOp {
     }
 }
 
-fn is_sys_attribute(expr: &Expr, attribute_name: &str) -> bool {
-    matches!(expr, Expr::Attribute(attribute)
-        if attribute.attr.as_str() == attribute_name
-            && matches!(attribute.value.as_ref(), Expr::Name(name) if name.id.as_str() == "sys"))
+/// Whether an expression resolves to `sys.<name>` through the module's own
+/// bindings — so `import sys as s; s.version_info` and
+/// `from sys import version_info` qualify, and a module that rebinds `sys`
+/// does not. The `Name | Attribute` guard keeps subscripted and called forms
+/// (`sys.version_info[0]`) honestly undecidable rather than unwrapped.
+fn resolves_to_sys(bindings: &BindingTable, expr: &Expr, name: &str) -> bool {
+    matches!(expr, Expr::Name(_) | Expr::Attribute(_)) && bindings.resolves_to(expr, "sys", name)
 }
 
 fn version_tuple(expr: &Expr) -> Option<(u32, u32)> {
@@ -250,6 +253,7 @@ pub(crate) fn platform_guard_literals(body: &[Stmt]) -> std::collections::BTreeS
     use ruff_python_ast::visitor::Visitor as _;
 
     let mut collector = PlatformLiterals {
+        bindings: BindingTable::from_module(body),
         found: std::collections::BTreeSet::new(),
     };
     for stmt in body {
@@ -259,6 +263,10 @@ pub(crate) fn platform_guard_literals(body: &[Stmt]) -> std::collections::BTreeS
 }
 
 struct PlatformLiterals {
+    /// The module's own bindings — comparisons are recognised exactly as
+    /// [`evaluate_comparison_guard`] recognises them, so the collected set is
+    /// complete for the guards that can actually fire.
+    bindings: BindingTable,
     found: std::collections::BTreeSet<String>,
 }
 
@@ -266,7 +274,9 @@ impl ruff_python_ast::visitor::Visitor<'_> for PlatformLiterals {
     fn visit_expr(&mut self, expr: &Expr) {
         if let Expr::Compare(compare) = expr {
             let sides = std::iter::once(compare.left.as_ref()).chain(compare.comparators.iter());
-            let names_platform = sides.clone().any(|side| is_sys_attribute(side, "platform"));
+            let names_platform = sides
+                .clone()
+                .any(|side| resolves_to_sys(&self.bindings, side, "platform"));
             if names_platform {
                 self.found.extend(sides.filter_map(string_literal));
             }

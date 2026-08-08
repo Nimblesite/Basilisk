@@ -297,7 +297,7 @@ impl StubExtractor {
     /// so the clone is a table copy plus refcount bumps and the intersection
     /// short-circuits untouched entries by pointer identity.
     fn visit_if(&mut self, if_stmt: &StmtIf) {
-        let branches = feasible_branches(if_stmt, self.target.as_ref());
+        let branches = feasible_branches(&self.bindings, if_stmt, self.target.as_ref());
         if branches.len() == 1 {
             if let Some(body) = branches.first().and_then(|body| *body) {
                 self.visit_body(body);
