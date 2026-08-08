@@ -1,10 +1,11 @@
-//! `Self` obligations (PEP 673). [PERMTEST-FAMILY-B] / [PERMTEST-VOCABULARY].
+//! `Self` obligations ([PEP 673](https://peps.python.org/pep-0673/)).
+//! [PERMTEST-FAMILY-B] / [PERMTEST-VOCABULARY].
 //!
 //! PEP 673 enumerates its rejections explicitly, and each one here is taken from
 //! that list rather than invented:
 //!
-//! * "`def foo(bar: Self) -> Self: ...` # Rejected (not within a class)"
-//! * "`bar: Self` # Rejected (not within a class)"
+//! * A module-level function annotation is rejected because no class binds it.
+//! * A module-level variable annotation is rejected for the same reason.
 //! * "we reject `Self` in staticmethods"
 //! * "we reject using `Self` with type arguments, such as `Self[int]`"
 //!
@@ -23,56 +24,57 @@ fn self_is_rejected_outside_a_class_body() -> Result<(), Box<dyn std::error::Err
         spec_reason: "PEP 673 rejects `Self` in a module-level function — there is no enclosing \
                       class for it to be bound to; inside a classmethod it is accepted",
         rejected: r#"
-import typing
+from typing import Self as enclosing_shape
 
 
-def bind(quire: typing.Self) -> typing.Self:
+def bind(quire: object) -> enclosing_shape:
     return quire
 "#,
         accepted: r#"
-import typing
+from builtins import classmethod as subtype_constructor
+from typing import Self as enclosing_shape
 
 
 class Codex:
-    @classmethod
-    def bind(cls) -> typing.Self:
+    @subtype_constructor
+    def bind(cls) -> enclosing_shape:
         return cls()
 "#,
         rejected_variants: &[
             aliased(
                 r#"
-from typing import Self as Same
+from typing import Self as mirrored_shape
 
 
-def bind(quire: Same) -> Same:
+def bind(quire: object) -> mirrored_shape:
     return quire
 "#,
             ),
             import_form(
                 r#"
-import typing_extensions
+import typing as type_contracts
 
 
-def bind(quire: typing_extensions.Self) -> typing_extensions.Self:
+def bind(quire: object) -> type_contracts.Self:
     return quire
 "#,
             ),
             renamed(
                 r#"
-import typing
+from typing_extensions import Self as extension_shape
 
 
-def stitch(folio: typing.Self) -> typing.Self:
+def stitch(folio: object) -> extension_shape:
     return folio
 "#,
             ),
             reformatted(
                 "
-import typing
+from typing import Self as enclosing_shape
 
 def bind(
-    quire : typing.Self ,   # <- no enclosing class
-) -> typing.Self :
+    quire : object ,
+) -> enclosing_shape :   # <- no enclosing class
         return quire
 ",
             ),
@@ -80,29 +82,34 @@ def bind(
         accepted_variants: &[
             aliased(
                 r#"
-from typing import Self as Same
+from builtins import classmethod as alternate_constructor
+from typing import Self as mirrored_shape
 
 
 class Codex:
-    @classmethod
-    def bind(cls) -> Same:
+    @alternate_constructor
+    def bind(cls) -> mirrored_shape:
         return cls()
 "#,
             ),
             renamed(
                 r#"
-import typing
+import builtins as runtime_tools
+import typing as type_contracts
 
 
 class Ledger:
-    @classmethod
-    def stitch(cls) -> typing.Self:
+    @runtime_tools.classmethod
+    def stitch(cls) -> type_contracts.Self:
         return cls()
 "#,
             ),
         ],
     }
-    .assert("Self is rejected outside a class body")
+    .assert_by(
+        "Self is rejected outside a class body",
+        "generics_self_usage",
+    )
 }
 
 // ── Self is rejected in a staticmethod ───────────────────────────────────
@@ -113,166 +120,175 @@ fn self_is_rejected_in_a_staticmethod() -> Result<(), Box<dyn std::error::Error>
         spec_reason: "PEP 673 rejects `Self` in staticmethods, since there is no `self` or `cls` \
                       for it to track; the same annotation on an instance method is accepted",
         rejected: r#"
-import typing
+from builtins import staticmethod as without_receiver
+from typing import Self as enclosing_shape
 
 
 class Codex:
-    @staticmethod
-    def bind() -> typing.Self:
-        raise RuntimeError("no receiver")
+    @without_receiver
+    def bind() -> enclosing_shape:
+        ...
 "#,
         accepted: r#"
-import typing
+from typing import Self as enclosing_shape
 
 
 class Codex:
-    def bind(self) -> typing.Self:
+    def bind(self) -> enclosing_shape:
         return self
 "#,
         rejected_variants: &[
             aliased(
                 r#"
-from typing import Self as Same
+from builtins import staticmethod as detached_operation
+from typing import Self as mirrored_shape
 
 
 class Codex:
-    @staticmethod
-    def bind() -> Same:
-        raise RuntimeError("no receiver")
+    @detached_operation
+    def bind() -> mirrored_shape:
+        ...
 "#,
             ),
             import_form(
                 r#"
-import typing_extensions
+import builtins as runtime_tools
+import typing as type_contracts
 
 
 class Codex:
-    @staticmethod
-    def bind() -> typing_extensions.Self:
-        raise RuntimeError("no receiver")
+    @runtime_tools.staticmethod
+    def bind() -> type_contracts.Self:
+        ...
 "#,
             ),
             renamed(
                 r#"
-import typing
+from builtins import staticmethod as detached_operation
+from typing_extensions import Self as extension_shape
 
 
 class Ledger:
-    @staticmethod
-    def stitch() -> typing.Self:
-        raise RuntimeError("no receiver")
+    @detached_operation
+    def stitch() -> extension_shape:
+        ...
 "#,
             ),
             reformatted(
                 "
-import typing
+from builtins import staticmethod as without_receiver
+from typing import Self as enclosing_shape
 
 class Codex:
 
-        @staticmethod
-        def bind() -> typing.Self :   # <- no receiver to bind Self to
-            raise RuntimeError( 'no receiver' )
+        @without_receiver
+        def bind() -> enclosing_shape :   # <- no receiver to bind Self to
+            ...
 ",
             ),
         ],
         accepted_variants: &[
             aliased(
                 r#"
-from typing import Self as Same
+from typing import Self as mirrored_shape
 
 
 class Codex:
-    def bind(self) -> Same:
+    def bind(self) -> mirrored_shape:
         return self
 "#,
             ),
             renamed(
                 r#"
-import typing
+import typing as type_contracts
 
 
 class Ledger:
-    def stitch(self) -> typing.Self:
+    def stitch(self) -> type_contracts.Self:
         return self
 "#,
             ),
         ],
     }
-    .assert("Self is rejected in a staticmethod")
+    .assert_by("Self is rejected in a staticmethod", "generics_self_usage")
 }
 
 // ── Self at module scope, versus in an attribute annotation ──────────────
 
 #[test]
-fn self_is_rejected_at_module_scope_but_allowed_on_an_attribute()
--> Result<(), Box<dyn std::error::Error>> {
+fn self_is_rejected_at_module_scope_but_allowed_on_an_attribute(
+) -> Result<(), Box<dyn std::error::Error>> {
     SpecObligation {
-        spec_reason: "PEP 673 lists `bar: Self` at module level as rejected, while an attribute \
+        spec_reason:
+            "PEP 673 lists a module-level `Self` annotation as rejected, while an attribute \
                       annotation inside a class is accepted and treated as returning `Self`",
         rejected: r#"
-import typing
+from typing import Self as enclosing_shape
 
-gutter: typing.Self
+gutter: enclosing_shape
 "#,
         accepted: r#"
-import typing
+from typing import Self as enclosing_shape
 
 
 class Codex:
-    successor: typing.Self | None = None
+    successor: enclosing_shape | None = None
 "#,
         rejected_variants: &[
             aliased(
                 r#"
-from typing import Self as Same
+from typing import Self as mirrored_shape
 
-gutter: Same
+gutter: mirrored_shape
 "#,
             ),
             import_form(
                 r#"
-import typing_extensions
+import typing as type_contracts
 
-gutter: typing_extensions.Self
+gutter: type_contracts.Self
 "#,
             ),
             renamed(
                 r#"
-import typing
+from typing_extensions import Self as extension_shape
 
-deckle: typing.Self
+deckle: extension_shape
 "#,
             ),
             reformatted(
                 "
-import typing
+from typing import Self as enclosing_shape
 
-gutter : typing.Self   # <- module scope, no enclosing class
+gutter : enclosing_shape   # <- module scope, no enclosing class
 ",
             ),
         ],
         accepted_variants: &[
             aliased(
                 r#"
-from typing import Self as Same
+from typing import Self as mirrored_shape
 
 
 class Codex:
-    successor: Same | None = None
+    successor: mirrored_shape | None = None
 "#,
             ),
             renamed(
                 r#"
-import typing
+import typing as type_contracts
 
 
 class Ledger:
-    predecessor: typing.Self | None = None
+    predecessor: type_contracts.Self | None = None
 "#,
             ),
         ],
     }
-    .assert("Self is rejected at module scope but allowed on an attribute")
+    .assert_by(
+        "Self is rejected at module scope but allowed on an attribute",
+        "generics_self_usage",
+    )
 }
 
 // ── Self takes no type arguments ─────────────────────────────────────────
@@ -280,62 +296,63 @@ class Ledger:
 #[test]
 fn self_may_not_be_subscripted() -> Result<(), Box<dyn std::error::Error>> {
     SpecObligation {
-        spec_reason: "PEP 673 rejects using `Self` with type arguments such as `Self[int]`; `Self` \
+        spec_reason:
+            "PEP 673 rejects using `Self` with type arguments such as `Self[int]`; `Self` \
                       already denotes the enclosing class and takes no parameters",
         rejected: r#"
-import typing
+from typing import Self as enclosing_shape
 
 
 class Codex:
-    def bind(self) -> typing.Self[int]:
+    def bind(self) -> enclosing_shape[int]:
         return self
 "#,
         accepted: r#"
-import typing
+from typing import Self as enclosing_shape
 
 
 class Codex:
-    def bind(self) -> typing.Self:
+    def bind(self) -> enclosing_shape:
         return self
 "#,
         rejected_variants: &[
             aliased(
                 r#"
-from typing import Self as Same
+from typing import Self as mirrored_shape
 
 
 class Codex:
-    def bind(self) -> Same[int]:
+    def bind(self) -> mirrored_shape[int]:
         return self
 "#,
             ),
             import_form(
                 r#"
-import typing
+import typing as type_contracts
 import builtins
 
 
 class Codex:
-    def bind(self) -> typing.Self[builtins.int]:
+    def bind(self) -> type_contracts.Self[builtins.int]:
         return self
 "#,
             ),
             renamed(
                 r#"
-import typing
+from typing_extensions import Self as extension_shape
 
 
 class Ledger:
-    def stitch(self) -> typing.Self[int]:
+    def stitch(self) -> extension_shape[int]:
         return self
 "#,
             ),
             reformatted(
                 "
-import typing
+from typing import Self as enclosing_shape
 
 class Codex:
-        def bind( self ) -> typing.Self[
+        def bind( self ) -> enclosing_shape[
             int   # <- Self admits no type arguments
         ] :
             return self
@@ -345,93 +362,92 @@ class Codex:
         accepted_variants: &[
             aliased(
                 r#"
-from typing import Self as Same
+from typing import Self as mirrored_shape
 
 
 class Codex:
-    def bind(self) -> Same:
+    def bind(self) -> mirrored_shape:
         return self
 "#,
             ),
             renamed(
                 r#"
-import typing
+import typing as type_contracts
 
 
 class Ledger:
-    def stitch(self) -> typing.Self:
+    def stitch(self) -> type_contracts.Self:
         return self
 "#,
             ),
         ],
     }
-    .assert("Self may not be subscripted")
+    .assert_by("Self may not be subscripted", "generics_self_basic")
 }
 
 // ── __new__ is an accepted Self position ─────────────────────────────────
 
 #[test]
-fn self_is_accepted_in_new_and_as_a_parameter_type()
--> Result<(), Box<dyn std::error::Error>> {
+fn self_is_accepted_in_new_and_as_a_parameter_type() -> Result<(), Box<dyn std::error::Error>> {
     SpecObligation {
         spec_reason: "PEP 673 explicitly accepts `def __new__(cls, …) -> Self` and `Self` as a \
                       parameter annotation; rejecting either is a false positive. A module-level \
                       function keeps the rejection even when it merely takes `Self`",
         rejected: r#"
-import typing
+from typing import Self as enclosing_shape
 
 
-def collate(left: typing.Self, right: typing.Self) -> None:
+def collate(left: enclosing_shape, right: object) -> None:
     return None
 "#,
         accepted: r#"
-import typing
+from typing import Self as enclosing_shape
 
 
 class Codex:
-    def __new__(cls, leaves: int) -> typing.Self:
+    def __new__(cls, leaves: int) -> enclosing_shape:
         return super().__new__(cls)
 
-    def collate(self, other: typing.Self) -> None:
+    def collate(self, other: enclosing_shape) -> None:
         return None
 "#,
         rejected_variants: &[
             aliased(
                 r#"
-from typing import Self as Same
+from typing import Self as mirrored_shape
 
 
-def collate(left: Same, right: Same) -> None:
+def collate(left: mirrored_shape, right: object) -> None:
     return None
 "#,
             ),
             import_form(
                 r#"
-import typing_extensions
+import typing as type_contracts
 
 
 def collate(
-    left: typing_extensions.Self, right: typing_extensions.Self
+    left: type_contracts.Self, right: object
 ) -> None:
     return None
 "#,
             ),
             renamed(
                 r#"
-import typing
+from typing_extensions import Self as extension_shape
 
 
-def gather(recto: typing.Self, verso: typing.Self) -> None:
+def gather(recto: extension_shape, verso: object) -> None:
     return None
 "#,
             ),
             reformatted(
                 "
-import typing
+from typing import Self as enclosing_shape
 
 def collate(
-    left  : typing.Self ,
-    right : typing.Self ,   # <- still outside any class
+    left  : enclosing_shape ,
+    right : object ,   # <- still outside any class
 ) -> None :
         return None
 ",
@@ -440,31 +456,34 @@ def collate(
         accepted_variants: &[
             aliased(
                 r#"
-from typing import Self as Same
+from typing import Self as mirrored_shape
 
 
 class Codex:
-    def __new__(cls, leaves: int) -> Same:
+    def __new__(cls, leaves: int) -> mirrored_shape:
         return super().__new__(cls)
 
-    def collate(self, other: Same) -> None:
+    def collate(self, other: mirrored_shape) -> None:
         return None
 "#,
             ),
             renamed(
                 r#"
-import typing
+import typing as type_contracts
 
 
 class Ledger:
-    def __new__(cls, folios: int) -> typing.Self:
+    def __new__(cls, folios: int) -> type_contracts.Self:
         return super().__new__(cls)
 
-    def gather(self, peer: typing.Self) -> None:
+    def gather(self, peer: type_contracts.Self) -> None:
         return None
 "#,
             ),
         ],
     }
-    .assert("Self is accepted in __new__ and as a parameter type")
+    .assert_by(
+        "Self is accepted in __new__ and as a parameter type",
+        "generics_self_usage",
+    )
 }

@@ -368,20 +368,73 @@ mod tests {
         }
     }
 
-    /// `Proven` requires an attributed obligation. Until `assert_rejected_by`
-    /// is actually used by a passing obligation, nothing may claim it.
+    /// Codes attributed by an obligation in the golden permutation suite: every
+    /// string literal appearing near an `assert_by(` / `assert_rejected_by(`
+    /// call site. Proximity to the attribution call is required so a code
+    /// merely *mentioned* in a fixture cannot count as attributed.
+    fn attributed_codes() -> HashSet<String> {
+        let golden = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden");
+        let mut sources = String::new();
+        read_all(&golden, &mut sources);
+        let mut codes = HashSet::new();
+        for marker in ["assert_by(", "assert_rejected_by("] {
+            for (index, _) in sources.match_indices(marker) {
+                let start = index + marker.len();
+                let window = sources.get(start..(start + 400).min(sources.len())).unwrap_or("");
+                let mut rest = window;
+                while let Some(open) = rest.find('"') {
+                    let Some(tail) = rest.get(open + 1..) else { break };
+                    let Some(close) = tail.find('"') else { break };
+                    if let Some(literal) = tail.get(..close) {
+                        codes.insert(literal.to_owned());
+                    }
+                    rest = tail.get(close + 1..).unwrap_or("");
+                }
+            }
+        }
+        codes
+    }
+
+    /// `Proven` requires an attributed obligation: a golden permutation test
+    /// that names the rule's code in `assert_by`/`assert_rejected_by`
+    /// ([PERMTEST-FAMILY-B]). Pass-ness is enforced by those obligations being
+    /// tests themselves — a Proven rule whose obligation regresses fails the
+    /// golden suite, and a Proven label without any attribution fails here.
     #[test]
     fn proven_status_requires_an_attributed_obligation() {
-        let claimed: Vec<&str> = RULE_STATUS
+        let attributed = attributed_codes();
+        let unattributed: Vec<&str> = RULE_STATUS
             .iter()
             .filter(|(_, status)| *status == RuleStatus::Proven)
             .map(|(code, _)| *code)
+            .filter(|code| !attributed.contains(*code))
             .collect();
         assert!(
-            claimed.is_empty(),
-            "these rules claim Proven: {claimed:?}. A rule may only be Proven when a passing \
-             permutation obligation attributes a diagnostic to it via `assert_rejected_by` \
-             ([PERMTEST-FAMILY-B]). Add that test, then delete this assertion's expectation."
+            unattributed.is_empty(),
+            "these rules claim Proven but no golden obligation attributes a diagnostic to \
+             them via `assert_by`/`assert_rejected_by` ([PERMTEST-FAMILY-B]): \
+             {unattributed:?}. Add the attributed obligation (and make it pass) before \
+             claiming Proven."
+        );
+    }
+
+    /// The inverse direction: an INVALID rule may not simultaneously be the
+    /// subject of an attributed obligation someone expects to pass — the two
+    /// claims contradict each other, and whichever is stale must be fixed.
+    #[test]
+    fn invalid_rules_are_not_attributed_in_the_golden_suite() {
+        let attributed = attributed_codes();
+        let contradictions: Vec<&str> = RULE_STATUS
+            .iter()
+            .filter(|(_, status)| status.is_invalid())
+            .map(|(code, _)| *code)
+            .filter(|code| attributed.contains(*code))
+            .collect();
+        assert!(
+            contradictions.is_empty(),
+            "these rules are labelled Invalid yet a golden obligation attributes a \
+             diagnostic to them: {contradictions:?}. Either the rule was rebuilt (relabel \
+             it) or the obligation is aspirational (it must be failing — check it is)."
         );
     }
 }
