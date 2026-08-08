@@ -91,7 +91,6 @@ pub(crate) mod generics_typevartuple_callable;
 pub(crate) mod generics_typevartuple_specialization;
 pub(crate) mod generics_typevartuple_specialization_2;
 pub(crate) mod generics_typevartuple_unpack;
-pub(crate) mod generics_upper_bound;
 pub(crate) mod generics_upper_bound_2;
 pub(crate) mod generics_variance;
 pub(crate) mod generics_variance_inference;
@@ -312,7 +311,6 @@ fn all_rules() -> &'static [&'static dyn Rule] {
         &generics_self_protocols::ProtocolSelfViolation,
         &generics_self_basic::SelfTypeViolation,
         &protocols_modules::ModuleProtocolIncompatible,
-        &generics_upper_bound::TypeVarBoundViolation,
         &generics_typevartuple_unpack::TypeVarTupleUnpackViolation,
         &generics_typevartuple_callable::TypeVarTupleCallableMismatch,
         &generics_typevartuple_basic_2::TypeVarTupleUnpackRequired,

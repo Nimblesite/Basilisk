@@ -32,25 +32,6 @@ fn has_decorator_form(bindings: &BindingTable, decorators: &[Decorator], form: T
         .any(|decorator| bindings.form_of(&decorator.expression) == Some(form))
 }
 
-/// Does any decorator denote the builtin named `builtin`?
-///
-/// Builtins need no import, so no registry entry describes them and
-/// [`BindingTable::form_of`] cannot answer. Recognition is a bare `Name` node
-/// carrying the identifier, and only while the module has not bound that name
-/// to something of its own — which [`BindingTable::binds_name`] decides. Only
-/// [`function_info_from`] calls this, with the two method-descriptor builtins
-/// fixed at the call sites.
-fn has_builtin_decorator(
-    bindings: &BindingTable,
-    decorators: &[Decorator],
-    builtin: &str,
-) -> bool {
-    !bindings.binds_name(builtin)
-        && decorators.iter().any(|decorator| {
-            matches!(&decorator.expression, Expr::Name(name) if name.id.as_str() == builtin)
-        })
-}
-
 pub(super) fn function_info_from(
     bindings: &BindingTable,
     func: &StmtFunctionDef,
@@ -145,8 +126,8 @@ pub(super) fn function_info_from(
         local_vars,
         local_unannotated_vars,
         is_overload: has_decorator_form(bindings, &func.decorator_list, TypingForm::Overload),
-        is_staticmethod: has_builtin_decorator(bindings, &func.decorator_list, "staticmethod"),
-        is_classmethod: has_builtin_decorator(bindings, &func.decorator_list, "classmethod"),
+        is_staticmethod: false,
+        is_classmethod: false,
         is_no_type_check: has_decorator_form(
             bindings,
             &func.decorator_list,
@@ -439,4 +420,3 @@ pub(super) fn collect_string_refs_from_expr(expr: &Expr, out: &mut Vec<String>) 
         _ => {}
     }
 }
-

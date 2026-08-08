@@ -95,6 +95,31 @@ process("hello")  # E -- str does not satisfy int bound
 }
 
 #[test]
+fn typevar_bound_diagnostic_does_not_depend_on_keyword_spacing(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let compact = run(
+        "from typing import TypeVar\nT = TypeVar('T', bound=int)\ndef f(x: T) -> T: return x\nf('bad')\n",
+    )?;
+    let spaced = run(
+        "from typing import TypeVar\nT = TypeVar('T', bound = int)\ndef f(x: T) -> T: return x\nf('bad')\n",
+    )?;
+    let compact_count = compact
+        .iter()
+        .filter(|diagnostic| diagnostic.code.code == "generics_upper_bound")
+        .count();
+    let spaced_count = spaced
+        .iter()
+        .filter(|diagnostic| diagnostic.code.code == "generics_upper_bound")
+        .count();
+    assert!(compact_count > 0, "the control case must exercise the rule");
+    assert_eq!(
+        spaced_count, compact_count,
+        "whitespace around a keyword argument cannot change its resolved meaning"
+    );
+    Ok(())
+}
+
+#[test]
 fn test_e0080_nested_typevar_bounds() -> Result<(), Box<dyn std::error::Error>> {
     let src = r#"
 from typing import Sized, TypeVar

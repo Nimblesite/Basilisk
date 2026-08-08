@@ -32,15 +32,14 @@ struct TdSpec<'a> {
 
 /// Validate a dict literal against the `TypedDict` spec.
 ///
-/// Emits diagnostics for non-literal keys, invalid keys, missing required keys,
-/// and value-type mismatches. `span_range` is the range used for emitted spans;
-/// callers typically pass the enclosing statement's range so the diagnostic
-/// points at the whole assignment.
+/// Emits diagnostics for non-literal keys, invalid keys, and missing required
+/// keys. `span_range` is the range used for emitted spans; callers typically
+/// pass the enclosing statement's range so the diagnostic points at the whole
+/// assignment.
 fn check_dict_against_typeddict(
     dict: &ruff_python_ast::ExprDict,
     spec: &TdSpec<'_>,
     span_range: ruff_text_size::TextRange,
-    fields: &TdFieldMap<'_>,
     out: &mut Vec<TypedDictKeyViolation>,
 ) {
     let TdSpec {
@@ -104,16 +103,6 @@ fn check_dict_against_typeddict(
             },
         });
     }
-
-    check_dict_value_types(
-        dict,
-        field_types,
-        all_fields,
-        class_name,
-        span_range,
-        fields,
-        out,
-    );
 }
 
 pub(super) fn td_check_regular_assign(
@@ -148,7 +137,6 @@ pub(super) fn td_check_regular_assign(
                 has_extra_items: *has_extra_items,
             },
             node.range(),
-            fields,
             out,
         );
     }
@@ -182,49 +170,8 @@ pub(super) fn td_check_ann_assign(
             has_extra_items: *has_extra_items,
         },
         node.range(),
-        fields,
         out,
     );
-}
-
-/// Recursively check value types in a dict literal against `TypedDict` field types.
-fn check_dict_value_types(
-    dict: &ruff_python_ast::ExprDict,
-    field_types: &std::collections::HashMap<&str, String>,
-    all_fields: &[&str],
-    class_name: &str,
-    span_range: ruff_text_size::TextRange,
-    fields: &TdFieldMap<'_>,
-    out: &mut Vec<TypedDictKeyViolation>,
-) {
-    use ruff_text_size::Ranged as _;
-    for item in &dict.items {
-        let Some(Expr::StringLiteral(s)) = &item.key else {
-            continue;
-        };
-        let key = s.value.to_string();
-        if !all_fields.contains(&key.as_str()) {
-            continue;
-        }
-        let Some(expected) = field_types.get(key.as_str()) else {
-            continue;
-        };
-
-        // Nested dict literal — if the expected type is a TypedDict, recurse.
-        if let Expr::Dict(nested_dict) = &item.value {
-            if let Some((nested_fields, nested_types, _, _)) = fields.get(expected.as_str()) {
-                check_dict_value_types(
-                    nested_dict,
-                    nested_types,
-                    nested_fields,
-                    expected,
-                    nested_dict.range(),
-                    fields,
-                    out,
-                );
-            }
-        }
-    }
 }
 
 /// Walk an expression and report subscript reads with invalid `TypedDict` keys.
