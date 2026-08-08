@@ -47,7 +47,8 @@ use super::oracle::ModuleOracle;
 pub(crate) struct ModuleTypes<'m> {
     annotations: Option<AnnotationResolver<'m>>,
     oracle: Option<ModuleOracle<'m>>,
-    subtyping: SubtypingContext,
+    // The `subtyping: SubtypingContext` field is DELETED — see the banner on
+    // the removed accessor below. Do not re-add it in any form.
 }
 
 impl<'m> ModuleTypes<'m> {
@@ -62,7 +63,6 @@ impl<'m> ModuleTypes<'m> {
         Self {
             annotations,
             oracle,
-            subtyping: module_context(module),
         }
     }
 
@@ -77,8 +77,24 @@ impl<'m> ModuleTypes<'m> {
         self.oracle.as_ref()
     }
 
-    /// The module's nominal class hierarchy ([TYPEINF-SUBTYPING]).
-    pub(crate) fn subtyping(&self) -> &SubtypingContext {
-        &self.subtyping
-    }
+    // ######################################################################
+    // # DELETED — `subtyping()`, and the `subtyping: SubtypingContext`     #
+    // # field it exposed. DO NOT RESTORE. DO NOT SUBSTITUTE A PLACEHOLDER  #
+    // # CONTEXT THAT ANSWERS EVERY QUERY `false` TO MAKE THIS COMPILE.     #
+    // #                                                                    #
+    // # `crate::subtyping` keyed its entire hierarchy on STRINGS:          #
+    // # `is_subtype(&str, &str)` over class names harvested from rendered  #
+    // # annotation text, with `"int"`/`"str"`/`"object"` literal matching, #
+    // # `|` splitting, and `starts_with("tuple[")`. Every rule that took   #
+    // # this accessor inherited a verdict derived from spelling, however   #
+    // # careful the rule's own logic was. That is why ~20 rules could not  #
+    // # be honest individually — they were reading from a dishonest well.  #
+    // #                                                                    #
+    // # The replacement is the canonical binding table plus `TypeNode`     #
+    // # relations; a class hierarchy is built from RESOLVED base symbols,  #
+    // # never from base-class source text.                                 #
+    // #                                                                    #
+    // # Every caller of `types.subtyping()` is LEFT BROKEN ON PURPOSE.     #
+    // # Those call sites are the map of what must be rebuilt.              #
+    // ######################################################################
 }

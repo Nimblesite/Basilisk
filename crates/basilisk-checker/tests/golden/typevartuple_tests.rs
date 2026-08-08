@@ -40,8 +40,8 @@ use super::harness::{aliased, import_form, reformatted, renamed, SpecObligation}
 // ── one type parameter list admits at most one variadic ──────────────────
 
 #[test]
-fn a_type_parameter_list_admits_at_most_one_type_variable_tuple()
--> Result<(), Box<dyn std::error::Error>> {
+fn a_type_parameter_list_admits_at_most_one_type_variable_tuple(
+) -> Result<(), Box<dyn std::error::Error>> {
     SpecObligation {
         spec_reason: "PEP 646 states that only a single type variable tuple may appear in a type \
                       parameter list, because multiple ones make it ambiguous which parameters \
@@ -236,9 +236,45 @@ def hunt(course: tuple[int, *tuple[int, ...], str]) -> None:
     return None
 "#,
             ),
+            import_form(
+                r#"
+import builtins as core_shapes
+import typing as type_forms
+
+
+def toll(
+    chime: core_shapes.tuple[
+        int,
+        type_forms.Unpack[core_shapes.tuple[int, ...]],
+        str,
+    ],
+) -> None:
+    return None
+"#,
+            ),
+            reformatted(
+                "
+from builtins import tuple as Ring
+
+def toll(
+    chime : Ring[
+        int ,
+        *Ring[
+            int ,
+            ... ,
+        ] ,
+        str ,
+    ] ,
+) -> None :
+        return None
+",
+            ),
         ],
     }
-    .assert("a tuple type admits at most one unpacking")
+    .assert_by(
+        "a tuple type admits at most one unpacking",
+        "generics_typevartuple_specialization",
+    )
 }
 
 // ── a variadic may never be used packed ──────────────────────────────────
@@ -248,8 +284,8 @@ def hunt(course: tuple[int, *tuple[int, ...], str]) -> None:
 // `TypeVar` is ordinary PEP 484; `*args: Ts` for a variadic is "NOT valid".
 
 #[test]
-fn a_type_variable_tuple_may_never_appear_in_packed_form()
--> Result<(), Box<dyn std::error::Error>> {
+fn a_type_variable_tuple_may_never_appear_in_packed_form() -> Result<(), Box<dyn std::error::Error>>
+{
     SpecObligation {
         spec_reason: "PEP 646 requires that \"type variable tuples must always be used unpacked \
                       (that is, prefixed by the star operator)\" and gives `def foo(*args: Ts)` as \
@@ -344,9 +380,281 @@ def hunt(stay: Garter, *wheels: Garter) -> Garter:
     return stay
 "#,
             ),
+            import_form(
+                r#"
+import typing_extensions as parameter_forms
+
+Sallie = parameter_forms.TypeVar("Sallie")
+
+
+def peal(clapper: Sallie, *ropes: Sallie) -> Sallie:
+    return clapper
+"#,
+            ),
+            reformatted(
+                "
+from typing import TypeVar as Scalar
+
+Sallie = Scalar(
+    'Sallie' ,
+)
+
+def peal(
+    clapper : Sallie ,
+    *ropes  : Sallie ,
+) -> Sallie :
+        return clapper
+",
+            ),
         ],
     }
-    .assert("a type variable tuple may never appear in packed form")
+    .assert_by(
+        "a type variable tuple may never appear in packed form",
+        "generics_typevartuple_basic_2",
+    )
+}
+
+// ── an unbounded unpack cannot consume the fixed neighbours ─────────────
+
+#[test]
+fn an_unbounded_unpack_does_not_remove_fixed_type_arguments(
+) -> Result<(), Box<dyn std::error::Error>> {
+    SpecObligation {
+        spec_reason: "PEP 646 states that an unpacked unbounded tuple may bind zero or more type \
+                      arguments; the fixed prefix and suffix surrounding it still require their \
+                      own arguments, so a one-argument specialization cannot satisfy two fixed \
+                      positions while a two-argument specialization can",
+        rejected: r#"
+from typing import Any as UnknownValue
+from typing import Generic as Shape
+from typing import TypeVarTuple as DimensionPack
+
+Dimensions = DimensionPack("Dimensions")
+
+
+class Array(Shape[*Dimensions]):
+    pass
+
+
+def consume(value: Array[int, *tuple[UnknownValue, ...], str]) -> None:
+    return None
+
+
+def relay(value: Array[int]) -> None:
+    consume(value)
+"#,
+        accepted: r#"
+from typing import Any as UnknownValue
+from typing import Generic as Shape
+from typing import TypeVarTuple as DimensionPack
+
+Dimensions = DimensionPack("Dimensions")
+
+
+class Array(Shape[*Dimensions]):
+    pass
+
+
+def consume(value: Array[int, *tuple[UnknownValue, ...], str]) -> None:
+    return None
+
+
+def relay(value: Array[int, str]) -> None:
+    consume(value)
+"#,
+        rejected_variants: &[
+            aliased(
+                r#"
+from builtins import tuple as SequenceShape
+from typing import Any as UnknownValue
+from typing import Generic as Shape
+from typing import TypeVarTuple as DimensionPack
+
+Dimensions = DimensionPack("Dimensions")
+
+
+class Array(Shape[*Dimensions]):
+    pass
+
+
+def consume(value: Array[int, *SequenceShape[UnknownValue, ...], str]) -> None:
+    return None
+
+
+def relay(value: Array[int]) -> None:
+    consume(value)
+"#,
+            ),
+            import_form(
+                r#"
+import builtins as core_shapes
+import typing_extensions as parameter_forms
+from typing import Any as UnknownValue
+from typing import Unpack as Expand
+
+Dimensions = parameter_forms.TypeVarTuple("Dimensions")
+
+
+class Array(parameter_forms.Generic[Expand[Dimensions]]):
+    pass
+
+
+def consume(
+    value: Array[int, Expand[core_shapes.tuple[UnknownValue, ...]], str],
+) -> None:
+    return None
+
+
+def relay(value: Array[int]) -> None:
+    consume(value)
+"#,
+            ),
+            renamed(
+                r#"
+from typing import Any as Opaque
+from typing import Generic as Parametric
+from typing import TypeVarTuple as AxisBundle
+
+Axes = AxisBundle("Axes")
+
+
+class Lattice(Parametric[*Axes]):
+    pass
+
+
+def inspect(sample: Lattice[bytes, *tuple[Opaque, ...], float]) -> None:
+    return None
+
+
+def forward(sample: Lattice[bytes]) -> None:
+    inspect(sample)
+"#,
+            ),
+            reformatted(
+                "
+from typing import Any as UnknownValue, Generic as Shape, TypeVarTuple as DimensionPack
+
+Dimensions = DimensionPack( 'Dimensions' )
+
+class Array( Shape[ *Dimensions ] ):
+        pass
+
+def consume(
+    value : Array[
+        int ,
+        * tuple[
+            UnknownValue ,
+            ... ,
+        ] ,
+        str ,
+    ] ,
+) -> None :
+        return None
+
+def relay( value : Array[ int ] ) -> None :
+        consume( value )
+",
+            ),
+        ],
+        accepted_variants: &[
+            aliased(
+                r#"
+from builtins import tuple as SequenceShape
+from typing import Any as UnknownValue
+from typing import Generic as Shape
+from typing import TypeVarTuple as DimensionPack
+
+Dimensions = DimensionPack("Dimensions")
+
+
+class Array(Shape[*Dimensions]):
+    pass
+
+
+def consume(value: Array[int, *SequenceShape[UnknownValue, ...], str]) -> None:
+    return None
+
+
+def relay(value: Array[int, str]) -> None:
+    consume(value)
+"#,
+            ),
+            import_form(
+                r#"
+import builtins as core_shapes
+import typing_extensions as parameter_forms
+from typing import Any as UnknownValue
+from typing import Unpack as Expand
+
+Dimensions = parameter_forms.TypeVarTuple("Dimensions")
+
+
+class Array(parameter_forms.Generic[Expand[Dimensions]]):
+    pass
+
+
+def consume(
+    value: Array[int, Expand[core_shapes.tuple[UnknownValue, ...]], str],
+) -> None:
+    return None
+
+
+def relay(value: Array[int, str]) -> None:
+    consume(value)
+"#,
+            ),
+            renamed(
+                r#"
+from typing import Any as Opaque
+from typing import Generic as Parametric
+from typing import TypeVarTuple as AxisBundle
+
+Axes = AxisBundle("Axes")
+
+
+class Lattice(Parametric[*Axes]):
+    pass
+
+
+def inspect(sample: Lattice[bytes, *tuple[Opaque, ...], float]) -> None:
+    return None
+
+
+def forward(sample: Lattice[bytes, float]) -> None:
+    inspect(sample)
+"#,
+            ),
+            reformatted(
+                "
+from typing import Any as UnknownValue, Generic as Shape, TypeVarTuple as DimensionPack
+
+Dimensions = DimensionPack( 'Dimensions' )
+
+class Array( Shape[ *Dimensions ] ):
+        pass
+
+def consume(
+    value : Array[
+        int ,
+        * tuple[
+            UnknownValue ,
+            ... ,
+        ] ,
+        str ,
+    ] ,
+) -> None :
+        return None
+
+def relay( value : Array[ int , str ] ) -> None :
+        consume( value )
+",
+            ),
+        ],
+    }
+    .assert_by(
+        "an unbounded unpack does not remove fixed type arguments",
+        "generics_typevartuple_unpack",
+    )
 }
 
 // ── Unpack needs something unpackable ────────────────────────────────────
@@ -355,8 +663,8 @@ def hunt(stay: Garter, *wheels: Garter) -> Garter:
 // decided solely by what `Sallie` was bound to.
 
 #[test]
-fn unpack_applied_to_a_scalar_type_variable_is_not_a_type()
--> Result<(), Box<dyn std::error::Error>> {
+fn unpack_applied_to_a_scalar_type_variable_is_not_a_type() -> Result<(), Box<dyn std::error::Error>>
+{
     SpecObligation {
         spec_reason: "PEP 646 introduces `Unpack` as the back-portable spelling of the star \
                       operator, whose operand is a type variable tuple or a tuple type; a plain \
@@ -462,8 +770,8 @@ def toll(chime: tuple[*Sallie]) -> None:
 // ── a variadic absorbs zero arguments; its neighbours stay required ──────
 
 #[test]
-fn a_variadic_args_parameter_absorbs_zero_arguments_without_excusing_the_rest()
--> Result<(), Box<dyn std::error::Error>> {
+fn a_variadic_args_parameter_absorbs_zero_arguments_without_excusing_the_rest(
+) -> Result<(), Box<dyn std::error::Error>> {
     SpecObligation {
         spec_reason: "a type variable tuple binds zero or more types, so `peal(3)` is well-typed \
                       with `Bells` bound to the empty tuple; the preceding non-variadic parameter \
@@ -599,8 +907,8 @@ def lower() -> None:
 // ── Callable[[*Ts], R] fixes the order of a linked tuple[*Ts] ────────────
 
 #[test]
-fn an_unpacked_variadic_in_a_callable_fixes_the_order_of_the_linked_tuple()
--> Result<(), Box<dyn std::error::Error>> {
+fn an_unpacked_variadic_in_a_callable_fixes_the_order_of_the_linked_tuple(
+) -> Result<(), Box<dyn std::error::Error>> {
     SpecObligation {
         spec_reason: "PEP 646: a `Callable` containing an unpacked item treats the elements \"as \
                       if they were the type for `*args`\", so `Callable[[*Bells], None]` solved \

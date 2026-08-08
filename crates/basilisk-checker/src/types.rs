@@ -443,14 +443,29 @@ impl InferredType {
             (InferredType::TypeForm(inner_a), InferredType::TypeForm(inner_b)) => {
                 inner_a.is_assignable_to(inner_b)
             }
-            // Named types with the same base name (before `[`) are assumed compatible.
-            // Without full generic variance analysis we cannot determine if
-            // `Foo[int]` is assignable to `Foo[float]`, so we avoid false positives.
-            (InferredType::Named(a_name), InferredType::Named(b_name)) => {
-                let a_base = a_name.split('[').next().unwrap_or(a_name);
-                let b_base = b_name.split('[').next().unwrap_or(b_name);
-                a_base == b_base
-            }
+            // ##############################################################
+            // # DELETED — the `(Named, Named)` arm. DO NOT RESTORE IT AND  #
+            // # DO NOT REPLACE IT WITH A PLACEHOLDER THAT ANSWERS EITHER   #
+            // # WAY.                                                       #
+            // #                                                            #
+            // # It read:                                                   #
+            // #   let a_base = a_name.split('[').next()...                 #
+            // #   let b_base = b_name.split('[').next()...                 #
+            // #   a_base == b_base                                         #
+            // #                                                            #
+            // # That is PARSING A TYPE OUT OF A STRING — splitting a       #
+            // # rendered generic at a bracket and comparing the text       #
+            // # before it. Two unrelated classes whose renderings happened  #
+            // # to agree were declared compatible; the same class reached   #
+            // # by two spellings was not.                                  #
+            // #                                                            #
+            // # `InferredType::Named(String)` is itself the defect: it     #
+            // # carries a RENDERING where it must carry a resolved         #
+            // # identity. The replacement compares canonical `TypeNode`s   #
+            // # via `assignable`, whose `None` is an honest abstention.    #
+            // #                                                            #
+            // # Pinned by: tests/nominal_spelling_surgery_pin_tests.rs     #
+            // ##############################################################
             // Ellipsis (`...`) parsed as Named is compatible when it appears
             // inside Callable parameter lists (e.g. `Callable[..., T]`).
             // For tuple annotations, `...` has special semantics that need
@@ -513,40 +528,26 @@ fn callable_params_assignable(source: &[InferredType], target: &[InferredType]) 
         .all(|(source_param, target_param)| target_param.is_assignable_to(source_param))
 }
 
-/// Relations a `Named` leaf settles outright, hoisted ahead of the main
-/// assignability match — every one only ever ANSWERS `true`, never rejects:
-///
-/// * `object` is the top type: every value IS an object, so it accepts
-///   anything as a target, and in the SOURCE position it stays as permissive
-///   as the gradual `Any` it used to be modelled by — narrowing an
-///   `object`-typed value to a concrete type is how most `isinstance` code is
-///   written, and this level has no flow information to tell a narrowed use
-///   from an unnarrowed one, so rejecting it would fire on spec-valid code.
-/// * A class object (`type` / `type[X]`) IS callable — calling it constructs
-///   an instance — and when the class itself is gradual (`type` means
-///   `type[Any]`) so is its constructor signature, so it satisfies every
-///   `Callable` target.
-fn special_named_assignable(source: &InferredType, target: &InferredType) -> bool {
-    let is_object = |ty: &InferredType| matches!(ty, InferredType::Named(name) if name == "object");
-    if is_object(source) || is_object(target) {
-        return true;
-    }
-    match (source, target) {
-        (InferredType::Named(name), InferredType::Callable(_)) => {
-            name == "type" || name.starts_with("type[")
-        }
-        // A `Named` value satisfies a `type` target: the engine's Stage-2
-        // class/instance conflation cannot tell `cls` (a class object) from
-        // an instance, so a nominal value MAY be a class object — rejecting
-        // it would fire on `def f(cls) -> type[Self]: return cls`. Values
-        // positively known NOT to be class objects (`None`, literals,
-        // containers) still mismatch.
-        (InferredType::Named(_), InferredType::Named(target_name)) => {
-            target_name == "type" || target_name.starts_with("type[")
-        }
-        _ => false,
-    }
-}
+// ##########################################################################
+// # DELETED — `special_named_assignable`. DO NOT RESTORE IT, DO NOT WRITE  #
+// # A PLACEHOLDER IN ITS PLACE, DO NOT VENDOR A COPY UNDER A NEW NAME.     #
+// #                                                                        #
+// # It decided assignability from the SPELLING of a rendered type name:    #
+// #   `name == "object"`            — the top type by its builtin spelling #
+// #   `name == "type"`              — class-object-ness by spelling        #
+// #   `name.starts_with("type[")`   — substring test on a rendered generic #
+// #                                                                        #
+// # So a user class named `object` silently became the top type, while the #
+// # real `builtins.object` under an alias did not. That is a verdict from  #
+// # how a type is WRITTEN, which no production verdict may ever come from. #
+// #                                                                        #
+// # The replacement asks the BINDING TABLE what the annotation denotes     #
+// # (`form_of_with_builtins` -> `TypingForm::ObjectClass` /`TypeClass`)    #
+// # and abstains when it cannot tell. The call site above is LEFT BROKEN   #
+// # ON PURPOSE: it is the map of what must be rebuilt.                     #
+// #                                                                        #
+// # Pinned by: tests/nominal_spelling_surgery_pin_tests.rs                 #
+// ##########################################################################
 
 /// Generator yield/return positions are covariant; the value sent back into
 /// the suspended generator is contravariant.

@@ -135,9 +135,40 @@ def amend(sheet: Plat) -> None:
     sheet["isogon"] = 3
 "#,
             ),
+            import_form(
+                r#"
+import typing_extensions as schema_forms
+
+
+class Survey(schema_forms.TypedDict):
+    datum: schema_forms.ReadOnly[str]
+    hachure: int
+
+
+def revise(chart: Survey) -> None:
+    chart["hachure"] = 3
+"#,
+            ),
+            reformatted(
+                "
+from typing import TypedDict as Record, ReadOnly as Frozen
+
+class Survey( Record ):
+
+        datum   : Frozen[ str ]
+        hachure : int
+
+def revise( chart : Survey ) -> None :
+
+        chart[ 'hachure' ] = 3
+",
+            ),
         ],
     }
-    .assert("a read-only item may not be assigned")
+    .assert_by(
+        "a read-only item may not be assigned",
+        "typeddicts_readonly",
+    )
 }
 
 // ── removal counts as mutation too ───────────────────────────────────────
@@ -145,7 +176,8 @@ def amend(sheet: Plat) -> None:
 #[test]
 fn a_read_only_item_may_not_be_deleted() -> Result<(), Box<dyn std::error::Error>> {
     SpecObligation {
-        spec_reason: "the spec counts removal as mutation, and separately rejects `del` unless the \
+        spec_reason:
+            "the spec counts removal as mutation, and separately rejects `del` unless the \
                       key is non-required *and* mutable; a read-only key fails the second \
                       condition even when it is declared `NotRequired`",
         rejected: r#"
@@ -262,9 +294,37 @@ def amend(sheet: Plat) -> None:
     del sheet["origin"]
 "#,
             ),
+            import_form(
+                r#"
+import typing_extensions as schema_forms
+
+
+class Survey(schema_forms.TypedDict):
+    datum: schema_forms.NotRequired[str]
+    hachure: int
+
+
+def revise(chart: Survey) -> None:
+    del chart["datum"]
+"#,
+            ),
+            reformatted(
+                "
+from typing import TypedDict as Record, NotRequired as Optional_
+
+class Survey( Record ):
+        datum   : Optional_[ str ]
+        hachure : int
+
+def revise( chart : Survey ) -> None :
+        del chart[
+            'datum'
+        ]
+",
+            ),
         ],
     }
-    .assert("a read-only item may not be deleted")
+    .assert_by("a read-only item may not be deleted", "typeddicts_readonly")
 }
 
 // ── del is rejected on a required key even when mutable ──────────────────
@@ -376,16 +436,45 @@ def amend(sheet: Plat) -> None:
     del sheet["isogon"]
 "#,
             ),
+            import_form(
+                r#"
+import typing_extensions as schema_forms
+
+
+class Survey(schema_forms.TypedDict, total=False):
+    hachure: int
+
+
+def revise(chart: Survey) -> None:
+    del chart["hachure"]
+"#,
+            ),
+            reformatted(
+                "
+from typing import TypedDict as Record
+
+class Survey(
+        Record,
+        total = False,
+):
+        hachure : int
+
+def revise( chart : Survey ) -> None :
+        del chart[
+            'hachure'
+        ]
+",
+            ),
         ],
     }
-    .assert("del is rejected on a required key")
+    .assert_by("del is rejected on a required key", "typeddicts_operations")
 }
 
 // ── the permissions the spec grants subclasses ───────────────────────────
 
 #[test]
-fn a_subclass_may_redeclare_a_read_only_item_as_mutable()
--> Result<(), Box<dyn std::error::Error>> {
+fn a_subclass_may_redeclare_a_read_only_item_as_mutable() -> Result<(), Box<dyn std::error::Error>>
+{
     SpecObligation {
         spec_reason: "the spec permits a read-only item in a superclass to be redeclared as \
                       mutable in a subclass, and permits redeclaring it with a type assignable to \
@@ -495,7 +584,39 @@ class Tracing(Sheet):
     origin: str
 "#,
             ),
+            import_form(
+                r#"
+import typing_extensions as schema_forms
+from builtins import object as BroadValue
+
+
+class Survey(schema_forms.TypedDict):
+    datum: schema_forms.ReadOnly[BroadValue]
+
+
+class Plat(Survey):
+    datum: str
+"#,
+            ),
+            reformatted(
+                "
+from typing import TypedDict as Record, ReadOnly as Frozen
+from builtins import object as BroadValue
+
+class Survey( Record ):
+        datum : Frozen[
+            BroadValue
+        ]
+
+class Plat( Survey ):
+
+        datum : str
+",
+            ),
         ],
     }
-    .assert("a subclass may redeclare a read-only item as mutable")
+    .assert_by(
+        "a subclass may redeclare a read-only item as mutable",
+        "typeddicts_inheritance",
+    )
 }

@@ -178,70 +178,30 @@ impl<'m, 'a> TypeJudge<'m, 'a> {
     }
 }
 
-/// Nominal-subclass acceptance through the module's registered hierarchy:
-/// `x: Base = Derived()` and `x: int = MyInt()` are assignments
-/// [`InferredType::is_assignable_to`] alone cannot bless because it has no
-/// class table ([NARROWPLAN-INTEGRATION]: nominal verdicts route through
-/// [`SubtypingContext`]). Union sides decompose exactly as assignability does.
-pub(crate) fn nominal_subclass_assignable(
-    inferred: &InferredType,
-    declared: &InferredType,
-    subtyping: &SubtypingContext,
-) -> bool {
-    match (inferred, declared) {
-        (InferredType::Union(arms), _) => arms.iter().all(|arm| {
-            arm.is_assignable_to(declared) || nominal_subclass_assignable(arm, declared, subtyping)
-        }),
-        (_, InferredType::Union(arms)) => arms.iter().any(|arm| {
-            inferred.is_assignable_to(arm) || nominal_subclass_assignable(inferred, arm, subtyping)
-        }),
-        (InferredType::Optional(inner), _) => {
-            nominal_subclass_assignable(inner, declared, subtyping)
-                && InferredType::None_.is_assignable_to(declared)
-        }
-        (_, InferredType::Optional(inner)) => {
-            nominal_subclass_assignable(inferred, inner, subtyping)
-        }
-        // The nominal walk only ARBITRATES across representations — a `Named`
-        // class against a builtin leaf (either direction). Two container
-        // forms already had their structural verdict from
-        // [`InferredType::is_assignable_to`]; re-blessing them under their
-        // bare class name would erase invariance errors.
-        _ if matches!(inferred, InferredType::Named(_))
-            || matches!(declared, InferredType::Named(_)) =>
-        {
-            match (nominal_leaf(inferred), nominal_leaf(declared)) {
-                // `Answer.Yes` IS an `Answer`: a dotted member literal is an
-                // instance of the enum that owns it.
-                (Some(sub), Some(sup)) => {
-                    subtyping.is_subtype(&sub, &sup)
-                        || sub
-                            .strip_prefix(sup.as_str())
-                            .is_some_and(|rest| rest.starts_with('.'))
-                }
-                _ => false,
-            }
-        }
-        _ => false,
-    }
-}
-
-/// The name a type participates in the nominal walk under — a class's base
-/// spelling, or the builtin name of a concrete leaf. Containers join under
-/// their builtin class so a user class deriving `dict[K, V]` is accepted
-/// where `dict` is declared.
-fn nominal_leaf(ty: &InferredType) -> Option<String> {
-    match ty {
-        InferredType::Named(name) => Some(name.split('[').next().unwrap_or(name).to_owned()),
-        InferredType::Int => Some("int".to_owned()),
-        InferredType::Str | InferredType::LiteralString => Some("str".to_owned()),
-        InferredType::Float => Some("float".to_owned()),
-        InferredType::Bool => Some("bool".to_owned()),
-        InferredType::Bytes => Some("bytes".to_owned()),
-        InferredType::List(_) => Some("list".to_owned()),
-        InferredType::Set(_) => Some("set".to_owned()),
-        InferredType::Dict(_, _) => Some("dict".to_owned()),
-        InferredType::Tuple(_) => Some("tuple".to_owned()),
-        _ => None,
-    }
-}
+// ##########################################################################
+// # DELETED — `nominal_subclass_assignable` and `nominal_leaf`.            #
+// # DO NOT RESTORE EITHER. DO NOT LEAVE A PLACEHOLDER THAT ANSWERS         #
+// # `true` OR `false` IN THEIR PLACE. DO NOT VENDOR THEM UNDER NEW NAMES.  #
+// #                                                                        #
+// # `nominal_leaf` was a SPELLING TABLE. It converted a resolved type back #
+// # into a string — `InferredType::Int => "int"`, `List(_) => "list"` —    #
+// # and `Named(name) => name.split('[').next()`, parsing a rendered        #
+// # generic by splitting it at a bracket.                                  #
+// #                                                                        #
+// # `nominal_subclass_assignable` then compared those strings, and settled #
+// # ENUM MEMBERSHIP with:                                                  #
+// #                                                                        #
+// #     sub.strip_prefix(sup).is_some_and(|rest| rest.starts_with('.'))    #
+// #                                                                        #
+// # — a text operation standing in for "is this member declared by that    #
+// # enum?". Any class whose name merely began with the target's name and   #
+// # a dot was accepted as a member of it; a genuine member reached under   #
+// # an alias was rejected. The question is about DECLARATIONS and must be  #
+// # answered from the resolver's class/enum tables by symbol identity.     #
+// #                                                                        #
+// # `TypeJudge::fits` is LEFT BROKEN ON PURPOSE — it is the map of what    #
+// # must be rebuilt on canonical `TypeNode` + `assignable`, whose `None`   #
+// # is an honest abstention.                                               #
+// #                                                                        #
+// # Pinned by: tests/nominal_spelling_surgery_pin_tests.rs                 #
+// ##########################################################################
