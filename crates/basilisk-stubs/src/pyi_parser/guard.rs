@@ -1,5 +1,14 @@
 //! Static selection of simple version and platform guards in `.pyi` files.
+//!
+//! Implements the "simple version and platform checks" of the
+//! [typing spec's directives section](https://typing.python.org/en/latest/spec/directives.html):
+//! `sys.version_info` / `sys.platform` comparisons and `TYPE_CHECKING`, which
+//! is considered `True` during type checking. Recognition resolves the guard
+//! expression through the module's own bindings ([RESOLV-CANONICAL-BINDING]) —
+//! `import sys as s` guards evaluate identically, and a module that rebinds
+//! `sys` or `TYPE_CHECKING` decides nothing.
 
+use basilisk_canonical::{BindingTable, TypingForm};
 use ruff_python_ast::{BoolOp, CmpOp, Expr, Number, Stmt, StmtIf, UnaryOp};
 
 use crate::types::{StubTarget, StubTargetPlatform};
@@ -34,11 +43,12 @@ impl PossibleTruth {
 }
 
 pub(super) fn feasible_branches<'a>(
+    bindings: &BindingTable,
     if_stmt: &'a StmtIf,
     target: Option<&StubTarget>,
 ) -> Vec<Option<&'a [Stmt]>> {
     let mut branches = Vec::new();
-    let first = evaluate_guard(&if_stmt.test, target);
+    let first = evaluate_guard(bindings, &if_stmt.test, target);
     if first.can_be_true {
         branches.push(Some(if_stmt.body.as_slice()));
     }
@@ -49,7 +59,7 @@ pub(super) fn feasible_branches<'a>(
             break;
         }
         if let Some(test) = &clause.test {
-            let truth = evaluate_guard(test, target);
+            let truth = evaluate_guard(bindings, test, target);
             if truth.can_be_true {
                 branches.push(Some(clause.body.as_slice()));
             }
@@ -65,30 +75,41 @@ pub(super) fn feasible_branches<'a>(
     branches
 }
 
-fn evaluate_guard(expr: &Expr, target: Option<&StubTarget>) -> PossibleTruth {
+fn evaluate_guard(bindings: &BindingTable, expr: &Expr, target: Option<&StubTarget>) -> PossibleTruth {
     match expr {
         Expr::BooleanLiteral(literal) => PossibleTruth::from_bool(literal.value),
         Expr::UnaryOp(unary) if matches!(unary.op, UnaryOp::Not) => {
-            let inner = evaluate_guard(&unary.operand, target);
+            let inner = evaluate_guard(bindings, &unary.operand, target);
             PossibleTruth {
                 can_be_true: inner.can_be_false,
                 can_be_false: inner.can_be_true,
             }
         }
-        Expr::BoolOp(boolean) => evaluate_boolean_guard(boolean.op, &boolean.values, target),
-        Expr::Compare(_) => evaluate_comparison_guard(expr, target),
+        Expr::BoolOp(boolean) => {
+            evaluate_boolean_guard(bindings, boolean.op, &boolean.values, target)
+        }
+        Expr::Compare(_) => evaluate_comparison_guard(bindings, expr, target),
+        // "Considered True during type checking" — spec directives. Only an
+        // expression that RESOLVES to the flag qualifies; a bare unimported
+        // name or a rebound one stays undecidable.
+        Expr::Name(_) | Expr::Attribute(_)
+            if bindings.is_form(expr, TypingForm::TypeCheckingFlag) =>
+        {
+            PossibleTruth::TRUE
+        }
         _ => PossibleTruth::EITHER,
     }
 }
 
 fn evaluate_boolean_guard(
+    bindings: &BindingTable,
     operator: BoolOp,
     values: &[Expr],
     target: Option<&StubTarget>,
 ) -> PossibleTruth {
     let truths: Vec<PossibleTruth> = values
         .iter()
-        .map(|value| evaluate_guard(value, target))
+        .map(|value| evaluate_guard(bindings, value, target))
         .collect();
     match operator {
         BoolOp::And => PossibleTruth {
@@ -102,7 +123,11 @@ fn evaluate_boolean_guard(
     }
 }
 
-fn evaluate_comparison_guard(expr: &Expr, target: Option<&StubTarget>) -> PossibleTruth {
+fn evaluate_comparison_guard(
+    bindings: &BindingTable,
+    expr: &Expr,
+    target: Option<&StubTarget>,
+) -> PossibleTruth {
     let Expr::Compare(compare) = expr else {
         return PossibleTruth::EITHER;
     };
@@ -115,16 +140,16 @@ fn evaluate_comparison_guard(expr: &Expr, target: Option<&StubTarget>) -> Possib
     let Some(right) = compare.comparators.first() else {
         return PossibleTruth::EITHER;
     };
-    if is_sys_attribute(&compare.left, "version_info") {
+    if resolves_to_sys(bindings, &compare.left, "version_info") {
         return version_guard(operator, right, target);
     }
-    if is_sys_attribute(right, "version_info") {
+    if resolves_to_sys(bindings, right, "version_info") {
         return version_guard(flip_comparison(operator), &compare.left, target);
     }
-    if is_sys_attribute(&compare.left, "platform") {
+    if resolves_to_sys(bindings, &compare.left, "platform") {
         return platform_guard(operator, right, target);
     }
-    if is_sys_attribute(right, "platform") {
+    if resolves_to_sys(bindings, right, "platform") {
         return platform_guard(flip_comparison(operator), &compare.left, target);
     }
     PossibleTruth::EITHER
