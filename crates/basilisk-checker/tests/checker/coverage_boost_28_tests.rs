@@ -24,7 +24,12 @@ class Bad(Base[T_co]):
     pass
 "#;
     let diagnostics = run(source)?;
-    let _ = diagnostics;
+    assert_rule_count(
+        &diagnostics,
+        "generics_variance",
+        1,
+        "a covariant TypeVar cannot satisfy an invariant base parameter",
+    );
     Ok(())
 }
 
@@ -43,7 +48,12 @@ class Bad(Base[T_contra]):
     pass
 "#;
     let diagnostics = run(source)?;
-    let _ = diagnostics;
+    assert_rule_count(
+        &diagnostics,
+        "generics_variance",
+        1,
+        "a contravariant TypeVar cannot satisfy an invariant base parameter",
+    );
     Ok(())
 }
 
@@ -62,7 +72,12 @@ class Bad(Sink[T_co]):
     pass
 "#;
     let diagnostics = run(source)?;
-    let _ = diagnostics;
+    assert_rule_count(
+        &diagnostics,
+        "generics_variance",
+        1,
+        "a covariant TypeVar cannot satisfy a contravariant base parameter",
+    );
     Ok(())
 }
 
@@ -81,7 +96,12 @@ class Bad(Source[T_contra]):
     pass
 "#;
     let diagnostics = run(source)?;
-    let _ = diagnostics;
+    assert_rule_count(
+        &diagnostics,
+        "generics_variance",
+        1,
+        "a contravariant TypeVar cannot satisfy a covariant base parameter",
+    );
     Ok(())
 }
 
@@ -102,7 +122,12 @@ class Bad(Pair[T_co, T_contra]):
     pass
 "#;
     let diagnostics = run(source)?;
-    let _ = diagnostics;
+    assert_rule_count(
+        &diagnostics,
+        "generics_variance",
+        2,
+        "each incompatible TypeVar variance in a generic base is an error",
+    );
     Ok(())
 }
 
@@ -123,7 +148,12 @@ class Bad(MyAlias):
     pass
 "#;
     let diagnostics = run(source)?;
-    let _ = diagnostics;
+    assert_rule_count(
+        &diagnostics,
+        "generics_variance",
+        0,
+        "an unused covariant TypeVar cannot create a variance violation",
+    );
     Ok(())
 }
 
@@ -142,7 +172,12 @@ class Outer(Generic[T_co]):
     inner: Container[T_co]
 "#;
     let diagnostics = run(source)?;
-    let _ = diagnostics;
+    assert_rule_count(
+        &diagnostics,
+        "generics_variance",
+        1,
+        "a covariant class parameter cannot occur through an invariant container",
+    );
     Ok(())
 }
 
@@ -162,7 +197,12 @@ while True:
     break
 "#;
     let diagnostics = run(source)?;
-    let _ = diagnostics;
+    assert_rule_count(
+        &diagnostics,
+        "qualifiers_final_annotation_2",
+        1,
+        "Final names cannot be reassigned in a loop body (PEP 591)",
+    );
     Ok(())
 }
 
@@ -179,7 +219,12 @@ except:
     MAX = 300
 "#;
     let diagnostics = run(source)?;
-    let _ = diagnostics;
+    assert_rule_count(
+        &diagnostics,
+        "qualifiers_final_annotation_2",
+        2,
+        "each reassignment of a Final name is forbidden, including try branches (PEP 591)",
+    );
     Ok(())
 }
 
@@ -198,7 +243,12 @@ with CM():
     MAX = 200
 "#;
     let diagnostics = run(source)?;
-    let _ = diagnostics;
+    assert_rule_count(
+        &diagnostics,
+        "qualifiers_final_annotation_2",
+        1,
+        "Final names cannot be reassigned in a with body (PEP 591)",
+    );
     Ok(())
 }
 
@@ -224,7 +274,12 @@ b = B()
 b.X = 5
 "#;
     let diagnostics = run(source)?;
-    let _ = diagnostics;
+    assert_rule_count(
+        &diagnostics,
+        "qualifiers_final_annotation_2",
+        6,
+        "Final class attributes cannot be reassigned through a class, subclass, or instance",
+    );
     Ok(())
 }
 
@@ -248,7 +303,12 @@ x: Triple[int] = Triple()
 y: Triple[int, str] = Triple()
 "#;
     let diagnostics = run(source)?;
-    let _ = diagnostics;
+    assert_rule_count(
+        &diagnostics,
+        "generics_defaults_specialization",
+        2,
+        "Triple has three required type parameters, so one and two arguments are both invalid",
+    );
     Ok(())
 }
 
@@ -267,7 +327,12 @@ class WithWeakref:
     y: str
 "#;
     let diagnostics = run(source)?;
-    let _ = diagnostics;
+    assert_rule_count(
+        &diagnostics,
+        "dataclasses_slots",
+        0,
+        "weakref_slot=True is valid when dataclass slots=True",
+    );
     Ok(())
 }
 
@@ -299,7 +364,12 @@ z = Child.child_class
 w = Child.child_inst
 "#;
     let diagnostics = run(source)?;
-    let _ = diagnostics;
+    assert_rule_count(
+        &diagnostics,
+        "generics_type_erasure",
+        2,
+        "instance attributes inst1 and child_inst cannot be accessed through class objects",
+    );
     Ok(())
 }
 
@@ -319,7 +389,12 @@ a: List[object] = [1, 2, 3]
 b: List[int] = a
 "#;
     let diagnostics = run(source)?;
-    let _ = diagnostics;
+    assert_rule_count(
+        &diagnostics,
+        "assignment_compatibility",
+        1,
+        "list is invariant, so list[object] is not assignable to list[int]",
+    );
     Ok(())
 }
 
@@ -341,7 +416,12 @@ def my_fn(x: int) -> str:
 takes_fn(my_fn)
 "#;
     let diagnostics = run(source)?;
-    let _ = diagnostics;
+    assert_rule_count(
+        &diagnostics,
+        "callables_protocol",
+        0,
+        "Callable return types are covariant, so str may satisfy object",
+    );
     Ok(())
 }
 
@@ -360,7 +440,12 @@ class MyClass[NewT](Generic[OldT]):
     pass
 "#;
     let diagnostics = run(source)?;
-    let _ = diagnostics;
+    assert_rule_count(
+        &diagnostics,
+        "generics_syntax_compatibility",
+        1,
+        "a PEP 695 class cannot also introduce a traditional TypeVar through Generic",
+    );
     Ok(())
 }
 
@@ -381,7 +466,12 @@ class TD(TypedDict):
         pass
 "#;
     let diagnostics = run(source)?;
-    let _ = diagnostics;
+    assert_rule_count(
+        &diagnostics,
+        "typeddicts_class_syntax",
+        1,
+        "a TypedDict class body may declare items but not methods",
+    );
     Ok(())
 }
 
@@ -394,7 +484,12 @@ x = cast(int, "hello")
 y = cast(str, 42)
 "#;
     let diagnostics = run(source)?;
-    let _ = diagnostics;
+    assert_rule_count(
+        &diagnostics,
+        "directives_cast",
+        0,
+        "cast(Type, value) deliberately overrides the checker's inferred type (PEP 484)",
+    );
     Ok(())
 }
 
@@ -407,7 +502,12 @@ class TD(TypedDict, total=True, extra=False):
     x: int
 "#;
     let diagnostics = run(source)?;
-    let _ = diagnostics;
+    assert_rule_count(
+        &diagnostics,
+        "typeddicts_class_syntax_2",
+        1,
+        "extra is not a specified TypedDict class keyword",
+    );
     Ok(())
 }
 
@@ -420,7 +520,12 @@ x: int = 42
 reveal_type(x)
 "#;
     let diagnostics = run(source)?;
-    let _ = diagnostics;
+    assert_rule_count(
+        &diagnostics,
+        "directives_reveal_type",
+        1,
+        "a type checker must reveal the statically inferred type of reveal_type(x)",
+    );
     Ok(())
 }
 
@@ -437,7 +542,12 @@ class Child(FinalClass):
     pass
 "#;
     let diagnostics = run(source)?;
-    let _ = diagnostics;
+    assert_rule_count(
+        &diagnostics,
+        "qualifiers_final_decorator",
+        1,
+        "a class decorated with final cannot be subclassed (PEP 591)",
+    );
     Ok(())
 }
 
@@ -450,7 +560,12 @@ class NotTD:
     x: Required[int]
 "#;
     let diagnostics = run(source)?;
-    let _ = diagnostics;
+    assert_rule_count(
+        &diagnostics,
+        "typeddicts_required",
+        1,
+        "Required marks TypedDict keys and is invalid on an ordinary class attribute (PEP 655)",
+    );
     Ok(())
 }
 
@@ -463,7 +578,12 @@ x: int = 42
 assert_type(x, str)
 "#;
     let diagnostics = run(source)?;
-    let _ = diagnostics;
+    assert_rule_count(
+        &diagnostics,
+        "directives_assert_type_2",
+        1,
+        "assert_type must report when an int expression is asserted to be str",
+    );
     Ok(())
 }
 
@@ -480,7 +600,12 @@ class Extended(Color):
     GREEN = 3
 "#;
     let diagnostics = run(source)?;
-    let _ = diagnostics;
+    assert_rule_count(
+        &diagnostics,
+        "enums_behaviors",
+        1,
+        "an Enum that already defines members cannot be extended with new members",
+    );
     Ok(())
 }
 
@@ -493,7 +618,12 @@ class Bad(Generic[int]):
     pass
 "#;
     let diagnostics = run(source)?;
-    let _ = diagnostics;
+    assert_rule_count(
+        &diagnostics,
+        "generics_basic_2",
+        1,
+        "every argument to Generic must be a distinct type variable",
+    );
     Ok(())
 }
 
@@ -507,7 +637,12 @@ class Color(Enum):
     BLUE: int = 2
 "#;
     let diagnostics = run(source)?;
-    let _ = diagnostics;
+    assert_rule_count(
+        &diagnostics,
+        "enums_members",
+        2,
+        "Enum members must not carry ordinary variable annotations",
+    );
     Ok(())
 }
 
@@ -519,7 +654,12 @@ from typing import Tuple
 x: Tuple[int, ..., str, ...] = (1, 2, "a", "b")
 "#;
     let diagnostics = run(source)?;
-    let _ = diagnostics;
+    assert_rule_count(
+        &diagnostics,
+        "tuples_type_form",
+        1,
+        "an unbounded tuple is exactly tuple[T, ...], not multiple ellipsis segments",
+    );
     Ok(())
 }
 
@@ -533,7 +673,12 @@ assert_type(x, int)
 assert_type(x, str)
 "#;
     let diagnostics = run(source)?;
-    let _ = diagnostics;
+    assert_rule_count(
+        &diagnostics,
+        "directives_assert_type_2",
+        1,
+        "only the assertion that an int expression is str must fail",
+    );
     Ok(())
 }
 
@@ -547,7 +692,12 @@ class Config(TypedDict):
     value: int
 "#;
     let diagnostics = run(source)?;
-    let _ = diagnostics;
+    assert_rule_count(
+        &diagnostics,
+        "typeddicts_readonly",
+        0,
+        "declaring a ReadOnly TypedDict item is valid until code mutates it (PEP 705)",
+    );
     Ok(())
 }
 
@@ -559,7 +709,12 @@ from typing import Annotated
 x: Annotated[int] = 42
 "#;
     let diagnostics = run(source)?;
-    let _ = diagnostics;
+    assert_rule_count(
+        &diagnostics,
+        "qualifiers_annotated_2",
+        1,
+        "Annotated requires a type and at least one metadata value (PEP 593)",
+    );
     Ok(())
 }
 
@@ -575,7 +730,12 @@ class Color(Enum):
 assert_type(Color.RED, Literal[Color.RED])
 "#;
     let diagnostics = run(source)?;
-    let _ = diagnostics;
+    assert_rule_count(
+        &diagnostics,
+        "directives_assert_type_2",
+        0,
+        "a direct enum member expression may retain its enum Literal type",
+    );
     Ok(())
 }
 
@@ -591,7 +751,12 @@ def bad_noreturn() -> NoReturn:
     pass
 "#;
     let diagnostics = run(source)?;
-    let _ = diagnostics;
+    assert_rule_count(
+        &diagnostics,
+        "specialtypes_never",
+        1,
+        "a function returning NoReturn cannot complete normally",
+    );
     Ok(())
 }
 
