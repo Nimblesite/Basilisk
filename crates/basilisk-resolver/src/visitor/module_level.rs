@@ -1,77 +1,11 @@
 //! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
 //! Module Level visitor functions.
 
-use ruff_python_ast::{Expr, Stmt, StmtFunctionDef};
+use ruff_python_ast::{Expr, Stmt};
 use ruff_text_size::Ranged;
 
-use crate::scope::{FloatParamIntAttrAccess, FunctionInfo};
-
 use super::class_info_ext::expr_simple_name;
-use super::core::{source_slice_range, source_slice_span, text_range_to_span};
-use super::enum_checks::INT_ONLY_FLOAT_ATTRS;
-use super::protocol_ext::{base_type_name, unqualified_base};
-
-pub(crate) fn collect_float_param_int_attr_accesses(
-    stmts: &[Stmt],
-    source: &str,
-) -> Vec<FloatParamIntAttrAccess> {
-    let mut out = Vec::new();
-    for stmt in stmts {
-        if let Stmt::FunctionDef(func) = stmt {
-            collect_float_accesses_in_function(func, source, &mut out);
-            // Recurse into nested functions.
-            out.extend(collect_float_param_int_attr_accesses(&func.body, source));
-        }
-    }
-    out
-}
-
-pub(super) fn collect_float_accesses_in_function(
-    func: &StmtFunctionDef,
-    source: &str,
-    out: &mut Vec<FloatParamIntAttrAccess>,
-) {
-    // Collect names of parameters annotated exactly as `float`.
-    let float_params: Vec<&str> = super::walks::iter_all_params(&func.parameters)
-        .filter(|p| {
-            p.parameter.annotation.as_deref().is_some_and(|ann| {
-                let range = ann.range();
-                source_slice_range(source, range).map(str::trim) == Some("float")
-            })
-        })
-        .map(|p| p.parameter.name.as_str())
-        .collect();
-
-    if float_params.is_empty() {
-        return;
-    }
-
-    // Only walk the top-level statements of the function body (no recursion into
-    // if/for/while/match/with/try blocks).
-    for stmt in &func.body {
-        let Stmt::Expr(expr_stmt) = stmt else {
-            continue;
-        };
-        let Expr::Attribute(attr) = expr_stmt.value.as_ref() else {
-            continue;
-        };
-        let Some(obj_name) = expr_simple_name(&attr.value) else {
-            continue;
-        };
-        if !float_params.contains(&obj_name.as_str()) {
-            continue;
-        }
-        let attr_name = attr.attr.as_str();
-        if !INT_ONLY_FLOAT_ATTRS.contains(&attr_name) {
-            continue;
-        }
-        out.push(FloatParamIntAttrAccess {
-            param_name: obj_name,
-            attr_name: attr_name.to_owned(),
-            span: text_range_to_span(expr_stmt.range()),
-        });
-    }
-}
+use super::core::text_range_to_span;
 
 pub(super) fn collect_module_attr_accesses(
     stmts: &[Stmt],
@@ -168,41 +102,6 @@ pub(super) fn collect_order_comparisons_from_expr(
             span: text_range_to_span(expr.range()),
         });
     }
-}
-
-pub(super) fn collect_generator_violations(
-    functions: &[FunctionInfo],
-    source: &str,
-) -> Vec<crate::scope::GeneratorViolation> {
-    let mut out = Vec::new();
-    for func in functions {
-        if !func.is_generator {
-            continue;
-        }
-        let Some(ann_span) = func.return_annotation_span else {
-            continue;
-        };
-        let Some(ann_text) = source_slice_span(source, ann_span) else {
-            continue;
-        };
-        let base = unqualified_base(base_type_name(ann_text));
-
-        // Skip user-defined types (may be Protocols with __next__/__anext__).
-        // Only flag types that are clearly non-generator built-in types.
-        let first_char = base.chars().next();
-        if first_char.is_some_and(char::is_uppercase) {
-            continue;
-        }
-
-        out.push(crate::scope::GeneratorViolation {
-            span: ann_span,
-            kind: crate::scope::GeneratorViolationKind::InvalidReturnType {
-                func_name: func.name.clone(),
-                return_type: ann_text.to_owned(),
-            },
-        });
-    }
-    out
 }
 
 // ---------------------------------------------------------------------------

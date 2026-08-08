@@ -12,27 +12,44 @@ use std::collections::HashMap;
 use ruff_python_ast::{self as ast, Expr, Stmt};
 use ruff_text_size::Ranged;
 
-use basilisk_resolver::{strip_typeddict_qualifiers, Span};
+use basilisk_resolver::{BindingTable, Span, TypingForm};
 
-use crate::rules::shared::{ann_str, expr_name};
+use crate::rules::shared::expr_name;
+use crate::rules::shared::typing_form::peel_qualifiers;
 
 /// Guards against cyclic `bases` (illegal Python, but must not hang).
 const MAX_DEPTH: u32 = 64;
 
 /// An explicitly declared field of a `TypedDict`.
+///
+/// Deliberately carries no value-type representation: the checker cannot yet
+/// compare type expressions semantically, and rendering annotations to text
+/// for comparison is the condemned mechanism ([ASTREBUILD-INVENTORY-TEXT]).
 #[derive(Debug, Clone)]
 pub(super) struct TdField {
     pub(super) name: String,
-    /// Core value type with `Required`/`NotRequired`/`ReadOnly` stripped.
-    pub(super) ty: String,
+    /// `Required[...]`/`NotRequired[...]` (binding-resolved) wins over the
+    /// class's `total=`.
     pub(super) required: bool,
 }
 
-/// An explicit `extra_items=` declaration.
+/// A PEP 655 qualifier illegally wrapping an `extra_items=` value type — the
+/// spec allows only `ReadOnly[]` there ("Other type qualifiers are not
+/// allowed").
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Qualifier {
+    Required,
+    NotRequired,
+}
+
+/// An explicit `extra_items=` declaration. Carries no value-type text — see
+/// [`TdField`].
 #[derive(Debug, Clone)]
 pub(super) struct ExtraItems {
-    /// Core value type with qualifiers stripped (e.g. `int | None`, `object`).
-    pub(super) ty: String,
+    /// `true` when `ReadOnly[...]` wraps the value type (PEP 705).
+    pub(super) readonly: bool,
+    /// An illegal `Required[]`/`NotRequired[]` wrapper, reported as an error.
+    pub(super) qualifier: Option<Qualifier>,
 }
 
 /// A `closed=` declaration. `value` is `None` when the argument is not a literal
@@ -54,9 +71,6 @@ pub(super) struct TdModel {
     pub(super) span: Span,
 }
 
-/// The effective `extra_items` pseudo-item: its type text.
-pub(super) type EffectiveExtra = String;
-
 pub(super) fn mk_span(range: ruff_text_size::TextRange) -> Span {
     Span {
         start: range.start().to_u32(),
@@ -64,54 +78,61 @@ pub(super) fn mk_span(range: ruff_text_size::TextRange) -> Span {
     }
 }
 
-/// The core type of an annotation, with `TypedDict` qualifiers stripped.
-fn core_type(text: &str) -> String {
-    strip_typeddict_qualifiers(text.trim()).to_owned()
-}
-
 // ---------------------------------------------------------------------------
 // Collection
 // ---------------------------------------------------------------------------
 
 /// Collect every `TypedDict` in declaration order. A class is a `TypedDict` when
+/// a base resolves to `typing.TypedDict` through the module's bindings, or when
 /// it inherits from a `TypedDict` collected earlier (Python requires a base be
 /// defined before use).
-pub(super) fn collect_models(stmts: &[Stmt], target: Option<(u32, u32)>) -> Vec<TdModel> {
+pub(super) fn collect_models(
+    bindings: &BindingTable,
+    stmts: &[Stmt],
+    target: Option<(u32, u32)>,
+) -> Vec<TdModel> {
     let mut models: Vec<TdModel> = Vec::new();
-    collect_into(stmts, &mut models, target);
+    collect_into(bindings, stmts, &mut models, target);
     models
 }
 
-fn collect_into(stmts: &[Stmt], models: &mut Vec<TdModel>, target: Option<(u32, u32)>) {
+fn collect_into(
+    bindings: &BindingTable,
+    stmts: &[Stmt],
+    models: &mut Vec<TdModel>,
+    target: Option<(u32, u32)>,
+) {
     for stmt in stmts {
         if let Stmt::ClassDef(cls) = stmt {
-            if let Some(model) = model_from_class(cls, models, target) {
+            if let Some(model) = model_from_class(bindings, cls, models, target) {
                 models.push(model);
             }
-            collect_into(&cls.body, models, target);
+            collect_into(bindings, &cls.body, models, target);
         }
     }
 }
 
-fn is_typeddict_class(cls: &ast::StmtClassDef, known: &[TdModel]) -> bool {
+fn is_typeddict_class(bindings: &BindingTable, cls: &ast::StmtClassDef, known: &[TdModel]) -> bool {
     cls.arguments.as_ref().is_some_and(|args| {
-        args.args
-            .iter()
-            .any(|base| expr_name(base).is_some_and(|name| known.iter().any(|m| m.name == name)))
+        args.args.iter().any(|base| {
+            bindings.is_form(base, TypingForm::TypedDict)
+                || expr_name(base).is_some_and(|name| known.iter().any(|m| m.name == name))
+        })
     })
 }
 
 fn model_from_class(
+    bindings: &BindingTable,
     cls: &ast::StmtClassDef,
     known: &[TdModel],
     target: Option<(u32, u32)>,
 ) -> Option<TdModel> {
-    if !is_typeddict_class(cls, known) {
+    if !is_typeddict_class(bindings, cls, known) {
         return None;
     }
     let total = class_total(cls);
     let mut fields = Vec::new();
-    collect_td_fields(&cls.body, total, target, &mut fields);
+    collect_td_fields(bindings, &cls.body, total, target, &mut fields);
     let bases = cls
         .arguments
         .as_ref()
@@ -127,7 +148,7 @@ fn model_from_class(
         name: cls.name.to_string(),
         bases,
         fields,
-        extra_items: extra_items_keyword(cls),
+        extra_items: extra_items_keyword(bindings, cls),
         closed: closed_keyword(cls),
         span: mk_span(cls.range()),
     })
@@ -138,6 +159,7 @@ fn model_from_class(
 /// statically false at the target version — so a version-conditional item exists
 /// exactly when it would at runtime.
 fn collect_td_fields(
+    bindings: &BindingTable,
     stmts: &[Stmt],
     total: bool,
     target: Option<(u32, u32)>,
@@ -146,11 +168,11 @@ fn collect_td_fields(
     for stmt in stmts {
         match stmt {
             Stmt::AnnAssign(_) => {
-                if let Some(field) = field_from_stmt(stmt, total) {
+                if let Some(field) = field_from_stmt(bindings, stmt, total) {
                     out.push(field);
                 }
             }
-            Stmt::If(if_stmt) => collect_td_fields_in_if(if_stmt, total, target, out),
+            Stmt::If(if_stmt) => collect_td_fields_in_if(bindings, if_stmt, total, target, out),
             _ => {}
         }
     }
@@ -158,42 +180,44 @@ fn collect_td_fields(
 
 /// Admit fields from each statically-reachable branch of an `if`/`elif`/`else`.
 fn collect_td_fields_in_if(
+    bindings: &BindingTable,
     if_stmt: &ast::StmtIf,
     total: bool,
     target: Option<(u32, u32)>,
     out: &mut Vec<TdField>,
 ) {
     use basilisk_resolver::{evaluate, parse_static_condition, BranchTruth};
-    let test = parse_static_condition(&if_stmt.test);
+    let test = parse_static_condition(bindings, &if_stmt.test);
     let truth = target.map_or(BranchTruth::Unknown, |target| evaluate(&test, target));
     if truth != BranchTruth::AlwaysFalse {
-        collect_td_fields(&if_stmt.body, total, target, out);
+        collect_td_fields(bindings, &if_stmt.body, total, target, out);
     }
     for clause in &if_stmt.elif_else_clauses {
         let reachable = match &clause.test {
             Some(elif) => target.is_none_or(|target| {
-                evaluate(&parse_static_condition(elif), target) != BranchTruth::AlwaysFalse
+                evaluate(&parse_static_condition(bindings, elif), target)
+                    != BranchTruth::AlwaysFalse
             }),
             // The `else` is reachable unless the `if` test is always taken.
             None => truth != BranchTruth::AlwaysTrue,
         };
         if reachable {
-            collect_td_fields(&clause.body, total, target, out);
+            collect_td_fields(bindings, &clause.body, total, target, out);
         }
     }
 }
 
-fn field_from_stmt(stmt: &Stmt, total: bool) -> Option<TdField> {
+fn field_from_stmt(bindings: &BindingTable, stmt: &Stmt, total: bool) -> Option<TdField> {
     let Stmt::AnnAssign(ann) = stmt else {
         return None;
     };
     let name = expr_name(&ann.target)?.to_owned();
-    let ty = core_type(&ann_str(&ann.annotation));
-    Some(TdField {
-        name,
-        ty,
-        required: total,
-    })
+    // PEP 655: an explicit `Required[]`/`NotRequired[]` qualifier overrides the
+    // class's `total=` default. Resolved through the bindings, never spelling.
+    let required = peel_qualifiers(bindings, &ann.annotation)
+        .required
+        .unwrap_or(total);
+    Some(TdField { name, required })
 }
 
 fn class_total(cls: &ast::StmtClassDef) -> bool {
@@ -205,18 +229,26 @@ fn class_total(cls: &ast::StmtClassDef) -> bool {
     })
 }
 
-fn extra_items_keyword(cls: &ast::StmtClassDef) -> Option<ExtraItems> {
+fn extra_items_keyword(bindings: &BindingTable, cls: &ast::StmtClassDef) -> Option<ExtraItems> {
     let args = cls.arguments.as_ref()?;
     let kw = args
         .keywords
         .iter()
         .find(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "extra_items"))?;
-    Some(extra_items_from_expr(&kw.value))
+    Some(extra_items_from_expr(bindings, &kw.value))
 }
 
-fn extra_items_from_expr(expr: &Expr) -> ExtraItems {
+fn extra_items_from_expr(bindings: &BindingTable, expr: &Expr) -> ExtraItems {
+    let peeled = peel_qualifiers(bindings, expr);
     ExtraItems {
-        ty: core_type(&ann_str(expr)),
+        readonly: peeled.readonly,
+        qualifier: peeled.required.map(|required| {
+            if required {
+                Qualifier::Required
+            } else {
+                Qualifier::NotRequired
+            }
+        }),
     }
 }
 
@@ -301,10 +333,12 @@ fn find_extra<'a>(
         .find_map(|base| find_extra(base, map, depth + 1, true))
 }
 
-/// The effective `extra_items` pseudo-item every `TypedDict` carries: the
-/// explicit declaration, or the implicit `object`.
-pub(super) fn effective_extra(name: &str, map: &HashMap<&str, &TdModel>) -> EffectiveExtra {
-    explicit_extra(name, map, true).map_or_else(|| "object".to_owned(), |e| e.ty.clone())
+/// Whether the effective `extra_items` pseudo-item is read-only. PEP 728: a
+/// `TypedDict` with no explicit declaration anywhere in its chain "is
+/// equivalent to a TypedDict with read-only extra items of type `object`",
+/// so the implicit pseudo-item is read-only.
+pub(super) fn effective_extra_readonly(name: &str, map: &HashMap<&str, &TdModel>) -> bool {
+    explicit_extra(name, map, true).is_none_or(|extra| extra.readonly)
 }
 
 /// `true` when `name` or any ancestor sets `closed=True`.

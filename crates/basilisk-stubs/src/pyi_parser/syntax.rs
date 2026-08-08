@@ -21,27 +21,6 @@ pub(super) fn has_decorator_form(
         .any(|decorator| bindings.form_of(&decorator.expression) == Some(form))
 }
 
-/// Does any decorator on this definition denote the builtin `staticmethod`?
-///
-/// `staticmethod` needs no import, so no registry entry describes it and
-/// [`BindingTable::form_of`] cannot answer. Recognition is therefore a bare
-/// `Name` node carrying that identifier, and only while the module has not
-/// bound the name to something of its own — which [`BindingTable::binds_name`]
-/// decides. The builtin is fixed here on purpose: an API taking the name as a
-/// parameter would let callers recognise arbitrary symbols by spelling.
-pub(super) fn has_staticmethod_decorator(
-    bindings: &BindingTable,
-    decorators: &[Decorator],
-) -> bool {
-    const BUILTIN: &str = "staticmethod";
-    if bindings.binds_name(BUILTIN) {
-        return false;
-    }
-    decorators.iter().any(|decorator| {
-        matches!(&decorator.expression, Expr::Name(name) if name.id.as_str() == BUILTIN)
-    })
-}
-
 pub(super) fn ann_assign_target_name(ann: &StmtAnnAssign) -> Option<String> {
     if let Expr::Name(name_expr) = ann.target.as_ref() {
         Some(name_expr.id.to_string())
@@ -59,9 +38,7 @@ pub(super) fn stub_method(
     let mut params = extract_params(&function.parameters);
     // A static method has no receiver to strip; every other method binds its
     // first parameter as one.
-    let receiver = if has_staticmethod_decorator(bindings, &function.decorator_list)
-        || params.is_empty()
-    {
+    let receiver = if params.is_empty() {
         None
     } else {
         Some(params.remove(0))

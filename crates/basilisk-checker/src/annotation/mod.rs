@@ -73,6 +73,9 @@ pub struct AnnotationResolver<'m> {
     /// ([RESOLV-CANONICAL-BINDING]). Structural types are satisfied by shape,
     /// not identity, so nominal judgments abstain on them.
     structural: std::collections::HashSet<&'m str>,
+    /// The module's binding table ([RESOLV-CANONICAL-BINDING]) — the ONE
+    /// lawful answer to "which typing symbol does this expression denote?".
+    bindings: &'m basilisk_resolver::BindingTable,
 }
 
 /// One step of resolution: the alias parameters currently bound, the aliases
@@ -118,7 +121,48 @@ impl<'m> AnnotationResolver<'m> {
             tables: Tables::build(&parsed.ast),
             annotations: index::annotation_nodes(&parsed.ast),
             resolved: RefCell::default(),
+            structural: module
+                .classes
+                .iter()
+                .filter(|class| class.is_protocol || class.is_typed_dict)
+                .map(|class| class.name.as_str())
+                .collect(),
+            bindings: &module.bindings,
         })
+    }
+
+    /// The module's binding table, for callers that resolve typing symbols
+    /// on expression nodes ([RESOLV-CANONICAL-BINDING]).
+    #[must_use]
+    pub fn bindings(&self) -> &basilisk_resolver::BindingTable {
+        self.bindings
+    }
+
+    /// Does this type mention a STRUCTURAL class this module declares — a
+    /// `Protocol` or `TypedDict` — at any depth? Structural targets need
+    /// member-level judgment, so nominal assignability rules abstain when
+    /// this answers `true`.
+    ///
+    /// The leaf test is set membership of the engine's `Named` leaf — the
+    /// [TYPEINF-LEGACY] boundary — against binding-resolved class nature; no
+    /// source text is consulted.
+    #[must_use]
+    pub fn is_structural_target(&self, ty: &InferredType) -> bool {
+        match ty {
+            InferredType::Named(name) => self.structural.contains(name.as_str()),
+            InferredType::Union(arms) => arms.iter().any(|arm| self.is_structural_target(arm)),
+            InferredType::Optional(inner)
+            | InferredType::List(inner)
+            | InferredType::Set(inner)
+            | InferredType::TypeForm(inner) => self.is_structural_target(inner),
+            InferredType::Dict(key, value) => {
+                self.is_structural_target(key) || self.is_structural_target(value)
+            }
+            InferredType::Tuple(elements) => {
+                elements.iter().any(|element| self.is_structural_target(element))
+            }
+            _ => false,
+        }
     }
 
     /// Resolve an annotation expression to the type it denotes.
