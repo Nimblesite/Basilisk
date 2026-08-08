@@ -218,10 +218,7 @@ fn collect_folder_debt(paths: &[String]) -> Result<BTreeMap<PathBuf, FolderDebt>
     for diagnostic in &outcome.diagnostics {
         let entry = debt.entry(governing_root(&diagnostic.path)).or_default();
         let code = diagnostic.code.code.to_owned();
-        if matches!(
-            diagnostic.severity,
-            basilisk_checker::Severity::Error | basilisk_checker::Severity::SafetyViolation
-        ) {
+        if diagnostic.severity == basilisk_checker::Severity::Error {
             let _ = entry.error_codes.insert(code.clone());
         }
         let _ = entry.firing_codes.insert(code);

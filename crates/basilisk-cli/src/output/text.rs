@@ -155,7 +155,7 @@ fn decimal_width(mut value: usize) -> usize {
 /// Apply the appropriate colour to a severity label.
 fn color_severity(severity: Severity, text: &str) -> String {
     match severity {
-        Severity::Error | Severity::SafetyViolation => text.red().bold().to_string(),
+        Severity::Error => text.red().bold().to_string(),
         Severity::Warning => text.yellow().bold().to_string(),
         Severity::Info => text.blue().bold().to_string(),
     }

@@ -205,10 +205,7 @@ fn error_codes(diagnostics: &[basilisk_checker::Diagnostic]) -> BTreeSet<String>
     diagnostics
         .iter()
         .filter(|diagnostic| {
-            matches!(
-                diagnostic.severity,
-                basilisk_checker::Severity::Error | basilisk_checker::Severity::SafetyViolation
-            )
+            diagnostic.severity == basilisk_checker::Severity::Error
         })
         .map(|diagnostic| diagnostic.code.code.to_owned())
         .collect()

@@ -20,40 +20,30 @@ ship as a text scan does not ship.
 
 ## TODO {#CHKADVPLAN-TODO}
 
-### Ownership and safety checks (`basilisk-checker::ownership`) {#CHKADVPLAN-TODO-SAFETY}
-
-These are Basilisk rules. The concepts are borrowed from
-[Mojo's ownership model](https://docs.modular.com/mojo/manual/values/ownership);
-the analysis is Basilisk's own, expressed in Python's `Annotated` conventions.
-`mojo` is not a legal identifier — prose may credit the inspiration, but no spec
-ID, module path, file name, or rule name may carry it ([CHKARCH-SAFETY]).
-Unbuilt and unadvertised: the module is unwired scaffolding, registers no rule,
-and stays out of user-facing docs until it ships as a working, opt-in rule set.
-
-- [ ] Ownership tracking via `Borrowed`/`InOut`/`Owned` `Annotated` conventions: mutation-of-borrowed and use-after-move detection ([CHKARCH-SAFETY-OWNERSHIP]).
-- [ ] Parameter-immutability-by-default analysis with `InOut` opt-out + frozen-dataclass nudges ([CHKARCH-SAFETY-IMMUTABLE]).
-- [ ] Structural-discipline checks: dynamic-attribute-on-typed-class, missing `__init__`, `__slots__` suggestions ([CHKARCH-SAFETY-STRUCTURAL]).
-- [ ] No-implicit-coercion checks (int→float, bool→int, bytes→str) ([CHKARCH-SAFETY-COERCION]).
-- [ ] Source-concept → Basilisk-check mapping table backing the above ([CHKARCH-SAFETY-COMPAT]).
-- [ ] Only once the above land and are wired into the pipeline: surface the rule
-      set in the website docs. Nothing here is advertised before then.
-
 ### Dependency hygiene {#CHKADVPLAN-TODO-DEPHYGIENE}
 
 - [ ] First-party / third-party package-name collision
   ([#47](https://github.com/Nimblesite/Basilisk/issues/47)). When a declared PyPI
   dependency shares a name with a package the project itself ships, an unrelated
   distribution is silently pulled into the graph and precedence depends on
-  install order — dependency confusion that never fails loudly. Basilisk already
-  holds all three inputs: local package roots (import resolution), declared
-  dependencies (`basilisk-config`), and installed site-packages contents
-  (`missing_type_stubs`), so the check is a three-way join. Warning by default,
-  gradable per project. Must handle hyphen/underscore variants (PyPI
+  install order — dependency confusion that never fails loudly. Warning by
+  default, gradable per project. Must handle hyphen/underscore variants (PyPI
   `pydantic-ai` → import `pydantic_ai`), stay silent when the package is purely
   first-party or the dependency has no local twin, and offer a quick fix that
   removes the dependency line or renames the local package. The real case that
   prompted it: a project shipping `src/nap/` that also declared `nap>=2.0.0`,
   pulling an unrelated HTTP library.
+
+  The check is a three-way join, and Basilisk holds **one** of the three inputs
+  today — local package roots, from import resolution. The other two are
+  prerequisites, not existing capability:
+
+  - [ ] Declared-dependency extraction. `basilisk-config` parses the
+    `[tool.basilisk]` table only; nothing reads `[project].dependencies`,
+    `[dependency-groups]`, or `uv.lock`.
+  - [ ] Installed-distribution inventory. `missing_type_stubs` (BSK-0152) tests
+    whether a *resolved import* landed under site-packages without a `py.typed`
+    marker — it never enumerates installed distributions.
 
 ### Plugin host {#CHKADVPLAN-TODO-PLUGINS}
 

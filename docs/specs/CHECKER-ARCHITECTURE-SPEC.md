@@ -379,60 +379,6 @@ accepted by the Python parser in Python 3.12 and later"
 
 Tests: `crates/basilisk-checker/tests/checker/version_target_tests.rs`.
 
----
-
-## Ownership and safety analysis {#CHKARCH-SAFETY}
-
-Status: planned, opt-in, unimplemented, and not wired into the checker pipeline.
-There is no scaffolding: the former `basilisk-checker::ownership` module was
-**deleted**, because it reconstructed definitions and parameter uses by scanning
-raw source lines for `def ` and for `Annotated` metadata spellings — the
-mechanism [CHKARCH-RECOGNITION-BANNED](#CHKARCH-RECOGNITION-BANNED) forbids
-outright, and one whose own module documentation conceded it saw those
-characters inside comments and string literals. It registered no rule, so
-nothing user-facing was lost.
-
-Any future implementation starts from the Ruff AST and
-[CHKARCH-RECOGNITION](#CHKARCH-RECOGNITION), never from the deleted code.
-Shipping PEP rules must not reuse these anchors or diagnostic descriptions.
-
-These are Basilisk rules. The concepts are borrowed from
-[Mojo's ownership model](https://docs.modular.com/mojo/manual/values/ownership),
-but the analysis is Basilisk's own, expressed in standard Python `Annotated`
-conventions — not a port of Mojo's checker. `mojo` is therefore not a legal
-identifier here: it must never appear in a spec ID, module path, file name, or
-rule name. Prose may credit the inspiration; tags may not carry it.
-
-Because none of it works today it is also **not advertised**: it stays out of
-the README, the website, and the user-facing docs until it ships as a working,
-opt-in rule set. Only complete, production-ready features are advertised.
-
-### Ownership tracking {#CHKARCH-SAFETY-OWNERSHIP}
-
-The target is explicit `Annotated[T, Borrowed|InOut|Owned]` analysis for
-mutation-of-borrowed and use-after-transfer diagnostics.
-
-### Parameter immutability {#CHKARCH-SAFETY-IMMUTABLE}
-
-The target is an opt-in rule that treats mutable parameters as read-only unless
-marked `InOut`; it does not change Python runtime semantics.
-
-### Structural discipline {#CHKARCH-SAFETY-STRUCTURAL}
-
-The target is opt-in checks for dynamic attributes and related typed-class
-structure. Existing PEP/dataclass rules remain separate.
-
-### Explicit coercion {#CHKARCH-SAFETY-COERCION}
-
-The target is opt-in diagnostics for selected implicit conversions. It must not
-contradict the typing-spec numeric tower used by default PEP rules.
-
-### Compatibility contract {#CHKARCH-SAFETY-COMPAT}
-
-All metadata uses standard Python typing constructs, all rules are off by
-default, and the implementation plan is
-[CHECKER-ADVANCED-FEATURES-PLAN.md](../plans/CHECKER-ADVANCED-FEATURES-PLAN.md).
-
 ## Symbol recognition — AST and resolution only {#CHKARCH-RECOGNITION}
 
 **Normative, and it overrides every other section of this specification.** No
@@ -821,9 +767,6 @@ Source Files (.py)
   VS Code / Cursor /      Terminal / CI
   Windsurf / Zed /
   Neovim
-
-  (planned: ownership / immutability / coercion analysis — unimplemented,
-   see CHKARCH-SAFETY.)
 ```
 
 All stages are backed by:

@@ -24,9 +24,6 @@ pub enum Severity {
     Warning,
     /// A type error that must be resolved.
     Error,
-    /// Critical safety violation reported by the opt-in, off-by-default
-    /// ownership/move-semantics rules ([CHKARCH-SAFETY]).
-    SafetyViolation,
 }
 
 impl std::fmt::Display for Severity {
@@ -35,7 +32,6 @@ impl std::fmt::Display for Severity {
             Severity::Info => write!(f, "info"),
             Severity::Warning => write!(f, "warning"),
             Severity::Error => write!(f, "error"),
-            Severity::SafetyViolation => write!(f, "safety violation"),
         }
     }
 }

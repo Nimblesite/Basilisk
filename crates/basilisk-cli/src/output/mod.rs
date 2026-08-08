@@ -329,17 +329,6 @@ mod tests {
     }
 
     #[test]
-    fn format_one_safety_violation_header_is_bold_red() {
-        force_colors();
-        let diag = make_diag_with_severity(Severity::SafetyViolation, None, None);
-        let out = render_one(&diag, "def foo(x): pass");
-        assert!(
-            out.contains(&format!("{BOLD_RED}safety violation{RESET}")),
-            "safety violation label must be bold red, got:\n{out}"
-        );
-    }
-
-    #[test]
     fn format_one_without_source_falls_back_to_path() {
         force_colors();
         let diag = make_diag(Some("help"), Some("note"));
@@ -435,16 +424,6 @@ mod tests {
     fn format_snippet_info_underline_is_bold_blue() {
         let out = snippet_sample(Severity::Info);
         assert_contains_colour(&out, &format!("{BOLD_BLUE}^{RESET}"), "info underline");
-    }
-
-    #[test]
-    fn format_snippet_safety_violation_underline_is_bold_red() {
-        let out = snippet_sample(Severity::SafetyViolation);
-        assert_contains_colour(
-            &out,
-            &format!("{BOLD_RED}^{RESET}"),
-            "safety violation underline",
-        );
     }
 
     #[test]
@@ -591,16 +570,6 @@ mod tests {
     #[test]
     fn render_diagnostics_json_info_severity() {
         let diag = make_diag_with_severity(Severity::Info, None, None);
-        let sources = vec![FileSource {
-            path: "test.py".to_owned(),
-            text: "def foo(x): pass".to_owned(),
-        }];
-        render_diagnostics_json(&[diag], &sources, &[]);
-    }
-
-    #[test]
-    fn render_diagnostics_json_safety_violation_severity() {
-        let diag = make_diag_with_severity(Severity::SafetyViolation, None, None);
         let sources = vec![FileSource {
             path: "test.py".to_owned(),
             text: "def foo(x): pass".to_owned(),

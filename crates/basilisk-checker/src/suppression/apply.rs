@@ -14,10 +14,7 @@ pub fn apply_overrides_at_line(
     match selected_override(diagnostic.code.code, line, overrides) {
         Some(SelectedOverride::Mode { mode, .. }) => apply_mode(diagnostic, mode),
         Some(SelectedOverride::Relaxed { .. }) => {
-            if matches!(
-                diagnostic.severity,
-                Severity::Error | Severity::SafetyViolation
-            ) {
+            if diagnostic.severity == Severity::Error {
                 diagnostic.severity = Severity::Warning;
             }
             Some(diagnostic)
@@ -91,7 +88,7 @@ pub(crate) fn changing_audit_directive(
             changes.then_some(audit_index).flatten()
         }
         SelectedOverride::Relaxed { audit_index } => {
-            matches!(severity, Severity::Error | Severity::SafetyViolation)
+            (severity == Severity::Error)
                 .then_some(audit_index)
                 .flatten()
         }

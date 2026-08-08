@@ -130,7 +130,7 @@ pub(crate) fn build_module_tree(
 /// Only exact `Error`/`Warning` severities are serialized — the same filter
 /// [`compute_file_health`] counts — so the spec invariant
 /// `errors == diagnostics.filter(d => d.severity == "error").length` holds
-/// (`Info` and the opt-in `SafetyViolation` are excluded from both).
+/// (`Info` is excluded from both).
 fn diagnostic_nodes(
     diagnostics: &[basilisk_checker::Diagnostic],
     text: &str,
@@ -141,9 +141,7 @@ fn diagnostic_nodes(
             let severity = match diagnostic.severity {
                 basilisk_checker::Severity::Error => "error",
                 basilisk_checker::Severity::Warning => "warning",
-                basilisk_checker::Severity::Info | basilisk_checker::Severity::SafetyViolation => {
-                    return None;
-                }
+                basilisk_checker::Severity::Info => return None,
             };
             let line = byte_offset_to_line(text, diagnostic.span.start);
             let node = serde_json::json!({
@@ -665,9 +663,8 @@ mod tests {
     }
 
     // Tests the ordering + severity-filter rules of [EXTACT-MODULES-DIAGNOSTICS]:
-    // errors before warnings, then ascending line; Info and the opt-in
-    // SafetyViolation stay off the wire so the count invariant against
-    // compute_file_health holds exactly.
+    // errors before warnings, then ascending line; Info stays off the wire so
+    // the count invariant against compute_file_health holds exactly.
     #[test]
     fn test_diagnostic_nodes_sorts_errors_first_then_line_and_filters_severities() {
         use basilisk_checker::Severity;
@@ -678,7 +675,6 @@ mod tests {
             make_diag(Severity::Error, 18, "error on line 3"),
             make_diag(Severity::Info, 6, "info stays off the wire"),
             make_diag(Severity::Error, 6, "error on line 1"),
-            make_diag(Severity::SafetyViolation, 12, "safety stays off the wire"),
         ];
 
         let rows = diagnostic_nodes(&diagnostics, text);
@@ -701,7 +697,7 @@ mod tests {
                 ("error on line 3", 3),
                 ("warning on line 0", 0),
             ],
-            "errors before warnings, then ascending line; Info/SafetyViolation excluded"
+            "errors before warnings, then ascending line; Info excluded"
         );
         // Every row carries the full DiagnosticNode shape.
         for row in &rows {

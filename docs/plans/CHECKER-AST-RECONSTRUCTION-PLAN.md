@@ -1,6 +1,6 @@
 # Rebuild the checker on the AST {#ASTREBUILD}
 
-> **Status (2026-08-06):** the deletion phase is complete and the rebuild has
+> **Status (2026-08-08):** the deletion phase is complete and the rebuild has
 > not started. Basilisk's former 100% `python/typing` claim is withdrawn, the
 > project is not listed in the [official results](https://github.com/python/typing/blob/main/conformance/results/results.html),
 > and the current conformance level is **unknown**. Nothing in this plan
@@ -160,6 +160,59 @@ Deleted because keyword scanning **was** the whole mechanism, not a detail of it
 
 ---
 
+## Salvage: what survives, what returns, what stays deleted {#ASTREBUILD-SALVAGE}
+
+The deletion commits (`31ef02d8`, `d79e955c`, `7234dd20`, `4f6044f7`) removed
+6,326 lines. Every deleted file over 60 lines was triaged by counting AST
+signals (`Expr::`, `Stmt::`, `ruff_python_ast`, span access) against text
+signals (`starts_with("`, `slice_span`, `.lines()`, `== "`) in the deleted
+hunks. **The purge was overwhelmingly correct**: the large deleted rule and
+refactoring modules score zero AST signal. Nothing in that set is rebuilt by
+restoring it — it is rebuilt by [the pattern](#ASTREBUILD-PATTERN).
+
+Three exceptions, and the reasoning for each.
+
+### Rebuild from, do not restore: the type-expression evaluator {#ASTREBUILD-SALVAGE-FORMS}
+
+`crates/basilisk-checker/src/annotation/forms.rs` lost 142 lines in `31ef02d8`
+— the only deleted file with real AST signal and no text signal. It evaluated
+subscripted special forms from their **argument expressions**: `Callable[[P], R]`
+including the `[]` and `...` cases, `Concatenate[X, P]` prefix extraction,
+`Generator`, `Literal`, `Optional`/`Union`, and the PEP 647/742 guard payloads.
+That is genuine type-expression evaluation over `Expr` nodes and it is worth
+having back.
+
+It is not restorable as written. It dispatched on a **lowercased resolved member
+name** (`"literal"`, `"callable"`, `"concatenate"`), which the older cheat
+inventory classed as legitimate because the string came from the import
+cascade rather than the use site. [ASTREBUILD-LAW](#ASTREBUILD-LAW) is stricter
+and supersedes it: the answer must be a `TypingForm`, and a Python spelling may
+not appear in a `.rs` file at all. The restored ratchet fails on the old file by
+construction.
+
+- [ ] Rebuild the evaluator in [Phase 5](#ASTREBUILD-PHASE-TYPEEXPR) with the
+      argument-walking structure intact and the dispatch re-keyed from
+      lowercased strings to `BindingTable::form_of`.
+
+### Already in the tree: the inference and narrowing foundations {#ASTREBUILD-SALVAGE-INFERENCE}
+
+Commit `e3e97d30` (#377, "shared inference, narrowing, and subtyping
+foundations") was **not** lost to the purge. Every file it added survives, and
+the tests grew rather than shrank (`narrow_flow_tests.rs` 284 → 997 lines).
+Scanned for the banned mechanisms:
+
+| File | Verdict |
+|---|---|
+| `inference.rs`, `narrow/reachability.rs`, `narrow/env.rs`, `narrow/set_ops.rs`, `bidir/generics.rs` | Clean. `rhs_fully_determines_type` consumes the resolver's `RhsKind` ADT — a resolved answer, not a spelling. |
+| `narrow/flow.rs`, `narrow/guards.rs`, `subtyping.rs` | Algorithms are sound; they consume `InferredType::Named(String)`, so they inherit the condemned layer (`from_annotation` calls, `name == "range"`, `sup == "object"`). |
+
+The narrowing and subtyping **algorithms** are real work that does not need
+redoing. What they sit on does. That makes
+[Phase 5](#ASTREBUILD-PHASE-TYPEEXPR) a representation swap underneath working
+code, not a rewrite of it — and it is the reason Phase 5 is worth its size.
+
+---
+
 ## The pattern every rebuild follows {#ASTREBUILD-PATTERN}
 
 One shape, used everywhere, so review is mechanical.
@@ -200,18 +253,58 @@ greener than it found it.
 ### Phase 0 — restore the build {#ASTREBUILD-PHASE-COMPILE}
 
 Nothing else can be measured until `cargo check --workspace --all-targets`
-completes.
+completes. Three breaks, and one crate move they depend on.
 
-- [ ] Populate `StubFunction::is_overload` by resolving the decorator through
-      `BindingTable` to `TypingForm::Overload`. `basilisk-stubs` parses `.pyi`
-      files with the same Ruff parser, so the same mechanism applies; do not
-      reintroduce a decorator-name comparison.
-- [ ] Replace the three `decorator_spelled` call sites. `staticmethod` and
-      `classmethod` are true builtins needing no import, so recognising them is
-      permitted — but they still must be matched on the resolved decorator
-      **node**, not on sliced source text.
-- [ ] Record the full downstream error list once the workspace compiles; it may
-      exceed this inventory.
+#### 0a — put the canonical layer where every crate can reach it {#ASTREBUILD-PHASE-COMPILE-CANONICAL}
+
+Recognition has to be available to `basilisk-stubs`, which parses `.pyi` files
+with the same Ruff parser and must answer the same questions. It cannot reach
+`canonical/` where that module lives today, because `basilisk-resolver` already
+depends on `basilisk-stubs`.
+
+`canonical/` is self-contained — 586 LOC across `form.rs`, `binding.rs`, and
+`mod.rs`, importing only `ruff_python_ast`, `serde`, and `std`, with no
+`crate::` reference to the rest of the resolver — so it moves without edits.
+
+- [ ] Create `crates/basilisk-canonical` from
+      `crates/basilisk-resolver/src/canonical/`, carrying
+      `resources/typing_symbols.toml` with it.
+- [ ] Re-export `BindingTable`, `TypingForm`, and `CanonicalSymbol` from
+      `basilisk-resolver` so no existing consumer's import path changes.
+- [ ] Depend on it from `basilisk-stubs` and `basilisk-resolver`. One registry
+      answers for the whole workspace; a second copy of the vocabulary anywhere
+      is the defect returning.
+
+#### 0b — populate `StubFunction::is_overload` {#ASTREBUILD-PHASE-COMPILE-OVERLOAD}
+
+`pyi_parser.rs:491` routes a function into `self.overloads` on this flag, and
+`pyi_parser/syntax.rs:27` no longer sets it.
+
+- [ ] Build a `BindingTable` for each `.pyi` module and set `is_overload` from
+      `form_of(decorator)  == Some(TypingForm::Overload)`. A stub that writes
+      `from typing import overload as _ov` must group identically.
+- [ ] Re-key the receiver decision at `pyi_parser/syntax.rs:20`, which reads
+      `decorator.ends_with("staticmethod")` on a rendered string. The builtin
+      name is permitted; reconstructing it from rendered text is not.
+- [ ] `StubFunction::decorators` is a `Vec<String>` of rendered names — the
+      shape that made both defects possible. Carry resolved forms alongside it,
+      and stop new decisions being made from the strings.
+
+#### 0c — replace the `decorator_spelled` call sites {#ASTREBUILD-PHASE-COMPILE-DECORATORS}
+
+Three callers reference a helper that no longer exists:
+`missing_parameter_annotation.rs:191,195` and
+`calls_argument_count/method_binding.rs:135`.
+
+- [ ] Decide `staticmethod` / `classmethod` from the resolved decorator
+      **node**. Both are true builtins needing no import, so recognising them is
+      permitted — matching them against sliced source text is not.
+
+#### 0d — measure what Phase 0 uncovered {#ASTREBUILD-PHASE-COMPILE-MEASURE}
+
+- [ ] Record the full downstream error list once the workspace compiles. The
+      inventory above was taken through a build that stops in `basilisk-stubs`,
+      so the real count is unknown and may be larger.
 - [ ] `make lint` and `make fmt` clean.
 
 ### Phase 1 — deliver binding resolution to consumers {#ASTREBUILD-PHASE-BINDING}

@@ -37,7 +37,7 @@ pub(super) struct JsonDiagnostic<'a> {
     /// The diagnostic error/warning code (e.g. `BSK-0001`), or `None` for a
     /// file the run could not analyse — no rule ran, so none can be named.
     pub(super) code: Option<&'a str>,
-    /// Severity string: `"error"`, `"warning"`, `"info"`, or `"safety violation"`.
+    /// Severity string: `"error"`, `"warning"`, or `"info"`.
     pub(super) severity: &'a str,
     /// Human-readable diagnostic message.
     pub(super) message: &'a str,
@@ -83,7 +83,6 @@ pub fn render_diagnostics_json(
                     basilisk_checker::Severity::Error => "error",
                     basilisk_checker::Severity::Warning => "warning",
                     basilisk_checker::Severity::Info => "info",
-                    basilisk_checker::Severity::SafetyViolation => "safety violation",
                 },
                 message: &d.message,
                 path: &d.path,
