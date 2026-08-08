@@ -239,6 +239,18 @@ impl BindingTable {
         self.form_of(expr) == Some(form)
     }
 
+    /// Whether an expression resolves to `name` defined in `module`.
+    ///
+    /// The lawful recognition for a specific symbol outside the typing
+    /// registry (`sys.version_info`, `sys.platform`): the use-site expression
+    /// is resolved through the module's bindings and its canonical identity
+    /// compared — so aliased imports match and rebound names never do.
+    #[must_use]
+    pub fn resolves_to(&self, expr: &Expr, module: &str, name: &str) -> bool {
+        self.canonical_of(expr)
+            .is_some_and(|symbol| symbol.module == module && symbol.name == name)
+    }
+
     /// The element expression of a subscript whose base denotes `form`.
     ///
     /// `Final[int]` with [`TypingForm::FinalQualifier`] yields `int`.

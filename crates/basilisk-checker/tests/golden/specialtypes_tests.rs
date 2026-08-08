@@ -504,9 +504,10 @@ poise(1.5)
 #[test]
 fn int_does_not_narrow_to_bool() -> Result<(), Box<dyn std::error::Error>> {
     SpecObligation {
-        spec_reason: "`bool` is a subclass of `int`, so `bool` flows into `int`; the tower grants \
-                      no promotion in the reverse direction, and an `int` argument to a `bool` \
-                      parameter is ill-typed",
+        spec_reason: "`bool` is a nominal subclass of `int`, so `bool` flows into `int` by \
+                      ordinary subtyping. PEP 484's numeric tower covers only int/float/complex \
+                      and grants nothing here, so an `int` argument to a `bool` parameter is \
+                      ill-typed — the tower must not be over-applied",
         rejected: r#"
 def latch(engaged: bool) -> None:
     return None
