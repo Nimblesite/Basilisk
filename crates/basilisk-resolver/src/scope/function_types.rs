@@ -115,6 +115,11 @@ pub struct FunctionInfo {
     pub name: String,
     /// All positional-or-keyword and keyword-only parameters.
     pub parameters: Vec<ParameterInfo>,
+    /// How many leading entries of [`Self::parameters`] accept a positional
+    /// argument (`posonlyargs` + `args`); the remainder are keyword-only.
+    /// Rules that reason about "the first positional parameter" (PEP 742
+    /// narrowing functions) read this instead of guessing from names.
+    pub positional_count: usize,
     /// The `*args` parameter, if present.
     pub vararg: Option<ParameterInfo>,
     /// The `**kwargs` parameter, if present.

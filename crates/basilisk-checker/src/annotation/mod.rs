@@ -226,7 +226,17 @@ impl<'m> AnnotationResolver<'m> {
             return InferredType::Unknown;
         }
         match expr {
-            Expr::Name(name) => self.name(name.id.as_str(), frame),
+            Expr::Name(name) => match self.name(name.id.as_str(), frame) {
+                // A spelling the tables cannot ground may still DENOTE a
+                // builtin class through its binding (`from builtins import
+                // str as Text`). The binding table answers by identity, so
+                // this only ever grounds what the name provably is — it
+                // never re-reads the spelling.
+                InferredType::Unknown => self
+                    .builtin_class_leaf(expr)
+                    .unwrap_or(InferredType::Unknown),
+                resolved => resolved,
+            },
             Expr::Attribute(_) => self.attribute(expr, frame),
             Expr::Subscript(sub) => self.subscript(sub, frame),
             Expr::BinOp(bin) if bin.op == Operator::BitOr => self.union(bin, frame),
@@ -280,6 +290,9 @@ impl<'m> AnnotationResolver<'m> {
     /// then generic same-file classes.
     fn subscript(&self, sub: &ruff_python_ast::ExprSubscript, frame: &Frame) -> InferredType {
         let args = basilisk_parser::subscript_elements(sub);
+        if let Some(narrowing) = self.narrowing_form(&sub.value, &args, frame) {
+            return narrowing;
+        }
         let Some(head) = tables::dotted_name(&sub.value).and_then(|d| self.canonical_head(&d))
         else {
             return InferredType::Unknown;
@@ -297,6 +310,42 @@ impl<'m> AnnotationResolver<'m> {
             return InferredType::Named(head);
         }
         InferredType::Unknown
+    }
+
+    /// The builtin class a name-or-attribute node DENOTES per the binding
+    /// table, as the engine's leaf for it. `None` for anything that is not
+    /// provably a builtin class — the caller keeps its own answer.
+    fn builtin_class_leaf(&self, expr: &Expr) -> Option<InferredType> {
+        use basilisk_resolver::TypingForm;
+        Some(match self.bindings.form_of_with_builtins(expr)? {
+            TypingForm::IntClass => InferredType::Int,
+            TypingForm::StrClass => InferredType::Str,
+            TypingForm::FloatClass => InferredType::Float,
+            TypingForm::BoolClass => InferredType::Bool,
+            TypingForm::BytesClass => InferredType::Bytes,
+            TypingForm::NoneTypeClass => InferredType::None_,
+            TypingForm::ObjectClass => InferredType::Named("object".to_owned()),
+            _ => return None,
+        })
+    }
+
+    /// `TypeIs[X]` (PEP 742) / `TypeGuard[X]` (PEP 647), recognised by
+    /// resolving the subscript's base NODE through the binding table — so an
+    /// aliased import (`from typing import TypeIs as N`), a qualified
+    /// spelling (`typing_extensions.TypeIs`), and a shadowed name all lower
+    /// by what they denote. Both forms take exactly one type argument; any
+    /// other arity is not the narrowing form and falls through.
+    fn narrowing_form(&self, base: &Expr, args: &[&Expr], frame: &Frame) -> Option<InferredType> {
+        let type_is = match self.bindings.form_of(base)? {
+            basilisk_resolver::TypingForm::TypeIs => true,
+            basilisk_resolver::TypingForm::TypeGuard => false,
+            _ => return None,
+        };
+        let [target] = args else { return None };
+        Some(InferredType::Guard {
+            type_is,
+            inner: Box::new(self.eval(target, &frame.nested())),
+        })
     }
 
     /// `X | Y` — flattened into one union.

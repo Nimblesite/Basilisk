@@ -235,12 +235,21 @@ impl Rule for TypeIsInconsistentNarrowing {
                 continue;
             };
 
-            // Find the first non-self/cls parameter (the one being narrowed).
-            let first_param = func
+            // PEP 742: "The type narrowing behavior is applied to the first
+            // positional argument" — for a method or classmethod, the one
+            // after the implicit receiver. Receiver-ness is the function's
+            // KIND (a method that is not a staticmethod), never a parameter's
+            // name: `def is_wide(self: object) -> TypeIs[int]` at module
+            // scope has no receiver, whatever its parameter is called.
+            let receiver_count =
+                usize::from(func.class_name.is_some() && !func.is_staticmethod);
+            let Some(param) = func
                 .parameters
-                .iter()
-                .find(|param| param.name != "self" && param.name != "cls");
-            let Some(param) = first_param else {
+                .get(..func.positional_count)
+                .and_then(|positional| positional.get(receiver_count))
+            else {
+                // No positional parameter to narrow — that defect belongs to
+                // `narrowing_typeguard`, not this consistency rule.
                 continue;
             };
             let Some(param_ann_span) = param.annotation_span else {

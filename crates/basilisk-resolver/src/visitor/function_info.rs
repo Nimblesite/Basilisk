@@ -64,6 +64,7 @@ pub(super) fn function_info_from(
         .map(param_with_default_to_info)
         .collect();
 
+    let positional_count = positional.len();
     let all_params: Vec<ParameterInfo> = positional.into_iter().chain(kwonly).collect();
     let vararg = params.vararg.as_deref().map(parameter_to_info);
     let kwarg = params.kwarg.as_deref().map(parameter_to_info);
@@ -109,6 +110,7 @@ pub(super) fn function_info_from(
     FunctionInfo {
         name: func.name.to_string(),
         parameters: all_params,
+        positional_count,
         vararg,
         kwarg,
         return_annotation,
