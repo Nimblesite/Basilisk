@@ -1,28 +1,26 @@
 //! Asynchronous typing: `Awaitable`, coroutines, `async for`, `async with`,
-//! async generators, and `contextlib.asynccontextmanager`.
+//! async generators and `contextlib.asynccontextmanager`.
 //! [PERMTEST-FAMILY-B] / [PERMTEST-VOCABULARY].
 //!
 //! `Awaitable`, `AsyncIterator`, `AsyncIterable`, `AsyncGenerator`,
-//! `AsyncContextManager` and `Generator` are outside the 55 typing symbols
+//! `AsyncContextManager` and `Generator` sit outside the 55 typing symbols
 //! `conformance/tests/` imports, so no rule can carry a hardcoded arm for them;
-//! they appear bare and freely. `Coroutine` and `Any` *are* in that vocabulary
-//! and are therefore quarantined — they occur only under an alias
-//! (`Coroutine as SuspendedCall`, `Any as Unconstrained`) or an alternate import
-//! form (`typing.Coroutine`, `collections.abc.Coroutine`), never bare.
-//! Identifiers are drawn from a vocabulary disjoint from the suite's 913.
+//! they appear bare. `Coroutine` and `Any` *are* in that vocabulary and are
+//! quarantined — they occur only under an alias (`Coroutine as SuspendedCall`,
+//! `Any as Unconstrained`) or an alternate import form (`typing.Coroutine`,
+//! `collections.abc.Coroutine`), never bare. Identifiers are drawn from a
+//! vocabulary disjoint from the suite's 913.
 
 use super::harness::{aliased, import_form, reformatted, renamed, SpecObligation};
 
 // ── `await` operand ──────────────────────────────────────────────────────
-// The spec makes the operand of `await` an *awaitable*: an object whose type
-// implements `__await__` returning an iterator. A class that merely has methods
-// is not awaitable, and no nominal relationship rescues it.
+// The operand of `await` must be an awaitable: an object whose type implements
+// `__await__` returning an iterator. Having methods is not having that one.
 
 const AWAIT_REJECTED: &str = r"
 class Windlass:
     def haul(self) -> int:
         return 3
-
 
 async def crank() -> int:
     return await Windlass()
@@ -31,12 +29,10 @@ async def crank() -> int:
 const AWAIT_ACCEPTED: &str = r"
 from typing import Generator
 
-
 class Windlass:
     def __await__(self) -> Generator[None, None, int]:
         yield None
         return 3
-
 
 async def crank() -> int:
     return await Windlass()
@@ -47,18 +43,16 @@ class Capstan:
     def drag(self) -> int:
         return 3
 
-
 async def wind() -> int:
     return await Capstan()
 ";
 
-const AWAIT_REJECTED_REFORMATTED: &str = r"
+const AWAIT_REJECTED_REFORMATTED: &str = "
 class Windlass:  # a hauling drum, and nothing more
 
         def haul(self) -> int:
 
                 return 3
-
 async def crank() -> int:
         # the defect is on the next line
         return await (Windlass())
@@ -67,12 +61,10 @@ async def crank() -> int:
 const AWAIT_ACCEPTED_IMPORT_FORM: &str = r"
 import collections.abc
 
-
 class Windlass:
     def __await__(self) -> collections.abc.Generator[None, None, int]:
         yield None
         return 3
-
 
 async def crank() -> int:
     return await Windlass()
@@ -94,13 +86,12 @@ fn await_requires_dunder_await() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // ── Calling an `async def` ───────────────────────────────────────────────
-// Calling an `async def` declared `-> int` produces a *coroutine object*, not an
+// Calling an `async def` declared `-> int` produces a coroutine object, not an
 // `int`. The `int` arrives only after `await`.
 
 const CALL_REJECTED: &str = r"
 async def tally_firkins() -> int:
     return 12
-
 
 async def audit() -> None:
     volume: int = tally_firkins()
@@ -111,7 +102,6 @@ const CALL_ACCEPTED: &str = r"
 async def tally_firkins() -> int:
     return 12
 
-
 async def audit() -> None:
     volume: int = await tally_firkins()
     print(volume)
@@ -121,20 +111,18 @@ const CALL_REJECTED_RENAMED: &str = r"
 async def count_staves() -> int:
     return 12
 
-
 async def reckoning() -> None:
     toll: int = count_staves()
     print(toll)
 ";
 
-const CALL_REJECTED_REFORMATTED: &str = r"
+const CALL_REJECTED_REFORMATTED: &str = "
 async def tally_firkins() -> int:
 
         return 12
 async def audit() -> None:
-        # no await: this binds a coroutine object to an int
+        # no await, so this binds a coroutine object to an int
         volume: int = (tally_firkins())
-
         print(volume)
 ";
 
@@ -155,16 +143,14 @@ fn unawaited_call_is_not_its_return_type() -> Result<(), Box<dyn std::error::Err
 
 // ── The coroutine type itself ────────────────────────────────────────────
 // An `async def` returning `int` has call type `Coroutine[Any, Any, int]`; the
-// third argument is the awaited result, so `Coroutine[Any, Any, str]` is wrong.
-// `Coroutine` and `Any` are quarantined: aliased here, import-form below.
+// third argument is the awaited result, so `str` there is wrong. `Coroutine`
+// and `Any` are quarantined: aliased in the canonical pair, import-form below.
 
 const COROUTINE_REJECTED: &str = r"
 from typing import Any as Unconstrained, Coroutine as SuspendedCall
 
-
 async def tally_firkins() -> int:
     return 12
-
 
 async def audit() -> None:
     pending: SuspendedCall[Unconstrained, Unconstrained, str] = tally_firkins()
@@ -174,10 +160,8 @@ async def audit() -> None:
 const COROUTINE_ACCEPTED: &str = r"
 from typing import Any as Unconstrained, Coroutine as SuspendedCall
 
-
 async def tally_firkins() -> int:
     return 12
-
 
 async def audit() -> None:
     pending: SuspendedCall[Unconstrained, Unconstrained, int] = tally_firkins()
@@ -187,10 +171,8 @@ async def audit() -> None:
 const COROUTINE_REJECTED_IMPORT_FORM: &str = r"
 import typing
 
-
 async def tally_firkins() -> int:
     return 12
-
 
 async def audit() -> None:
     pending: typing.Coroutine[typing.Any, typing.Any, str] = tally_firkins()
@@ -201,10 +183,8 @@ const COROUTINE_ACCEPTED_IMPORT_FORM: &str = r"
 import collections.abc
 import typing
 
-
 async def tally_firkins() -> int:
     return 12
-
 
 async def audit() -> None:
     pending: collections.abc.Coroutine[typing.Any, typing.Any, int] = tally_firkins()
@@ -223,24 +203,28 @@ fn coroutine_carries_the_awaited_result_type() -> Result<(), Box<dyn std::error:
     .assert("coroutine result parameter")
 }
 
-// ── `async for` ──────────────────────────────────────────────────────────
-// `async for` resolves `__aiter__`/`__anext__`. The synchronous iteration
-// protocol does not satisfy it, however complete it is.
+// ── `async for` and `AsyncIterable` ──────────────────────────────────────
+// `async for` resolves `__aiter__`/`__anext__`, and `AsyncIterable[int]` is
+// satisfied by `__aiter__` alone. The synchronous iteration protocol satisfies
+// neither, however complete it is.
 
 const ASYNC_FOR_REJECTED: &str = r"
+from typing import AsyncIterable
+
 class Coppice:
     def __iter__(self):
         return iter([1, 2])
 
-
-async def gather() -> None:
-    async for sapling in Coppice():
+async def gather(grove: AsyncIterable[int]) -> None:
+    async for sapling in grove:
         print(sapling)
+
+async def tend() -> None:
+    await gather(Coppice())
 ";
 
 const ASYNC_FOR_ACCEPTED: &str = r"
-from typing import AsyncIterator
-
+from typing import AsyncIterable, AsyncIterator
 
 class Coppice:
     def __aiter__(self) -> AsyncIterator[int]:
@@ -249,26 +233,31 @@ class Coppice:
     async def __anext__(self) -> int:
         raise StopAsyncIteration
 
-
-async def gather() -> None:
-    async for sapling in Coppice():
+async def gather(grove: AsyncIterable[int]) -> None:
+    async for sapling in grove:
         print(sapling)
+
+async def tend() -> None:
+    await gather(Coppice())
 ";
 
 const ASYNC_FOR_REJECTED_RENAMED: &str = r"
+from typing import AsyncIterable
+
 class Bosket:
     def __iter__(self):
         return iter([1, 2])
 
-
-async def quench() -> None:
-    async for withy in Bosket():
+async def quench(thicket: AsyncIterable[int]) -> None:
+    async for withy in thicket:
         print(withy)
+
+async def storm() -> None:
+    await quench(Bosket())
 ";
 
 const ASYNC_FOR_ACCEPTED_IMPORT_FORM: &str = r"
 import collections.abc
-
 
 class Coppice:
     def __aiter__(self) -> collections.abc.AsyncIterator[int]:
@@ -277,10 +266,12 @@ class Coppice:
     async def __anext__(self) -> int:
         raise StopAsyncIteration
 
-
-async def gather() -> None:
-    async for sapling in Coppice():
+async def gather(grove: collections.abc.AsyncIterable[int]) -> None:
+    async for sapling in grove:
         print(sapling)
+
+async def tend() -> None:
+    await gather(Coppice())
 ";
 
 #[test]
@@ -296,12 +287,11 @@ fn async_for_requires_the_async_iteration_protocol() -> Result<(), Box<dyn std::
 }
 
 // ── Async generator return statement ─────────────────────────────────────
-// A function containing `yield` is a generator; an *async* generator may not
-// return a value, because there is no channel to deliver it on.
+// A function containing `yield` is a generator; an *async* generator has no
+// channel to deliver a return value on, so `return <value>` is ill-formed.
 
 const ASYNC_RETURN_REJECTED: &str = r"
 from typing import AsyncGenerator
-
 
 async def bail_bilge() -> AsyncGenerator[int, None]:
     yield 4
@@ -311,7 +301,6 @@ async def bail_bilge() -> AsyncGenerator[int, None]:
 const ASYNC_RETURN_ACCEPTED: &str = r"
 from typing import AsyncGenerator
 
-
 async def bail_bilge() -> AsyncGenerator[int, None]:
     yield 4
     return
@@ -320,7 +309,6 @@ async def bail_bilge() -> AsyncGenerator[int, None]:
 const ASYNC_RETURN_REJECTED_ALIASED: &str = r"
 from typing import AsyncGenerator as AsyncYieldStream
 
-
 async def bail_bilge() -> AsyncYieldStream[int, None]:
     yield 4
     return 9
@@ -328,7 +316,6 @@ async def bail_bilge() -> AsyncYieldStream[int, None]:
 
 const ASYNC_RETURN_ACCEPTED_IMPORT_FORM: &str = r"
 import collections.abc
-
 
 async def bail_bilge() -> collections.abc.AsyncGenerator[int, None]:
     yield 4
@@ -354,14 +341,12 @@ fn async_generator_may_not_return_a_value() -> Result<(), Box<dyn std::error::Er
 const YIELD_REJECTED: &str = r#"
 from typing import AsyncGenerator
 
-
 async def recite_marks() -> AsyncGenerator[str, None]:
     yield b"portside"
 "#;
 
 const YIELD_ACCEPTED: &str = r#"
 from typing import AsyncGenerator
-
 
 async def recite_marks() -> AsyncGenerator[str, None]:
     yield "portside"
@@ -370,22 +355,12 @@ async def recite_marks() -> AsyncGenerator[str, None]:
 const YIELD_REJECTED_ALIASED: &str = r#"
 from typing import AsyncGenerator as AsyncYieldStream
 
-
 async def recite_marks() -> AsyncYieldStream[str, None]:
-    yield b"portside"
-"#;
-
-const YIELD_REJECTED_IMPORT_FORM: &str = r#"
-import collections.abc
-
-
-async def recite_marks() -> collections.abc.AsyncGenerator[str, None]:
     yield b"portside"
 "#;
 
 const YIELD_REJECTED_REFORMATTED: &str = "
 from typing import AsyncGenerator
-
 async def recite_marks() -> AsyncGenerator[
         str,
         None,
@@ -402,7 +377,6 @@ fn async_generator_yield_type_is_load_bearing() -> Result<(), Box<dyn std::error
         accepted: YIELD_ACCEPTED,
         rejected_variants: &[
             aliased(YIELD_REJECTED_ALIASED),
-            import_form(YIELD_REJECTED_IMPORT_FORM),
             reformatted(YIELD_REJECTED_REFORMATTED),
         ],
         accepted_variants: &[],
@@ -422,7 +396,6 @@ async def count_staves() -> int:
 const DECL_ACCEPTED: &str = r"
 from typing import AsyncIterator
 
-
 async def count_staves() -> AsyncIterator[int]:
     yield 3
 ";
@@ -430,14 +403,13 @@ async def count_staves() -> AsyncIterator[int]:
 const DECL_ACCEPTED_ALIASED: &str = r"
 from typing import AsyncIterator as AsyncStream
 
-
 async def count_staves() -> AsyncStream[int]:
     yield 3
 ";
 
 #[test]
-fn async_generator_return_annotation_must_be_async_iterable(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn async_generator_return_annotation_must_be_async_iterable()
+-> Result<(), Box<dyn std::error::Error>> {
     SpecObligation {
         spec_reason: "an async generator function returns an async iterator, never its yield type",
         rejected: DECL_REJECTED,
@@ -460,7 +432,6 @@ class Postern:
     def __exit__(self, mishap: object, trouble: object, trace: object) -> None:
         return None
 
-
 async def breach() -> None:
     async with Postern() as gate:
         print(gate)
@@ -473,7 +444,6 @@ class Postern:
 
     async def __aexit__(self, mishap: object, trouble: object, trace: object) -> None:
         return None
-
 
 async def breach() -> None:
     async with Postern() as gate:
@@ -488,8 +458,7 @@ class Barbican:
     def __exit__(self, upset: object, bother: object, unwind: object) -> None:
         return None
 
-
-async def storm() -> None:
+async def sally() -> None:
     async with Barbican() as hatch:
         print(hatch)
 "#;
@@ -506,7 +475,6 @@ class Postern:  # a back gate, opened asynchronously
                 trace: object,
         ) -> None:
                 return None
-
 async def breach() -> None:
         async with Postern() as gate:
                 print(gate)
@@ -525,18 +493,16 @@ fn async_with_requires_the_async_context_protocol() -> Result<(), Box<dyn std::e
 }
 
 // ── `contextlib.asynccontextmanager` ─────────────────────────────────────
-// The decorator turns an async generator into an async context manager whose
-// `as` target has the type the single `yield` produces.
+// The decorator turns an async generator into an `AsyncContextManager[T]`, and
+// the `as` target takes the type the single `yield` produces.
 
 const ACM_REJECTED: &str = r#"
 import contextlib
 from typing import AsyncContextManager, AsyncIterator
 
-
 @contextlib.asynccontextmanager
 async def tap_hogshead() -> AsyncIterator[str]:
     yield "amber"
-
 
 async def decant() -> None:
     cask: AsyncContextManager[str] = tap_hogshead()
@@ -549,11 +515,9 @@ const ACM_ACCEPTED: &str = r#"
 import contextlib
 from typing import AsyncContextManager, AsyncIterator
 
-
 @contextlib.asynccontextmanager
 async def tap_hogshead() -> AsyncIterator[str]:
     yield "amber"
-
 
 async def decant() -> None:
     cask: AsyncContextManager[str] = tap_hogshead()
@@ -567,11 +531,9 @@ import collections.abc
 import contextlib
 from contextlib import asynccontextmanager
 
-
 @asynccontextmanager
 async def tap_hogshead() -> collections.abc.AsyncIterator[str]:
     yield "amber"
-
 
 async def decant() -> None:
     cask: contextlib.AbstractAsyncContextManager[str] = tap_hogshead()
@@ -584,11 +546,9 @@ const ACM_ACCEPTED_ALIASED: &str = r#"
 from contextlib import asynccontextmanager as async_scope
 from typing import AsyncContextManager as ScopedAsync, AsyncIterator as AsyncStream
 
-
 @async_scope
 async def tap_hogshead() -> AsyncStream[str]:
     yield "amber"
-
 
 async def decant() -> None:
     cask: ScopedAsync[str] = tap_hogshead()
@@ -610,12 +570,11 @@ fn asynccontextmanager_binds_the_yielded_type() -> Result<(), Box<dyn std::error
 }
 
 // ── `Awaitable[T]` ───────────────────────────────────────────────────────
-// Awaiting an `Awaitable[bytes]` produces `bytes`; the awaited type is the
+// Awaiting an `Awaitable[bytes]` produces `bytes`: the awaited type is the
 // parameter, not the awaitable itself.
 
 const AWAITABLE_REJECTED: &str = r"
 from typing import Awaitable
-
 
 async def steep(brew: Awaitable[bytes]) -> None:
     liquor: str = await brew
@@ -625,7 +584,6 @@ async def steep(brew: Awaitable[bytes]) -> None:
 const AWAITABLE_ACCEPTED: &str = r"
 from typing import Awaitable
 
-
 async def steep(brew: Awaitable[bytes]) -> None:
     liquor: bytes = await brew
     print(liquor)
@@ -634,7 +592,6 @@ async def steep(brew: Awaitable[bytes]) -> None:
 const AWAITABLE_REJECTED_ALIASED: &str = r"
 from typing import Awaitable as PendingValue
 
-
 async def steep(brew: PendingValue[bytes]) -> None:
     liquor: str = await brew
     print(liquor)
@@ -642,7 +599,6 @@ async def steep(brew: PendingValue[bytes]) -> None:
 
 const AWAITABLE_ACCEPTED_IMPORT_FORM: &str = r"
 import collections.abc
-
 
 async def steep(brew: collections.abc.Awaitable[bytes]) -> None:
     liquor: bytes = await brew
@@ -661,73 +617,53 @@ fn awaiting_an_awaitable_yields_its_parameter() -> Result<(), Box<dyn std::error
     .assert("Awaitable parameter")
 }
 
-// ── `AsyncIterable[T]` as a parameter type ───────────────────────────────
-// A synchronous iterable is not an `AsyncIterable`; the call of an async
-// generator function is.
+// ── An `Awaitable[T]` parameter rejects a plain value ────────────────────
+// A bare `int` is not an `Awaitable[int]`; the call of an `async def` is.
 
-const ITERABLE_REJECTED: &str = r"
-from typing import AsyncIterable
+const PARAM_REJECTED: &str = r"
+from typing import Awaitable
 
+async def settle(pending: Awaitable[int]) -> int:
+    return await pending
 
-async def drain(spigot: AsyncIterable[int]) -> int:
-    reckoning: int = 0
-    async for parcel in spigot:
-        reckoning += parcel
-    return reckoning
-
-
-async def kick_off() -> int:
-    return await drain([1, 2, 3])
+async def sluice_run() -> int:
+    return await settle(7)
 ";
 
-const ITERABLE_ACCEPTED: &str = r"
-from typing import AsyncGenerator, AsyncIterable
+const PARAM_ACCEPTED: &str = r"
+from typing import Awaitable
 
+async def yield_toll() -> int:
+    return 7
 
-async def runlet() -> AsyncGenerator[int, None]:
-    yield 1
-    yield 2
+async def settle(pending: Awaitable[int]) -> int:
+    return await pending
 
-
-async def drain(spigot: AsyncIterable[int]) -> int:
-    reckoning: int = 0
-    async for parcel in spigot:
-        reckoning += parcel
-    return reckoning
-
-
-async def kick_off() -> int:
-    return await drain(runlet())
+async def sluice_run() -> int:
+    return await settle(yield_toll())
 ";
 
-const ITERABLE_ACCEPTED_IMPORT_FORM: &str = r"
+const PARAM_ACCEPTED_IMPORT_FORM: &str = r"
 import collections.abc
 
+async def yield_toll() -> int:
+    return 7
 
-async def runlet() -> collections.abc.AsyncGenerator[int, None]:
-    yield 1
-    yield 2
+async def settle(pending: collections.abc.Awaitable[int]) -> int:
+    return await pending
 
-
-async def drain(spigot: collections.abc.AsyncIterable[int]) -> int:
-    reckoning: int = 0
-    async for parcel in spigot:
-        reckoning += parcel
-    return reckoning
-
-
-async def kick_off() -> int:
-    return await drain(runlet())
+async def sluice_run() -> int:
+    return await settle(yield_toll())
 ";
 
 #[test]
-fn async_iterable_parameter_rejects_a_sync_list() -> Result<(), Box<dyn std::error::Error>> {
+fn awaitable_parameter_rejects_a_plain_value() -> Result<(), Box<dyn std::error::Error>> {
     SpecObligation {
-        spec_reason: "`list[int]` has no `__aiter__`, so it is not an `AsyncIterable[int]`",
-        rejected: ITERABLE_REJECTED,
-        accepted: ITERABLE_ACCEPTED,
+        spec_reason: "`int` has no `__await__`, so it is not an `Awaitable[int]`",
+        rejected: PARAM_REJECTED,
+        accepted: PARAM_ACCEPTED,
         rejected_variants: &[],
-        accepted_variants: &[import_form(ITERABLE_ACCEPTED_IMPORT_FORM)],
+        accepted_variants: &[import_form(PARAM_ACCEPTED_IMPORT_FORM)],
     }
-    .assert("AsyncIterable parameter")
+    .assert("Awaitable argument")
 }

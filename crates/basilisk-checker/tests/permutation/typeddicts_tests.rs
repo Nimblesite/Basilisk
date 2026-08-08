@@ -456,15 +456,19 @@ fn functional_syntax_carries_the_same_totality() -> Result<(), Box<dyn std::erro
 /// `class` statement — or only the call — separates them here.
 #[test]
 fn functional_and_class_syntax_agree() -> Result<(), Box<dyn std::error::Error>> {
+    let class_defect = analyse(WAPENTAKE_MISSING_REJECTED)?;
+    let call_defect = analyse(WAPENTAKE_FUNCTIONAL_REJECTED)?;
     assert_eq!(
-        code_multiset(&analyse(WAPENTAKE_MISSING_REJECTED)?),
-        code_multiset(&analyse(WAPENTAKE_FUNCTIONAL_REJECTED)?),
+        code_multiset(&class_defect),
+        code_multiset(&call_defect),
         "the same omitted required item must be judged the same whether the TypedDict is \
          declared by class statement or by call. See [PERMTEST-FAMILY-A]."
     );
+    let class_clean = analyse(WAPENTAKE_ACCEPTED)?;
+    let call_clean = analyse(WAPENTAKE_FUNCTIONAL_ACCEPTED)?;
     assert_eq!(
-        code_multiset(&analyse(WAPENTAKE_ACCEPTED)?),
-        code_multiset(&analyse(WAPENTAKE_FUNCTIONAL_ACCEPTED)?),
+        code_multiset(&class_clean),
+        code_multiset(&call_clean),
         "a complete literal must be accepted under both declaration forms. \
          See [PERMTEST-FAMILY-A]."
     );

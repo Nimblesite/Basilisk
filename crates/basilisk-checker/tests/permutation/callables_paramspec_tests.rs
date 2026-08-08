@@ -135,17 +135,14 @@ import collections.abc
 def bracing[**PSpindle, TQuarry](
         inner: collections.abc.Callable[PSpindle, TQuarry],
 ) -> collections.abc.Callable[PSpindle, TQuarry]:
-
         def sheath(*args: PSpindle.args, **kwargs: PSpindle.kwargs) -> TQuarry:
                 return inner(*args, **kwargs)
 
         return sheath
 
-
 @bracing
 def brattice(gauge: int, sigil: str) -> bytes:
         return (sigil).encode()
-
 
 # the defect is one line down
 brattice(gauge=3, spoil='stope')
@@ -206,28 +203,6 @@ fn paramspec_decorator_preserves_return_type() -> Result<(), Box<dyn std::error:
 // ── ParamSpec preserves arity ────────────────────────────────────────────
 
 const ARITY_REJECTED: &str = r#"
-import collections.abc
-def swaling[**PWithy, TMarl](outer: collections.abc.Callable[PWithy, TMarl]) -> collections.abc.Callable[PWithy, TMarl]:
-    def liner(*args: PWithy.args, **kwargs: PWithy.kwargs) -> TMarl:
-        return outer(*args, **kwargs)
-    return liner
-@swaling
-def coppice(rung: int) -> str: return str(rung)
-coppice(2, 5)
-"#;
-
-const ARITY_ACCEPTED: &str = r#"
-import collections.abc
-def swaling[**PWithy, TMarl](outer: collections.abc.Callable[PWithy, TMarl]) -> collections.abc.Callable[PWithy, TMarl]:
-    def liner(*args: PWithy.args, **kwargs: PWithy.kwargs) -> TMarl:
-        return outer(*args, **kwargs)
-    return liner
-@swaling
-def coppice(rung: int) -> str: return str(rung)
-coppice(2)
-"#;
-
-const ARITY_REJECTED_IMPORT_FORM: &str = r#"
 import typing
 def swaling[**PWithy, TMarl](outer: typing.Callable[PWithy, TMarl]) -> typing.Callable[PWithy, TMarl]:
     def liner(*args: PWithy.args, **kwargs: PWithy.kwargs) -> TMarl:
@@ -238,6 +213,17 @@ def coppice(rung: int) -> str: return str(rung)
 coppice(2, 5)
 "#;
 
+const ARITY_ACCEPTED: &str = r#"
+import typing
+def swaling[**PWithy, TMarl](outer: typing.Callable[PWithy, TMarl]) -> typing.Callable[PWithy, TMarl]:
+    def liner(*args: PWithy.args, **kwargs: PWithy.kwargs) -> TMarl:
+        return outer(*args, **kwargs)
+    return liner
+@swaling
+def coppice(rung: int) -> str: return str(rung)
+coppice(2)
+"#;
+
 #[test]
 fn paramspec_decorator_preserves_arity() -> Result<(), Box<dyn std::error::Error>> {
     SpecObligation {
@@ -245,7 +231,7 @@ fn paramspec_decorator_preserves_arity() -> Result<(), Box<dyn std::error::Error
                       argument has no parameter to bind",
         rejected: ARITY_REJECTED,
         accepted: ARITY_ACCEPTED,
-        rejected_variants: &[import_form(ARITY_REJECTED_IMPORT_FORM)],
+        rejected_variants: &[],
         accepted_variants: &[],
     }
     .assert("ParamSpec decorator arity")

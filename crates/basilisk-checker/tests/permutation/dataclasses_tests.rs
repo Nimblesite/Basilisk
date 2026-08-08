@@ -293,10 +293,10 @@ class Firkin:
 print(Firkin(9) < Firkin(11))
 ";
 
-const ORDER_REJECTED_IMPORT_FORM: &str = r"
+const ORDER_ACCEPTED_IMPORT_FORM: &str = r"
 import dataclasses
 
-@dataclasses.dataclass
+@dataclasses.dataclass(order=True)
 class Firkin:
     gallons: int
 
@@ -309,8 +309,8 @@ fn default_dataclass_supports_no_less_than() -> Result<(), Box<dyn std::error::E
         spec_reason: "order defaults to False, so no __lt__ is synthesised",
         rejected: ORDER_REJECTED,
         accepted: ORDER_ACCEPTED,
-        rejected_variants: &[import_form(ORDER_REJECTED_IMPORT_FORM)],
-        accepted_variants: &[],
+        rejected_variants: &[],
+        accepted_variants: &[import_form(ORDER_ACCEPTED_IMPORT_FORM)],
     }
     .assert("order=False leaves < undefined")
 }
@@ -411,7 +411,7 @@ class Kiln:
 Kiln(3, 18)
 ";
 
-const INITVAR_ARITY_REJECTED_RENAMED: &str = r"
+const INITVAR_ARITY_ACCEPTED_RENAMED: &str = r"
 from dataclasses import InitVar, dataclass
 
 @dataclass
@@ -422,7 +422,7 @@ class Sluice:
     def __post_init__(self, sluicing_hours: int) -> None:
         print(self.gate_count * sluicing_hours)
 
-Sluice(3)
+Sluice(3, 18)
 ";
 
 #[test]
@@ -431,8 +431,8 @@ fn initvar_is_a_required_init_parameter() -> Result<(), Box<dyn std::error::Erro
         spec_reason: "an InitVar without a default is a required __init__ parameter",
         rejected: INITVAR_ARITY_REJECTED,
         accepted: INITVAR_ARITY_ACCEPTED,
-        rejected_variants: &[renamed(INITVAR_ARITY_REJECTED_RENAMED)],
-        accepted_variants: &[],
+        rejected_variants: &[],
+        accepted_variants: &[renamed(INITVAR_ARITY_ACCEPTED_RENAMED)],
     }
     .assert("InitVar constructor arity")
 }
@@ -476,7 +476,7 @@ class Coppice:
 #[test]
 fn mutable_default_must_use_a_factory() -> Result<(), Box<dyn std::error::Error>> {
     SpecObligation {
-        spec_reason: "a mutable default is shared across instances and must be a default_factory",
+        spec_reason: "a mutable default is shared across instances, so it must be a factory",
         rejected: MUTABLE_DEFAULT_REJECTED,
         accepted: MUTABLE_DEFAULT_ACCEPTED,
         rejected_variants: &[import_form(MUTABLE_DEFAULT_REJECTED_IMPORT_FORM)],

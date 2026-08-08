@@ -23,7 +23,8 @@ fn rhs_is_nonmember_call(bindings: &BindingTable, value: &Expr) -> bool {
 pub(super) type ClassBodyInfo = (Vec<AttributeInfo>, Vec<String>, Vec<(String, Vec<String>)>);
 
 use super::annotations::{
-    annotation_contains_readonly_expr, annotation_is_init_var, annotation_is_kw_only,
+    annotation_contains_readonly_expr, annotation_is_final, annotation_is_init_var,
+    annotation_is_kw_only,
 };
 use super::class_info_ext::{class_info_from, expr_simple_name};
 use super::core::{classify_rhs, collect_from_body, text_range_to_span};
@@ -213,6 +214,7 @@ fn ann_attribute(
         rhs_descriptor: None,
         rhs_name: None,
         is_readonly: annotation_contains_readonly_expr(bindings, &ann.annotation),
+        is_final: annotation_is_final(bindings, &ann.annotation),
         is_kw_only,
         is_init_false: ann
             .value
@@ -275,6 +277,7 @@ fn assign_attributes(
                 rhs_descriptor: rhs_descriptor.clone(),
                 rhs_name: rhs_name.clone(),
                 is_readonly: false,
+                is_final: false,
                 is_kw_only: false,
                 is_init_false: false,
                 is_init_var: false,

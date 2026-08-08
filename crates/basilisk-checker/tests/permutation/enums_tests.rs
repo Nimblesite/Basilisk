@@ -7,7 +7,7 @@
 //! `IntEnum`, `StrEnum` or `unique` at all. Every case below builds on the
 //! `enum` module reached by attribute (`enum.IntEnum`) or under an alias, so a
 //! rule keyed to a base-class *spelling* cannot answer any of them. Identifiers
-//! come from a vocabulary disjoint from the suite's 913 names, and the single
+//! come from a vocabulary disjoint from the suite's 913 names, and the one
 //! quarantined `typing` symbol used here (`Never`) appears only aliased.
 
 use super::harness::{aliased, import_form, reformatted, renamed, SpecObligation};
@@ -19,7 +19,6 @@ use super::harness::{aliased, import_form, reformatted, renamed, SpecObligation}
 
 const REBIND_REJECTED: &str = r"
 import enum
-
 class Sluice(enum.IntEnum):
     SHUT = 0
     OPEN = 1
@@ -28,7 +27,6 @@ Sluice.OPEN = 5
 
 const REBIND_ACCEPTED: &str = r"
 import enum
-
 class Sluice(enum.IntEnum):
     SHUT = 0
     OPEN = 1
@@ -37,7 +35,6 @@ latch = Sluice.OPEN
 
 const REBIND_REJECTED_ALIASED: &str = r"
 from enum import IntEnum as OrdinalEnum
-
 class Sluice(OrdinalEnum):
     SHUT = 0
     OPEN = 1
@@ -46,6 +43,7 @@ Sluice.OPEN = 5
 
 const REBIND_REJECTED_REFORMATTED: &str = r"
 import enum
+
 class Sluice(enum.IntEnum):  # a gate on a millrace
 
       SHUT = 0
@@ -72,12 +70,11 @@ fn enum_member_cannot_be_rebound() -> Result<(), Box<dyn std::error::Error>> {
 
 // ── `.value` follows the assigned literal ────────────────────────────────
 // A member's `_value_` is the type of the expression assigned in the class
-// body. `SCOURED = 9` gives `Culvert.SCOURED.value` type `int`; `@enum.unique`
-// constrains which values may repeat, never what type they have.
+// body: `SCOURED = 9` gives `.value` type `int`. `@enum.unique` constrains
+// which values may repeat, never what type they have.
 
 const VALUE_REJECTED: &str = r"
 import enum
-
 @enum.unique
 class Culvert(enum.IntEnum):
     SILTED = 4
@@ -87,7 +84,6 @@ soundings: str = Culvert.SCOURED.value
 
 const VALUE_ACCEPTED: &str = r"
 import enum
-
 @enum.unique
 class Culvert(enum.IntEnum):
     SILTED = 4
@@ -97,7 +93,6 @@ soundings: int = Culvert.SCOURED.value
 
 const VALUE_REJECTED_IMPORT_FORM: &str = r"
 from enum import IntEnum, unique
-
 @unique
 class Culvert(IntEnum):
     SILTED = 4
@@ -107,7 +102,6 @@ soundings: str = Culvert.SCOURED.value
 
 const VALUE_REJECTED_RENAMED: &str = r"
 import enum
-
 @enum.unique
 class Hogshead(enum.IntEnum):
     TIERCE = 4
@@ -136,7 +130,6 @@ fn member_value_type_follows_the_assigned_literal() -> Result<(), Box<dyn std::e
 
 const AUTO_REJECTED: &str = r"
 import enum
-
 class Kiln(enum.StrEnum):
     BISQUE = enum.auto()
     GLOST = enum.auto()
@@ -145,7 +138,6 @@ firing: int = Kiln.GLOST.value
 
 const AUTO_ACCEPTED: &str = r"
 import enum
-
 class Kiln(enum.StrEnum):
     BISQUE = enum.auto()
     GLOST = enum.auto()
@@ -154,7 +146,6 @@ firing: str = Kiln.GLOST.value
 
 const AUTO_REJECTED_ALIASED: &str = r"
 from enum import StrEnum as TextEnum, auto as next_value
-
 class Kiln(TextEnum):
     BISQUE = next_value()
     GLOST = next_value()
@@ -163,12 +154,14 @@ firing: int = Kiln.GLOST.value
 
 const AUTO_REJECTED_REFORMATTED: &str = r"
 import enum
+
 class Kiln(
       enum.StrEnum,
 ):
       # two firings, both auto-valued
       BISQUE = enum.auto()
       GLOST = enum.auto()
+
 firing: int = (Kiln.GLOST).value
 ";
 
@@ -196,14 +189,11 @@ fn str_enum_auto_yields_a_str_value() -> Result<(), Box<dyn std::error::Error>> 
 const DISJOINT_ACCEPTED: &str = r"
 import enum
 from typing import Never as Uninhabited
-
 class Sluice(enum.IntEnum):
     SHUT = 0
     OPEN = 1
-
 class Gantry(enum.IntEnum):
     RIGGED = 1
-
 def wicket(lever: Sluice) -> None:
     if lever is Gantry.RIGGED:
         sink: Uninhabited = lever
@@ -212,14 +202,11 @@ def wicket(lever: Sluice) -> None:
 const DISJOINT_REJECTED: &str = r"
 import enum
 from typing import Never as Uninhabited
-
 class Sluice(enum.IntEnum):
     SHUT = 0
     OPEN = 1
-
 class Gantry(enum.IntEnum):
     RIGGED = 1
-
 def wicket(lever: Sluice) -> None:
     if lever is Sluice.OPEN:
         sink: Uninhabited = lever
@@ -228,14 +215,11 @@ def wicket(lever: Sluice) -> None:
 const DISJOINT_REJECTED_RENAMED: &str = r"
 import enum
 from typing import Never as Uninhabited
-
 class Windlass(enum.IntEnum):
     TURNS = 0
     PAWLS = 1
-
 class Capstan(enum.IntEnum):
     DRUM = 1
-
 def pierce(barrel: Windlass) -> None:
     if barrel is Windlass.PAWLS:
         awl: Uninhabited = barrel
@@ -260,13 +244,10 @@ fn cross_enum_identity_is_never_satisfied() -> Result<(), Box<dyn std::error::Er
 
 const MIXIN_REJECTED: &str = r#"
 import enum
-
 class Kiln(enum.StrEnum):
     GLOST = "glost"
-
 class Sluice(enum.IntEnum):
     OPEN = 1
-
 def emboss(sigil: str) -> str:
     return sigil.upper()
 emboss(Sluice.OPEN)
@@ -274,13 +255,10 @@ emboss(Sluice.OPEN)
 
 const MIXIN_ACCEPTED: &str = r#"
 import enum
-
 class Kiln(enum.StrEnum):
     GLOST = "glost"
-
 class Sluice(enum.IntEnum):
     OPEN = 1
-
 def emboss(sigil: str) -> str:
     return sigil.upper()
 emboss(Kiln.GLOST)
@@ -288,13 +266,10 @@ emboss(Kiln.GLOST)
 
 const MIXIN_REJECTED_ALIASED: &str = r#"
 from enum import IntEnum as OrdinalEnum, StrEnum as TextEnum
-
 class Kiln(TextEnum):
     GLOST = "glost"
-
 class Sluice(OrdinalEnum):
     OPEN = 1
-
 def emboss(sigil: str) -> str:
     return sigil.upper()
 emboss(Sluice.OPEN)
@@ -302,12 +277,16 @@ emboss(Sluice.OPEN)
 
 const MIXIN_REJECTED_REFORMATTED: &str = "
 import enum
+
 class Kiln(enum.StrEnum):
       GLOST = 'glost'   # single-quoted, same string
+
 class Sluice(enum.IntEnum):
       OPEN = 1
+
 def emboss(sigil: str) -> str:
       return sigil.upper()
+
 emboss(
       Sluice.OPEN,
 )
@@ -337,11 +316,9 @@ fn str_enum_member_is_a_str_and_int_enum_member_is_not() -> Result<(), Box<dyn s
 
 const NONMEMBER_REJECTED: &str = r"
 import enum
-
 class Culvert(enum.IntEnum):
     SILTED = 4
     TARE = enum.nonmember(11)
-
 def dredge(state: Culvert) -> int:
     return state.value
 dredge(Culvert.TARE)
@@ -349,11 +326,9 @@ dredge(Culvert.TARE)
 
 const NONMEMBER_ACCEPTED: &str = r"
 import enum
-
 class Culvert(enum.IntEnum):
     SILTED = 4
     TARE = enum.member(11)
-
 def dredge(state: Culvert) -> int:
     return state.value
 dredge(Culvert.TARE)
@@ -361,11 +336,9 @@ dredge(Culvert.TARE)
 
 const NONMEMBER_REJECTED_ALIASED: &str = r"
 from enum import IntEnum as OrdinalEnum, nonmember as kept_off_the_roll
-
 class Culvert(OrdinalEnum):
     SILTED = 4
     TARE = kept_off_the_roll(11)
-
 def dredge(state: Culvert) -> int:
     return state.value
 dredge(Culvert.TARE)
@@ -373,11 +346,9 @@ dredge(Culvert.TARE)
 
 const NONMEMBER_REJECTED_RENAMED: &str = r"
 import enum
-
 class Bodkin(enum.IntEnum):
     EYED = 4
     SPARE = enum.nonmember(11)
-
 def pierce(awl: Bodkin) -> int:
     return awl.value
 pierce(Bodkin.SPARE)
@@ -405,11 +376,9 @@ fn nonmember_is_absent_from_the_member_list() -> Result<(), Box<dyn std::error::
 
 const FLAG_REJECTED: &str = r"
 import enum
-
 class Portcullis(enum.Flag):
     RAISED = 1
     BARRED = 2
-
 class Trebuchet(enum.Flag):
     LOOSED = 2
 blend = Portcullis.RAISED | Trebuchet.LOOSED
@@ -417,11 +386,9 @@ blend = Portcullis.RAISED | Trebuchet.LOOSED
 
 const FLAG_ACCEPTED: &str = r"
 import enum
-
 class Portcullis(enum.Flag):
     RAISED = 1
     BARRED = 2
-
 class Trebuchet(enum.Flag):
     LOOSED = 2
 blend = Portcullis.RAISED | Portcullis.BARRED
@@ -429,11 +396,9 @@ blend = Portcullis.RAISED | Portcullis.BARRED
 
 const FLAG_REJECTED_IMPORT_FORM: &str = r"
 from enum import Flag
-
 class Portcullis(Flag):
     RAISED = 1
     BARRED = 2
-
 class Trebuchet(Flag):
     LOOSED = 2
 blend = Portcullis.RAISED | Trebuchet.LOOSED
@@ -441,8 +406,10 @@ blend = Portcullis.RAISED | Trebuchet.LOOSED
 
 const FLAG_REJECTED_REFORMATTED: &str = r"
 import enum
+
 class Portcullis(enum.Flag):
       RAISED = 1; BARRED = 2
+
 class Trebuchet(enum.Flag):
       LOOSED = 2
 # combining across two flag classes
@@ -473,22 +440,18 @@ fn flag_or_requires_one_flag_class() -> Result<(), Box<dyn std::error::Error>> {
 
 const SUBCLASS_REJECTED: &str = r"
 import enum
-
 class Wapentake(enum.IntEnum):
     HUNDRED = 100
     RIDING = 3
-
 class Bailiwick(Wapentake):
     SHIRE = 40
 ";
 
 const SUBCLASS_ACCEPTED: &str = r"
 import enum
-
 class Wapentake(enum.IntEnum):
     def writ(self) -> str:
         return self.name
-
 class Bailiwick(Wapentake):
     HUNDRED = 100
     SHIRE = 40
@@ -496,22 +459,18 @@ class Bailiwick(Wapentake):
 
 const SUBCLASS_REJECTED_ALIASED: &str = r"
 from enum import IntEnum as OrdinalEnum
-
 class Wapentake(OrdinalEnum):
     HUNDRED = 100
     RIDING = 3
-
 class Bailiwick(Wapentake):
     SHIRE = 40
 ";
 
 const SUBCLASS_ACCEPTED_RENAMED: &str = r"
 import enum
-
 class Firkin(enum.IntEnum):
     def tally(self) -> str:
         return self.name
-
 class Trundle(Firkin):
     NINE = 9
     EIGHTEEN = 18

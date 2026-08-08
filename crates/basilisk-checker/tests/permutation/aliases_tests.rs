@@ -2,24 +2,22 @@
 //! [PERMTEST-FAMILY-B] / [PERMTEST-VOCABULARY].
 //!
 //! The `type` statement carries **no import at all**, so this area offers no
-//! library spelling for a rule to key on: every obligation below is decided
-//! from the alias's *value expression* and the scope its type parameters open,
-//! never from the text to the right of the `=`. The one quarantined symbol the
-//! area cannot avoid — `TypeAliasType` — appears only under an alias
-//! (`as ExplicitAliasKind`) or through `import typing`, never bare. Supporting
-//! symbols come from outside the 55 the conformance suite imports
-//! (`MutableSequence`), and every identifier is outside the suite's 913.
+//! library spelling for a rule to key on: every obligation below is decided from
+//! the alias's *value expression* and the scope its type parameters open, never
+//! from the text to the right of the `=`. The one quarantined symbol the area
+//! cannot avoid — `TypeAliasType` — appears only under an alias
+//! (`as ExplicitAliasKind`) or through `import typing`, never bare; supporting
+//! symbols come from outside the suite's 55, and identifiers outside its 913.
 
 use super::harness::{aliased, import_form, reformatted, renamed, SpecObligation};
 
 // ── RHS must be a type expression: list display ──────────────────────────
 // The spec requires the value of a `type` statement to be a valid type
-// expression. A list display is one only in the first argument of `Callable`;
+// expression. A list display is one only in `Callable`'s first argument;
 // standing alone it denotes no type.
 
 const LIST_DISPLAY_REJECTED: &str = r"
 from typing import MutableSequence
-
 type Sluice = [int, MutableSequence[str]]
 
 def gauge(outfall: Sluice) -> int:
@@ -28,7 +26,6 @@ def gauge(outfall: Sluice) -> int:
 
 const LIST_DISPLAY_ACCEPTED: &str = r"
 from typing import MutableSequence
-
 type Sluice = tuple[int, MutableSequence[str]]
 
 def gauge(outfall: Sluice) -> int:
@@ -37,7 +34,6 @@ def gauge(outfall: Sluice) -> int:
 
 const LIST_DISPLAY_REJECTED_ALIASED: &str = r"
 from typing import MutableSequence as RowSeries
-
 type Sluice = [int, RowSeries[str]]
 
 def gauge(outfall: Sluice) -> int:
@@ -46,7 +42,6 @@ def gauge(outfall: Sluice) -> int:
 
 const LIST_DISPLAY_REJECTED_IMPORT_FORM: &str = r"
 import collections.abc
-
 type Sluice = [int, collections.abc.MutableSequence[str]]
 
 def gauge(outfall: Sluice) -> int:
@@ -192,7 +187,6 @@ fn alias_value_may_not_be_an_attribute() -> Result<(), Box<dyn std::error::Error
 
 const ARITY_REJECTED: &str = r"
 from typing import MutableSequence
-
 type Tanner[TRadix] = MutableSequence[TRadix]
 
 def tabulate(rows: Tanner[int, str]) -> int:
@@ -201,7 +195,6 @@ def tabulate(rows: Tanner[int, str]) -> int:
 
 const ARITY_ACCEPTED: &str = r"
 from typing import MutableSequence
-
 type Tanner[TRadix] = MutableSequence[TRadix]
 
 def tabulate(rows: Tanner[int]) -> int:
@@ -210,7 +203,6 @@ def tabulate(rows: Tanner[int]) -> int:
 
 const ARITY_REJECTED_ALIASED: &str = r"
 from typing import MutableSequence as RowSeries
-
 type Tanner[TRadix] = RowSeries[TRadix]
 
 def tabulate(rows: Tanner[int, str]) -> int:
@@ -219,7 +211,6 @@ def tabulate(rows: Tanner[int, str]) -> int:
 
 const ARITY_REJECTED_RENAMED: &str = r"
 from typing import MutableSequence
-
 type Cooper[TQuarry] = MutableSequence[TQuarry]
 
 def stocktake(entries: Cooper[int, str]) -> int:
@@ -228,7 +219,6 @@ def stocktake(entries: Cooper[int, str]) -> int:
 
 const ARITY_ACCEPTED_IMPORT_FORM: &str = r"
 import collections.abc
-
 type Tanner[TRadix] = collections.abc.MutableSequence[TRadix]
 
 def tabulate(rows: Tanner[int]) -> int:
@@ -446,7 +436,6 @@ fn an_alias_to_a_union_is_not_a_base_class() -> Result<(), Box<dyn std::error::E
 
 const EXPLICIT_NAME_REJECTED: &str = r#"
 from typing import TypeAliasType as ExplicitAliasKind
-
 Bodkin = ExplicitAliasKind("Trivet", list[int])
 
 def pierce(cargo: Bodkin) -> int:
@@ -455,7 +444,6 @@ def pierce(cargo: Bodkin) -> int:
 
 const EXPLICIT_NAME_ACCEPTED: &str = r#"
 from typing import TypeAliasType as ExplicitAliasKind
-
 Bodkin = ExplicitAliasKind("Bodkin", list[int])
 
 def pierce(cargo: Bodkin) -> int:
@@ -464,7 +452,6 @@ def pierce(cargo: Bodkin) -> int:
 
 const EXPLICIT_NAME_REJECTED_IMPORT_FORM: &str = r#"
 import typing
-
 Bodkin = typing.TypeAliasType("Trivet", list[int])
 
 def pierce(cargo: Bodkin) -> int:
