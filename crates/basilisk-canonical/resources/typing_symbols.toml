@@ -81,7 +81,7 @@ form = "named-tuple"
 [[symbol]]
 modules = ["collections"]
 name = "namedtuple"
-form = "collections-namedtuple"
+form = "collections-named-tuple"
 
 # ---------------------------------------------------------------------------
 # Alias and distinct-type factories

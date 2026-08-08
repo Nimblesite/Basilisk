@@ -301,7 +301,7 @@ fn collect_guarded_fields(
     after_kw_only_sentinel: bool,
     attributes: &mut Vec<AttributeInfo>,
 ) {
-    let test = parse_static_condition(&if_stmt.test);
+    let test = parse_static_condition(bindings, &if_stmt.test);
     let if_guard = combine_guards(outer, test.clone());
     collect_fields_in_branch(
         bindings,
@@ -316,7 +316,7 @@ fn collect_guarded_fields(
     for clause in &if_stmt.elif_else_clauses {
         let branch = match &clause.test {
             Some(elif_test) => {
-                let cond = parse_static_condition(elif_test);
+                let cond = parse_static_condition(bindings, elif_test);
                 let mut parts = prior_negations.clone();
                 parts.push(cond.clone());
                 prior_negations.push(StaticCondition::Not(Box::new(cond)));
