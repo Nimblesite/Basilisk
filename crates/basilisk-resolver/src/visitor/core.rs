@@ -21,209 +21,103 @@ use super::typeddict::{td_check_subscript_assign, td_var_type_from_stmts, TdFiel
 };
 use super::typeddict_ext::{td_check_ann_assign, td_check_expr_reads, td_check_regular_assign};
 
+/// The record vectors a collection walk appends into, grouped so every walk
+/// function passes one sink set instead of five parallel parameters.
+pub(super) struct CollectSinks<'a> {
+    pub(super) functions: &'a mut Vec<FunctionInfo>,
+    pub(super) classes: &'a mut Vec<ClassInfo>,
+    pub(super) module_vars: &'a mut Vec<VariableInfo>,
+    pub(super) imports: &'a mut Vec<ImportInfo>,
+    pub(super) match_stmts: &'a mut Vec<MatchStmtInfo>,
+}
+
 pub(super) fn collect_from_body(
     bindings: &BindingTable,
     stmts: &[Stmt],
-    functions: &mut Vec<FunctionInfo>,
-    classes: &mut Vec<ClassInfo>,
-    module_vars: &mut Vec<VariableInfo>,
-    imports: &mut Vec<ImportInfo>,
-    match_stmts: &mut Vec<MatchStmtInfo>,
+    sinks: &mut CollectSinks<'_>,
     is_module_level: bool,
 ) {
     for stmt in stmts {
-        collect_from_stmt(
-            bindings,
-            stmt,
-            functions,
-            classes,
-            module_vars,
-            imports,
-            match_stmts,
-            is_module_level,
-        );
+        collect_from_stmt(bindings, stmt, sinks, is_module_level);
     }
 }
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "AST visitor covers many statement types"
-)]
+/// Walk a function body, keeping only the records that escape a function
+/// scope — nested functions and match statements. Classes, variables, and
+/// imports declared inside a function are local to it and are discarded.
+pub(super) fn collect_function_scope(
+    bindings: &BindingTable,
+    body: &[Stmt],
+    functions: &mut Vec<FunctionInfo>,
+    match_stmts: &mut Vec<MatchStmtInfo>,
+) {
+    let mut local_classes = Vec::new();
+    let mut local_vars = Vec::new();
+    let mut local_imports = Vec::new();
+    let mut sinks = CollectSinks {
+        functions,
+        classes: &mut local_classes,
+        module_vars: &mut local_vars,
+        imports: &mut local_imports,
+        match_stmts,
+    };
+    collect_from_body(bindings, body, &mut sinks, false);
+}
+
 pub(super) fn collect_from_stmt(
     bindings: &BindingTable,
     stmt: &Stmt,
-    functions: &mut Vec<FunctionInfo>,
-    classes: &mut Vec<ClassInfo>,
-    module_vars: &mut Vec<VariableInfo>,
-    imports: &mut Vec<ImportInfo>,
-    match_stmts: &mut Vec<MatchStmtInfo>,
+    sinks: &mut CollectSinks<'_>,
     is_module_level: bool,
 ) {
     match stmt {
         Stmt::FunctionDef(func) => {
-            functions.push(function_info_from(bindings, func, None));
-            collect_from_body(
-                bindings,
-                &func.body,
-                functions,
-                &mut Vec::new(),
-                &mut Vec::new(),
-                &mut Vec::new(),
-                match_stmts,
-                false,
-            );
+            sinks.functions.push(function_info_from(bindings, func, None));
+            collect_function_scope(bindings, &func.body, sinks.functions, sinks.match_stmts);
         }
         Stmt::ClassDef(class) => {
-            let class_info = class_info_from(bindings, class, functions, match_stmts);
-            classes.push(class_info);
+            let class_info = class_info_from(bindings, class, sinks.functions, sinks.match_stmts);
+            sinks.classes.push(class_info);
         }
         Stmt::If(node) => {
-            collect_from_body(
-                bindings,
-                &node.body,
-                functions,
-                classes,
-                module_vars,
-                imports,
-                match_stmts,
-                is_module_level,
-            );
-            collect_from_elif_else(
-                bindings,
-                &node.elif_else_clauses,
-                functions,
-                classes,
-                module_vars,
-                imports,
-                match_stmts,
-                is_module_level,
-            );
+            collect_from_body(bindings, &node.body, sinks, is_module_level);
+            collect_from_elif_else(bindings, &node.elif_else_clauses, sinks, is_module_level);
         }
         Stmt::For(node) => {
-            collect_from_body(
-                bindings,
-                &node.body,
-                functions,
-                classes,
-                module_vars,
-                imports,
-                match_stmts,
-                is_module_level,
-            );
-            collect_from_body(
-                bindings,
-                &node.orelse,
-                functions,
-                classes,
-                module_vars,
-                imports,
-                match_stmts,
-                is_module_level,
-            );
+            collect_from_body(bindings, &node.body, sinks, is_module_level);
+            collect_from_body(bindings, &node.orelse, sinks, is_module_level);
         }
         Stmt::While(node) => {
-            collect_from_body(
-                bindings,
-                &node.body,
-                functions,
-                classes,
-                module_vars,
-                imports,
-                match_stmts,
-                is_module_level,
-            );
-            collect_from_body(
-                bindings,
-                &node.orelse,
-                functions,
-                classes,
-                module_vars,
-                imports,
-                match_stmts,
-                is_module_level,
-            );
+            collect_from_body(bindings, &node.body, sinks, is_module_level);
+            collect_from_body(bindings, &node.orelse, sinks, is_module_level);
         }
         Stmt::With(node) => {
-            collect_from_body(
-                bindings,
-                &node.body,
-                functions,
-                classes,
-                module_vars,
-                imports,
-                match_stmts,
-                is_module_level,
-            );
+            collect_from_body(bindings, &node.body, sinks, is_module_level);
         }
         Stmt::Try(node) => {
-            collect_from_body(
-                bindings,
-                &node.body,
-                functions,
-                classes,
-                module_vars,
-                imports,
-                match_stmts,
-                is_module_level,
-            );
-            collect_from_handlers(
-                bindings,
-                &node.handlers,
-                functions,
-                classes,
-                module_vars,
-                imports,
-                match_stmts,
-                is_module_level,
-            );
-            collect_from_body(
-                bindings,
-                &node.orelse,
-                functions,
-                classes,
-                module_vars,
-                imports,
-                match_stmts,
-                is_module_level,
-            );
-            collect_from_body(
-                bindings,
-                &node.finalbody,
-                functions,
-                classes,
-                module_vars,
-                imports,
-                match_stmts,
-                is_module_level,
-            );
+            collect_from_body(bindings, &node.body, sinks, is_module_level);
+            collect_from_handlers(bindings, &node.handlers, sinks, is_module_level);
+            collect_from_body(bindings, &node.orelse, sinks, is_module_level);
+            collect_from_body(bindings, &node.finalbody, sinks, is_module_level);
         }
         Stmt::Import(node) if is_module_level => {
-            imports.extend(import_infos_from(node));
+            sinks.imports.extend(import_infos_from(node));
         }
         Stmt::ImportFrom(node) if is_module_level => {
-            imports.extend(import_from_infos_from(node));
+            sinks.imports.extend(import_from_infos_from(node));
         }
         Stmt::Assign(node) if is_module_level => {
-            module_vars.extend(assign_infos_from(node));
+            sinks.module_vars.extend(assign_infos_from(node));
         }
         Stmt::AnnAssign(node) if is_module_level => {
             if let Some(var) = ann_assign_info_from(node) {
-                module_vars.push(var);
+                sinks.module_vars.push(var);
             }
         }
         Stmt::Match(node) => {
-            match_stmts.push(match_stmt_info_from(node));
+            sinks.match_stmts.push(match_stmt_info_from(node));
             for case in &node.cases {
-                collect_from_body(
-                    bindings,
-                    &case.body,
-                    functions,
-                    classes,
-                    module_vars,
-                    imports,
-                    match_stmts,
-                    is_module_level,
-                );
+                collect_from_body(bindings, &case.body, sinks, is_module_level);
             }
         }
         _ => {}
@@ -233,49 +127,23 @@ pub(super) fn collect_from_stmt(
 pub(super) fn collect_from_elif_else(
     bindings: &BindingTable,
     clauses: &[ElifElseClause],
-    functions: &mut Vec<FunctionInfo>,
-    class_defs: &mut Vec<ClassInfo>,
-    module_vars: &mut Vec<VariableInfo>,
-    imports: &mut Vec<ImportInfo>,
-    match_stmts: &mut Vec<MatchStmtInfo>,
+    sinks: &mut CollectSinks<'_>,
     is_module_level: bool,
 ) {
     for clause in clauses {
-        collect_from_body(
-            bindings,
-            &clause.body,
-            functions,
-            class_defs,
-            module_vars,
-            imports,
-            match_stmts,
-            is_module_level,
-        );
+        collect_from_body(bindings, &clause.body, sinks, is_module_level);
     }
 }
 
 pub(super) fn collect_from_handlers(
     bindings: &BindingTable,
     handlers: &[ExceptHandler],
-    functions: &mut Vec<FunctionInfo>,
-    classes: &mut Vec<ClassInfo>,
-    module_vars: &mut Vec<VariableInfo>,
-    imports: &mut Vec<ImportInfo>,
-    match_stmts: &mut Vec<MatchStmtInfo>,
+    sinks: &mut CollectSinks<'_>,
     is_module_level: bool,
 ) {
     for handler in handlers {
         let ExceptHandler::ExceptHandler(h) = handler;
-        collect_from_body(
-            bindings,
-            &h.body,
-            functions,
-            classes,
-            module_vars,
-            imports,
-            match_stmts,
-            is_module_level,
-        );
+        collect_from_body(bindings, &h.body, sinks, is_module_level);
     }
 }
 

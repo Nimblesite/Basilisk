@@ -49,16 +49,14 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
     // correctly. Implements [RESOLV-CANONICAL-BINDING].
     let bindings = basilisk_canonical::BindingTable::from_module(&module.ast.body);
 
-    core::collect_from_body(
-        &bindings,
-        &module.ast.body,
-        &mut functions,
-        &mut classes,
-        &mut module_vars,
-        &mut imports,
-        &mut match_stmts,
-        true,
-    );
+    let mut sinks = core::CollectSinks {
+        functions: &mut functions,
+        classes: &mut classes,
+        module_vars: &mut module_vars,
+        imports: &mut imports,
+        match_stmts: &mut match_stmts,
+    };
+    core::collect_from_body(&bindings, &module.ast.body, &mut sinks, true);
 
     let calls = calls_and_reveal::collect_calls_from_stmts(&module.ast.body);
     // Which callee is a type-parameter factory is decided by resolving the
@@ -161,7 +159,7 @@ fn collect_analysis_results(
         multiple_unbounded_tuple_spans: annotations::collect_multiple_unbounded_tuple_spans(stmts),
         module_bare_assignments: assigns::collect_module_bare_assignments(stmts),
         module_attr_assignments: assigns::collect_module_attr_assignments(stmts),
-        final_issues: final_readonly_ext::collect_final_violations(bindings, stmts, classes, source),
+        final_issues: final_readonly_ext::collect_final_violations(bindings, stmts, classes),
         float_param_int_attr_accesses: module_level::collect_float_param_int_attr_accesses(
             stmts, source,
         ),

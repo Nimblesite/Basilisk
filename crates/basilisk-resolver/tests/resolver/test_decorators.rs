@@ -33,18 +33,13 @@ fn collects_decorator_with_plain_name() -> Result<(), Box<dyn std::error::Error>
 
 #[test]
 fn builtin_decorator_flags_do_not_depend_on_spelling() -> Result<(), Box<dyn std::error::Error>> {
-    let bare = resolve_src(
-        &"class C:\n    @staticmethod\n    def f() -> None: ...\n".to_owned(),
-    )?;
-    let aliased = resolve_src(
-        &concat!(
-            "from builtins import staticmethod as sm\n",
-            "class C:\n",
-            "    @sm\n",
-            "    def f() -> None: ...\n",
-        )
-        .to_owned(),
-    )?;
+    let bare = resolve_src("class C:\n    @staticmethod\n    def f() -> None: ...\n")?;
+    let aliased = resolve_src(concat!(
+        "from builtins import staticmethod as sm\n",
+        "class C:\n",
+        "    @sm\n",
+        "    def f() -> None: ...\n",
+    ))?;
     let bare_method = bare.functions.iter().find(|function| function.name == "f");
     let aliased_method = aliased
         .functions

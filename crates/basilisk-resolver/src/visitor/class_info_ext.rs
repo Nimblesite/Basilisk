@@ -57,6 +57,10 @@ fn class_keyword_bool(class: &StmtClassDef, name: &str) -> Option<bool> {
 }
 
 /// Behaviour flags carried by a resolved `@dataclass` decoration.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "`@dataclass(...)` takes many independent boolean keywords"
+)]
 struct DataclassDecoration {
     frozen: bool,
     kw_only: bool,

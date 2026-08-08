@@ -27,7 +27,7 @@ use super::annotations::{
     annotation_is_init_var, annotation_is_kw_only,
 };
 use super::class_info_ext::{class_info_from, expr_simple_name};
-use super::core::{classify_rhs, collect_from_body, text_range_to_span};
+use super::core::{classify_rhs, collect_function_scope, text_range_to_span};
 use super::dataclass::{field_init_is_false, field_kw_only_override};
 use super::function_info::function_info_from;
 
@@ -94,16 +94,7 @@ pub(super) fn collect_class_body(
                 // lexically nested inside the class; mark the non-method ones so
                 // `generics_self_usage` does not treat their `Self` as module-level usage.
                 let nested_start = functions.len();
-                collect_from_body(
-                    bindings,
-                    &func.body,
-                    functions,
-                    &mut Vec::new(),
-                    &mut Vec::new(),
-                    &mut Vec::new(),
-                    match_stmts,
-                    false,
-                );
+                collect_function_scope(bindings, &func.body, functions, match_stmts);
                 mark_nested_in_class(functions, nested_start);
                 method_names.push(method_name.clone());
                 method_decorators.push((method_name, decs));

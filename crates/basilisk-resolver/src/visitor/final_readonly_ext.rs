@@ -15,7 +15,6 @@ pub(super) fn collect_final_violations(
     bindings: &BindingTable,
     stmts: &[Stmt],
     classes: &[ClassInfo],
-    source: &str,
 ) -> Vec<crate::scope::FinalViolationInfo> {
     let mut out = Vec::new();
 
@@ -70,7 +69,7 @@ pub(super) fn collect_final_violations(
     for stmt in stmts {
         match stmt {
             Stmt::ClassDef(cls_def) => {
-                collect_class_final_violations(bindings, cls_def, &class_finals, source, &mut out);
+                collect_class_final_violations(bindings, cls_def, &class_finals, &mut out);
                 // Also check methods inside the class for global Final modifications.
                 for body_stmt in &cls_def.body {
                     if let Stmt::FunctionDef(method) = body_stmt {
@@ -126,7 +125,6 @@ pub(super) fn collect_class_final_violations(
     bindings: &BindingTable,
     cls_def: &StmtClassDef,
     class_finals: &std::collections::HashMap<&str, std::collections::HashSet<&str>>,
-    source: &str,
     out: &mut Vec<crate::scope::FinalViolationInfo>,
 ) {
     use crate::scope::{FinalViolationInfo, FinalViolationKind};
@@ -234,7 +232,7 @@ pub(super) fn collect_class_final_violations(
     // Recurse into nested class definitions.
     for body_stmt in &cls_def.body {
         if let Stmt::ClassDef(nested) = body_stmt {
-            collect_class_final_violations(bindings, nested, class_finals, source, out);
+            collect_class_final_violations(bindings, nested, class_finals, out);
         }
     }
 }
