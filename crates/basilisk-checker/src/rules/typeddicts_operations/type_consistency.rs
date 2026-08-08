@@ -3,13 +3,10 @@
 //!
 //! Validates assignments where the RHS is a `TypedDict`-typed variable:
 //!
-//! - `TypedDict` → `dict`: always an error
 //! - `TypedDict` → `TypedDict`: structural compatibility check
 //!
 //! Every verdict is structural over the parsed `ruff` AST
-//! ([LINESCANPLAN-AST-MIGRATION], issue #408): the builtin `dict` and the
-//! PEP 728 `extra_items=` class keyword resolve through the module's binding
-//! tables — never through sliced source text.
+//! ([LINESCANPLAN-AST-MIGRATION], issue #408).
 
 use std::collections::HashMap;
 
@@ -110,27 +107,6 @@ fn check_td_to_target(
     module: &ResolvedModule,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    // TypedDict → dict[...]: an error, except a PEP 728 `extra_items=`
-    // TypedDict whose value types are all assignable to the dict value type.
-    if let Some(dict_target) = dict_target(annotation) {
-        if let DictTarget::Parameterized(value_type) = dict_target {
-            if extra_items_values_assignable(ctx, rhs_td_name, &ann_str(value_type)) {
-                return;
-            }
-        }
-        emit_td_error(
-            diagnostics,
-            span,
-            &module.path,
-            &format!(
-                "TypedDict `{rhs_td_name}` is not assignable to `{}`",
-                ann_str(annotation)
-            ),
-            "A TypedDict is not consistent with any dict[...] type",
-        );
-        return;
-    }
-
     // TypedDict → TypedDict: structural compatibility.
     if let Expr::Name(lhs_name) = annotation {
         check_td_to_td(
@@ -170,29 +146,6 @@ fn check_td_to_td(
             &format!("TypedDict `{rhs_td_name}` is not assignable to `{lhs_td_name}`: {detail}"),
             "TypedDict types use structural compatibility with invariant value types",
         );
-    }
-}
-
-/// A `dict`-typed assignment target: bare `dict`, or `dict[K, V]` carrying a
-/// declared value type.
-enum DictTarget<'e> {
-    Bare,
-    Parameterized(&'e Expr),
-}
-
-/// When the annotation is the builtin `dict` (bare or subscripted), the target
-/// shape; `None` when the annotation is not a dict type at all.
-fn dict_target(annotation: &Expr) -> Option<DictTarget<'_>> {
-    let is_dict_head = |head: &Expr| matches!(head, Expr::Name(name) if name.id.as_str() == "dict");
-    match annotation {
-        Expr::Subscript(subscript) if is_dict_head(&subscript.value) => {
-            match subscript_args(&subscript.slice).get(1).copied() {
-                Some(value_type) => Some(DictTarget::Parameterized(value_type)),
-                None => Some(DictTarget::Bare),
-            }
-        }
-        head if is_dict_head(head) => Some(DictTarget::Bare),
-        _ => None,
     }
 }
 

@@ -182,9 +182,6 @@ fn compute_arities<'a>(module: &'a ResolvedModule) -> HashMap<&'a str, TypeArity
     arities
 }
 
-/// Built-in generic names with a fixed exact arity.
-const BUILTIN_EXACT_ARITY: &[(&str, usize)] = &[("type", 1)];
-
 /// `true` when the class's only generic parameter is a `ParamSpec`.
 fn is_single_paramspec_generic(
     cls: &basilisk_resolver::ClassInfo,
@@ -196,88 +193,6 @@ fn is_single_paramspec_generic(
     )
 }
 
-/// A type argument occupying a `ParamSpec` parameter slot must be a
-/// parameters form: a list (`[int, str]`), `...`, or another `ParamSpec`.
-/// A plain type (`ClassA[int, int]`) is an error.
-///
-/// Only multi-parameter generics are checked: a class generic over a single
-/// `ParamSpec` treats all arguments as the implicit parameter list (PEP 612).
-fn check_paramspec_slot_args(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-    let paramspec_names: HashSet<&str> =
-        basilisk_resolver::collect_name_set_where(&module.typevar_calls, |tv| tv.is_paramspec);
-    if paramspec_names.is_empty() {
-        return;
-    }
-    // Positional zip is only sound for fixed-arity generics: a TypeVarTuple
-    // absorbs a variable number of arguments, so those classes are skipped.
-    let class_params: HashMap<&str, Vec<&str>> = module
-        .classes
-        .iter()
-        .filter(|cls| {
-            cls.generic_params.len() > 1 && !cls.generic_params.iter().any(|p| p.is_typevartuple)
-        })
-        .map(|cls| {
-            let names = cls.generic_params.iter().map(|p| p.name.as_str()).collect();
-            (cls.name.as_str(), names)
-        })
-        .collect();
-
-    for site in &module.generic_subscript_sites {
-        let Some(params) = class_params.get(site.base_name.as_str()) else {
-            continue;
-        };
-        let Some(text) = crate::span_util::slice_span(&module.source, site.span) else {
-            continue;
-        };
-        let Some(args) = subscript_arg_texts(text) else {
-            continue;
-        };
-        if args.len() != params.len() {
-            continue;
-        }
-        for (param_name, arg) in params.iter().zip(args.iter()) {
-            if !paramspec_names.contains(param_name) {
-                continue;
-            }
-            if is_parameters_form(arg, &paramspec_names) {
-                continue;
-            }
-            diagnostics.push(error_diagnostic_owned(
-                CODE.clone(),
-                format!(
-                    "Type argument `{arg}` is not valid for `ParamSpec` parameter \
-                     `{param_name}` of `{}`",
-                    site.base_name
-                ),
-                site.span,
-                &module.path,
-                Some(
-                    "A ParamSpec must be specialized with a parameter list (`[int, str]`), \
-                     `...`, another ParamSpec, or `Concatenate[...]`"
-                        .to_owned(),
-                ),
-                None,
-            ));
-        }
-    }
-}
-
-/// Split `Base[a, b, ...]` into its top-level argument texts.
-fn subscript_arg_texts(text: &str) -> Option<Vec<&str>> {
-    let inner = text.trim().split_once('[')?.1.strip_suffix(']')?;
-    Some(
-        super::shared::split_top_level_commas(inner)
-            .into_iter()
-            .map(str::trim)
-            .collect(),
-    )
-}
-
-/// `true` when `arg` is a valid specialization for a `ParamSpec` slot.
-fn is_parameters_form(arg: &str, paramspec_names: &HashSet<&str>) -> bool {
-    arg.starts_with('[') || arg == "..." || paramspec_names.contains(arg)
-}
-
 impl Rule for TooFewTypeArguments {
     fn check(
         &self,
@@ -286,28 +201,8 @@ impl Rule for TooFewTypeArguments {
         diagnostics: &mut Vec<Diagnostic>,
     ) {
         let arities = compute_arities(module);
-        check_paramspec_slot_args(module, diagnostics);
 
         for site in &module.generic_subscript_sites {
-            // Check built-in types with fixed arity (e.g. `type[int, str]` is invalid).
-            for &(builtin, exact) in BUILTIN_EXACT_ARITY {
-                if site.base_name == builtin && site.arg_count > exact {
-                    diagnostics.push(error_diagnostic_owned(
-                        CODE.clone(),
-                        format!(
-                            "`{}` accepts exactly {exact} type argument, but {} {} provided",
-                            site.base_name,
-                            site.arg_count,
-                            if site.arg_count == 1 { "was" } else { "were" }
-                        ),
-                        site.span,
-                        &module.path,
-                        Some("`type` takes exactly one type argument: `type[T]`".to_string()),
-                        None,
-                    ));
-                }
-            }
-
             let Some(arity) = arities.get(site.base_name.as_str()) else {
                 continue;
             };

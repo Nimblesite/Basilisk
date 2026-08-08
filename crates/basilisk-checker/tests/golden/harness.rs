@@ -165,19 +165,19 @@ pub fn assert_invariant(
     Ok(())
 }
 
-/// **Family B oracle, positive.** Source the typing spec declares ill-typed must
-/// draw at least one diagnostic.
+/// Reject the former "any diagnostic proves the obligation" oracle.
 ///
-/// Deliberately code-agnostic: which rule catches it is an implementation
-/// detail, *that* it is caught is the spec obligation.
+/// A diagnostic for an unrelated defect in the fixture cannot prove that the
+/// intended typing rule was enforced. Callers must migrate to
+/// [`assert_rejected_by`] with the diagnostic identity they intend to test.
 pub fn assert_rejected(case: &str, spec_reason: &str, source: &str) -> Result<(), Box<dyn Error>> {
     let diags = analyse(source)?;
-    assert!(
-        !diags.is_empty(),
-        "{case}: no diagnostic. The typing spec makes this an error — {spec_reason}.\n\
-         Source:\n{source}\nSee [PERMTEST-FAMILY-B]."
-    );
-    Ok(())
+    Err(format!(
+        "{case}: rejected fixture names no expected diagnostic, so [{}] cannot prove this \
+         obligation: {spec_reason}. Migrate this case to assert_rejected_by.\nSource:\n{source}",
+        render(&diags)
+    )
+    .into())
 }
 
 /// **Family B oracle, positive and specific.** As [`assert_rejected`], but the

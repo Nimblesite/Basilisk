@@ -419,9 +419,18 @@ Three callers reference a helper that no longer exists:
 `missing_parameter_annotation.rs:191,195` and
 `calls_argument_count/method_binding.rs:135`.
 
-- [ ] Decide `staticmethod` / `classmethod` from the resolved decorator
-      **node**. Both are true builtins needing no import, so recognising them is
-      permitted — matching them against sliced source text is not.
+- [x] Resolver mechanism landed: `TypingForm::StaticMethod` / `ClassMethod`
+      registry entries under `modules = ["builtins"]` (validated against
+      bundled typeshed), `BindingTable::form_of_with_builtins` for the
+      no-import fallback, and `FunctionInfo::{is_staticmethod,is_classmethod}`
+      populated from the resolved decorator **node** (`is_abstractmethod` via
+      `abc.abstractmethod` landed alongside). Pinned by
+      `tests/resolver/test_decorators.rs::builtin_decorator_flags_do_not_depend_on_spelling`
+      and `tests/binding_table.rs::builtin_fallback_respects_module_rebinds`.
+- [ ] Swap the three call sites (`missing_parameter_annotation.rs:191,195`,
+      `calls_argument_count/method_binding.rs:135`) onto those flags. They were
+      deliberately left referencing the deleted helper rather than converted
+      into invisible no-ops; the swap is now mechanical.
 
 #### 0d — measured: what Phase 0 uncovered {#ASTREBUILD-PHASE-COMPILE-MEASURE}
 
@@ -496,13 +505,19 @@ The keystone. Every later phase depends only on this.
       `shared::parse_module(module)` and re-parse the file; that is
       O(rules × source) and it is the natural place for the binding table to
       live beside the tree it was derived from.
-- [ ] Write `crates/basilisk-resolver/tests/canonical_registry.rs`: every one of
-      the 92 registry entries must resolve to a real declaration in bundled
-      typeshed. A registry entry naming a symbol typeshed does not declare is a
-      **build failure** — that test is what stops the registry becoming a
-      spelling table by another route.
-- [ ] Test the three cases character matching gets wrong, per module:
-      `import X as Y`, `import mod; mod.X`, and a local `class X:` shadow.
+- [x] Registry-vs-typeshed validation: every registry entry must resolve to a
+      real declaration in bundled typeshed. Landed as
+      `crates/basilisk-stubs/tests/registry_typeshed_validation.rs` — the stubs
+      crate is where typeshed is bundled, so the test lives there rather than
+      at the resolver path first proposed. A registry entry naming a symbol
+      typeshed does not declare is a **build failure** — that test is what
+      stops the registry becoming a spelling table by another route.
+- [x] Test the three cases character matching gets wrong, per module:
+      `import X as Y`, `import mod; mod.X`, and a local `class X:` shadow —
+      `crates/basilisk-canonical/tests/binding_table.rs`
+      (`alias_dotted_and_shadow_still_resolve`), alongside pins for scope
+      containment, positional rebinding, guarded imports, compound-target
+      rebinds, star-import materialisation, and the builtin fallback.
 
 ### Phase 2 — rebuild resolver collectors {#ASTREBUILD-PHASE-RESOLVER}
 
