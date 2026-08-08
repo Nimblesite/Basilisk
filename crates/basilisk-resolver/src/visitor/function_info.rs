@@ -13,7 +13,7 @@ use super::assigns::{assign_infos_from, collect_all_assigns};
 use super::class_info_ext::{
     body_is_stub, decorator_name, decorator_name_and_span, extract_docstring,
 };
-use super::core::{classify_rhs, source_slice_range, text_range_to_span};
+use super::core::{classify_rhs, text_range_to_span};
 use super::narrowing::collect_narrowing_guards;
 use super::type_alias::type_param_name;
 use super::unhashable::collect_unhashable_keys_from_stmts;
@@ -301,11 +301,7 @@ fn collect_callee_name_refs(expr: &Expr, out: &mut Vec<(String, Span)>) {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Unhashable key collection
-// ---------------------------------------------------------------------------
-
-/// Walk all statements in a function body looking for dict literals with unhashable keys.
+/// Classify a return annotation by the shape rules downstream key off.
 pub(super) fn return_annotation_kind(expr: &Expr) -> ReturnAnnotationKind {
     let (is_any, is_none, is_num) = annotation_flags(expr);
     if is_any {
@@ -319,29 +315,7 @@ pub(super) fn return_annotation_kind(expr: &Expr) -> ReturnAnnotationKind {
     }
 }
 
-/// Returns `(is_any, is_none, is_numeric_literal)` for an annotation expression.
-pub(super) fn parse_defaults_count(keywords: &[ruff_python_ast::Keyword]) -> usize {
-    for kw in keywords {
-        if kw
-            .arg
-            .as_ref()
-            .is_some_and(|arg| arg.as_str() == "defaults")
-        {
-            return match &kw.value {
-                Expr::Tuple(t) => t.elts.len(),
-                Expr::List(l) => l.elts.len(),
-                _ => 0,
-            };
-        }
-    }
-    0
-}
-
-/// Collect `Final` string-literal constant bindings from module-level statements.
-///
-/// Returns a map from variable name to the string value (e.g., `X: Final = "x"` yields
-/// `"X" -> "x"`).  Only `Final` / `Final[str]` annotations with string-literal RHS
-/// are included.
+/// Recursively collect every `Name` reference in an expression tree.
 pub(super) fn collect_name_refs_from_expr(expr: &Expr, out: &mut Vec<String>) {
     match expr {
         Expr::Name(name) => out.push(name.id.to_string()),
@@ -425,23 +399,3 @@ pub(super) fn collect_string_refs_from_expr(expr: &Expr, out: &mut Vec<String>) 
     }
 }
 
-/// Convert an expression into a structured [`TypeArg`].
-///
-/// Simple names become `TypeArg::Simple`, subscript expressions become
-/// `TypeArg::Subscript { base, args }`. Other expression forms fall back to
-/// `TypeArg::Simple` using whatever simple name can be extracted (or an empty
-/// string as a last resort).
-pub(super) fn build_param_scope_owned(
-    parameters: &ruff_python_ast::Parameters,
-    source: &str,
-) -> Vec<(String, String)> {
-    super::walks::iter_all_params(parameters)
-        .filter_map(|p| {
-            let name = p.parameter.name.to_string();
-            let ann = p.parameter.annotation.as_deref()?;
-            let range = ann.range();
-            let ann_text = source_slice_range(source, range)?;
-            Some((name, ann_text.to_owned()))
-        })
-        .collect()
-}

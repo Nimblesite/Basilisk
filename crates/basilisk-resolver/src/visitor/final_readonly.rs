@@ -11,31 +11,6 @@ use crate::canonical::BindingTable;
 use super::annotations::annotation_is_final;
 use super::core::text_range_to_span;
 
-pub(super) fn collect_final_string_constants<'a>(
-    bindings: &BindingTable,
-    stmts: &'a [Stmt],
-) -> std::collections::HashMap<&'a str, &'a str> {
-    let mut map = std::collections::HashMap::new();
-    for stmt in stmts {
-        let Stmt::AnnAssign(ann) = stmt else { continue };
-        let Expr::Name(n) = ann.target.as_ref() else {
-            continue;
-        };
-        if !annotation_is_final(bindings, &ann.annotation) {
-            continue;
-        }
-        // RHS must be a string literal.
-        let Some(val) = ann.value.as_deref() else {
-            continue;
-        };
-        let Expr::StringLiteral(s) = val else {
-            continue;
-        };
-        let _ = map.insert(n.id.as_str(), s.value.to_str());
-    }
-    map
-}
-
 /// Build a map from `TypedDict` class name to its `ReadOnly` field names.
 pub(super) fn build_typeddict_readonly_map<'a>(
     classes: &'a [ClassInfo],
