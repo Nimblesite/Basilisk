@@ -1,5 +1,7 @@
 //! Tests for [`aliases_recursive`] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
-// Integration tests for aliases_recursive: Cyclical type alias.
+//!
+//! Recursive `type` aliases are specified by
+//! [PEP 695](https://peps.python.org/pep-0695/#generic-type-alias).
 
 use std::sync::mpsc;
 use std::thread;
@@ -131,5 +133,24 @@ fn upstream_cyclical_cases_as_type_statements_still_fire() -> Result<(), Box<dyn
             codes(&diags)
         );
     }
+    Ok(())
+}
+
+/// Regression for [#383](https://github.com/Nimblesite/Basilisk/issues/383).
+/// [PEP 695](https://peps.python.org/pep-0695/#generic-type-alias) supports
+/// recursive aliases and imposes no "same type arguments" restriction.
+/// Basilisk may offer a separately named opt-in policy for non-regular
+/// expansion, but the default PEP scoping rule must not invent that error.
+#[test]
+fn non_regular_recursive_alias_is_not_a_pep_scoping_error(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let source = "type R[T] = set[R[T | R[T]]]\n";
+    let diagnostics = run(source)?;
+    assert_rule_count(
+        &diagnostics,
+        "generics_syntax_scoping",
+        0,
+        "PEP 695 does not make non-regular recursion a type-parameter scoping violation",
+    );
     Ok(())
 }

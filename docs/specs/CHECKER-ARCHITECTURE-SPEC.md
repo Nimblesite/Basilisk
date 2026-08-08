@@ -1114,11 +1114,14 @@ unchanged; machine consumers see no new field.
 
 #### Unanalysable files {#CHKARCH-CLI-OUTPUT-FAILURES}
 
-A file the run could not analyse at all — a syntax error, an unreadable path —
-appears in the JSON array alongside the diagnostics, with `code` set to `null`
-because no rule produced it and a `severity` of `"error"`. It anchors at line 1,
-column 1: the failure is about the file as a whole, and the parser's own message
-carries whatever position it knows.
+A file the run could not analyse at all is always visible in the selected report
+format ([#384](https://github.com/Nimblesite/Basilisk/issues/384)). In JSON it
+appears alongside diagnostics, with `code` set to `null` because no rule
+produced it and a `severity` of `"error"`; it anchors at line 1, column 1 for
+schema stability. In human-readable text, the report body names the file,
+describes the failure, renders the parser position as actionable `line:column`
+rather than a byte offset, and counts the entry in the final summary. A tracing
+line on stderr is not part of either report and cannot satisfy this contract.
 
 Omitting it rendered `[]` — byte-for-byte the answer a clean file gets — for a
 file that was never checked, so every consumer reading the report rather than
@@ -1134,9 +1137,16 @@ recognise an entry.
 | Code | Meaning |
 |---|---|
 | 0 | Completed without error diagnostics |
-| 1 | Error diagnostics were found |
+| 1 | Source errors were found, including Python syntax errors that prevented analysis |
 | 2 | Invalid configuration (e.g. a `pep` rule resolved to `disabled`) |
 | 3 | Internal failure |
+
+A syntax error in user Python is code 1, never code 3. Code 3 means Basilisk
+itself could not complete for an internal reason; it must not mask diagnostics
+already produced by other files in the same run. This distinction and the
+text/JSON parity obligation are pinned by
+[#384](https://github.com/Nimblesite/Basilisk/issues/384) in
+`crates/basilisk-cli/tests/cli_binary_tests.rs`.
 
 ### CI use {#CHKARCH-CLI-CI}
 

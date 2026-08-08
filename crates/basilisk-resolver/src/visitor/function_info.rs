@@ -104,7 +104,7 @@ pub(super) fn function_info_from(
     let local_vars = collect_local_annotated_vars(&func.body);
     let local_unannotated_vars = collect_local_unannotated_vars(&func.body);
     let yield_exprs = collect_yield_exprs(&func.body);
-    let narrowing_guards = collect_narrowing_guards(&func.body);
+    let narrowing_guards = collect_narrowing_guards(bindings, &func.body);
 
     FunctionInfo {
         name: func.name.to_string(),

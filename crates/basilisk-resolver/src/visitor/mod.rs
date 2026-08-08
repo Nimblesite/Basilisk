@@ -136,8 +136,11 @@ fn collect_analysis_results(
         .filter(|c| c.is_typed_dict)
         .map(|c| c.name.as_str())
         .collect();
-    let mut isinstance_typeddict_spans =
-        typeddict_ext::collect_isinstance_typeddict_violations(stmts, &typeddict_class_names);
+    let mut isinstance_typeddict_spans = typeddict_ext::collect_isinstance_typeddict_violations(
+        bindings,
+        stmts,
+        &typeddict_class_names,
+    );
     isinstance_typeddict_spans.extend(typevar::collect_typevar_bound_typeddict_violations(
         bindings, stmts,
     ));

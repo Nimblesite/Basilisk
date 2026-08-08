@@ -25,6 +25,11 @@
 //!   1 — error diagnostics found
 //!   2 — invalid configuration
 //!   3 — internal error (bad path, I/O failure)
+//!
+//! Parse-failure regressions below pin
+//! [#384](https://github.com/Nimblesite/Basilisk/issues/384). This is CLI
+//! behavior rather than a Python typing rule, so its authority is the linked
+//! Basilisk CLI contract, not a fabricated PEP citation.
 
 use std::path::Path;
 use std::process::{Command, Output};
@@ -214,8 +219,8 @@ fn json_output_reports_a_file_that_failed_to_parse() -> Result<(), Box<dyn std::
 
     assert_eq!(
         out.status.code(),
-        Some(3),
-        "an unparseable file must exit 3"
+        Some(1),
+        "a user syntax error is a source diagnostic, never an internal checker failure"
     );
     assert_ne!(
         rendered.trim(),
@@ -279,7 +284,11 @@ fn json_output_keeps_valid_diagnostics_beside_a_parse_failure(
     let rendered = stdout(&out);
     let _ = std::fs::remove_dir_all(&dir);
 
-    assert_eq!(out.status.code(), Some(3), "a parse failure must exit 3");
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "a user syntax error must not mask ordinary diagnostics behind internal-failure exit 3"
+    );
     let value: Value = serde_json::from_str(&rendered)?;
     let items = value.as_array().ok_or("JSON output must stay an array")?;
     assert!(
@@ -332,7 +341,7 @@ fn json_output_for_a_clean_file_is_still_an_empty_array() -> Result<(), Box<dyn 
 }
 
 #[test]
-fn analysis_failure_exits_three_without_dropping_valid_diagnostics(
+fn syntax_failure_exits_one_without_dropping_valid_diagnostics(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (dir, staged) = stage_project(&["errors/e0001_single_param.py"])?;
     let malformed = dir.join("malformed.py");
@@ -346,7 +355,11 @@ fn analysis_failure_exits_three_without_dropping_valid_diagnostics(
     let malformed_only = run_check(&[&malformed])?;
     let _ = std::fs::remove_dir_all(&dir);
 
-    assert_eq!(mixed.status.code(), Some(3), "analysis failure must exit 3");
+    assert_eq!(
+        mixed.status.code(),
+        Some(1),
+        "a mixed run containing source errors must exit 1, not internal-failure 3"
+    );
     assert!(
         stdout(&mixed).contains("BSK-0001"),
         "a valid peer's diagnostics must still be rendered: {}",
@@ -354,13 +367,57 @@ fn analysis_failure_exits_three_without_dropping_valid_diagnostics(
     );
     assert_eq!(
         malformed_only.status.code(),
-        Some(3),
-        "a malformed requested file must exit 3"
+        Some(1),
+        "a malformed requested file is a source error and must exit 1"
     );
     assert!(
         !stdout(&malformed_only).contains("No issues found"),
         "analysis failure must never print a clean-success message: {}",
         stdout(&malformed_only)
+    );
+    Ok(())
+}
+
+/// [#384](https://github.com/Nimblesite/Basilisk/issues/384): the human-readable
+/// report has the same obligation as JSON under [CHKARCH-CLI-OUTPUT-FAILURES].
+/// A syntax error must be visible, located, and included in the summary.
+#[test]
+fn text_output_reports_and_counts_a_file_that_failed_to_parse(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let dir = std::env::temp_dir().join(format!("basilisk-text-failure-{}", std::process::id()));
+    std::fs::create_dir_all(&dir)?;
+    let malformed = dir.join("broken.py");
+    std::fs::write(&malformed, b"value = object()\nvalue.\n")?;
+    let malformed = malformed.to_string_lossy().into_owned();
+
+    let out = run_check(&[&malformed])?;
+    let rendered = stdout(&out);
+    let _ = std::fs::remove_dir_all(&dir);
+
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "a user syntax error must use the source-diagnostic exit code"
+    );
+    assert!(
+        rendered.contains("broken.py"),
+        "the report body must name the unanalysable file: {rendered}"
+    );
+    assert!(
+        rendered.to_ascii_lowercase().contains("syntax"),
+        "the report body must identify the syntax failure: {rendered}"
+    );
+    assert!(
+        rendered.contains("2:") || rendered.contains(":2:"),
+        "the syntax failure must use an actionable line/column location: {rendered}"
+    );
+    assert!(
+        rendered.contains("1 diagnostic") || rendered.contains("1 error"),
+        "the summary must count the unanalysable file: {rendered}"
+    );
+    assert!(
+        !rendered.contains("No issues found"),
+        "an unanalysable file must never render as clean: {rendered}"
     );
     Ok(())
 }

@@ -8,6 +8,7 @@
 //! - `assert isinstance(x, T)` / `assert x is not None` (§7.8)
 //! - `match` statement case narrowing (§7.5)
 
+use basilisk_canonical::{BindingTable, TypingForm};
 use ruff_python_ast::{CmpOp, ExceptHandler, Expr, Stmt};
 use ruff_text_size::Ranged;
 
@@ -19,19 +20,37 @@ use crate::scope::{
 use super::core::text_range_to_span;
 
 /// Collect all narrowing guards from a function body.
-pub(super) fn collect_narrowing_guards(stmts: &[Stmt]) -> Vec<NarrowingGuard> {
+///
+/// Guard callees (`isinstance`, `hasattr`, `type`, …) are recognised through
+/// the module's [`BindingTable`] — aliased imports of a builtin narrow, a
+/// module-level rebinding of its name does not. The table models module
+/// scope, so a *function-local* rebinding is not yet visible to it.
+pub(super) fn collect_narrowing_guards(
+    bindings: &BindingTable,
+    stmts: &[Stmt],
+) -> Vec<NarrowingGuard> {
     let mut guards = Vec::new();
-    collect_from_stmts(stmts, &mut guards, false);
+    collect_from_stmts(bindings, stmts, &mut guards, false);
     guards
 }
 
-fn collect_from_stmts(stmts: &[Stmt], guards: &mut Vec<NarrowingGuard>, in_loop: bool) {
+fn collect_from_stmts(
+    bindings: &BindingTable,
+    stmts: &[Stmt],
+    guards: &mut Vec<NarrowingGuard>,
+    in_loop: bool,
+) {
     for stmt in stmts {
-        collect_from_stmt(stmt, guards, in_loop);
+        collect_from_stmt(bindings, stmt, guards, in_loop);
     }
 }
 
-fn collect_from_stmt(stmt: &Stmt, guards: &mut Vec<NarrowingGuard>, in_loop: bool) {
+fn collect_from_stmt(
+    bindings: &BindingTable,
+    stmt: &Stmt,
+    guards: &mut Vec<NarrowingGuard>,
+    in_loop: bool,
+) {
     match stmt {
         Stmt::If(node) => {
             let if_body_span = body_span(&node.body);
@@ -41,7 +60,7 @@ fn collect_from_stmt(stmt: &Stmt, guards: &mut Vec<NarrowingGuard>, in_loop: boo
                 .map(|clause| body_span(&clause.body));
 
             if let Some(guard_kind) =
-                extract_guard_from_test(&node.test, if_body_span, else_body_span)
+                extract_guard_from_test(bindings, &node.test, if_body_span, else_body_span)
             {
                 guards.push(NarrowingGuard {
                     kind: guard_kind,
@@ -51,12 +70,14 @@ fn collect_from_stmt(stmt: &Stmt, guards: &mut Vec<NarrowingGuard>, in_loop: boo
             }
 
             // Recurse into branches
-            collect_from_stmts(&node.body, guards, in_loop);
+            collect_from_stmts(bindings, &node.body, guards, in_loop);
             for clause in &node.elif_else_clauses {
                 // elif clauses may also contain narrowing guards
                 if let Some(test) = &clause.test {
                     let elif_body_span = body_span(&clause.body);
-                    if let Some(guard_kind) = extract_guard_from_test(test, elif_body_span, None) {
+                    if let Some(guard_kind) =
+                        extract_guard_from_test(bindings, test, elif_body_span, None)
+                    {
                         guards.push(NarrowingGuard {
                             kind: guard_kind,
                             span: text_range_to_span(test.range()),
@@ -64,11 +85,11 @@ fn collect_from_stmt(stmt: &Stmt, guards: &mut Vec<NarrowingGuard>, in_loop: boo
                         });
                     }
                 }
-                collect_from_stmts(&clause.body, guards, in_loop);
+                collect_from_stmts(bindings, &clause.body, guards, in_loop);
             }
         }
         Stmt::Assert(node) => {
-            if let Some(inner_kind) = extract_assert_guard(&node.test) {
+            if let Some(inner_kind) = extract_assert_guard(bindings, &node.test) {
                 guards.push(NarrowingGuard {
                     kind: NarrowingGuardKind::Assert {
                         inner: Box::new(inner_kind),
@@ -85,31 +106,31 @@ fn collect_from_stmt(stmt: &Stmt, guards: &mut Vec<NarrowingGuard>, in_loop: boo
         // ([ASTREBUILD-PHASE-RESOLVER]).
         Stmt::Match(node) => {
             for case in &node.cases {
-                collect_from_stmts(&case.body, guards, in_loop);
+                collect_from_stmts(bindings, &case.body, guards, in_loop);
             }
         }
         // Loops: narrowing inside does NOT persist after the loop (§7.10)
         // Implements [TYPEINF-NARROWING-SCOPE] — the `in_loop` flag marks guards
         // collected inside a loop body so they do not leak past the loop.
         Stmt::For(node) => {
-            collect_from_stmts(&node.body, guards, true);
-            collect_from_stmts(&node.orelse, guards, in_loop);
+            collect_from_stmts(bindings, &node.body, guards, true);
+            collect_from_stmts(bindings, &node.orelse, guards, in_loop);
         }
         Stmt::While(node) => {
-            collect_from_stmts(&node.body, guards, true);
-            collect_from_stmts(&node.orelse, guards, in_loop);
+            collect_from_stmts(bindings, &node.body, guards, true);
+            collect_from_stmts(bindings, &node.orelse, guards, in_loop);
         }
         Stmt::With(node) => {
-            collect_from_stmts(&node.body, guards, in_loop);
+            collect_from_stmts(bindings, &node.body, guards, in_loop);
         }
         Stmt::Try(node) => {
-            collect_from_stmts(&node.body, guards, in_loop);
+            collect_from_stmts(bindings, &node.body, guards, in_loop);
             for handler in &node.handlers {
                 let ExceptHandler::ExceptHandler(h) = handler;
-                collect_from_stmts(&h.body, guards, in_loop);
+                collect_from_stmts(bindings, &h.body, guards, in_loop);
             }
-            collect_from_stmts(&node.orelse, guards, in_loop);
-            collect_from_stmts(&node.finalbody, guards, in_loop);
+            collect_from_stmts(bindings, &node.orelse, guards, in_loop);
+            collect_from_stmts(bindings, &node.finalbody, guards, in_loop);
         }
         // Do NOT recurse into nested function definitions — they have their own scope
         _ => {}
@@ -121,16 +142,17 @@ fn collect_from_stmt(stmt: &Stmt, guards: &mut Vec<NarrowingGuard>, in_loop: boo
 // [TYPEINF-NARROWING-NONE] (`is None`/`is not None` branch), and
 // [TYPEINF-NARROWING-TRUTHY] (`if x:` / `if not x:` branch).
 fn extract_guard_from_test(
+    bindings: &BindingTable,
     test: &Expr,
     if_body_span: Span,
     else_body_span: Option<Span>,
 ) -> Option<NarrowingGuardKind> {
     match test {
         // isinstance(x, T) / issubclass(x, T) / hasattr(x, "name")
-        Expr::Call(call) => extract_call_guard(call, if_body_span, else_body_span),
+        Expr::Call(call) => extract_call_guard(bindings, call, if_body_span, else_body_span),
         // x is None / x == lit / x in (lits) / "key" in td
         Expr::Compare(cmp) if cmp.comparators.len() == 1 => {
-            extract_compare_guard(cmp, if_body_span, else_body_span)
+            extract_compare_guard(bindings, cmp, if_body_span, else_body_span)
         }
         // `not x` — inverted truthiness
         Expr::UnaryOp(unary) if matches!(unary.op, ruff_python_ast::UnaryOp::Not) => {
@@ -157,25 +179,31 @@ fn extract_guard_from_test(
 }
 
 /// Extract a guard from a call test: `isinstance`, `issubclass`, `hasattr`.
+///
+/// The callee is recognised by what it RESOLVES to ([ASTREBUILD-LAW]), via
+/// [`BindingTable::form_of_with_builtins`]: an aliased import of the builtin
+/// still guards, a module-level rebinding of its name never does.
 fn extract_call_guard(
+    bindings: &BindingTable,
     call: &ruff_python_ast::ExprCall,
     if_body_span: Span,
     else_body_span: Option<Span>,
 ) -> Option<NarrowingGuardKind> {
-    let func_name = expr_simple_name(&call.func)?;
     if call.arguments.args.len() != 2 {
         return None;
     }
     let variable = expr_simple_name(call.arguments.args.first()?)?;
     let second = call.arguments.args.get(1)?;
-    match func_name.as_str() {
-        // [TYPEINF-NARROWING-ISINSTANCE] / [TYPEINF-NARROWING-ISSUBCLASS]:
-        // the second-argument reader rendered class references to name text
-        // and was deleted with it. No guard is produced until the argument
-        // resolves through bindings ([ASTREBUILD-PHASE-RESOLVER]).
-        "isinstance" | "issubclass" => None,
-        // Implements [TYPEINF-NARROWING-HASATTR] (groundwork).
-        "hasattr" => match second {
+    match bindings.form_of_with_builtins(&call.func)? {
+        // [TYPEINF-NARROWING-ISINSTANCE] / [TYPEINF-NARROWING-ISSUBCLASS]
+        // (typing spec narrowing §`isinstance`): the second-argument reader
+        // rendered class references to name text and was deleted with it. No
+        // guard is produced until the argument resolves through bindings
+        // ([ASTREBUILD-PHASE-RESOLVER]).
+        TypingForm::IsinstanceFunction | TypingForm::IssubclassFunction => None,
+        // Implements [TYPEINF-NARROWING-HASATTR]
+        // (<https://typing.python.org/en/latest/spec/narrowing.html>).
+        TypingForm::HasattrFunction => match second {
             Expr::StringLiteral(lit) => Some(NarrowingGuardKind::HasAttr {
                 variable,
                 attribute: lit.value.to_str().to_owned(),
@@ -191,6 +219,7 @@ fn extract_call_guard(
 /// Extract a guard from a single comparison: `is None`, `== <literal>`,
 /// `in (<literals>)`, or `"key" in td`.
 fn extract_compare_guard(
+    bindings: &BindingTable,
     cmp: &ruff_python_ast::ExprCompare,
     if_body_span: Span,
     else_body_span: Option<Span>,
@@ -200,7 +229,8 @@ fn extract_compare_guard(
     match op {
         CmpOp::Is | CmpOp::IsNot => {
             // Implements [TYPEINF-NARROWING-TYPEOF]: `type(x) is C`.
-            if let Some(guard) = extract_type_of_guard(cmp, op, right, if_body_span, else_body_span)
+            if let Some(guard) =
+                extract_type_of_guard(bindings, cmp, op, right, if_body_span, else_body_span)
             {
                 return Some(guard);
             }
@@ -218,8 +248,12 @@ fn extract_compare_guard(
     }
 }
 
-/// `type(x) is C` / `type(x) is not C` — exact-class comparison.
+/// `type(x) is C` / `type(x) is not C` — exact-class comparison
+/// (typing spec narrowing, `type()` guards). The callee must RESOLVE to the
+/// builtin `type` class ([ASTREBUILD-LAW]); `typing.Type` is a special form,
+/// not callable, so only [`TypingForm::TypeClass`] qualifies.
 fn extract_type_of_guard(
+    bindings: &BindingTable,
     cmp: &ruff_python_ast::ExprCompare,
     op: CmpOp,
     right: &Expr,
@@ -229,7 +263,9 @@ fn extract_type_of_guard(
     let Expr::Call(call) = cmp.left.as_ref() else {
         return None;
     };
-    if expr_simple_name(&call.func)? != "type" || call.arguments.args.len() != 1 {
+    if bindings.form_of_with_builtins(&call.func)? != TypingForm::TypeClass
+        || call.arguments.args.len() != 1
+    {
         return None;
     }
     let variable = expr_simple_name(call.arguments.args.first()?)?;
@@ -297,12 +333,13 @@ fn extract_membership_guard(
 /// Extract a narrowing guard from an `assert` statement's test expression.
 // Implements [TYPEINF-NARROWING-ASSERT] — `assert isinstance(x, T)` /
 // `assert x is not None` narrows for all subsequent code in the flow path.
-fn extract_assert_guard(test: &Expr) -> Option<NarrowingGuardKind> {
+fn extract_assert_guard(bindings: &BindingTable, test: &Expr) -> Option<NarrowingGuardKind> {
     match test {
-        // `assert isinstance(x, T)` shares the deleted second-argument
-        // reader; see `extract_call_guard`. Inert pending
-        // [ASTREBUILD-PHASE-RESOLVER].
-        Expr::Call(_) => None,
+        // `assert hasattr(x, "a")` narrows subsequent flow (§7.8); the
+        // callee resolves through bindings like every call guard.
+        // `assert isinstance(x, T)` still yields nothing there — its
+        // second-argument reader was deleted ([ASTREBUILD-PHASE-RESOLVER]).
+        Expr::Call(call) => extract_call_guard(bindings, call, Span::new(0, 0), None),
         // assert x is not None
         Expr::Compare(cmp) if cmp.comparators.len() == 1 => {
             let is_none_target = matches!(cmp.comparators.first(), Some(Expr::NoneLiteral(_)));

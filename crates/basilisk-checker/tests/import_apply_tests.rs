@@ -8,6 +8,13 @@
 )]
 //! `resolve_module_imports` application tests for `basilisk_checker::imports`
 //! (relocated from `basilisk-lsp`; behaviour-identical — public API only).
+//!
+//! Relative-import pipeline regressions reference
+//! [#369](https://github.com/Nimblesite/Basilisk/issues/369) and enforce
+//! [PEP 328](https://peps.python.org/pep-0328/#guido-s-decision), including the
+//! semantic meaning of two leading dots. They deliberately exercise the full
+//! parse → resolve → import-application path; testing the standalone path
+//! helper would not catch dropped AST `level` information.
 
 use std::fmt::Write as _;
 use std::fs;
@@ -16,6 +23,8 @@ use std::sync::Arc;
 use basilisk_checker::imports::{
     classify_unresolved, resolve_module_imports, ActiveTypeshed, ImportSearchPaths,
 };
+use basilisk_parser::parse_source;
+use basilisk_resolver::resolve;
 use basilisk_resolver::scope::{ImportResolution, PackageDepKind, UnresolvedReason};
 use basilisk_stubs::typeshed::archive::{Archive, ArchiveEntry, ArchiveVfs};
 use basilisk_stubs::typeshed::gittree::FileMode;
@@ -91,6 +100,98 @@ fn search_paths_with_registry(registry: Arc<PackageRegistry>) -> ImportSearchPat
     let mut paths = make_search_paths(vec![]);
     paths.registry = Some(registry);
     paths
+}
+
+fn resolve_source_imports(
+    source: &str,
+    path: &std::path::Path,
+    search_paths: &ImportSearchPaths,
+) -> basilisk_resolver::ResolvedModule {
+    let parsed = parse_source(source.to_owned(), path.display().to_string()).unwrap();
+    let mut resolved = resolve(&parsed).unwrap();
+    resolve_module_imports(&mut resolved, search_paths);
+    resolved
+}
+
+/// Regression for [#369](https://github.com/Nimblesite/Basilisk/issues/369).
+/// Under [PEP 328](https://peps.python.org/pep-0328/#guido-s-decision), two
+/// leading dots move from `pkg.dev` to parent package `pkg` before resolving
+/// `sub`; treating it as an absolute import of top-level `sub` is incorrect.
+#[test]
+fn parent_relative_import_resolves_through_full_pipeline() {
+    let root = make_tmp_dir("bsk_issue_369_parent_relative");
+    let source_root = root.join("src");
+    let dev = source_root.join("pkg").join("dev");
+    let sub = source_root.join("pkg").join("sub");
+    fs::create_dir_all(&dev).unwrap();
+    fs::create_dir_all(&sub).unwrap();
+    for init in [
+        source_root.join("pkg").join("__init__.py"),
+        dev.join("__init__.py"),
+        sub.join("__init__.py"),
+    ] {
+        fs::write(init, "").unwrap();
+    }
+    fs::write(sub.join("mod.py"), "class Foo: pass\n").unwrap();
+    let importer = dev.join("user.py");
+    let paths = make_search_paths(vec![source_root]);
+
+    let resolved = resolve_source_imports("from ..sub import mod\n", &importer, &paths);
+    let import = resolved.imports.first().expect("one relative import");
+    assert_ne!(
+        import.resolution,
+        ImportResolution::Unresolved,
+        "PEP 328 parent-relative import must resolve; got {import:?}"
+    );
+    assert!(
+        import
+            .resolved_path
+            .as_ref()
+            .is_some_and(|path| path.ends_with("pkg/sub/__init__.py")),
+        "`from ..sub import mod` must resolve relative to pkg, got {import:?}"
+    );
+
+    let _ = fs::remove_dir_all(&root);
+}
+
+/// Regression for [#369](https://github.com/Nimblesite/Basilisk/issues/369).
+/// [PEP 328](https://peps.python.org/pep-0328/#guido-s-decision) applies the
+/// same parent traversal before resolving a dotted module target.
+#[test]
+fn parent_relative_dotted_import_resolves_through_full_pipeline() {
+    let root = make_tmp_dir("bsk_issue_369_parent_relative_dotted");
+    let source_root = root.join("src");
+    let dev = source_root.join("pkg").join("dev");
+    let sub = source_root.join("pkg").join("sub");
+    fs::create_dir_all(&dev).unwrap();
+    fs::create_dir_all(&sub).unwrap();
+    for init in [
+        source_root.join("pkg").join("__init__.py"),
+        dev.join("__init__.py"),
+        sub.join("__init__.py"),
+    ] {
+        fs::write(init, "").unwrap();
+    }
+    fs::write(sub.join("mod.py"), "class Foo: pass\n").unwrap();
+    let importer = dev.join("user.py");
+    let paths = make_search_paths(vec![source_root]);
+
+    let resolved = resolve_source_imports("from ..sub.mod import Foo\n", &importer, &paths);
+    let import = resolved.imports.first().expect("one relative import");
+    assert_ne!(
+        import.resolution,
+        ImportResolution::Unresolved,
+        "PEP 328 parent-relative dotted import must resolve; got {import:?}"
+    );
+    assert!(
+        import
+            .resolved_path
+            .as_ref()
+            .is_some_and(|path| path.ends_with("pkg/sub/mod.py")),
+        "`from ..sub.mod import Foo` must resolve relative to pkg, got {import:?}"
+    );
+
+    let _ = fs::remove_dir_all(&root);
 }
 
 #[test]

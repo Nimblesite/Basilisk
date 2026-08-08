@@ -433,6 +433,24 @@ impl BindingTable {
             .is_some_and(|symbol| symbol.module == module && symbol.name == name)
     }
 
+    /// Whether a bare-name use refers to a module-level local definition —
+    /// a `def`, `class`, or assignment this module makes — rather than an
+    /// import or the builtin scope.
+    ///
+    /// Positional: the latest binding at or before the use site decides, so
+    /// a class name later rebound by an import stops referring to the class
+    /// from the rebinding onward.
+    #[must_use]
+    pub fn refers_to_local_definition(&self, expr: &Expr) -> bool {
+        let Expr::Name(name) = expr else {
+            return false;
+        };
+        matches!(
+            self.binding_at(name.id.as_str(), name.range().start()),
+            Some(BindingKind::LocalDefinition)
+        )
+    }
+
     /// The element expression of a subscript whose base denotes `form`.
     ///
     /// `Final[int]` with [`TypingForm::FinalQualifier`] yields `int`.

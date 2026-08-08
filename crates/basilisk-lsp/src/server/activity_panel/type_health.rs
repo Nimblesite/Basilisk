@@ -142,6 +142,12 @@ pub(crate) fn compute_file_health(
 /// Count annotated vs unannotated symbols in a resolved module.
 ///
 /// Returns `(total, annotated, unannotated_names)`.
+/// Enum members are semantically typed by their inferred enum-literal type and
+/// must never be counted as untyped merely because they correctly omit a
+/// variable annotation. That contract is tracked by
+/// [#373](https://github.com/Nimblesite/Basilisk/issues/373), grounded in
+/// [PEP 435](https://peps.python.org/pep-0435/) and the
+/// [typing enum specification](https://typing.python.org/en/latest/spec/enums.html#defining-members).
 fn count_annotations(resolved: &basilisk_resolver::ResolvedModule) -> (usize, usize, Vec<String>) {
     let mut total: usize = 0;
     let mut annotated: usize = 0;
@@ -302,6 +308,38 @@ mod tests {
         assert!(
             unannotated.iter().any(|n| n.contains('y')),
             "y should be unannotated"
+        );
+    }
+
+    /// Regression for [#373](https://github.com/Nimblesite/Basilisk/issues/373).
+    /// [PEP 435](https://peps.python.org/pep-0435/) defines enum members and the
+    /// [typing enum specification](https://typing.python.org/en/latest/spec/enums.html#defining-members)
+    /// gives each member an inferred literal enum type. Coverage must therefore
+    /// treat valid unannotated members as typed, not demand forbidden syntax.
+    #[test]
+    fn enum_members_are_semantically_typed_for_coverage() {
+        let idx = make_index();
+        let uri = make_uri("/tmp/status.py");
+        let source = concat!(
+            "from enum import StrEnum\n",
+            "\n",
+            "class Status(StrEnum):\n",
+            "    ACTIVE = 'active'\n",
+            "    INACTIVE = 'inactive'\n",
+        );
+        let _ = idx.set_open(&uri, source, 1);
+        let path = uri.to_file_path().unwrap();
+        let entry = idx.files.get(&path).unwrap();
+        let resolved = entry.resolved.as_ref().unwrap();
+
+        let (total, annotated, unannotated) = count_annotations(resolved);
+        assert_eq!(
+            annotated, total,
+            "enum members have inferred Literal[Status.MEMBER] types and must count as typed; untyped={unannotated:?}"
+        );
+        assert!(
+            !unannotated.iter().any(|name| name == "Status.ACTIVE" || name == "Status.INACTIVE"),
+            "valid enum members must not be labelled untyped: {unannotated:?}"
         );
     }
 

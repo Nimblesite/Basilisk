@@ -129,6 +129,12 @@ module.
 
 Symbol rows show name and a kind icon, expand class children, and open the file at the
 zero-based source line. No signature or docstring field exists in the wire payload.
+Semantic typing counts, not annotation-token counts: enum members count as typed
+through their inferred `Literal[EnumClass.MEMBER]` type and are never placed in
+the unannotated denominator. Requiring an explicit member annotation would
+contradict [PEP 435](https://peps.python.org/pep-0435/) and the
+[typing enum specification](https://typing.python.org/en/latest/spec/enums.html#defining-members).
+The regression is tracked by [#373](https://github.com/Nimblesite/Basilisk/issues/373).
 
 ### Decorations {#EXTACT-MODULES-DECORATIONS}
 

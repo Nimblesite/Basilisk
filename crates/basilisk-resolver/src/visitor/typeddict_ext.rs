@@ -241,62 +241,75 @@ fn subscript_key_literal(slice: &Expr) -> Option<String> {
 
 /// Collect `isinstance`/`issubclass`-on-`TypedDict` violations from
 /// module-level statements and function bodies.
+///
+/// PEP 589: "TypedDict type objects cannot be used in `isinstance()` tests
+/// such as `isinstance(d, Movie)`." Both sides of the call resolve through
+/// the module's [`basilisk_canonical::BindingTable`] ([ASTREBUILD-LAW]): the
+/// callee must resolve to the builtin `isinstance`/`issubclass`, and the
+/// checked name must still refer to the module-level TypedDict definition at
+/// the use site — not a later rebinding of the same spelling.
 pub(super) fn collect_isinstance_typeddict_violations(
+    bindings: &basilisk_canonical::BindingTable,
     stmts: &[Stmt],
     typeddict_names: &std::collections::HashSet<&str>,
 ) -> Vec<Span> {
     let mut out = Vec::new();
-    collect_isinstance_typeddict_in_stmts(stmts, typeddict_names, &mut out);
+    collect_isinstance_typeddict_in_stmts(bindings, stmts, typeddict_names, &mut out);
     out
 }
 
 pub(super) fn collect_isinstance_typeddict_in_stmts(
+    bindings: &basilisk_canonical::BindingTable,
     stmts: &[Stmt],
     typeddict_names: &std::collections::HashSet<&str>,
     out: &mut Vec<Span>,
 ) {
+    let mut check =
+        |expr: &Expr| collect_isinstance_typeddict_in_expr(bindings, expr, typeddict_names, out);
     crate::walk_all_stmts(stmts, &mut |stmt| match stmt {
         Stmt::If(node) => {
-            collect_isinstance_typeddict_in_expr(&node.test, typeddict_names, out);
+            check(&node.test);
             for clause in &node.elif_else_clauses {
                 if let Some(test) = &clause.test {
-                    collect_isinstance_typeddict_in_expr(test, typeddict_names, out);
+                    check(test);
                 }
             }
         }
-        Stmt::Expr(node) => collect_isinstance_typeddict_in_expr(&node.value, typeddict_names, out),
-        Stmt::Assign(node) => {
-            collect_isinstance_typeddict_in_expr(&node.value, typeddict_names, out);
-        }
+        Stmt::Expr(node) => check(&node.value),
+        Stmt::Assign(node) => check(&node.value),
         Stmt::AnnAssign(node) => {
             if let Some(val) = &node.value {
-                collect_isinstance_typeddict_in_expr(val, typeddict_names, out);
+                check(val);
             }
         }
-        Stmt::While(node) => collect_isinstance_typeddict_in_expr(&node.test, typeddict_names, out),
+        Stmt::While(node) => check(&node.test),
         _ => {}
     });
 }
 
 pub(super) fn collect_isinstance_typeddict_in_expr(
+    bindings: &basilisk_canonical::BindingTable,
     expr: &Expr,
     typeddict_names: &std::collections::HashSet<&str>,
     out: &mut Vec<Span>,
 ) {
+    use basilisk_canonical::TypingForm;
     use ruff_text_size::Ranged as _;
     let Expr::Call(call) = expr else { return };
-    let callee_is_isinstance = matches!(
-        call.func.as_ref(),
-        Expr::Name(n) if n.id == "isinstance" || n.id == "issubclass"
+    let callee_is_runtime_check = matches!(
+        bindings.form_of_with_builtins(&call.func),
+        Some(TypingForm::IsinstanceFunction | TypingForm::IssubclassFunction)
     );
-    if !callee_is_isinstance {
+    if !callee_is_runtime_check {
         return;
     }
     let Some(second_arg) = call.arguments.args.get(1) else {
         return;
     };
     if let Expr::Name(name) = second_arg {
-        if typeddict_names.contains(name.id.as_str()) {
+        if typeddict_names.contains(name.id.as_str())
+            && bindings.refers_to_local_definition(second_arg)
+        {
             let range = call.range();
             out.push(Span {
                 start: range.start().to_u32(),
