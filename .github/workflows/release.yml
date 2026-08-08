@@ -511,18 +511,59 @@ jobs:
           # One publish per platform-specific VSIX. vsce requires a separate
           # publish call for each --target platform; globbing all into one
           # publish silently uses only the first.
+          # Same hardening as the Open VSX step, for the same reason: an
+          # unguarded loop under `set -e` aborts on the first failure and
+          # strands every target behind it. Retry with backoff, treat an
+          # already-published version as done so re-runs are safe, and try
+          # every target before failing. An expired PAT is NOT retried — it
+          # can only fail again, so it exits immediately with the fix.
           shopt -s globstar nullglob
           published=0
+          skipped=0
+          failed=()
           for vsix in **/*.vsix; do
             echo "Publishing $vsix"
-            npx --yes @vscode/vsce publish $flag --packagePath "$vsix"
-            published=$((published + 1))
+            attempt=1
+            delay=15
+            while :; do
+              set +e
+              out="$(npx --yes @vscode/vsce publish $flag --packagePath "$vsix" 2>&1)"
+              rc=$?
+              set -e
+              echo "$out"
+              if [ "$rc" -eq 0 ]; then
+                published=$((published + 1))
+                break
+              fi
+              if grep -qiE 'already exists|greater than .* version' <<<"$out"; then
+                echo "$vsix is already published at this version — nothing to do"
+                skipped=$((skipped + 1))
+                break
+              fi
+              if grep -qi 'Personal Access Token used has expired' <<<"$out"; then
+                echo "::error::VSCODE_MARKETPLACE_PAT has EXPIRED. Mint a new Azure DevOps PAT at https://aka.ms/vscodepat — Organization: 'All accessible organizations', Scope: Marketplace → Manage — and update the Nimblesite org secret VSCODE_MARKETPLACE_PAT. Retrying cannot help."
+                exit 1
+              fi
+              if [ "$attempt" -ge 4 ]; then
+                echo "::warning::$vsix still failing after $attempt attempts"
+                failed+=("$vsix")
+                break
+              fi
+              echo "Attempt $attempt failed (exit $rc); retrying in ${delay}s"
+              sleep "$delay"
+              attempt=$((attempt + 1))
+              delay=$((delay * 2))
+            done
           done
-          if [ "$published" -eq 0 ]; then
+          if [ "$((published + skipped))" -eq 0 ] && [ "${#failed[@]}" -eq 0 ]; then
             echo "::error::No VSIX artifacts found to publish"
             exit 1
           fi
-          echo "Published $published VSIX(es) to the Marketplace"
+          echo "Marketplace: $published published, $skipped already present, ${#failed[@]} failed"
+          if [ "${#failed[@]}" -gt 0 ]; then
+            echo "::error::Marketplace publish failed for: ${failed[*]}"
+            exit 1
+          fi
 
   publish-vsix-ovsx:
     name: Publish VSIX (Open VSX)
@@ -574,18 +615,57 @@ jobs:
           # ovsx is version-pinned: a floating `npx ovsx` would fetch and run
           # the latest release at publish time, inside the job that holds the
           # token — a supply-chain risk. Bump deliberately.
+          # Open VSX returns transient 5xx under load. v0.41.0 published three
+          # targets, took a 503 on the fourth, and `set -e` aborted the loop —
+          # leaving win32-arm64 and win32-x64 unpublished with no retry. So:
+          # retry each target with backoff, treat "already exists" as the
+          # desired end state (makes re-runs and partial retries safe), and
+          # attempt EVERY target before failing, so one bad target can never
+          # strand the ones behind it. The job still fails if any target is
+          # ultimately unpublished — a partial push is never reported as green.
           shopt -s globstar nullglob
           published=0
+          skipped=0
+          failed=()
           for vsix in **/*.vsix; do
             echo "Publishing $vsix"
-            npx --yes ovsx@1.0.0 publish $flag --packagePath "$vsix"
-            published=$((published + 1))
+            attempt=1
+            delay=15
+            while :; do
+              set +e
+              out="$(npx --yes ovsx@1.0.0 publish $flag --packagePath "$vsix" 2>&1)"
+              rc=$?
+              set -e
+              echo "$out"
+              if [ "$rc" -eq 0 ]; then
+                published=$((published + 1))
+                break
+              fi
+              if grep -qi 'already exists' <<<"$out"; then
+                echo "$vsix is already published at this version — nothing to do"
+                skipped=$((skipped + 1))
+                break
+              fi
+              if [ "$attempt" -ge 4 ]; then
+                echo "::warning::$vsix still failing after $attempt attempts"
+                failed+=("$vsix")
+                break
+              fi
+              echo "Attempt $attempt failed (exit $rc); retrying in ${delay}s"
+              sleep "$delay"
+              attempt=$((attempt + 1))
+              delay=$((delay * 2))
+            done
           done
-          if [ "$published" -eq 0 ]; then
+          if [ "$((published + skipped))" -eq 0 ] && [ "${#failed[@]}" -eq 0 ]; then
             echo "::error::No VSIX artifacts found to publish"
             exit 1
           fi
-          echo "Published $published VSIX(es) to Open VSX"
+          echo "Open VSX: $published published, $skipped already present, ${#failed[@]} failed"
+          if [ "${#failed[@]}" -gt 0 ]; then
+            echo "::error::Open VSX publish failed for: ${failed[*]}"
+            exit 1
+          fi
 
   deploy-pages:
     name: Deploy GitHub Pages
