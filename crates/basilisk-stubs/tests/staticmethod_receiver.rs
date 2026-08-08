@@ -67,7 +67,10 @@ class Circle:
     def make(radius: float) -> float: ...
 ",
     );
-    assert_eq!(method(&stub, "Circle", "make").receiver, None);
+    let make = method(&stub, "Circle", "make");
+    assert_eq!(make.receiver, None);
+    assert_eq!(make.params.len(), 1);
+    assert_eq!(make.params.first().map(|param| param.name.as_str()), Some("radius"));
 }
 
 /// A bare `@staticmethod` with no import is the builtin fallback.
@@ -80,7 +83,10 @@ class Circle:
     def make(radius: float) -> float: ...
 ",
     );
-    assert_eq!(method(&stub, "Circle", "make").receiver, None);
+    let make = method(&stub, "Circle", "make");
+    assert_eq!(make.receiver, None);
+    assert_eq!(make.params.len(), 1);
+    assert_eq!(make.params.first().map(|param| param.name.as_str()), Some("radius"));
 }
 
 /// A stub that defines its own `staticmethod` earlier in the module has
@@ -102,6 +108,68 @@ class Circle:
         area.receiver.as_ref().map(|receiver| receiver.name.as_str()),
         Some("self")
     );
+    assert!(area.params.is_empty());
+}
+
+/// A later module binding cannot retroactively change what an earlier
+/// decorator expression denotes. At the decorator's position the bare name
+/// still resolves to the builtin.
+#[test]
+fn later_rebind_does_not_change_earlier_staticmethod() {
+    let stub = parse_stub(
+        "
+class Circle:
+    @staticmethod
+    def make(radius: float) -> float: ...
+
+def staticmethod(func): ...
+",
+    );
+    let make = method(&stub, "Circle", "make");
+    assert_eq!(make.receiver, None);
+    assert_eq!(make.params.len(), 1);
+    assert_eq!(make.params.first().map(|param| param.name.as_str()), Some("radius"));
+}
+
+/// A real builtin import after an earlier local definition becomes the
+/// governing binding for later decorators.
+#[test]
+fn later_builtin_import_restores_staticmethod() {
+    let stub = parse_stub(
+        "
+def staticmethod(func): ...
+from builtins import staticmethod
+
+class Circle:
+    @staticmethod
+    def make(radius: float) -> float: ...
+",
+    );
+    let make = method(&stub, "Circle", "make");
+    assert_eq!(make.receiver, None);
+    assert_eq!(make.params.len(), 1);
+    assert_eq!(make.params.first().map(|param| param.name.as_str()), Some("radius"));
+}
+
+/// Parentheses, line breaks, and a module alias do not change the resolved
+/// decorator identity.
+#[test]
+fn formatted_qualified_staticmethod_strips_receiver() {
+    let stub = parse_stub(
+        "
+import builtins as runtime
+
+class Circle:
+    @(
+        runtime.staticmethod
+    )
+    def make(radius: float) -> float: ...
+",
+    );
+    let make = method(&stub, "Circle", "make");
+    assert_eq!(make.receiver, None);
+    assert_eq!(make.params.len(), 1);
+    assert_eq!(make.params.first().map(|param| param.name.as_str()), Some("radius"));
 }
 
 /// An undecorated method always binds its first parameter as the receiver.
