@@ -9,8 +9,11 @@
 > silently emptied the `TypingForm` index is fixed and pinned by
 > `crates/basilisk-canonical/tests/canonical_registry.rs`. Deleted resolver
 > collectors are stubbed to empty vectors (inert, never satisfied), pinned by
-> 14 failing `annotation_tests` — [Phase 2](#ASTREBUILD-PHASE-RESOLVER) owns
-> them.
+> **161 failing resolver tests** (462 pass; measured per-binary on 2026-08-08:
+> annotation 14, class 8, function 1, misc 11, mutant 31, protocol 25,
+> resolution 1, type_system 36, typeddict 34) —
+> [Phase 2](#ASTREBUILD-PHASE-RESOLVER) owns them all, and none may be deleted
+> or weakened.
 > Basilisk's former 100% `python/typing` claim is withdrawn, the
 > project is not listed in the [official results](https://github.com/python/typing/blob/main/conformance/results/results.html),
 > and the current conformance level is **unknown**. Nothing in this plan
@@ -481,8 +484,11 @@ explicit `outer_typeparams` membership test remains and is lawful.
 
 The keystone. Every later phase depends only on this.
 
-- [ ] Add `pub bindings: BindingTable` to `ResolvedModule`, built once in
-      `visitor::collect` from the module body.
+- [x] Add `pub bindings` to `ResolvedModule`, built once in `visitor::collect`
+      from the module body. Carried as `ModuleBindings`, a deref-transparent
+      wrapper giving the table the same equality treatment as `LazyAst` (a
+      pure function of `source` carries no independent identity — and the
+      public `BindingTable` itself must not grow a lying `PartialEq`).
 - [x] Thread it through `core::collect_from_body` so collectors can consult it
       while building their records. Done as part of 0d: `&BindingTable` is the
       first parameter of every collection walk in `visitor/core.rs`.

@@ -1,41 +1,62 @@
-//! `assert_type`, `cast`, and `reveal_type` — the spec's static-introspection
-//! directives. [PERMTEST-FAMILY-A] / [PERMTEST-FAMILY-B] / [PERMTEST-VOCABULARY].
+//! `assert_type` — the spec's sharpest static-introspection directive.
+//! [PERMTEST-FAMILY-A] / [PERMTEST-FAMILY-B] / [PERMTEST-VOCABULARY].
+//!
+//! `cast` and `reveal_type` are in [`directives_more_tests`](directives_more_tests.rs).
 //!
 //! These are the sharpest permutation targets in the whole spec. Every one takes
 //! a *type expression* as an argument, so a checker that inspects the argument's
 //! source text rather than its resolved type passes the canonical spelling and
 //! fails every respelling of it.
 //!
-//! `assert_type` is sharper still: it demands type *identity*, not assignability.
+//! `assert_type` is sharper still: it demands *equivalence*, not assignability.
 //! An alias, a `from … import … as`, and a dotted attribute path must all compare
 //! equal to the type they name — and two programs that differ only in what an
 //! alias points at must get opposite verdicts from byte-identical call sites.
+//!
+//! **Authoring hazard.** Because `assert_type` demands equivalence, its subject
+//! must have a type the spec actually pins down. It must never be an unannotated
+//! literal binding: the spec's type-inference section states "No particular
+//! strategy is mandated", so `feldspar = 1` may lawfully infer `Literal[1]` *or*
+//! `int`, and `Literal[1]` is not equivalent to `int`. An `assert_type(feldspar,
+//! int)` fixture built on that would demand one lawful inference strategy and
+//! call the other a bug. Every subject below therefore takes its type from a
+//! *declared* source — an annotated return type or an annotated binding — which
+//! the spec does fix.
 
-use super::harness::{
-    assert_invariant, aliased, import_form, reformatted, renamed, SpecObligation,
-};
+use super::harness::{aliased, import_form, reformatted, renamed, SpecObligation};
 
 // ── assert_type compares the inferred type ───────────────────────────────
 
 #[test]
 fn assert_type_rejects_a_mismatched_type() -> Result<(), Box<dyn std::error::Error>> {
     SpecObligation {
-        spec_reason: "`assert_type(v, T)` is an error unless the inferred type of `v` is exactly \
-                      `T`; `1` infers `int`, not `str`",
+        spec_reason: "`assert_type(v, T)` is an error unless the inferred type of `v` is \
+                      *equivalent* to `T`. The subject is a call to a function declared \
+                      `-> int`, so the spec fixes its type at `int` regardless of the \
+                      checker's literal-inference strategy — asserting `str` is an error \
+                      and asserting `int` is not",
         rejected: r#"
 import typing
 
 
+def quarry() -> int:
+    return 1
+
+
 def assay() -> None:
-    feldspar = 1
+    feldspar = quarry()
     typing.assert_type(feldspar, str)
 "#,
         accepted: r#"
 import typing
 
 
+def quarry() -> int:
+    return 1
+
+
 def assay() -> None:
-    feldspar = 1
+    feldspar = quarry()
     typing.assert_type(feldspar, int)
 "#,
         rejected_variants: &[
@@ -45,8 +66,12 @@ from typing import assert_type as claim
 from builtins import str as Text
 
 
+def quarry() -> int:
+    return 1
+
+
 def assay() -> None:
-    feldspar = 1
+    feldspar = quarry()
     claim(feldspar, Text)
 "#,
             ),
@@ -56,8 +81,12 @@ import typing
 import builtins
 
 
+def quarry() -> builtins.int:
+    return 1
+
+
 def assay() -> None:
-    feldspar = 1
+    feldspar = quarry()
     typing.assert_type(feldspar, builtins.str)
 "#,
             ),
@@ -66,8 +95,12 @@ def assay() -> None:
 import typing
 
 
+def delve() -> int:
+    return 1
+
+
 def probe() -> None:
-    gabbro = 1
+    gabbro = delve()
     typing.assert_type(gabbro, str)
 "#,
             ),
@@ -75,12 +108,15 @@ def probe() -> None:
                 "
 import typing
 
+def quarry() -> int :
+        return 1
+
 def assay() -> None:
 
-        feldspar = 1
+        feldspar = quarry()
         typing.assert_type(
             feldspar ,
-            str ,   # <- inferred int, asserted str
+            str ,   # <- declared return int, asserted str
         )
 ",
             ),
@@ -92,8 +128,12 @@ from typing import assert_type as claim
 from builtins import int as Whole
 
 
+def quarry() -> Whole:
+    return 1
+
+
 def assay() -> None:
-    feldspar = 1
+    feldspar = quarry()
     claim(feldspar, Whole)
 "#,
             ),
@@ -103,8 +143,12 @@ import typing
 import builtins
 
 
+def quarry() -> builtins.int:
+    return 1
+
+
 def assay() -> None:
-    feldspar = 1
+    feldspar = quarry()
     typing.assert_type(feldspar, builtins.int)
 "#,
             ),
@@ -113,8 +157,12 @@ def assay() -> None:
 import typing
 
 
+def delve() -> int:
+    return 1
+
+
 def probe() -> None:
-    gabbro = 1
+    gabbro = delve()
     typing.assert_type(gabbro, int)
 "#,
             ),
@@ -227,18 +275,24 @@ def probe() -> None:
 fn assert_type_resolves_the_alias_target_not_the_alias_name()
 -> Result<(), Box<dyn std::error::Error>> {
     SpecObligation {
-        spec_reason: "a type alias is transparent: `Grain = str` makes `assert_type(1, Grain)` the \
-                      same error as `assert_type(1, str)`, while `Grain = int` makes it correct. \
-                      The call site is byte-identical in both programs, so only the resolved \
-                      target can decide",
+        spec_reason: "a type alias is transparent: `Grain = str` makes `assert_type(quarry(), \
+                      Grain)` the same error as asserting `str` outright, while `Grain = int` \
+                      makes it correct. The subject is a call declared `-> int`, so its type is \
+                      fixed by the spec rather than by the checker's literal-inference strategy, \
+                      and the assertion site is byte-identical in both programs — only the \
+                      resolved alias target can decide the verdict",
         rejected: r#"
 import typing
 
 Grain = str
 
 
+def quarry() -> int:
+    return 1
+
+
 def assay() -> None:
-    typing.assert_type(1, Grain)
+    typing.assert_type(quarry(), Grain)
 "#,
         accepted: r#"
 import typing
@@ -246,8 +300,12 @@ import typing
 Grain = int
 
 
+def quarry() -> int:
+    return 1
+
+
 def assay() -> None:
-    typing.assert_type(1, Grain)
+    typing.assert_type(quarry(), Grain)
 "#,
         rejected_variants: &[
             aliased(
@@ -258,8 +316,12 @@ from builtins import str as Text
 Grain = Text
 
 
+def quarry() -> int:
+    return 1
+
+
 def assay() -> None:
-    claim(1, Grain)
+    claim(quarry(), Grain)
 "#,
             ),
             import_form(
@@ -270,8 +332,12 @@ import builtins
 Grain = builtins.str
 
 
+def quarry() -> builtins.int:
+    return 1
+
+
 def assay() -> None:
-    typing.assert_type(1, Grain)
+    typing.assert_type(quarry(), Grain)
 "#,
             ),
             renamed(
@@ -281,8 +347,12 @@ import typing
 Fabric = str
 
 
+def delve() -> int:
+    return 1
+
+
 def probe() -> None:
-    typing.assert_type(1, Fabric)
+    typing.assert_type(delve(), Fabric)
 "#,
             ),
             reformatted(
@@ -291,9 +361,12 @@ import typing
 
 Grain = str   # <- alias points at str
 
+def quarry() -> int :
+        return 1
+
 def assay() -> None:
 
-        typing.assert_type( 1 , Grain )
+        typing.assert_type( quarry() , Grain )
 ",
             ),
         ],
@@ -306,8 +379,28 @@ from builtins import int as Whole
 Grain = Whole
 
 
+def quarry() -> Whole:
+    return 1
+
+
 def assay() -> None:
-    claim(1, Grain)
+    claim(quarry(), Grain)
+"#,
+            ),
+            import_form(
+                r#"
+import typing
+import builtins
+
+Grain = builtins.int
+
+
+def quarry() -> builtins.int:
+    return 1
+
+
+def assay() -> None:
+    typing.assert_type(quarry(), Grain)
 "#,
             ),
             renamed(
@@ -317,8 +410,12 @@ import typing
 Fabric = int
 
 
+def delve() -> int:
+    return 1
+
+
 def probe() -> None:
-    typing.assert_type(1, Fabric)
+    typing.assert_type(delve(), Fabric)
 "#,
             ),
         ],
@@ -326,150 +423,3 @@ def probe() -> None:
     .assert("assert_type resolves the alias target, not the alias name")
 }
 
-// ── cast is an escape hatch, but still a two-argument call ───────────────
-
-#[test]
-fn cast_takes_a_type_and_a_value() -> Result<(), Box<dyn std::error::Error>> {
-    SpecObligation {
-        spec_reason: "`cast(typ, val)` is declared with two positional parameters; one argument \
-                      does not bind `val`. The value's own type is deliberately unchecked — that \
-                      is what makes `cast` an escape hatch — so the two-argument form is clean",
-        rejected: r#"
-import typing
-
-
-def assay() -> None:
-    typing.cast(int)
-"#,
-        accepted: r#"
-import typing
-
-
-def assay() -> None:
-    typing.cast(int, "olivine")
-"#,
-        rejected_variants: &[
-            aliased(
-                r#"
-from typing import cast as coerce
-from builtins import int as Whole
-
-
-def assay() -> None:
-    coerce(Whole)
-"#,
-            ),
-            import_form(
-                r#"
-import typing
-import builtins
-
-
-def assay() -> None:
-    typing.cast(builtins.int)
-"#,
-            ),
-            renamed(
-                r#"
-import typing
-
-
-def probe() -> None:
-    typing.cast(int)
-"#,
-            ),
-            reformatted(
-                "
-import typing
-
-def assay() -> None:
-        typing.cast(
-            int   # <- no value argument
-        )
-",
-            ),
-        ],
-        accepted_variants: &[
-            aliased(
-                r#"
-from typing import cast as coerce
-from builtins import int as Whole
-
-
-def assay() -> None:
-    coerce(Whole, "olivine")
-"#,
-            ),
-            reformatted(
-                "
-import typing
-
-def assay() -> None:
-        typing.cast(
-            int ,
-            'olivine' ,
-        )
-",
-            ),
-        ],
-    }
-    .assert("cast takes a type and a value")
-}
-
-// ── reveal_type: invariance only, since it always reports ────────────────
-
-#[test]
-fn reveal_type_reports_identically_however_it_is_spelled()
--> Result<(), Box<dyn std::error::Error>> {
-    // `reveal_type` always emits, so neither directed leg applies; the property
-    // under test is purely Family A — the same program respelled must produce
-    // the same number of revelations, no more and no fewer.
-    let canonical = r#"
-import typing
-
-
-def assay() -> None:
-    quartzite = 1
-    typing.reveal_type(quartzite)
-"#;
-
-    assert_invariant(
-        "reveal_type reports identically however it is spelled",
-        canonical,
-        &[
-            aliased(
-                r#"
-from typing import reveal_type as show
-
-
-def assay() -> None:
-    quartzite = 1
-    show(quartzite)
-"#,
-            ),
-            renamed(
-                r#"
-import typing
-
-
-def probe() -> None:
-    obsidian = 1
-    typing.reveal_type(obsidian)
-"#,
-            ),
-            reformatted(
-                "
-import typing
-
-def assay() -> None:
-
-        quartzite = 1
-
-        typing.reveal_type(
-            quartzite   # one revelation, however it is laid out
-        )
-",
-            ),
-        ],
-    )
-}
