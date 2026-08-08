@@ -73,7 +73,6 @@ pub(crate) mod generics_defaults_referential;
 pub(crate) mod generics_defaults_referential_2;
 pub(crate) mod generics_defaults_referential_2_helpers;
 pub(crate) mod generics_defaults_specialization;
-pub(crate) mod generics_scoping;
 pub(crate) mod generics_self_attributes;
 pub(crate) mod generics_self_basic;
 pub(crate) mod generics_self_protocols;
@@ -347,7 +346,6 @@ fn all_rules() -> &'static [&'static dyn Rule] {
         &directives_deprecated::DeprecatedUsage,
         &directives_disjoint_base::DisjointBaseViolation,
         &namedtuples_define_class::NamedTupleDefError,
-        &generics_scoping::UnboundTypeVarScope,
         &protocols_explicit_2::SuperAbstractCall,
         &protocols_runtime_checkable_2::ProtocolUnsafeOverlap,
         &annotations_generators::GeneratorReturnTypeViolation,

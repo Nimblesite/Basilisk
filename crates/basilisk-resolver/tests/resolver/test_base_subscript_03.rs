@@ -65,6 +65,58 @@ fn typeddict_subscript_wrong_value_type() -> Result<(), Box<dyn std::error::Erro
 }
 
 #[test]
+fn key_lambda_tuple_index_check_does_not_depend_on_annotation_spelling(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let bare = resolve_src(
+        &concat!(
+            "def load(): ...\n",
+            "def f() -> None:\n",
+            "    items: list[tuple[int, int]] = load()\n",
+            "    sorted(items, key=lambda pair: pair[2])\n",
+        )
+        .to_owned(),
+    )?;
+    let aliased = resolve_src(
+        &concat!(
+            "from builtins import list as SequenceList, tuple as FixedTuple\n",
+            "def load(): ...\n",
+            "def f() -> None:\n",
+            "    items: SequenceList[FixedTuple[int, int]] = load()\n",
+            "    sorted(items, key=lambda pair: pair[2])\n",
+        )
+        .to_owned(),
+    )?;
+    assert_eq!(bare.tuple_index_violations.len(), 1);
+    assert_eq!(
+        aliased.tuple_index_violations.len(),
+        bare.tuple_index_violations.len(),
+        "equivalent builtin aliases must not change tuple-index analysis"
+    );
+    Ok(())
+}
+
+#[test]
+fn direct_tuple_index_check_does_not_depend_on_annotation_spelling(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let bare = resolve_src(&"value: tuple[int, int]\nbad = value[2]\n".to_owned())?;
+    let aliased = resolve_src(
+        &concat!(
+            "from builtins import tuple as FixedTuple\n",
+            "value: FixedTuple[int, int]\n",
+            "bad = value[2]\n",
+        )
+        .to_owned(),
+    )?;
+    assert_eq!(bare.tuple_index_violations.len(), 1);
+    assert_eq!(
+        aliased.tuple_index_violations.len(),
+        bare.tuple_index_violations.len(),
+        "equivalent tuple aliases must not change tuple-index analysis"
+    );
+    Ok(())
+}
+
+#[test]
 fn type_arg_subscript_in_base_class() -> Result<(), Box<dyn std::error::Error>> {
     use basilisk_resolver::TypeArg;
     let src = "from typing import TypeVar, Generic\nT = TypeVar('T')\nclass Base(Generic[T]):\n    pass\nclass Child(Base[list[int]]):\n    pass\n".to_owned();
