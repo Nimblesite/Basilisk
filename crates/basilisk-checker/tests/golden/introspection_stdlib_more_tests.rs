@@ -9,6 +9,12 @@
 //! Identifiers are drawn from a vocabulary disjoint from the suite's 913.
 
 use super::harness::{aliased, import_form, reformatted, renamed, SpecObligation};
+#[allow(
+    clippy::wildcard_imports,
+    unused_imports,
+    reason = "shared golden fixtures: each sibling uses the subset it references"
+)]
+use super::introspection_stdlib::*;
 
 #[test]
 fn deque_is_not_a_list() -> Result<(), Box<dyn std::error::Error>> {

@@ -21,7 +21,7 @@ use super::harness::{aliased, import_form, reformatted, renamed, SpecObligation}
 // no such constraint — it is a one-way assertion — so the identical signature
 // is well-typed under `TypeGuard` and ill-typed under `TypeIs`.
 
-const NARROWED_OUTSIDE_PARAMETER: &str = r"
+pub(super) const NARROWED_OUTSIDE_PARAMETER: &str = r"
 from typing import TypeIs as NarrowsTo
 from decimal import Decimal
 
@@ -29,7 +29,7 @@ def bears_scale(quantum: str) -> NarrowsTo[Decimal]:
     return False
 ";
 
-const NARROWED_WITHIN_PARAMETER: &str = r"
+pub(super) const NARROWED_WITHIN_PARAMETER: &str = r"
 from typing import TypeIs as NarrowsTo
 from decimal import Decimal
 
@@ -37,7 +37,7 @@ def bears_scale(quantum: object) -> NarrowsTo[Decimal]:
     return isinstance(quantum, Decimal)
 ";
 
-const NARROWED_OUTSIDE_PARAMETER_ALIASED: &str = r"
+pub(super) const NARROWED_OUTSIDE_PARAMETER_ALIASED: &str = r"
 from typing import TypeIs as ImpliesKind
 from decimal import Decimal as FixedPoint
 
@@ -45,7 +45,7 @@ def bears_scale(quantum: str) -> ImpliesKind[FixedPoint]:
     return False
 ";
 
-const NARROWED_OUTSIDE_PARAMETER_IMPORT_FORM: &str = r"
+pub(super) const NARROWED_OUTSIDE_PARAMETER_IMPORT_FORM: &str = r"
 import decimal
 import typing
 
@@ -53,7 +53,7 @@ def bears_scale(quantum: str) -> typing.TypeIs[decimal.Decimal]:
     return False
 ";
 
-const NARROWED_OUTSIDE_PARAMETER_RENAMED: &str = r"
+pub(super) const NARROWED_OUTSIDE_PARAMETER_RENAMED: &str = r"
 from typing import TypeIs as NarrowsTo
 from decimal import Decimal
 
@@ -61,7 +61,7 @@ def holds_precision(magnitude: str) -> NarrowsTo[Decimal]:
     return False
 ";
 
-const NARROWED_OUTSIDE_PARAMETER_REFORMATTED: &str = r"
+pub(super) const NARROWED_OUTSIDE_PARAMETER_REFORMATTED: &str = r"
 from typing import TypeIs as NarrowsTo
 
 from decimal import Decimal
@@ -76,7 +76,7 @@ def bears_scale(
         return (False)
 ";
 
-const NARROWED_WITHIN_PARAMETER_ALIASED: &str = r"
+pub(super) const NARROWED_WITHIN_PARAMETER_ALIASED: &str = r"
 from typing import TypeIs as ImpliesKind
 from decimal import Decimal as FixedPoint
 
@@ -102,7 +102,7 @@ fn type_is_return_type_must_fit_inside_its_parameter() -> Result<(), Box<dyn std
     .assert("TypeIs return type within parameter type")
 }
 
-const ASSERTED_OUTSIDE_PARAMETER: &str = r"
+pub(super) const ASSERTED_OUTSIDE_PARAMETER: &str = r"
 from typing import TypeGuard as AssertsKind
 from decimal import Decimal
 
@@ -110,7 +110,7 @@ def bears_scale(quantum: str) -> AssertsKind[Decimal]:
     return False
 ";
 
-const ASSERTED_OUTSIDE_PARAMETER_IMPORT_FORM: &str = r"
+pub(super) const ASSERTED_OUTSIDE_PARAMETER_IMPORT_FORM: &str = r"
 import decimal
 import typing
 
@@ -137,7 +137,7 @@ fn type_guard_carries_no_assignability_restriction() -> Result<(), Box<dyn std::
 // branch is `Decimal | str` minus `Decimal`, i.e. `str`. Under a
 // `TypeGuard[Decimal]` the negative branch is left at `Decimal | str`.
 
-const TYPE_IS_ELSE_TREATED_AS_DECIMAL: &str = r"
+pub(super) const TYPE_IS_ELSE_TREATED_AS_DECIMAL: &str = r"
 from typing import TypeIs as NarrowsTo
 from decimal import Decimal
 
@@ -150,7 +150,7 @@ def transcribe(quantum: Decimal | str) -> str:
     return quantum.to_eng_string()
 ";
 
-const TYPE_IS_ELSE_TREATED_AS_STR: &str = r"
+pub(super) const TYPE_IS_ELSE_TREATED_AS_STR: &str = r"
 from typing import TypeIs as NarrowsTo
 from decimal import Decimal
 
@@ -163,7 +163,7 @@ def transcribe(quantum: Decimal | str) -> str:
     return quantum.casefold()
 ";
 
-const TYPE_IS_ELSE_TREATED_AS_STR_ALIASED: &str = r"
+pub(super) const TYPE_IS_ELSE_TREATED_AS_STR_ALIASED: &str = r"
 from typing import TypeIs as ImpliesKind
 from decimal import Decimal as FixedPoint
 
@@ -189,7 +189,7 @@ fn type_is_narrows_the_negative_branch() -> Result<(), Box<dyn std::error::Error
     .assert("TypeIs negative-branch narrowing")
 }
 
-const TYPE_GUARD_ELSE_ASSUMED_NARROWED: &str = r"
+pub(super) const TYPE_GUARD_ELSE_ASSUMED_NARROWED: &str = r"
 from typing import TypeGuard as AssertsKind
 from decimal import Decimal
 
@@ -202,7 +202,7 @@ def transcribe(quantum: Decimal | str) -> str:
     return quantum.casefold()
 ";
 
-const TYPE_GUARD_ELSE_RECHECKED: &str = r"
+pub(super) const TYPE_GUARD_ELSE_RECHECKED: &str = r"
 from typing import TypeGuard as AssertsKind
 from decimal import Decimal
 
@@ -217,7 +217,7 @@ def transcribe(quantum: Decimal | str) -> str:
     return quantum.to_eng_string()
 ";
 
-const TYPE_GUARD_ELSE_ASSUMED_NARROWED_IMPORT_FORM: &str = r"
+pub(super) const TYPE_GUARD_ELSE_ASSUMED_NARROWED_IMPORT_FORM: &str = r"
 import typing
 from decimal import Decimal
 
@@ -248,7 +248,7 @@ fn type_guard_leaves_the_negative_branch_unnarrowed() -> Result<(), Box<dyn std:
 // resolved member set. `MutableSequence` declares `append`; `Reversible`
 // declares only `__reversed__`.
 
-const APPEND_AFTER_REVERSIBLE: &str = r"
+pub(super) const APPEND_AFTER_REVERSIBLE: &str = r"
 from collections.abc import Reversible
 
 def stow(hopper: object, freight: int) -> None:
@@ -256,7 +256,7 @@ def stow(hopper: object, freight: int) -> None:
         hopper.append(freight)
 ";
 
-const APPEND_AFTER_MUTABLE_SEQUENCE: &str = r"
+pub(super) const APPEND_AFTER_MUTABLE_SEQUENCE: &str = r"
 from collections.abc import MutableSequence
 
 def stow(hopper: object, freight: int) -> None:
@@ -264,7 +264,7 @@ def stow(hopper: object, freight: int) -> None:
         hopper.append(freight)
 ";
 
-const APPEND_AFTER_MUTABLE_SEQUENCE_IMPORT_FORM: &str = r"
+pub(super) const APPEND_AFTER_MUTABLE_SEQUENCE_IMPORT_FORM: &str = r"
 import collections.abc
 
 def stow(hopper: object, freight: int) -> None:
@@ -285,7 +285,7 @@ fn isinstance_mutable_sequence_admits_append() -> Result<(), Box<dyn std::error:
     .assert("isinstance MutableSequence append")
 }
 
-const ELSE_BRANCH_TREATED_AS_MAPPING: &str = r"
+pub(super) const ELSE_BRANCH_TREATED_AS_MAPPING: &str = r"
 from collections import OrderedDict
 from decimal import Decimal
 
@@ -295,7 +295,7 @@ def inscribe(dossier: OrderedDict[str, int] | Decimal) -> int:
     return len(dossier)
 ";
 
-const ELSE_BRANCH_TREATED_AS_DECIMAL: &str = r"
+pub(super) const ELSE_BRANCH_TREATED_AS_DECIMAL: &str = r"
 from collections import OrderedDict
 from decimal import Decimal
 
@@ -305,7 +305,7 @@ def inscribe(dossier: OrderedDict[str, int] | Decimal) -> int:
     return dossier.adjusted()
 ";
 
-const ELSE_BRANCH_TREATED_AS_DECIMAL_RENAMED: &str = r"
+pub(super) const ELSE_BRANCH_TREATED_AS_DECIMAL_RENAMED: &str = r"
 from collections import OrderedDict
 from decimal import Decimal
 

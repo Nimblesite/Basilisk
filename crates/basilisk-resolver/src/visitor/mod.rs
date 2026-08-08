@@ -61,6 +61,7 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
     // not answer at all.
     let typevar_calls = typevar::collect_typevar_calls(&bindings, &module.ast.body);
     reclassify_generic_params(&mut classes, &typevar_calls);
+    propagate_enum_bases(&mut classes);
 
     let collected = collect_analysis_results(module, &bindings, &classes);
     build_resolved_module(
@@ -75,6 +76,33 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
         typevar_calls,
         collected,
     )
+}
+
+/// Propagate enum-ness through module-local bases to a fixpoint.
+///
+/// `ClassInfo::is_enum` promises "directly or transitively inherits from an
+/// `Enum` family class" (`scope/class_types.rs`), matching the runtime
+/// (<https://docs.python.org/3/library/enum.html#enum.Enum>). Direct bases
+/// were classified through binding resolution when each class was collected;
+/// this pass closes the relation over the module's own class hierarchy.
+fn propagate_enum_bases(classes: &mut [crate::scope::ClassInfo]) {
+    loop {
+        let enum_names: std::collections::HashSet<String> = classes
+            .iter()
+            .filter(|class| class.is_enum)
+            .map(|class| class.name.clone())
+            .collect();
+        let mut changed = false;
+        for class in classes.iter_mut() {
+            if !class.is_enum && class.bases.iter().any(|base| enum_names.contains(base)) {
+                class.is_enum = true;
+                changed = true;
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
 }
 
 /// Reclassify generic params that are not actual `TypeVar`s.

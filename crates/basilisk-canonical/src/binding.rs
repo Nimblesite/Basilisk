@@ -49,6 +49,25 @@ struct BindingEvent {
     kind: BindingKind,
 }
 
+/// How a driver wants an `if` statement's branches collected.
+///
+/// A driver with static knowledge of the execution target (a stub parser
+/// with a concrete Python version, PEP 484 version checks) selects the one
+/// branch that executes; without knowledge, every branch contributes — the
+/// conservative union.
+#[derive(Debug, Clone, Copy)]
+pub enum BranchView<'a> {
+    /// No static selection: collect every branch.
+    AllBranches,
+    /// Exactly this branch's body executes for the driver's target.
+    Only(&'a [Stmt]),
+    /// No branch executes for the driver's target.
+    NoBranch,
+}
+
+/// A driver's static branch selection for `if` statements.
+pub type BranchFilter<'f> = &'f dyn for<'a> Fn(&'a ruff_python_ast::StmtIf) -> BranchView<'a>;
+
 /// What a binding makes a name refer to.
 #[derive(Debug, Clone)]
 enum BindingKind {
@@ -74,8 +93,20 @@ impl BindingTable {
     /// Build the binding table for a module body.
     #[must_use]
     pub fn from_module(body: &[Stmt]) -> Self {
+        Self::from_module_with_branch_filter(body, &|_| BranchView::AllBranches)
+    }
+
+    /// Build the binding table with a driver-supplied branch selection.
+    ///
+    /// Mutually exclusive `if` branches (version/platform guards in stubs)
+    /// never execute together; a table flattened over all of them lets an
+    /// infeasible branch's binding control resolution in the selected one.
+    /// The filter answers, per `if`, which branches the driver's target
+    /// actually executes.
+    #[must_use]
+    pub fn from_module_with_branch_filter(body: &[Stmt], filter: BranchFilter<'_>) -> Self {
         let mut table = Self::default();
-        table.collect(body);
+        table.collect(body, filter);
         for events in table.names.values_mut() {
             events.sort_by_key(|event| event.offset);
         }
@@ -83,15 +114,24 @@ impl BindingTable {
     }
 
     /// Collect binding events from statements executing in the module frame.
-    fn collect(&mut self, body: &[Stmt]) {
+    fn collect(&mut self, body: &[Stmt], filter: BranchFilter<'_>) {
         for stmt in body {
-            self.collect_stmt(stmt);
+            self.collect_stmt(stmt, filter);
         }
     }
 
     /// Binding events of one module-frame statement.
-    fn collect_stmt(&mut self, stmt: &Stmt) {
-        let offset = stmt.range().start();
+    ///
+    /// Python creates a binding AFTER evaluating the statement that makes it
+    /// (<https://docs.python.org/3/reference/executionmodel.html#binding-of-names>),
+    /// so events are timestamped at the statement's END: an assignment's
+    /// RHS, a class's bases, and a function's decorators — all inside the
+    /// statement's range — resolve to the PRECEDING binding, while any later
+    /// use sees the new one. (A PEP 695 `type X = …` alias may lazily
+    /// reference itself; that inner use resolves to nothing here, which
+    /// every consumer treats as abstention.)
+    fn collect_stmt(&mut self, stmt: &Stmt, filter: BranchFilter<'_>) {
+        let offset = stmt.range().end();
         match stmt {
             Stmt::Import(import) => self.bind_plain_import(offset, import),
             Stmt::ImportFrom(import) => self.bind_from_import(offset, import),
@@ -102,7 +142,7 @@ impl BindingTable {
             Stmt::AugAssign(assign) => self.bind_target(offset, &assign.target),
             Stmt::TypeAlias(alias) => self.bind_target(offset, &alias.name),
             Stmt::Delete(delete) => self.bind_each_target(offset, &delete.targets),
-            _ => self.collect_compound(offset, stmt),
+            _ => self.collect_compound(stmt, filter),
         }
     }
 
@@ -110,60 +150,67 @@ impl BindingTable {
     ///
     /// `def` and `class` bodies are NOT among them: they execute in their own
     /// scopes, so nothing inside them binds a module-level name.
-    fn collect_compound(&mut self, offset: TextSize, stmt: &Stmt) {
+    fn collect_compound(&mut self, stmt: &Stmt, filter: BranchFilter<'_>) {
         match stmt {
-            Stmt::If(node) => {
-                self.collect(&node.body);
-                for clause in &node.elif_else_clauses {
-                    self.collect(&clause.body);
+            Stmt::If(node) => match filter(node) {
+                BranchView::AllBranches => {
+                    self.collect(&node.body, filter);
+                    for clause in &node.elif_else_clauses {
+                        self.collect(&clause.body, filter);
+                    }
                 }
-            }
+                BranchView::Only(body) => self.collect(body, filter),
+                BranchView::NoBranch => {}
+            },
             Stmt::While(node) => {
-                self.collect(&node.body);
-                self.collect(&node.orelse);
+                self.collect(&node.body, filter);
+                self.collect(&node.orelse, filter);
             }
             Stmt::For(node) => {
-                self.bind_target(offset, &node.target);
-                self.collect(&node.body);
-                self.collect(&node.orelse);
+                // The target binds once the iterable has evaluated — before
+                // the body runs — so it is visible at every body offset.
+                self.bind_target(node.iter.range().end(), &node.target);
+                self.collect(&node.body, filter);
+                self.collect(&node.orelse, filter);
             }
-            Stmt::With(node) => self.collect_with(offset, node),
-            Stmt::Try(node) => self.collect_try(node),
-            Stmt::Match(node) => self.collect_match(node),
+            Stmt::With(node) => self.collect_with(node, filter),
+            Stmt::Try(node) => self.collect_try(node, filter),
+            Stmt::Match(node) => self.collect_match(node, filter),
             _ => {}
         }
     }
 
-    /// `with … as target:` targets and body.
-    fn collect_with(&mut self, offset: TextSize, node: &ruff_python_ast::StmtWith) {
+    /// `with … as target:` targets and body. Each target binds once its own
+    /// context expression has evaluated, before the body runs.
+    fn collect_with(&mut self, node: &ruff_python_ast::StmtWith, filter: BranchFilter<'_>) {
         for item in &node.items {
             if let Some(target) = &item.optional_vars {
-                self.bind_target(offset, target);
+                self.bind_target(item.context_expr.range().end(), target);
             }
         }
-        self.collect(&node.body);
+        self.collect(&node.body, filter);
     }
 
     /// `try` body, handlers (and their `as` names), `else`, `finally`.
-    fn collect_try(&mut self, node: &ruff_python_ast::StmtTry) {
-        self.collect(&node.body);
+    fn collect_try(&mut self, node: &ruff_python_ast::StmtTry, filter: BranchFilter<'_>) {
+        self.collect(&node.body, filter);
         for handler in &node.handlers {
             let ExceptHandler::ExceptHandler(handler) = handler;
             if let Some(name) = &handler.name {
                 self.push_local(name.range().start(), name.as_str());
             }
-            self.collect(&handler.body);
+            self.collect(&handler.body, filter);
         }
-        self.collect(&node.orelse);
-        self.collect(&node.finalbody);
+        self.collect(&node.orelse, filter);
+        self.collect(&node.finalbody, filter);
     }
 
     /// `match` case bodies and the names their patterns capture.
-    fn collect_match(&mut self, node: &ruff_python_ast::StmtMatch) {
+    fn collect_match(&mut self, node: &ruff_python_ast::StmtMatch, filter: BranchFilter<'_>) {
         for case in &node.cases {
             let offset = case.pattern.range().start();
             self.bind_pattern(offset, &case.pattern);
-            self.collect(&case.body);
+            self.collect(&case.body, filter);
         }
     }
 
@@ -431,6 +478,109 @@ impl BindingTable {
     pub fn resolves_to(&self, expr: &Expr, module: &str, name: &str) -> bool {
         self.canonical_of(expr)
             .is_some_and(|symbol| symbol.module == module && symbol.name == name)
+    }
+
+    /// The specification form a QUOTED annotation denotes.
+    ///
+    /// PEP 484 forward references: a string annotation contains a type
+    /// expression evaluated lazily, after the module has executed
+    /// (<https://peps.python.org/pep-0484/#forward-references>). The
+    /// contents are parsed with `ruff_python_parser` — never inspected as
+    /// text — and resolved against each name's FINAL binding, the namespace
+    /// a deferred evaluation sees. The parsed expression's own offsets are
+    /// relative to the string and never consulted.
+    #[must_use]
+    pub fn form_of_quoted_annotation(&self, source: &str) -> Option<TypingForm> {
+        let parsed = ruff_python_parser::parse_expression(source).ok()?;
+        self.form_of_final(&parsed.into_syntax().body)
+    }
+
+    /// Whether `form` appears anywhere within a quoted annotation's type
+    /// expression — through subscripts, unions, and tuples, mirroring the
+    /// composition forms an item type is built from (`"Required[ReadOnly[int]]"`,
+    /// PEP 705).
+    #[must_use]
+    pub fn quoted_annotation_mentions(&self, source: &str, form: TypingForm) -> bool {
+        let Ok(parsed) = ruff_python_parser::parse_expression(source) else {
+            return false;
+        };
+        self.expr_mentions_final(&parsed.into_syntax().body, form)
+    }
+
+    /// [`Self::quoted_annotation_mentions`]'s walk over a parsed expression.
+    fn expr_mentions_final(&self, expr: &Expr, form: TypingForm) -> bool {
+        if self.form_of_final(expr) == Some(form) {
+            return true;
+        }
+        match expr {
+            Expr::Subscript(sub) => self.expr_mentions_final(&sub.slice, form),
+            Expr::BinOp(bin) => {
+                self.expr_mentions_final(&bin.left, form)
+                    || self.expr_mentions_final(&bin.right, form)
+            }
+            Expr::Tuple(tuple) => tuple
+                .elts
+                .iter()
+                .any(|element| self.expr_mentions_final(element, form)),
+            _ => false,
+        }
+    }
+
+    /// [`Self::form_of`] against the module's FINAL namespace, with the
+    /// builtin fallback: the resolution a lazily evaluated forward
+    /// reference sees.
+    fn form_of_final(&self, expr: &Expr) -> Option<TypingForm> {
+        if let Some(form) = self.canonical_of_final(expr).and_then(|s| form_at(&s)) {
+            return Some(form);
+        }
+        let Expr::Name(name) = expr else {
+            return None;
+        };
+        if self.names.contains_key(name.id.as_str()) {
+            return None;
+        }
+        crate::form::builtin_form_of_name(name.id.as_str())
+    }
+
+    /// [`Self::canonical_of`] using each name's LAST binding.
+    fn canonical_of_final(&self, expr: &Expr) -> Option<CanonicalSymbol> {
+        match expr {
+            Expr::Name(name) => match self.last_binding(name.id.as_str())? {
+                BindingKind::Symbol(symbol) => Some(symbol.clone()),
+                BindingKind::Module(_) | BindingKind::LocalDefinition => None,
+            },
+            Expr::Attribute(attribute) => {
+                let module = self.module_path_of_final(&attribute.value)?;
+                Some(CanonicalSymbol::new(module, attribute.attr.as_str()))
+            }
+            Expr::Subscript(subscript) => self.canonical_of_final(&subscript.value),
+            Expr::Call(call) => self.canonical_of_final(&call.func),
+            _ => None,
+        }
+    }
+
+    /// [`Self::module_path_of`] using each name's LAST binding.
+    fn module_path_of_final(&self, expr: &Expr) -> Option<String> {
+        match expr {
+            Expr::Name(name) => match self.last_binding(name.id.as_str())? {
+                BindingKind::Module(module) => Some(module.clone()),
+                BindingKind::Symbol(_) | BindingKind::LocalDefinition => None,
+            },
+            Expr::Attribute(attribute) => {
+                let base = self.module_path_of_final(&attribute.value)?;
+                Some(format!("{base}.{}", attribute.attr))
+            }
+            _ => None,
+        }
+    }
+
+    /// The final binding of a name — what the name refers to once the whole
+    /// module has executed.
+    fn last_binding(&self, name: &str) -> Option<&BindingKind> {
+        self.names
+            .get(name)
+            .and_then(|events| events.last())
+            .map(|event| &event.kind)
     }
 
     /// Whether a bare-name use refers to a module-level local definition —

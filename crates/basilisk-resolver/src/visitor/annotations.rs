@@ -22,31 +22,49 @@ use super::core::{classify_rhs, text_range_to_span};
 // correctly. Implements [RESOLV-CANONICAL-BINDING].
 // ---------------------------------------------------------------------------
 
+/// Whether an annotation denotes `form`, unwrapping a PEP 484 quoted
+/// forward reference: `"Final[int]"` means exactly what `Final[int]` means,
+/// resolved against the module's final namespace
+/// (<https://peps.python.org/pep-0484/#forward-references>).
+fn annotation_form_is(bindings: &BindingTable, ann: &Expr, form: TypingForm) -> bool {
+    match ann {
+        Expr::StringLiteral(lit) => {
+            bindings.form_of_quoted_annotation(lit.value.to_str()) == Some(form)
+        }
+        _ => bindings.is_form(ann, form),
+    }
+}
+
 /// Whether an annotation is the dataclass keyword-only sentinel.
 pub(super) fn annotation_is_kw_only(bindings: &BindingTable, ann: &Expr) -> bool {
-    bindings.is_form(ann, TypingForm::KwOnlySentinel)
+    annotation_form_is(bindings, ann, TypingForm::KwOnlySentinel)
 }
 
 /// Whether an annotation is `InitVar` or `InitVar[T]`.
 pub(super) fn annotation_is_init_var(bindings: &BindingTable, ann: &Expr) -> bool {
-    bindings.is_form(ann, TypingForm::InitVar)
+    annotation_form_is(bindings, ann, TypingForm::InitVar)
 }
 
 /// Whether an annotation is the `Final` qualifier, bare or subscripted.
 pub(super) fn annotation_is_final(bindings: &BindingTable, ann: &Expr) -> bool {
-    bindings.is_form(ann, TypingForm::FinalQualifier)
+    annotation_form_is(bindings, ann, TypingForm::FinalQualifier)
 }
 
 /// Whether an annotation is the `ClassVar` qualifier, bare or subscripted.
 pub(super) fn annotation_is_class_var(bindings: &BindingTable, ann: &Expr) -> bool {
-    bindings.is_form(ann, TypingForm::ClassVar)
+    annotation_form_is(bindings, ann, TypingForm::ClassVar)
 }
 
 /// Whether a `ReadOnly` qualifier appears anywhere within an annotation.
 ///
 /// Recurses through the composition forms an item type can be built from, so
-/// `Required[ReadOnly[int]]` and `ReadOnly[int] | None` are both found.
+/// `Required[ReadOnly[int]]` and `ReadOnly[int] | None` are both found — and
+/// a quoted annotation is searched through its parsed forward-reference
+/// expression (PEP 484), never its characters.
 pub(super) fn annotation_contains_readonly_expr(bindings: &BindingTable, expr: &Expr) -> bool {
+    if let Expr::StringLiteral(lit) = expr {
+        return bindings.quoted_annotation_mentions(lit.value.to_str(), TypingForm::ReadOnly);
+    }
     if bindings.is_form(expr, TypingForm::ReadOnly) {
         return true;
     }

@@ -210,6 +210,18 @@ fn collect_refactoring_actions(
     for action in refactor::extract_variable(uri, source, range) {
         actions.push(CodeActionOrCommand::CodeAction(action));
     }
+    if let Some(action) = refactor::extract_constant(uri, source, range) {
+        actions.push(CodeActionOrCommand::CodeAction(action));
+    }
+    if let Some(action) = refactor::extract_function(uri, source, range) {
+        actions.push(CodeActionOrCommand::CodeAction(action));
+    }
+    for action in refactor::convert_union_syntax(uri, source, range) {
+        actions.push(CodeActionOrCommand::CodeAction(action));
+    }
+    for action in refactor::convert_optional_syntax(uri, source, range) {
+        actions.push(CodeActionOrCommand::CodeAction(action));
+    }
     if let Some(action) = refactor::inline_variable(uri, source, range) {
         actions.push(CodeActionOrCommand::CodeAction(action));
     }

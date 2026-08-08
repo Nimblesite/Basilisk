@@ -26,7 +26,7 @@ use super::Rule;
 mod helpers;
 
 use helpers::{
-    check_init_method_args, extract_type_args_text, has_custom_init_in_bases, has_unresolved_base,
+    check_init_method_args, has_custom_init_in_bases, has_unresolved_base,
     resolve_string_annotation, CODE,
 };
 
@@ -78,13 +78,17 @@ impl Rule for ConstructorCallError {
         let Some(oracle) = types.oracle() else {
             return;
         };
+        let Some(parsed) = super::shared::parse_module(module) else {
+            return;
+        };
+        let index = super::shared::ExprIndex::build(&parsed.ast);
         let ctx = Ctx {
             module,
-            source,
             path,
             class_map: &class_map,
             method_map: &method_map,
             typevar_names: &typevar_names,
+            index: &index,
         };
         for call in oracle.calls() {
             check_constructor_call(call, &ctx, diagnostics);
@@ -190,11 +194,11 @@ fn check_class_scoped_typevars_in_self(
 /// Bundle of state threaded through all E0111 statement/expression walkers.
 struct Ctx<'a> {
     module: &'a ResolvedModule,
-    source: &'a str,
     path: &'a str,
     class_map: &'a HashMap<&'a str, &'a basilisk_resolver::ClassInfo>,
     method_map: &'a HashMap<(&'a str, &'a str), Vec<&'a basilisk_resolver::FunctionInfo>>,
     typevar_names: &'a [&'a str],
+    index: &'a super::shared::ExprIndex<'a>,
 }
 
 /// Check a single call expression for constructor call errors.
@@ -256,12 +260,12 @@ fn check_subscript_constructor(
 ) {
     use ruff_python_ast::Expr;
     let Ctx {
-        module: _,
-        source,
-        path,
+        module,
         class_map,
         method_map,
         typevar_names,
+        index,
+        ..
     } = *ctx;
 
     let Expr::Name(class_name_node) = sub.value.as_ref() else {
@@ -275,27 +279,16 @@ fn check_subscript_constructor(
         return;
     }
 
-    let type_args = extract_type_args_text(&sub.slice, source);
-
-    let mut substitutions: HashMap<&str, &str> = HashMap::new();
-    for (idx, param) in class_info.generic_params.iter().enumerate() {
-        if let Some(arg) = type_args.get(idx) {
-            let _ = substitutions.insert(param.name.as_str(), arg.as_str());
-        }
-    }
-
     if let Some(init_funcs) = method_map.get(&(class_name, "__init__")) {
         for init_func in init_funcs {
             check_init_method_args(
                 init_func,
-                &substitutions,
                 call,
                 class_name,
-                &type_args,
-                source,
-                path,
                 class_info,
                 typevar_names,
+                module,
+                index,
                 diagnostics,
             );
         }

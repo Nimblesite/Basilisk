@@ -20,7 +20,7 @@ use super::harness::{aliased, import_form, reformatted, renamed, SpecObligation}
 // parameter must be assignable to the bound. `SupportsAbs[int]` is satisfied by
 // `__abs__(self) -> int` and by nothing else; `__round__` is a different member.
 
-const ABS_BOUND_REJECTED: &str = r"
+pub(super) const ABS_BOUND_REJECTED: &str = r"
 from typing import SupportsAbs
 
 class Quernstone:
@@ -33,7 +33,7 @@ def slake[TGrist: SupportsAbs[int]](load: TGrist) -> TGrist:
 slake(Quernstone())
 ";
 
-const ABS_BOUND_ACCEPTED: &str = r"
+pub(super) const ABS_BOUND_ACCEPTED: &str = r"
 from typing import SupportsAbs
 
 class Quernstone:
@@ -48,7 +48,7 @@ slake(Quernstone())
 
 /// A6. The legacy declaration form binds the same bound to the same parameter,
 /// so the verdict must not move. `TypeVar` is quarantined, hence the alias.
-const ABS_BOUND_REJECTED_LEGACY: &str = r"
+pub(super) const ABS_BOUND_REJECTED_LEGACY: &str = r"
 from typing import SupportsAbs, TypeVar as QuarriedVar
 
 TGrist = QuarriedVar('TGrist', bound=SupportsAbs[int])
@@ -63,7 +63,7 @@ def slake(load: TGrist) -> TGrist:
 slake(Quernstone())
 ";
 
-const ABS_BOUND_REJECTED_IMPORT_FORM: &str = r"
+pub(super) const ABS_BOUND_REJECTED_IMPORT_FORM: &str = r"
 import typing
 
 class Quernstone:
@@ -76,7 +76,7 @@ def slake[TGrist: typing.SupportsAbs[int]](load: TGrist) -> TGrist:
 slake(Quernstone())
 ";
 
-const ABS_BOUND_REJECTED_REFORMATTED: &str = r"
+pub(super) const ABS_BOUND_REJECTED_REFORMATTED: &str = r"
 from typing import SupportsAbs
 class Quernstone:  # carries a rounding member, not an absolute one
 
@@ -91,7 +91,7 @@ def slake[TGrist: SupportsAbs[int]](
 slake(Quernstone())
 ";
 
-const ABS_BOUND_ACCEPTED_ALIASED: &str = r"
+pub(super) const ABS_BOUND_ACCEPTED_ALIASED: &str = r"
 from typing import SupportsAbs as HasMagnitude
 
 class Quernstone:
@@ -126,7 +126,7 @@ fn upper_bound_rejects_a_type_missing_the_bound_member(
 // The false-positive side of the same clause. `frozenset[str]` is an
 // `AbstractSet[str]`; `list[str]` is not, whatever else it can do.
 
-const SET_BOUND_REJECTED: &str = r#"
+pub(super) const SET_BOUND_REJECTED: &str = r#"
 from typing import AbstractSet
 
 def winnow[TQuarry: AbstractSet[str]](husks: TQuarry) -> TQuarry:
@@ -135,7 +135,7 @@ def winnow[TQuarry: AbstractSet[str]](husks: TQuarry) -> TQuarry:
 winnow(["barley"])
 "#;
 
-const SET_BOUND_ACCEPTED: &str = r#"
+pub(super) const SET_BOUND_ACCEPTED: &str = r#"
 from typing import AbstractSet
 
 def winnow[TQuarry: AbstractSet[str]](husks: TQuarry) -> TQuarry:
@@ -144,7 +144,7 @@ def winnow[TQuarry: AbstractSet[str]](husks: TQuarry) -> TQuarry:
 winnow(frozenset({"barley"}))
 "#;
 
-const SET_BOUND_ACCEPTED_ALIASED: &str = r#"
+pub(super) const SET_BOUND_ACCEPTED_ALIASED: &str = r#"
 from typing import AbstractSet as UnorderedOf
 
 def winnow[TQuarry: UnorderedOf[str]](husks: TQuarry) -> TQuarry:
@@ -153,7 +153,7 @@ def winnow[TQuarry: UnorderedOf[str]](husks: TQuarry) -> TQuarry:
 winnow(frozenset({"barley"}))
 "#;
 
-const SET_BOUND_ACCEPTED_IMPORT_FORM: &str = r#"
+pub(super) const SET_BOUND_ACCEPTED_IMPORT_FORM: &str = r#"
 import typing
 
 def winnow[TQuarry: typing.AbstractSet[str]](husks: TQuarry) -> TQuarry:
@@ -181,7 +181,7 @@ fn upper_bound_accepts_a_conforming_argument() -> Result<(), Box<dyn std::error:
 // Spec: the bound constrains every explicit type argument too, not only the
 // ones inferred at a call site.
 
-const CLASS_BOUND_REJECTED: &str = r"
+pub(super) const CLASS_BOUND_REJECTED: &str = r"
 from typing import MutableSequence
 
 class Kilnload[TEmber: MutableSequence[int]]:
@@ -192,7 +192,7 @@ def fire(load: Kilnload[str]) -> int:
     return len(load.embers)
 ";
 
-const CLASS_BOUND_ACCEPTED: &str = r"
+pub(super) const CLASS_BOUND_ACCEPTED: &str = r"
 from typing import MutableSequence
 
 class Kilnload[TEmber: MutableSequence[int]]:
@@ -203,7 +203,7 @@ def fire(load: Kilnload[list[int]]) -> int:
     return len(load.embers)
 ";
 
-const CLASS_BOUND_REJECTED_ALIASED: &str = r"
+pub(super) const CLASS_BOUND_REJECTED_ALIASED: &str = r"
 from typing import MutableSequence as GrowableRow
 
 class Kilnload[TEmber: GrowableRow[int]]:
@@ -214,7 +214,7 @@ def fire(load: Kilnload[str]) -> int:
     return len(load.embers)
 ";
 
-const CLASS_BOUND_ACCEPTED_IMPORT_FORM: &str = r"
+pub(super) const CLASS_BOUND_ACCEPTED_IMPORT_FORM: &str = r"
 import collections.abc
 
 class Kilnload[TEmber: collections.abc.MutableSequence[int]]:
@@ -243,14 +243,14 @@ fn class_bound_binds_explicit_type_arguments() -> Result<(), Box<dyn std::error:
 // that does not contain the other parameters of the same list, so naming one is
 // invalid however it is spelled.
 
-const SIBLING_BOUND_REJECTED: &str = r"
+pub(super) const SIBLING_BOUND_REJECTED: &str = r"
 def plumb[TWithy, TBollard: TWithy](
     stave: TWithy, hoop: TBollard
 ) -> tuple[TWithy, TBollard]:
     return (stave, hoop)
 ";
 
-const SIBLING_BOUND_ACCEPTED: &str = r"
+pub(super) const SIBLING_BOUND_ACCEPTED: &str = r"
 from typing import Reversible
 
 def plumb[TWithy, TBollard: Reversible[str]](
@@ -259,20 +259,20 @@ def plumb[TWithy, TBollard: Reversible[str]](
     return (stave, hoop)
 ";
 
-const SIBLING_BOUND_REJECTED_RENAMED: &str = r"
+pub(super) const SIBLING_BOUND_REJECTED_RENAMED: &str = r"
 def careen[TPennon, TGirth: TPennon](
     shaft: TPennon, collar: TGirth
 ) -> tuple[TPennon, TGirth]:
     return (shaft, collar)
 ";
 
-const SIBLING_BOUND_REJECTED_REFORMATTED: &str = r"
+pub(super) const SIBLING_BOUND_REJECTED_REFORMATTED: &str = r"
 # the bound below names a parameter of its own list
 def plumb[TWithy, TBollard: TWithy](stave: TWithy, hoop: TBollard) -> tuple[TWithy, TBollard]:
         return ((stave, hoop))
 ";
 
-const SIBLING_BOUND_ACCEPTED_ALIASED: &str = r"
+pub(super) const SIBLING_BOUND_ACCEPTED_ALIASED: &str = r"
 from typing import Reversible as CanRunBackwards
 
 def plumb[TWithy, TBollard: CanRunBackwards[str]](
@@ -301,28 +301,28 @@ fn bound_may_not_name_a_sibling_type_parameter() -> Result<(), Box<dyn std::erro
 // Spec: a constrained type parameter is solved to one of its listed
 // constraints. `str` is neither `bytes` nor `bool`, so no solution exists.
 
-const CONSTRAINT_REJECTED: &str = r#"
+pub(super) const CONSTRAINT_REJECTED: &str = r#"
 def swage[TGirth: (bytes, bool)](fitting: TGirth) -> TGirth:
     return fitting
 
 swage("cordage")
 "#;
 
-const CONSTRAINT_ACCEPTED: &str = r#"
+pub(super) const CONSTRAINT_ACCEPTED: &str = r#"
 def swage[TGirth: (bytes, bool)](fitting: TGirth) -> TGirth:
     return fitting
 
 swage(b"cordage")
 "#;
 
-const CONSTRAINT_REJECTED_RENAMED: &str = r#"
+pub(super) const CONSTRAINT_REJECTED_RENAMED: &str = r#"
 def bevel[TSpindle: (bytes, bool)](collar: TSpindle) -> TSpindle:
     return collar
 
 bevel("cordage")
 "#;
 
-const CONSTRAINT_REJECTED_REFORMATTED: &str = "
+pub(super) const CONSTRAINT_REJECTED_REFORMATTED: &str = "
 def swage[
         TGirth: (bytes, bool),
 ](fitting: TGirth) -> TGirth:  # solved to exactly one constraint

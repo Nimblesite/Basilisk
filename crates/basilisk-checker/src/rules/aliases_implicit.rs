@@ -13,7 +13,11 @@
 //!   constructors all make runtime values, not types.
 //! - Alias parameterization is checked against the alias's own type
 //!   parameters: arity, `ParamSpec` argument shape (PEP 612), and `TypeVar`
-//!   bounds through the module's subtyping context ([NARROWPLAN-SUBTYPING]).
+//!   bounds through the semantic relation layer
+//!   ([RESOLV-CANONICAL-RELATION]): both the bound and the argument are
+//!   lowered through the module's bindings ([ASTREBUILD-LAW]) and related
+//!   with [`assignable`], so aliased builtins behave like their canonical
+//!   spellings and unresolved names abstain instead of guessing.
 //!
 //! ```python
 //! from typing import TypeAlias
@@ -23,7 +27,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use basilisk_resolver::{ResolvedModule, Span};
+use basilisk_resolver::{assignable, ResolvedModule, Span, TypeNode};
 use ruff_python_ast::visitor::{walk_expr, Visitor};
 use ruff_python_ast::{Expr, Operator};
 
@@ -33,7 +37,6 @@ use crate::rules::shared::{
     ExprIndex, StringPolicy, TypeExprJudge,
 };
 use crate::span_util::slice_span;
-use crate::subtyping::SubtypingContext;
 
 use super::Rule;
 
@@ -122,10 +125,11 @@ fn check_explicit_alias_values(
 // ---------------------------------------------------------------------------
 
 /// One declared type parameter of an alias, in order of first appearance in
-/// the alias's RHS.
+/// the alias's RHS. The bound is the RESOLVED node of the `TypeVar` call's
+/// `bound=` expression (its source text rides along for messages only).
 struct TypeParam {
     name: String,
-    bound: Option<String>,
+    bound: Option<(TypeNode, String)>,
     is_paramspec: bool,
     is_typevartuple: bool,
 }
@@ -159,37 +163,64 @@ fn ordered_name_refs(expr: &Expr) -> Vec<&str> {
 
 /// The alias's type parameters: every distinct declared `TypeVar` /
 /// `ParamSpec` / `TypeVarTuple` referenced in the RHS, in first-appearance
-/// order, each carrying its declared bound.
-fn alias_type_params(module: &ResolvedModule, rhs: &Expr) -> Vec<TypeParam> {
-    let declared: HashMap<&str, (Option<&str>, bool, bool)> = module
+/// order, each carrying its declared bound as a resolved node.
+fn alias_type_params(
+    module: &ResolvedModule,
+    index: &ExprIndex<'_>,
+    rhs: &Expr,
+) -> Vec<TypeParam> {
+    let declared: HashMap<&str, &basilisk_resolver::TypeVarCallInfo> = module
         .typevar_calls
         .iter()
-        .map(|tv| {
-            (
-                tv.name.as_str(),
-                (
-                    tv.bound_type_name.as_deref(),
-                    tv.is_paramspec,
-                    tv.is_typevartuple,
-                ),
-            )
-        })
+        .map(|tv| (tv.name.as_str(), tv))
         .collect();
     let mut seen = HashSet::new();
     let mut params = Vec::new();
     for name in ordered_name_refs(rhs) {
-        if let Some((bound, is_paramspec, is_typevartuple)) = declared.get(name) {
+        if let Some(tv) = declared.get(name) {
             if seen.insert(name) {
                 params.push(TypeParam {
                     name: name.to_owned(),
-                    bound: bound.map(str::to_owned),
-                    is_paramspec: *is_paramspec,
-                    is_typevartuple: *is_typevartuple,
+                    bound: typevar_bound(module, index, tv),
+                    is_paramspec: tv.is_paramspec,
+                    is_typevartuple: tv.is_typevartuple,
                 });
             }
         }
     }
     params
+}
+
+/// The resolved bound of a `TypeVar` call: the `bound=` keyword expression
+/// lowered through the module's bindings ([ASTREBUILD-LAW]). The keyword
+/// NAME `bound` is `TypeVar`'s API surface, a lawful anchor — the
+/// expression it carries is never inspected as text except for the
+/// message string returned alongside the node.
+fn typevar_bound(
+    module: &ResolvedModule,
+    index: &ExprIndex<'_>,
+    tv: &basilisk_resolver::TypeVarCallInfo,
+) -> Option<(TypeNode, String)> {
+    let Expr::Call(call) = index.expr(tv.span)? else {
+        return None;
+    };
+    let bound = call
+        .arguments
+        .keywords
+        .iter()
+        .find(|kw| kw.arg.as_ref().is_some_and(|arg| arg.as_str() == "bound"))?;
+    let node = TypeNode::lower(&module.bindings, &bound.value);
+    let text = slice_span(&module.source, span_of(&bound.value))
+        .unwrap_or_default()
+        .to_owned();
+    Some((node, text))
+}
+
+/// The resolver span of an expression node.
+fn span_of(expr: &Expr) -> Span {
+    use ruff_text_size::Ranged as _;
+    let range = expr.range();
+    Span::new(range.start().to_u32(), range.end().to_u32())
 }
 
 /// Build a map from alias name to its [`AliasInfo`], covering explicit
@@ -224,7 +255,7 @@ fn build_alias_info_map(
         let _ = map.insert(
             var.name.clone(),
             AliasInfo {
-                params: alias_type_params(module, rhs),
+                params: alias_type_params(module, index, rhs),
                 is_union: matches!(rhs, Expr::BinOp(binop) if binop.op == Operator::BitOr),
             },
         );
@@ -240,23 +271,10 @@ fn check_alias_parameterization(
     alias_map: &HashMap<String, AliasInfo>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    // A TypeVar used as a type argument defers its bound to the use site.
-    let typevar_names: HashSet<&str> = module
-        .typevar_calls
-        .iter()
-        .map(|tv| tv.name.as_str())
-        .collect();
-    // Bound verdicts route through the module-seeded context
-    // ([NARROWPLAN-SUBTYPING]).
-    let subtyping = crate::subtyping::module_context(module);
-    let known_class_names: HashSet<&str> = module.classes.iter().map(|c| c.name.as_str()).collect();
     let checker = ParameterizationChecker {
         module,
         index,
         alias_map,
-        typevar_names,
-        subtyping,
-        known_class_names,
     };
     for func in &module.functions {
         for param in &func.parameters {
@@ -276,9 +294,6 @@ struct ParameterizationChecker<'m, 'ast> {
     module: &'m ResolvedModule,
     index: &'m ExprIndex<'ast>,
     alias_map: &'m HashMap<String, AliasInfo>,
-    typevar_names: HashSet<&'m str>,
-    subtyping: SubtypingContext,
-    known_class_names: HashSet<&'m str>,
 }
 
 impl ParameterizationChecker<'_, '_> {
@@ -404,11 +419,13 @@ impl ParameterizationChecker<'_, '_> {
         }
     }
 
-    /// Check `TypeVar` bounds. A violation is reported only when the
-    /// subtyping context has positive knowledge of BOTH sides — builtin
-    /// tower names or module-local classes — because `is_subtype` answers
-    /// `false` for names it cannot see (imported bases, typeshed classes),
-    /// and inventing errors from ignorance breaks the gradual guarantee.
+    /// Check `TypeVar` bounds: the type argument must be assignable to the
+    /// declared bound (PEP 484; typing spec, generics). Both sides are
+    /// RESOLVED nodes lowered through the module's bindings
+    /// ([ASTREBUILD-LAW]) and related with [`assignable`], which abstains
+    /// (`None`) on anything unmodelled — a declared `TypeVar` argument, an
+    /// unresolved import, a user class — so a diagnostic is emitted only on
+    /// a definite `Some(false)`, never from ignorance.
     fn check_bounds(
         &self,
         base: &str,
@@ -418,55 +435,47 @@ impl ParameterizationChecker<'_, '_> {
         diagnostics: &mut Vec<Diagnostic>,
     ) {
         for (position, param) in info.params.iter().enumerate() {
-            let Some(bound) = param.bound.as_deref() else {
+            let Some((bound_node, bound_text)) = &param.bound else {
                 continue;
             };
-            let Some(arg_name) = args.get(position).and_then(|arg| simple_type_name(arg)) else {
+            let Some(arg) = args.get(position) else {
                 continue;
             };
-            if self.typevar_names.contains(arg_name) {
-                continue; // Defers its own bound to the use site.
-            }
-            if !self.name_is_known(arg_name) || !self.name_is_known(bound) {
-                continue;
-            }
-            if !self.subtyping.is_subtype(arg_name, bound) {
-                diagnostics.push(error_diagnostic_owned(
-                    CODE.clone(),
-                    format!(
-                        "Type argument `{arg_name}` does not satisfy \
-                         bound `{bound}` of TypeVar `{}` in `{base}`",
-                        param.name
-                    ),
-                    span,
-                    &self.module.path,
-                    Some(format!(
-                        "TypeVar `{}` requires a type that is a \
-                         subtype of `{bound}`",
-                        param.name
-                    )),
-                    None,
-                ));
+            let arg_node = TypeNode::lower(&self.module.bindings, arg);
+            if assignable(&arg_node, bound_node) == Some(false) {
+                self.report_bound_violation(base, param, arg, bound_text, span, diagnostics);
             }
         }
     }
 
-    /// Positive knowledge: the builtin types the tower models, or a class
-    /// this module defines (registered in the subtyping context).
-    fn name_is_known(&self, name: &str) -> bool {
-        matches!(
-            name,
-            "int" | "float" | "complex" | "bool" | "str" | "bytes" | "object" | "None"
-        ) || self.known_class_names.contains(name)
-    }
-}
-
-/// The simple name a type argument denotes, when it has one.
-fn simple_type_name(expr: &Expr) -> Option<&str> {
-    match expr {
-        Expr::Name(name) => Some(name.id.as_str()),
-        Expr::NoneLiteral(_) => Some("None"),
-        _ => None,
+    /// The bound-violation diagnostic. Source text appears in the MESSAGE
+    /// only — the verdict came from the resolved relation.
+    fn report_bound_violation(
+        &self,
+        base: &str,
+        param: &TypeParam,
+        arg: &Expr,
+        bound_text: &str,
+        span: Span,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
+        let arg_text = slice_span(&self.module.source, span_of(arg)).unwrap_or_default();
+        diagnostics.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
+                "Type argument `{arg_text}` does not satisfy \
+                 bound `{bound_text}` of TypeVar `{}` in `{base}`",
+                param.name
+            ),
+            span,
+            &self.module.path,
+            Some(format!(
+                "TypeVar `{}` requires a type that is a \
+                 subtype of `{bound_text}`",
+                param.name
+            )),
+            None,
+        ));
     }
 }
 

@@ -88,6 +88,10 @@ fn collect_import_edits_for_rename(
 }
 
 /// Parse a `file://` URI string into a filesystem `PathBuf`.
+#[expect(
+    dead_code,
+    reason = "path utility whose production caller (module-rename edits) was deleted under [ASTREBUILD-LAW]; pending the AST rebuild ([ASTREBUILD-PHASE-RESOLVER])"
+)]
 fn uri_str_to_path(uri_str: &str) -> Option<PathBuf> {
     let url = Url::parse(uri_str).ok()?;
     url.to_file_path().ok()
@@ -99,12 +103,26 @@ fn uri_str_to_path(uri_str: &str) -> Option<PathBuf> {
 /// - `/workspace/foo/bar.py`    -> `foo.bar`
 /// - `/workspace/foo/__init__.py` -> `foo`
 /// - `/workspace/main.py`       -> `main`
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "path utility whose production caller (module-rename edits) was deleted under [ASTREBUILD-LAW]; exercised by unit tests pending the AST rebuild ([ASTREBUILD-PHASE-RESOLVER])"
+    )
+)]
 fn file_path_to_module(file_path: &Path, roots: &[PathBuf]) -> Option<String> {
     let relative = find_relative_to_root(file_path, roots)?;
     relative_path_to_module(&relative)
 }
 
 /// Find the relative path of `file_path` under the first matching workspace root.
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "path utility whose production caller (module-rename edits) was deleted under [ASTREBUILD-LAW]; exercised by unit tests pending the AST rebuild ([ASTREBUILD-PHASE-RESOLVER])"
+    )
+)]
 fn find_relative_to_root(file_path: &Path, roots: &[PathBuf]) -> Option<PathBuf> {
     for root in roots {
         if let Ok(rel) = file_path.strip_prefix(root) {
@@ -118,6 +136,13 @@ fn find_relative_to_root(file_path: &Path, roots: &[PathBuf]) -> Option<PathBuf>
 ///
 /// Strips the `.py`/`.pyi` extension, replaces path separators with dots,
 /// and handles `__init__.py` (the module is the parent package).
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "path utility whose production caller (module-rename edits) was deleted under [ASTREBUILD-LAW]; exercised by unit tests pending the AST rebuild ([ASTREBUILD-PHASE-RESOLVER])"
+    )
+)]
 fn relative_path_to_module(relative: &Path) -> Option<String> {
     let file_name = relative.file_name()?.to_str()?;
 
@@ -150,6 +175,13 @@ fn relative_path_to_module(relative: &Path) -> Option<String> {
 }
 
 /// Convert path components to a dotted module string.
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "path utility whose production caller (module-rename edits) was deleted under [ASTREBUILD-LAW]; exercised by unit tests pending the AST rebuild ([ASTREBUILD-PHASE-RESOLVER])"
+    )
+)]
 fn path_components_to_module(path: &Path) -> String {
     path.components()
         .filter_map(|c| c.as_os_str().to_str())
@@ -158,11 +190,25 @@ fn path_components_to_module(path: &Path) -> String {
 }
 
 /// Check if `module_str` matches `old_module` exactly or starts with `old_module.`.
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "path utility whose production caller (module-rename edits) was deleted under [ASTREBUILD-LAW]; exercised by unit tests pending the AST rebuild ([ASTREBUILD-PHASE-RESOLVER])"
+    )
+)]
 fn is_module_match(module_str: &str, old_module: &str) -> bool {
     module_str == old_module || module_str.starts_with(&format!("{old_module}."))
 }
 
 /// Replace the `old_module` prefix in `module_str` with `new_module`.
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "path utility whose production caller (module-rename edits) was deleted under [ASTREBUILD-LAW]; exercised by unit tests pending the AST rebuild ([ASTREBUILD-PHASE-RESOLVER])"
+    )
+)]
 fn replace_module_in_str(module_str: &str, old_module: &str, new_module: &str) -> String {
     if module_str == old_module {
         new_module.to_owned()

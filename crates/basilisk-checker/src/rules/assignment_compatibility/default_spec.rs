@@ -13,16 +13,26 @@
 //! x1: type[Bar[str]] = Bar  # OK  — DefaultStrT defaults to str
 //! x2: type[Bar[int]] = Bar  # E   — bare Bar specializes to Bar[str]
 //! ```
+//!
+//! Every verdict is computed on resolved AST nodes ([ASTREBUILD-LAW]): the
+//! annotation is destructured structurally (its `type` base recognised by
+//! what it RESOLVES to), and the requested argument is related to the
+//! `TypeVar`'s lowered default through [`equivalent`]
+//! ([RESOLV-CANONICAL-RELATION]).  A diagnostic is emitted only on a
+//! definite `Some(false)`; unresolvable nodes abstain.
 
 use std::collections::HashMap;
 
-use basilisk_resolver::{ResolvedModule, VariableInfo};
+use basilisk_resolver::{
+    equivalent, BuiltinClass, ResolvedModule, TypeNode, TypeVarCallInfo, VariableInfo,
+};
+use ruff_python_ast::{Expr, ExprName};
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic};
-use crate::rules::shared::split_top_level_commas;
+use crate::rules::shared::{parse_module, ExprIndex};
 use crate::span_util::slice_span;
 
-use super::{extract_annotation, CODE};
+use super::CODE;
 
 /// Check module-level and function-local annotated variables for
 /// `x: type[C[Args]] = C` assignments where a defaulted type parameter's
@@ -31,7 +41,11 @@ pub(super) fn check_default_specializations(
     module: &ResolvedModule,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let defaults = typevar_defaults(module);
+    let Some(parsed) = parse_module(module) else {
+        return;
+    };
+    let index = ExprIndex::build(&parsed.ast);
+    let defaults = typevar_defaults(module, &index);
     if defaults.is_empty() {
         return;
     }
@@ -43,56 +57,79 @@ pub(super) fn check_default_specializations(
             .flat_map(|func| func.local_vars.iter()),
     );
     for var in vars {
-        check_var(var, module, &defaults, diagnostics);
+        check_var(var, module, &index, &defaults, diagnostics);
     }
 }
 
-/// Map from `TypeVar` name to its `default=` type name, for typevars that
-/// declare a simple default (e.g. `TypeVar("DefaultStrT", default=str)`).
-fn typevar_defaults(module: &ResolvedModule) -> HashMap<&str, &str> {
+/// Map from `TypeVar` name to its resolved `default=` type (PEP 696) plus
+/// the default's recorded name (used only in diagnostic text), for typevars
+/// that declare a simple default (e.g. `TypeVar("DefaultStrT", default=str)`).
+fn typevar_defaults<'m>(
+    module: &'m ResolvedModule,
+    index: &ExprIndex<'_>,
+) -> HashMap<&'m str, (TypeNode, &'m str)> {
     module
         .typevar_calls
         .iter()
         .filter_map(|tv| {
-            tv.default_type_name
-                .as_deref()
-                .map(|default| (tv.name.as_str(), default))
+            let display = tv.default_type_name.as_deref()?;
+            let node = default_node(tv, index, module)?;
+            Some((tv.name.as_str(), (node, display)))
         })
         .collect()
+}
+
+/// The lowered `default=` argument of a recorded `TypeVar(...)` call.  The
+/// expression is found on the call NODE and lowered through the module's
+/// bindings — never read back from source text ([ASTREBUILD-LAW]).
+fn default_node(
+    tv: &TypeVarCallInfo,
+    index: &ExprIndex<'_>,
+    module: &ResolvedModule,
+) -> Option<TypeNode> {
+    let Expr::Call(call) = index.expr(tv.span)? else {
+        return None;
+    };
+    let default = call
+        .arguments
+        .keywords
+        .iter()
+        .find(|kw| kw.arg.as_ref().is_some_and(|arg| arg.as_str() == "default"))?;
+    Some(TypeNode::lower(&module.bindings, &default.value))
 }
 
 /// Check one annotated variable for a default-specialization mismatch.
 fn check_var(
     var: &VariableInfo,
     module: &ResolvedModule,
-    defaults: &HashMap<&str, &str>,
+    index: &ExprIndex<'_>,
+    defaults: &HashMap<&str, (TypeNode, &str)>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     if !var.has_annotation {
         return;
     }
-    let Some(rhs_span) = var.rhs_span else {
+    let Some(Expr::Name(rhs)) = var.rhs_span.and_then(|span| index.expr(span)) else {
         return;
     };
-    let Some(rhs_text) = slice_span(&module.source, rhs_span) else {
+    let Some(annotation_span) = var.annotation_span else {
         return;
     };
-    let rhs_name = rhs_text.trim();
-    if !is_identifier(rhs_name) {
+    let Some(annotation) = index.expr(annotation_span) else {
+        return;
+    };
+    let Some((class_ref, type_args)) = type_of_subscript(annotation, module) else {
+        return;
+    };
+    if class_ref.id.as_str() != rhs.id.as_str() {
         return;
     }
 
-    let Some(annotation) = extract_annotation(&module.source, var.name_span) else {
-        return;
-    };
-    let Some((class_name, type_args)) = parse_type_of_subscript(annotation) else {
-        return;
-    };
-    if class_name != rhs_name {
-        return;
-    }
-
-    let Some(class_info) = module.classes.iter().find(|c| c.name == class_name) else {
+    let Some(class_info) = module
+        .classes
+        .iter()
+        .find(|c| c.name == class_ref.id.as_str())
+    else {
         return;
     };
     let free_params = free_type_params(class_info, module);
@@ -101,22 +138,29 @@ fn check_var(
         let Some(param_name) = free_params.get(idx) else {
             break;
         };
-        let Some(default) = defaults.get(param_name.as_str()) else {
+        let Some((default, default_name)) = defaults.get(param_name.as_str()) else {
             continue;
         };
-        if is_identifier(arg) && arg != default {
+        let arg_node = TypeNode::lower(&module.bindings, arg);
+        // A diagnostic only on a definite mismatch between the requested
+        // argument and the parameter's resolved default; `None` (either node
+        // unresolvable) abstains ([ASTREBUILD-LAW]).
+        if equivalent(&arg_node, default) == Some(false) {
+            let annotation_text = slice_span(&module.source, annotation_span).unwrap_or("");
+            let class_name = class_ref.id.as_str();
             diagnostics.push(error_diagnostic_owned(
                 CODE.clone(),
                 format!(
-                    "Type mismatch: `{}` is annotated `{annotation}` but assigned bare \
-                     `{class_name}`, whose type parameter `{param_name}` defaults to `{default}`",
+                    "Type mismatch: `{}` is annotated `{annotation_text}` but assigned bare \
+                     `{class_name}`, whose type parameter `{param_name}` defaults to \
+                     `{default_name}`",
                     var.name
                 ),
                 var.name_span,
                 &module.path,
                 Some(format!(
-                    "Subscript the right-hand side explicitly (`{class_name}[{arg}]`) or \
-                     change the annotation to `type[{class_name}[{default}]]`"
+                    "Subscript the right-hand side explicitly or change the annotation to \
+                     `type[{class_name}[{default_name}]]`"
                 )),
                 Some(
                     "A bare generic class is equivalent to the class specialized with its \
@@ -129,21 +173,32 @@ fn check_var(
     }
 }
 
-/// Parse `type[C[A1, A2, ...]]` into `("C", ["A1", "A2", ...])`.
-fn parse_type_of_subscript(annotation: &str) -> Option<(&str, Vec<&str>)> {
-    let inner = annotation
-        .trim()
-        .strip_prefix("type[")?
-        .strip_suffix(']')?
-        .trim();
-    let bracket = inner.find('[')?;
-    let class_name = inner.get(..bracket)?.trim();
-    let args_text = inner.get(bracket + 1..)?.strip_suffix(']')?;
-    let args = split_top_level_commas(args_text);
-    if args.is_empty() || !is_identifier(class_name) {
+/// Destructure a `type[C[args…]]` annotation NODE: the outer base must
+/// denote the builtin `type` — recognised by LOWERING it through the
+/// module's bindings, so `typing.Type`, an aliased import, or any other
+/// spelling behaves identically ([ASTREBUILD-LAW]) — the inner base must be
+/// a plain name, and the returned args are the inner subscript's elements.
+fn type_of_subscript<'e>(
+    annotation: &'e Expr,
+    module: &ResolvedModule,
+) -> Option<(&'e ExprName, Vec<&'e Expr>)> {
+    let Expr::Subscript(outer) = annotation else {
+        return None;
+    };
+    if TypeNode::lower(&module.bindings, &outer.value) != TypeNode::Builtin(BuiltinClass::Type) {
         return None;
     }
-    Some((class_name, args.into_iter().map(str::trim).collect()))
+    let Expr::Subscript(inner) = outer.slice.as_ref() else {
+        return None;
+    };
+    let Expr::Name(class_ref) = inner.value.as_ref() else {
+        return None;
+    };
+    let args = match inner.slice.as_ref() {
+        Expr::Tuple(tuple) => tuple.elts.iter().collect(),
+        single => vec![single],
+    };
+    Some((class_ref, args))
 }
 
 /// The class's free type parameters, in declaration order.
@@ -172,11 +227,4 @@ fn free_type_params(
         .filter(|name| seen.insert(name.as_str()))
         .cloned()
         .collect()
-}
-
-/// `true` when `text` is a plain Python identifier (no subscripts, dots, etc.).
-fn is_identifier(text: &str) -> bool {
-    !text.is_empty()
-        && text.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
-        && !text.starts_with(|c: char| c.is_ascii_digit())
 }

@@ -280,7 +280,7 @@ pub(crate) fn builtin_member_declarations<'a>(
     &'a basilisk_resolver::scope::IndexedStubClass,
     Vec<&'a basilisk_stubs::StubFunction>,
 )> {
-    let (type_name, literal_receiver) = dot_receiver_builtin_type(resolved, source, byte_offset)?;
+    let (type_name, _literal_receiver) = dot_receiver_builtin_type(resolved, source, byte_offset)?;
     let class = resolved.builtin_classes.get(&type_name)?;
     let declarations = class
         .declaration

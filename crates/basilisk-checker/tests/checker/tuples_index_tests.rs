@@ -3,23 +3,48 @@
 //! Regression coverage for [#284](https://github.com/Nimblesite/Basilisk/issues/284),
 //! grounded in [PEP 484 tuple types](https://peps.python.org/pep-0484/#the-typing-module):
 //! a fixed tuple has a statically known element count and literal indexing must
-//! respect that count at every expression position.
+//! respect that count at every expression position. Qualified and aliased
+//! builtin spellings below require semantic AST resolution; matching the text
+//! `tuple` is insufficient. [PEP 585](https://peps.python.org/pep-0585/) makes
+//! the builtin generic the runtime carrier; an import alias does not change it.
 // Integration tests for tuples_index: Tuple index out of bounds.
 
 use super::common::*;
 
 #[test]
 fn valid_tuple_index() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let variants = [
+        r#"
 t: tuple[int, str] = (1, "a")
 x = t[0]
 y = t[1]
-"#;
-    let diags = run(source)?;
-    assert!(
-        !codes(&diags).contains(&"tuples_index"),
-        "valid tuple index should not fire E0103"
-    );
+"#,
+        r#"
+import builtins as runtime_types
+
+sediment: runtime_types.tuple[runtime_types.int, runtime_types.str] = (1, "a")
+first = sediment[0]
+second = sediment[1]
+"#,
+        r#"
+from builtins import int as WholeValue
+from builtins import str as TextValue
+from builtins import tuple as FixedSequence
+
+sediment: FixedSequence[WholeValue, TextValue] = (1, "a")
+first = sediment[0]
+second = sediment[1]
+"#,
+    ];
+    for source in variants {
+        let diags = run(source)?;
+        assert_rule_count(
+            &diags,
+            "tuples_index",
+            0,
+            "valid bounds must remain valid through resolved builtin aliases",
+        );
+    }
     Ok(())
 }
 
@@ -47,19 +72,80 @@ x = t[3]
     Ok(())
 }
 
+/// [#284](https://github.com/Nimblesite/Basilisk/issues/284): tuple bounds
+/// are an AST/type fact. Renaming every symbol and reformatting the subscript
+/// must not change the diagnostic count or semantic details.
+#[test]
+fn positive_out_of_bounds_is_symbol_and_format_invariant() -> Result<(), Box<dyn std::error::Error>>
+{
+    let variants = [
+        "sample: tuple[int, str, bool] = (1, 'a', True)\nchosen = sample[3]\n",
+        "sediment: tuple[\n    int,\n    str,\n    bool,\n] = (\n    1,\n    'a',\n    True,\n)\nchosen = sediment[\n    3\n]\n",
+        "import builtins as runtime_types\nsediment: runtime_types.tuple[runtime_types.int, runtime_types.str, runtime_types.bool] = (1, 'a', True)\nvalid = sediment[2]\nchosen = sediment[3]\n",
+        "from builtins import bool as TruthValue\nfrom builtins import int as WholeValue\nfrom builtins import str as TextValue\nfrom builtins import tuple as FixedSequence\nsediment: FixedSequence[WholeValue, TextValue, TruthValue] = (1, 'a', True)\nvalid = sediment[2]\nchosen = sediment[3]\n",
+    ];
+    for source in variants {
+        let diagnostics = run(source)?;
+        assert_rule_count(
+            &diagnostics,
+            "tuples_index",
+            1,
+            "fixed-tuple bounds must be invariant under identifier, formatting, and resolved-symbol mutations",
+        );
+        let messages = messages_for(&diagnostics, "tuples_index");
+        assert!(
+            messages
+                .iter()
+                .all(|message| message.contains("index 3") && message.contains("length 3")),
+            "every mutation must report the same semantic index and length: {messages:?}"
+        );
+    }
+    Ok(())
+}
+
 #[test]
 fn negative_out_of_bounds() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
+    let variants = [
+        r#"
 t: tuple[int, str, bool] = (1, "a", True)
 x = t[-4]
-"#;
-    let diags = run(source)?;
-    let hits: Vec<&str> = messages_for(&diags, "tuples_index");
-    assert_eq!(
-        hits.len(),
-        1,
-        "module-level `t[-4]` on a 3-tuple must fire exactly once, got: {hits:?}"
-    );
+"#,
+        r#"
+import builtins as runtime_types
+
+sediment: runtime_types.tuple[
+    runtime_types.int,
+    runtime_types.str,
+    runtime_types.bool,
+] = (1, "a", True)
+valid = sediment[-3]
+chosen = sediment[-(4)]
+"#,
+        r#"
+from builtins import bool as TruthValue
+from builtins import int as WholeValue
+from builtins import str as TextValue
+from builtins import tuple as FixedSequence
+
+sediment: FixedSequence[WholeValue, TextValue, TruthValue] = (1, "a", True)
+valid = sediment[-3]
+chosen = sediment[-4]
+"#,
+    ];
+    for source in variants {
+        let diags = run(source)?;
+        let hits: Vec<&str> = messages_for(&diags, "tuples_index");
+        assert_eq!(
+            hits.len(),
+            1,
+            "module-level index -4 on a three-element tuple must fire exactly once: {hits:?}"
+        );
+        assert!(
+            hits.iter()
+                .all(|message| message.contains("index -4") && message.contains("length 3")),
+            "the diagnostic must preserve the semantic index and tuple length through aliases: {hits:?}"
+        );
+    }
     Ok(())
 }
 

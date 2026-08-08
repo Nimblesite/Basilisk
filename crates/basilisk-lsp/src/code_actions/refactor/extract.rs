@@ -184,3 +184,33 @@ fn byte_offset_to_lsp_position(source: &str, offset: usize) -> Position {
         character: u32::try_from(character).unwrap_or(u32::MAX),
     }
 }
+
+/// Extract the selected expression into a module-level constant.
+///
+/// INERT. The previous implementation located the insertion point and
+/// synthesised the constant by scanning raw source lines and was deleted
+/// under [ASTREBUILD-LAW]; the feature offers nothing until it is rebuilt on
+/// the parsed AST ([ASTREBUILD-PHASE-RESOLVER]). Its unit test remains and
+/// FAILS — the accurate map of the missing rebuild.
+pub(in crate::code_actions) fn extract_constant(
+    _uri: &Url,
+    _source: &str,
+    _range: &Range,
+) -> Option<CodeAction> {
+    None
+}
+
+/// Extract the selected statements into a new function.
+///
+/// INERT. The previous implementation reconstructed Python structure from
+/// source text and was deleted under [ASTREBUILD-LAW]; the feature offers
+/// nothing until it is rebuilt on the parsed AST
+/// ([ASTREBUILD-PHASE-RESOLVER]). Its unit tests remain and FAIL — the
+/// accurate map of the missing rebuild.
+pub(in crate::code_actions) fn extract_function(
+    _uri: &Url,
+    _source: &str,
+    _range: &Range,
+) -> Option<CodeAction> {
+    None
+}

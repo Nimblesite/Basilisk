@@ -13,6 +13,8 @@
 //! emits only the rest and runs them only when configuration resolves them to
 //! a non-disabled severity. A configuration that resolves a `pep` rule to
 //! `disabled` is invalid and exits 2 ([CHKARCH-CLI-EXITCODES]).
+//! Malformed-config regressions pin
+//! [#227](https://github.com/Nimblesite/Basilisk/issues/227).
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -322,4 +324,38 @@ fn pep_tag_disable_is_a_config_error() {
         Some(2),
         "a pep tag-disable must exit 2 ([CHKARCH-CONFIG-MODEL])"
     );
+}
+
+/// Regression for [#227](https://github.com/Nimblesite/Basilisk/issues/227):
+/// malformed project configuration is not absence of configuration. The CLI
+/// contract requires exit 2 and an actionable error before checking source.
+#[test]
+fn malformed_pyproject_is_a_config_error() {
+    let dir = unique_dir("malformedconfig");
+    std::fs::write(
+        dir.join("pyproject.toml"),
+        "[tool.basilisk\npython-version = [\n",
+    )
+    .expect("write malformed config");
+    let py = dir.join("m.py");
+    std::fs::write(&py, "x: int = 1\n").expect("write module");
+
+    for subcommand in ["check", "analyze"] {
+        let out = run(subcommand, &py);
+        assert_eq!(
+            out.status.code(),
+            Some(2),
+            "{subcommand} must classify malformed TOML as invalid configuration"
+        );
+        let stderr = String::from_utf8_lossy(&out.stderr).to_ascii_lowercase();
+        assert!(
+            stderr.contains("config") && (stderr.contains("toml") || stderr.contains("parse")),
+            "{subcommand} must explain the malformed configuration: {stderr}"
+        );
+        assert!(
+            stdout(&out).trim().is_empty() || stdout(&out).trim() == "[]",
+            "source checking must not proceed after malformed configuration: {}",
+            stdout(&out)
+        );
+    }
 }

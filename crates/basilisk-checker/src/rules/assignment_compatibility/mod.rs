@@ -23,6 +23,10 @@ mod callable_check;
 mod dataclass_check;
 mod default_spec;
 mod enum_expand;
+#[expect(
+    dead_code,
+    reason = "AST scaffolding preserved for its rebuilt consumer ([ASTREBUILD-PHASE-RESOLVER]); the text-matched caller was deleted under [ASTREBUILD-LAW]"
+)]
 mod protocol_members;
 mod sig_model;
 mod sig_subtype;
@@ -36,7 +40,6 @@ use skip_names::SkipNames;
 use crate::annotation::AnnotationResolver;
 use crate::rules::shared::module_types::ModuleTypes;
 use crate::rules::shared::oracle::ModuleOracle;
-use crate::span_util::slice_span;
 use crate::subtyping::SubtypingContext;
 use crate::types::InferredType;
 use basilisk_resolver::{ResolvedModule, Span, VariableInfo};
@@ -188,7 +191,7 @@ fn legacy_inference_surface(
             | Expr::Tuple(_)
             | Expr::Lambda(_),
         ) => true,
-        Some(Expr::Name(name)) => params.texts.contains_key(name.id.as_str()),
+        Some(Expr::Name(name)) => params.annotations.contains_key(name.id.as_str()),
         _ => false,
     }
 }
@@ -220,11 +223,12 @@ fn declared_target_grounded(resolver: &AnnotationResolver<'_>, declared: &Inferr
 // through `SubtypingContext`; one implementation, not two).
 use crate::rules::shared::judge::nominal_subclass_assignable;
 
-/// Raw parameter-annotation texts for the enclosing function, consumed by the
-/// structural callable-subtyping rescue.
+/// Annotation SPANS per annotated parameter of the enclosing function,
+/// consumed by the structural callable-subtyping rescue. Spans, not text —
+/// the rescue resolves them to AST nodes ([ASTREBUILD-LAW]).
 #[derive(Default)]
 struct ParamMaps {
-    texts: std::collections::HashMap<String, String>,
+    annotations: std::collections::HashMap<String, Span>,
 }
 
 /// Check a slice of annotated variables for type mismatches.
@@ -272,8 +276,6 @@ fn check_vars(
                 .annotation_span
                 .and_then(|span| resolver.resolve_span(span))
                 .or_else(|| resolver.resolve_text(annotation_text))?;
-            let declared_nominal = nominal_name(&declared_type);
-
             // TypeForm assignments require type-expression validation, not
             // value-type inference.  Delegate to the dedicated module.
             if let InferredType::TypeForm(ref inner) = declared_type {
@@ -357,7 +359,7 @@ fn check_vars(
                 || nominal_subclass_assignable(&inferred_type, &declared_type, subtyping)
             {
                 None
-            } else if callable_rescue(var, source, annotation_text, params, call_index) {
+            } else if callable_rescue(var, params, call_index, oracle) {
                 // Structurally valid callable subtyping (callback protocols,
                 // `Callable[...]` forms, `TypeAlias` callables) — not a mismatch.
                 None
@@ -382,22 +384,33 @@ fn check_vars(
 }
 
 /// Attempt to validate a flagged assignment as structurally compatible
-/// callable subtyping: the RHS must be a parameter whose raw annotation text,
-/// compared against the declared annotation, passes the callable subtype check.
+/// callable subtyping: the RHS must be a name bound to a parameter whose
+/// annotation NODE, compared against the declared annotation NODE, passes
+/// the callable subtype check. Both annotations are judged as resolved AST
+/// nodes, never as source text ([ASTREBUILD-LAW]).
 fn callable_rescue(
     var: &VariableInfo,
-    source: &str,
-    annotation_text: &str,
     params: &ParamMaps,
     call_index: &callable_check::CallIndex,
+    oracle: Option<&ModuleOracle<'_>>,
 ) -> bool {
-    let Some(rhs_text) = var.rhs_span.and_then(|span| slice_span(source, span)) else {
+    let Some(oracle) = oracle else {
         return false;
     };
-    let Some(rhs_annotation) = params.texts.get(rhs_text.trim()) else {
+    let Some(Expr::Name(rhs)) = var.rhs_span.and_then(|span| oracle.expr(span)) else {
         return false;
     };
-    callable_check::assignment_compatible(annotation_text, rhs_annotation, call_index)
+    let Some(rhs_annotation) = params
+        .annotations
+        .get(rhs.id.as_str())
+        .and_then(|span| oracle.expr(*span))
+    else {
+        return false;
+    };
+    let Some(declared) = var.annotation_span.and_then(|span| oracle.expr(span)) else {
+        return false;
+    };
+    callable_check::assignment_compatible(declared, rhs_annotation, call_index)
 }
 
 /// Check local variables in function bodies for type mismatches.
@@ -416,7 +429,7 @@ fn check_local_vars(
 ) {
     let source = &module.source;
     for func in &module.functions {
-        let params = build_param_maps(&func.parameters, source);
+        let params = build_param_maps(&func.parameters);
         check_vars(
             &func.local_vars,
             source,
@@ -433,20 +446,15 @@ fn check_local_vars(
     }
 }
 
-/// Raw annotation text per annotated parameter, for the structural
+/// Annotation span per annotated parameter, for the structural
 /// callable-subtyping rescue ([`callable_rescue`]).
-fn build_param_maps(params: &[basilisk_resolver::ParameterInfo], source: &str) -> ParamMaps {
+fn build_param_maps(params: &[basilisk_resolver::ParameterInfo]) -> ParamMaps {
     let mut maps = ParamMaps::default();
     for param in params {
         let Some(ann_span) = param.annotation_span else {
             continue;
         };
-        let Some(ann_text) = slice_span(source, ann_span) else {
-            continue;
-        };
-        let _ = maps
-            .texts
-            .insert(param.name.clone(), ann_text.trim().to_owned());
+        let _ = maps.annotations.insert(param.name.clone(), ann_span);
     }
     maps
 }
@@ -463,15 +471,6 @@ fn nominal_name(ty: &InferredType) -> Option<String> {
         InferredType::Named(name) => Some(name.to_ascii_lowercase()),
         _ => None,
     }
-}
-
-/// Is the value a `TypedDict` the module declared (transitively — a subclass
-/// of one is one)? A `TypedDict` fits by SCHEMA, including extra-items and
-/// closedness rules the nominal judgment does not model, so a newly-visible
-/// `TypedDict` value abstains rather than misjudging
-/// ([CHKARCH-CONFORMANCE-MODE]).
-fn inferred_is_typeddict(inferred: &InferredType, skip: &SkipNames) -> bool {
-    nominal_name(inferred).is_some_and(|name| skip.typeddict_schemas.contains_key(name.as_str()))
 }
 
 /// [`nominal_name`] with any subscript stripped — `Pair[int]` keys as `pair`.

@@ -4,50 +4,166 @@
 //!
 //! When several parameters of a function bind the same `ParamSpec`, the
 //! argument callables must have identical signatures.
+//!
+//! Every verdict here is computed from resolved bindings and the
+//! [`TypeNode`] relations ([ASTREBUILD-LAW]): the `Callable` and
+//! `Concatenate` heads are recognised by what they resolve to, annotations
+//! are related through [`assignable`]/[`equivalent`], and a diagnostic is
+//! emitted only on a definite `Some(false)`. Source text appears in
+//! diagnostic messages only.
 
 use std::collections::{HashMap, HashSet};
 
 use ruff_python_ast::{Expr, Stmt};
 use ruff_text_size::Ranged as _;
 
-use basilisk_resolver::{ResolvedModule, Span};
+use basilisk_resolver::{
+    assignable, equivalent, BindingTable, ResolvedModule, Span, TypeNode, TypingForm,
+};
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic};
-use crate::rules::shared::{ann_str, is_type_compatible, StarParam};
+use crate::span_util::node_message_text;
 
 use super::CODE;
+
+/// A resolved annotation: the lowered node carries every verdict
+/// ([ASTREBUILD-LAW]); the display text is for diagnostic messages only.
+#[derive(Clone)]
+pub(super) struct AnnInfo {
+    /// The annotation lowered through the module's bindings.
+    pub(super) node: TypeNode,
+    /// Source rendering, used exclusively in diagnostic messages.
+    pub(super) display: String,
+}
+
+impl AnnInfo {
+    /// Lower `expr` through the module's bindings, keeping its source
+    /// rendering for messages.
+    pub(super) fn lower(bindings: &BindingTable, source: &str, expr: &Expr) -> Self {
+        Self {
+            node: TypeNode::lower(bindings, expr),
+            display: node_message_text(source, expr).to_owned(),
+        }
+    }
+}
+
+/// A `*args`/`**kwargs` slot carrying the resolved annotation node — the
+/// semantic replacement for the shared text-payload slot.
+#[derive(Clone, Default)]
+enum StarSlot {
+    /// The signature has no such parameter.
+    #[default]
+    Absent,
+    /// Present without an annotation (implicitly gradual).
+    Untyped,
+    /// Present with a resolved annotation.
+    Typed(AnnInfo),
+}
+
+impl StarSlot {
+    /// `true` when the parameter exists in the signature.
+    fn is_present(&self) -> bool {
+        !matches!(self, Self::Absent)
+    }
+
+    /// The resolved annotation; `None` for absent or untyped (gradual).
+    fn ann(&self) -> Option<&AnnInfo> {
+        match self {
+            Self::Typed(ann) => Some(ann),
+            Self::Absent | Self::Untyped => None,
+        }
+    }
+}
 
 /// A function parameter that binds a `ParamSpec`.
 struct PBindParam {
     position: usize,
-    /// Prefix types required ahead of the bound `ParamSpec`.
-    prefix: Vec<String>,
+    /// Resolved prefix types required ahead of the bound `ParamSpec`
+    /// (`Concatenate[prefix.., P]`).
+    prefix: Vec<AnnInfo>,
     /// The bound `ParamSpec` name.
     paramspec: String,
 }
 
 /// The comparable surface of a local function's signature.
-#[derive(PartialEq, Eq)]
 struct FnSignature {
-    posonly: Vec<(String, Option<String>)>,
-    standard: Vec<(String, Option<String>)>,
-    kwonly: Vec<(String, Option<String>)>,
-    vararg: StarParam,
-    kwarg: StarParam,
+    posonly: Vec<(String, Option<AnnInfo>)>,
+    standard: Vec<(String, Option<AnnInfo>)>,
+    kwonly: Vec<(String, Option<AnnInfo>)>,
+    vararg: StarSlot,
+    kwarg: StarSlot,
 }
 
 impl FnSignature {
     /// Leading positional parameter annotations (positional-only + standard).
-    fn positional_annotations(&self) -> impl Iterator<Item = Option<&str>> {
+    fn positional_annotations(&self) -> impl Iterator<Item = Option<&AnnInfo>> {
         self.posonly
             .iter()
             .chain(self.standard.iter())
-            .map(|(_, ann)| ann.as_deref())
+            .map(|(_, ann)| ann.as_ref())
     }
 
     fn positional_count(&self) -> usize {
         self.posonly.len() + self.standard.len()
     }
+}
+
+/// `true` only when two signatures DEFINITELY differ: a structural
+/// difference (arity, parameter names callable by keyword, star-parameter
+/// presence) or an annotation pair the relation layer rejects
+/// (`equivalent == Some(false)`). Unresolvable pairs abstain
+/// ([RESOLV-CANONICAL-RELATION]) — a diagnostic may not come from a guess.
+fn signatures_definitely_differ(a: &FnSignature, b: &FnSignature) -> bool {
+    if a.posonly.len() != b.posonly.len()
+        || a.standard.len() != b.standard.len()
+        || a.kwonly.len() != b.kwonly.len()
+        || a.vararg.is_present() != b.vararg.is_present()
+        || a.kwarg.is_present() != b.kwarg.is_present()
+    {
+        return true;
+    }
+    let positional_pairs = a
+        .posonly
+        .iter()
+        .chain(a.standard.iter())
+        .zip(b.posonly.iter().chain(b.standard.iter()));
+    for ((_, ann_a), (_, ann_b)) in positional_pairs {
+        if anns_definitely_differ(ann_a.as_ref(), ann_b.as_ref()) {
+            return true;
+        }
+    }
+    // Standard and keyword-only parameters are callable by keyword, so their
+    // names are part of the signature (PEP 612 binds them through `P`).
+    let named = a
+        .standard
+        .iter()
+        .chain(a.kwonly.iter())
+        .zip(b.standard.iter().chain(b.kwonly.iter()));
+    for ((name_a, _), (name_b, _)) in named {
+        if name_a != name_b {
+            return true;
+        }
+    }
+    for ((_, ann_a), (_, ann_b)) in a.kwonly.iter().zip(b.kwonly.iter()) {
+        if anns_definitely_differ(ann_a.as_ref(), ann_b.as_ref()) {
+            return true;
+        }
+    }
+    star_definitely_differs(&a.vararg, &b.vararg) || star_definitely_differs(&a.kwarg, &b.kwarg)
+}
+
+/// A definite mismatch between two optional annotations; missing annotations
+/// are gradual and abstain.
+fn anns_definitely_differ(a: Option<&AnnInfo>, b: Option<&AnnInfo>) -> bool {
+    match (a, b) {
+        (Some(a), Some(b)) => equivalent(&a.node, &b.node) == Some(false),
+        _ => false,
+    }
+}
+
+/// A definite mismatch between two star slots of equal presence.
+fn star_definitely_differs(a: &StarSlot, b: &StarSlot) -> bool {
+    anns_definitely_differ(a.ann(), b.ann())
 }
 
 /// Entry point.
@@ -61,23 +177,25 @@ pub(super) fn check_hof_paramspec_args(
     if paramspec_names.is_empty() {
         return;
     }
+    let bindings: &BindingTable = &module.bindings;
+    let source = module.source.as_str();
 
     let mut hofs: HashMap<&str, Vec<PBindParam>> = HashMap::new();
-    let mut returns: HashMap<&str, (Vec<String>, String)> = HashMap::new();
+    let mut returns: HashMap<&str, (Vec<AnnInfo>, String)> = HashMap::new();
     let mut signatures: HashMap<&str, FnSignature> = HashMap::new();
     for stmt in stmts {
         let Stmt::FunctionDef(func) = stmt else {
             continue;
         };
-        let _ = signatures.insert(func.name.as_str(), fn_signature(func));
-        let binds = collect_pbind_params(func, &paramspec_names);
+        let _ = signatures.insert(func.name.as_str(), fn_signature(bindings, source, func));
+        let binds = collect_pbind_params(bindings, source, func, &paramspec_names);
         if !binds.is_empty() {
             let _ = hofs.insert(func.name.as_str(), binds);
         }
         if let Some(ret_bind) = func
             .returns
             .as_deref()
-            .and_then(|ret| parse_callable_pbind(ret, &paramspec_names))
+            .and_then(|ret| parse_callable_pbind(bindings, source, ret, &paramspec_names))
         {
             let _ = returns.insert(func.name.as_str(), ret_bind);
         }
@@ -87,7 +205,7 @@ pub(super) fn check_hof_paramspec_args(
     }
 
     let derived = derive_hof_results(stmts, &hofs, &returns, &signatures);
-    check_derived_calls(stmts, &derived, &module.path, diagnostics);
+    check_derived_calls(module, stmts, &derived, diagnostics);
 
     // Direct calls: `hof(fn_name, ...)`.
     basilisk_resolver::walk_all_stmts(stmts, &mut |stmt| {
@@ -140,6 +258,8 @@ pub(super) fn check_hof_paramspec_args(
 
 /// Parameters of `func` that bind a `ParamSpec` through their annotation.
 fn collect_pbind_params(
+    bindings: &BindingTable,
+    source: &str,
     func: &ruff_python_ast::StmtFunctionDef,
     paramspec_names: &HashSet<&str>,
 ) -> Vec<PBindParam> {
@@ -151,7 +271,7 @@ fn collect_pbind_params(
         .enumerate()
         .filter_map(|(position, pwd)| {
             let ann = pwd.parameter.annotation.as_deref()?;
-            let (prefix, paramspec) = parse_callable_pbind(ann, paramspec_names)?;
+            let (prefix, paramspec) = parse_callable_pbind(bindings, source, ann, paramspec_names)?;
             Some(PBindParam {
                 position,
                 prefix,
@@ -161,15 +281,25 @@ fn collect_pbind_params(
         .collect()
 }
 
-/// Parse a subscripted annotation whose parameter position is one of
-/// `paramspec_names`, yielding its prefix types and the bound `ParamSpec` name.
+/// Parse a `Callable[P, R]` / `Callable[Concatenate[T1, .., P], R]`
+/// annotation binding one of `paramspec_names`, yielding the resolved
+/// `Concatenate` prefix and the bound `ParamSpec` name.
+///
+/// The `Callable` and `Concatenate` heads are recognised by what they
+/// RESOLVE to through the binding table ([ASTREBUILD-LAW]) — an aliased
+/// import is the same form; a shadowed name is not.
 pub(super) fn parse_callable_pbind(
+    bindings: &BindingTable,
+    source: &str,
     ann: &Expr,
     paramspec_names: &HashSet<&str>,
-) -> Option<(Vec<String>, String)> {
+) -> Option<(Vec<AnnInfo>, String)> {
     let Expr::Subscript(sub) = ann else {
         return None;
     };
+    if bindings.form_of_with_builtins(&sub.value) != Some(TypingForm::Callable) {
+        return None;
+    }
     let Expr::Tuple(tup) = sub.slice.as_ref() else {
         return None;
     };
@@ -180,29 +310,61 @@ pub(super) fn parse_callable_pbind(
         Expr::Name(n) if paramspec_names.contains(n.id.as_str()) => {
             Some((Vec::new(), n.id.to_string()))
         }
+        Expr::Subscript(concat)
+            if bindings.form_of_with_builtins(&concat.value) == Some(TypingForm::Concatenate) =>
+        {
+            let Expr::Tuple(parts) = concat.slice.as_ref() else {
+                return None;
+            };
+            let (last, prefix) = parts.elts.split_last()?;
+            let Expr::Name(ps) = last else {
+                return None;
+            };
+            if !paramspec_names.contains(ps.id.as_str()) {
+                return None;
+            }
+            let prefix = prefix
+                .iter()
+                .map(|e| AnnInfo::lower(bindings, source, e))
+                .collect();
+            Some((prefix, ps.id.to_string()))
+        }
         _ => None,
     }
 }
 
-/// Extract the comparable signature of a function definition.
-fn fn_signature(func: &ruff_python_ast::StmtFunctionDef) -> FnSignature {
+/// Extract the comparable signature of a function definition, lowering every
+/// annotation through the module's bindings.
+fn fn_signature(
+    bindings: &BindingTable,
+    source: &str,
+    func: &ruff_python_ast::StmtFunctionDef,
+) -> FnSignature {
     let params = &func.parameters;
     let pair = |pwd: &ruff_python_ast::ParameterWithDefault| {
         (
             pwd.parameter.name.to_string(),
-            pwd.parameter.annotation.as_deref().map(ann_str),
+            pwd.parameter
+                .annotation
+                .as_deref()
+                .map(|ann| AnnInfo::lower(bindings, source, ann)),
         )
     };
+    let star = |param: Option<&ruff_python_ast::Parameter>| match param {
+        None => StarSlot::Absent,
+        Some(p) => p
+            .annotation
+            .as_deref()
+            .map_or(StarSlot::Untyped, |ann| {
+                StarSlot::Typed(AnnInfo::lower(bindings, source, ann))
+            }),
+    };
     FnSignature {
-        posonly: params.posonlyargs.iter().map(pair).collect(),
-        standard: params.args.iter().map(pair).collect(),
-        kwonly: params.kwonlyargs.iter().map(pair).collect(),
-        vararg: params.vararg.as_deref().map_or(StarParam::Absent, |v| {
-            StarParam::from_annotation(v.annotation.as_deref().map(ann_str))
-        }),
-        kwarg: params.kwarg.as_deref().map_or(StarParam::Absent, |k| {
-            StarParam::from_annotation(k.annotation.as_deref().map(ann_str))
-        }),
+        posonly: params.posonlyargs.iter().map(&pair).collect(),
+        standard: params.args.iter().map(&pair).collect(),
+        kwonly: params.kwonlyargs.iter().map(&pair).collect(),
+        vararg: star(params.vararg.as_deref()),
+        kwarg: star(params.kwarg.as_deref()),
     }
 }
 
@@ -282,6 +444,7 @@ fn check_call(
     }
 
     // Shared ParamSpec: all bound arguments must have identical signatures.
+    // Only a DEFINITE difference counts ([RESOLV-CANONICAL-RELATION]).
     if problem.is_none() {
         let mut by_paramspec: HashMap<&str, Vec<&FnSignature>> = HashMap::new();
         let mut names: HashMap<&str, Vec<&str>> = HashMap::new();
@@ -299,7 +462,7 @@ fn check_call(
         }
         for (paramspec, sigs) in &by_paramspec {
             let mismatched = sigs.windows(2).any(|pair| match pair {
-                [first, second] => first != second,
+                [first, second] => signatures_definitely_differ(first, second),
                 _ => false,
             });
             if mismatched {
@@ -335,8 +498,12 @@ fn check_call(
 }
 
 /// A problem description when `sig` cannot accept the `Concatenate` prefix as
-/// leading positional arguments; `None` when compatible.
-fn prefix_mismatch(sig: &FnSignature, prefix: &[String]) -> Option<String> {
+/// leading positional arguments; `None` when compatible or unresolvable.
+///
+/// The prefix supplies a value of the prefix type into the leading parameter,
+/// so the prefix type must be [`assignable`] to the parameter's annotation; a
+/// mismatch is reported only on a definite `Some(false)`.
+fn prefix_mismatch(sig: &FnSignature, prefix: &[AnnInfo]) -> Option<String> {
     if prefix.is_empty() {
         return None;
     }
@@ -351,10 +518,10 @@ fn prefix_mismatch(sig: &FnSignature, prefix: &[String]) -> Option<String> {
     }
     for (expected, actual) in prefix.iter().zip(sig.positional_annotations()) {
         let Some(actual) = actual else { continue };
-        if !is_type_compatible(expected, actual) {
+        if assignable(&expected.node, &actual.node) == Some(false) {
             return Some(format!(
-                "leading parameter is `{actual}`, but the Concatenate prefix supplies \
-                 `{expected}`"
+                "leading parameter is `{}`, but the Concatenate prefix supplies `{}`",
+                actual.display, expected.display
             ));
         }
     }
@@ -373,7 +540,7 @@ fn prefix_mismatch(sig: &FnSignature, prefix: &[String]) -> Option<String> {
 fn derive_hof_results(
     stmts: &[Stmt],
     hofs: &HashMap<&str, Vec<PBindParam>>,
-    returns: &HashMap<&str, (Vec<String>, String)>,
+    returns: &HashMap<&str, (Vec<AnnInfo>, String)>,
     signatures: &HashMap<&str, FnSignature>,
 ) -> HashMap<String, FnSignature> {
     let mut derived = HashMap::new();
@@ -415,12 +582,12 @@ fn derive_hof_results(
 fn derive_signature(
     base: &FnSignature,
     consumed: usize,
-    ret_prefix: &[String],
+    ret_prefix: &[AnnInfo],
 ) -> Option<FnSignature> {
     if base.positional_count() < consumed {
         return None;
     }
-    let mut remaining: Vec<(bool, (String, Option<String>))> = base
+    let mut remaining: Vec<(bool, (String, Option<AnnInfo>))> = base
         .posonly
         .iter()
         .map(|p| (true, p.clone()))
@@ -428,7 +595,7 @@ fn derive_signature(
         .collect();
     let leftover = remaining.split_off(consumed);
 
-    let mut posonly: Vec<(String, Option<String>)> = ret_prefix
+    let mut posonly: Vec<(String, Option<AnnInfo>)> = ret_prefix
         .iter()
         .map(|ty| (String::new(), Some(ty.clone())))
         .collect();
@@ -451,9 +618,9 @@ fn derive_signature(
 
 /// Validate calls to variables holding derived HOF results.
 fn check_derived_calls(
+    module: &ResolvedModule,
     stmts: &[Stmt],
     derived: &HashMap<String, FnSignature>,
-    path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     if derived.is_empty() {
@@ -476,7 +643,7 @@ fn check_derived_calls(
         let Some(sig) = derived.get(callee.id.as_str()) else {
             return;
         };
-        if let Some(problem) = derived_call_problem(call, sig) {
+        if let Some(problem) = derived_call_problem(call, sig, &module.source) {
             let range = call.range();
             diagnostics.push(error_diagnostic_owned(
                 CODE.clone(),
@@ -485,7 +652,7 @@ fn check_derived_calls(
                     start: range.start().to_u32(),
                     end: range.end().to_u32(),
                 },
-                path,
+                &module.path,
                 Some(
                     "The callable's signature is determined by the ParamSpec binding of \
                      the higher-order function result"
@@ -498,7 +665,15 @@ fn check_derived_calls(
 }
 
 /// A problem description for a call against a derived signature, if any.
-fn derived_call_problem(call: &ruff_python_ast::ExprCall, sig: &FnSignature) -> Option<String> {
+///
+/// Argument types come from [`TypeNode::of_literal_expr`] and are related to
+/// the resolved parameter annotation through [`assignable`]; only a definite
+/// `Some(false)` reports. `source` feeds message text only.
+fn derived_call_problem(
+    call: &ruff_python_ast::ExprCall,
+    sig: &FnSignature,
+    source: &str,
+) -> Option<String> {
     // Keyword arguments must not name positional-only parameters.
     for kw in &call.arguments.keywords {
         let Some(kw_name) = kw.arg.as_ref() else {
@@ -516,21 +691,21 @@ fn derived_call_problem(call: &ruff_python_ast::ExprCall, sig: &FnSignature) -> 
     }
     // Positional literal arguments must match parameter annotations
     // (overflow positions check against `*args`).
-    let annotations: Vec<Option<&str>> = sig.positional_annotations().collect();
+    let annotations: Vec<Option<&AnnInfo>> = sig.positional_annotations().collect();
     for (idx, arg) in call.arguments.args.iter().enumerate() {
-        let Some(actual) = crate::rules::shared::infer_expr_literal_type(arg) else {
-            continue;
-        };
+        let actual = TypeNode::of_literal_expr(arg);
         let expected = annotations
             .get(idx)
             .copied()
             .flatten()
-            .or_else(|| sig.vararg.ty());
+            .or_else(|| sig.vararg.ann());
         let Some(expected) = expected else { continue };
-        if !is_type_compatible(actual, expected) {
+        if assignable(&actual, &expected.node) == Some(false) {
             return Some(format!(
-                "argument {} has type `{actual}`, expected `{expected}`",
-                idx + 1
+                "argument {} (`{}`) is not assignable to `{}`",
+                idx + 1,
+                node_message_text(source, arg),
+                expected.display
             ));
         }
     }

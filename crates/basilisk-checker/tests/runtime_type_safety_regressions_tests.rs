@@ -10,9 +10,9 @@
 //! specific PEPs are linked on the tests that exercise annotated assignments,
 //! context managers, and asynchronous operations.
 
-#[expect(
+#[allow(
     dead_code,
-    reason = "shared test harness; this target uses only run and assert_rule_count"
+    reason = "shared test harness; each target uses the subset of helpers it needs"
 )]
 mod common;
 
@@ -90,6 +90,30 @@ red_pin!(
     "len()\n",
     "the resolved builtins.len signature requires one argument"
 );
+
+/// Semantic mutation for [#417 cases 6 and 24](https://github.com/Nimblesite/Basilisk/issues/417).
+/// [PEP 484 callable checking](https://peps.python.org/pep-0484/#callable)
+/// applies to resolved builtin identity, so aliases and qualified module access
+/// must enforce the same signatures as the bare spellings.
+#[test]
+fn issue_417_builtin_arity_is_invariant_under_symbol_aliases(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+import builtins as runtime
+from builtins import len as measure
+
+measure()
+runtime.type()
+"#;
+    let diagnostics = run(source)?;
+    assert_rule_count(
+        &diagnostics,
+        "calls_argument_count",
+        2,
+        "resolved len/type aliases must retain their builtin call signatures",
+    );
+    Ok(())
+}
 
 red_pin!(
     /// Regression for [#417 case 7](https://github.com/Nimblesite/Basilisk/issues/417).
@@ -180,6 +204,23 @@ red_pin!(
     "import json\njson.loads(5)\n",
     "the resolved json.loads overloads reject int"
 );
+
+/// Semantic mutation for [#417 case 16](https://github.com/Nimblesite/Basilisk/issues/417).
+/// [PEP 484](https://peps.python.org/pep-0484/#callable) checks the resolved
+/// callable signature, not the source spelling `json.loads`.
+#[test]
+fn issue_417_typeshed_callable_is_invariant_under_import_alias(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let source = "from json import loads as decode_payload\ndecode_payload(5)\n";
+    let diagnostics = run(source)?;
+    assert_rule_count(
+        &diagnostics,
+        "calls_argument_type",
+        1,
+        "an aliased json.loads must reject int exactly like qualified json.loads",
+    );
+    Ok(())
+}
 
 red_pin!(
     /// Regression for [#417 case 17](https://github.com/Nimblesite/Basilisk/issues/417).
@@ -458,6 +499,39 @@ def duplicate[T](value: T) -> tuple[T, T]:
 
 assert_type(duplicate(P()), tuple[P, P])
 assert_type(duplicate(P()), tuple[str, str])
+"#,
+    )
+}
+
+/// Semantic mutation for [#419](https://github.com/Nimblesite/Basilisk/issues/419).
+/// [PEP 695](https://peps.python.org/pep-0695/#generic-functions) type
+/// parameters are resolved bindings. Renaming the function, parameter, class,
+/// and type parameter and reformatting the signature cannot alter substitution.
+#[test]
+fn issue_419_generic_substitution_is_symbol_and_format_invariant(
+) -> Result<(), Box<dyn std::error::Error>> {
+    assert_generic_assert_type_pair(
+        r#"
+from typing import assert_type as verify_static_type
+
+class Sediment:
+    pass
+
+def replicate[
+    element_type
+](
+    specimen: element_type,
+) -> tuple[
+    element_type,
+    element_type,
+]:
+    return (
+        specimen,
+        specimen,
+    )
+
+verify_static_type(replicate(Sediment()), tuple[Sediment, Sediment])
+verify_static_type(replicate(Sediment()), tuple[bytes, bytes])
 "#,
     )
 }

@@ -60,10 +60,14 @@ Banned in every crate, in every form — see the symbol-naming ban in
 | `source.lines()` + `starts_with("def ")` | Re-lexing text the parser already parsed, badly. |
 | `slice_span(&module.source, span).starts_with("tuple[")` | Same defect one level down, on rendered annotation text. |
 
-Permitted, because they decide nothing about typing: true builtins (`int`,
-`str`, `isinstance`, `object`), dunder names, keyword-argument names at call
-sites (`bound=`, `total=`), file extensions, Basilisk's own directive syntax
-(`# basilisk:`), and text inside diagnostic **messages**.
+Permitted, because they decide nothing about typing: builtin spellings inside
+`typing_symbols.toml` and the registry's builtin fallback ONLY (a use of
+`int`/`isinstance`/`object` resolves through `form_of_with_builtins` — Python
+lets every name be shadowed, rebound, or aliased, so no use site may be
+compared against a builtin spelling), dunder names at definition sites,
+keyword-argument names at call sites (`bound=`, `total=`), file extensions,
+Basilisk's own directive syntax (`# basilisk:`), and text inside diagnostic
+**messages**.
 
 **A rebuilt rule that cannot answer its question lawfully emits nothing.** A
 silent rule is a tracked gap; a rule that guesses from spelling is a false
@@ -627,7 +631,9 @@ No number is publishable until every box here is ticked.
 2. No production code reconstructs Python structure from raw source text.
    Permitted exceptions, and no others: line **geometry** for diagnostic spans,
    Basilisk's own `# basilisk:` directives (genuinely comments, which the AST
-   does not carry), and Basilisk's own rendered stub-signature output.
+   does not carry), and Basilisk's own rendered stub-signature output **for
+   presentation only** — rendered text may never feed a typing verdict
+   ([CHKARCH-RECOGNITION-PERMITTED](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-RECOGNITION-PERMITTED)).
 3. All 43 rules emit again, each with tests that survive import aliasing, dotted
    access, local shadowing, and reformatting.
 4. `ResolvedModule` carries the binding table; `canonical_registry.rs` passes.

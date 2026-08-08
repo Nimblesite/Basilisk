@@ -162,14 +162,6 @@ impl AnnotationSpans {
 }
 
 /// The trailing name of a plain or dotted reference (`Literal`, `typing.Literal`).
-fn qualified_tail(expr: &Expr) -> Option<&str> {
-    match expr {
-        Expr::Name(name) => Some(name.id.as_str()),
-        Expr::Attribute(attribute) => Some(attribute.attr.as_str()),
-        _ => None,
-    }
-}
-
 impl<'a> Visitor<'a> for AnnotationSpans {
     fn visit_stmt(&mut self, stmt: &'a Stmt) {
         match stmt {

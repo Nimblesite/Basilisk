@@ -4,7 +4,9 @@
 // A decorator is a *name*, and whether `@ov` means `typing.overload` is the
 // same binding question an annotation asks — answered by the resolver's
 // import map plus its value-binding pass, never by matching the spelling
-// (Refs #380). Observed through `overloads_definitions`: an `@overload`
+// ([#380](https://github.com/Nimblesite/Basilisk/issues/380)). The overload
+// contract comes from [PEP 484](https://peps.python.org/pep-0484/#function-method-overloading).
+// Observed through `overloads_definitions`: an `@overload`
 // chain with NO implementation fires exactly when the decorator truly is
 // `typing.overload`.
 

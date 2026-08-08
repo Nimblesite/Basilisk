@@ -7,7 +7,7 @@ use basilisk_resolver::Span;
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
-use super::context::{ann_str, expr_name, extract_base_name, ModuleContext};
+use super::context::{annotation_base_name, expr_name, ModuleContext};
 use super::protocol::check_protocol_func_compat;
 
 use ruff_python_ast::{Expr, Stmt};
@@ -149,12 +149,13 @@ fn infer_decorated_proto_type(
     for dec in &func.decorator_list {
         let dec_name = expr_name(&dec.expression)?;
         let dec_func = ctx.find_func(dec_name)?;
-        if dec_func.return_type.is_empty() {
+        // The return annotation's base class is captured structurally from
+        // the AST ([ASTREBUILD-LAW]), never from rendered annotation text.
+        let Some(base) = dec_func.return_base_name.as_deref() else {
             continue;
-        }
-        let base = extract_base_name(&dec_func.return_type);
-        if ctx.find_protocol(&base).is_some() {
-            return Some(base);
+        };
+        if ctx.find_protocol(base).is_some() {
+            return Some(base.to_owned());
         }
     }
     None
@@ -213,11 +214,14 @@ fn check_assignment(
     span: Span,
 ) {
     let value_name = expr_name(value);
-    let ann_s = ann_str(annotation);
 
-    // Protocol type annotation
-    let base = extract_base_name(&ann_s);
-    if ctx.is_non_protocol_class(&base) {
+    // The annotation's base class is read structurally from the AST
+    // ([ASTREBUILD-LAW]): a bare name or the base of a subscript. Anything
+    // else names no class this context models, so the check abstains.
+    let Some(base) = annotation_base_name(annotation) else {
+        return;
+    };
+    if ctx.is_non_protocol_class(base) {
         if let Some(fname) = value_name {
             if ctx.find_func(fname).is_some() {
                 diag.push(error_diagnostic_owned(
@@ -232,7 +236,7 @@ fn check_assignment(
         }
         return;
     }
-    if let Some(protocol) = ctx.find_protocol(&base) {
+    if let Some(protocol) = ctx.find_protocol(base) {
         if let Some(fname) = value_name {
             if let Some(fsig) = ctx.find_func(fname) {
                 check_protocol_func_compat(protocol, fsig, path, code, diag, span);

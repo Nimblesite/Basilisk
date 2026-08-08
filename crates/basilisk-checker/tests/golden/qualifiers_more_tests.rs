@@ -18,6 +18,12 @@ use super::harness::{
     aliased, analyse, assert_accepted, assert_rejected, import_form, reformatted, renamed,
     SpecObligation,
 };
+#[allow(
+    clippy::wildcard_imports,
+    unused_imports,
+    reason = "shared golden fixtures: each sibling uses the subset it references"
+)]
+use super::qualifiers::*;
 
 #[test]
 fn final_declaration_requires_a_value() -> Result<(), Box<dyn std::error::Error>> {

@@ -6,10 +6,18 @@ use basilisk_resolver::ResolvedModule;
 use super::Rule;
 use crate::diagnostic::{Diagnostic, ErrorCode};
 
+#[expect(
+    dead_code,
+    reason = "AST scaffolding preserved for its rebuilt consumer ([ASTREBUILD-PHASE-RESOLVER]); the text-matched caller was deleted under [ASTREBUILD-LAW]"
+)]
 mod ast_index;
 mod call_args;
 mod conformance;
 
+#[expect(
+    dead_code,
+    reason = "rule is registered but INERT: its text-matched verdict path was deleted under [ASTREBUILD-LAW] and no diagnostic is emitted until the semantic rebuild ([ASTREBUILD-PHASE-RESOLVER])"
+)]
 pub(super) const CODE: ErrorCode = ErrorCode {
     code: "protocols_definition_2",
     docs_url: "https://www.basilisk-python.dev/errors/protocols_definition_2",

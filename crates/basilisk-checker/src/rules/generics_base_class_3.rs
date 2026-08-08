@@ -6,20 +6,29 @@
 //! differs in an invariant position is passed, the call is invalid.
 //!
 //! ```python
-//! class SymbolTable(dict[str, list[Node]]): ...
+//! class SymbolTable(dict[str, list[int]]): ...
 //!
 //! def takes(x: dict[str, list[object]]): ...
 //!
 //! def test(s: SymbolTable):
-//!     takes(s)  # E -- list is invariant, list[Node] != list[object]
+//!     takes(s)  # E -- list is invariant, list[int] != list[object]
 //! ```
+//!
+//! Verdicts come from the resolved semantic model ([ASTREBUILD-LAW]): the
+//! subclass's base annotation and the parameter annotation are lowered
+//! through the module's binding table to [`TypeNode`]s and related with
+//! [`assignable`], whose builtin-container variance rules decide the
+//! mismatch. A relation the layer cannot decide (user classes among the type
+//! arguments, unresolved names) abstains and no diagnostic is emitted.
+//! Source text appears only inside diagnostic messages.
 
 use std::collections::HashMap;
 
-use basilisk_resolver::{ResolvedModule, Span};
+use basilisk_resolver::{assignable, ResolvedModule, Span, TypeNode};
+use ruff_python_ast::{self as ast, Expr, Stmt};
+use ruff_text_size::Ranged;
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
-use crate::rules::shared::split_top_level_commas;
 use crate::span_util::slice_span;
 
 use super::Rule;
@@ -40,312 +49,254 @@ impl Rule for InvariantGenericArgMismatch {
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        let source = &module.source;
-        let path = &module.path;
-
-        // Step 1: Build a map of class names to their resolved base type text.
-        let class_base_map: HashMap<&str, (&str, Vec<&str>)> = build_class_base_map(module);
-
-        if class_base_map.is_empty() {
-            return;
-        }
-
-        // Step 2: Build a map of module-level function name -> params.
-        let mut func_params: HashMap<&str, Vec<(&str, &str)>> = HashMap::new();
-        for func in &module.functions {
-            if func.class_name.is_some() {
-                continue;
-            }
-            let mut params = Vec::new();
-            for param in &func.parameters {
-                let ann_text = param
-                    .annotation_span
-                    .and_then(|span| slice_span(source, span));
-                if let Some(ann) = ann_text {
-                    params.push((param.name.as_str(), ann.trim()));
-                }
-            }
-            if !params.is_empty() {
-                let _ = func_params.insert(func.name.as_str(), params);
-            }
-        }
-
-        // Step 3: Re-parse and walk function bodies for calls.
         let Some(parsed) = super::shared::parse_module(module) else {
             return;
         };
 
+        // Step 1: class name -> its parameterised builtin-generic base.
+        let class_bases = collect_class_bases(module, &parsed.ast.body);
+        if class_bases.is_empty() {
+            return;
+        }
+
+        // Step 2: module-level function name -> positional parameters.
+        let func_params = collect_function_params(&parsed.ast.body);
+
+        // Step 3: walk function bodies for calls.
         for stmt in &parsed.ast.body {
-            visit_stmt(
-                stmt,
-                source,
-                path,
-                &class_base_map,
-                &func_params,
-                diagnostics,
-            );
+            visit_stmt(stmt, module, &class_bases, &func_params, diagnostics);
         }
     }
 }
 
-/// Build a map from class name to (`base_generic_name`,`type_arg_texts`ts]).
-fn build_class_base_map(module: &ResolvedModule) -> HashMap<&str, (&str, Vec<&str>)> {
-    let source = &module.source;
-    let mut map = HashMap::new();
+/// A class's parameterised base: the lowered node for verdicts and the base
+/// expression for diagnostic messages.
+struct ClassBase<'a> {
+    node: TypeNode,
+    expr: &'a Expr,
+}
 
-    for cls in &module.classes {
-        for entry in &cls.base_subscripts {
-            if !is_builtin_generic(&entry.base_name) {
-                continue;
-            }
-            let span_text = slice_span(source, entry.span);
-            if let Some(text) = span_text {
-                if let Some(type_args) = extract_subscript_args(text) {
-                    let _ = map.insert(cls.name.as_str(), (entry.base_name.as_str(), type_args));
-                }
+/// Map each module-level class to its base whose lowered form is a
+/// parameterised builtin generic (`dict[...]`, `list[...]`, ...). Bases the
+/// binding table cannot resolve to a builtin generic lower to `Unknown` and
+/// are skipped — the relation would abstain on them anyway.
+fn collect_class_bases<'a>(
+    module: &ResolvedModule,
+    stmts: &'a [Stmt],
+) -> HashMap<&'a str, ClassBase<'a>> {
+    let mut map = HashMap::new();
+    for stmt in stmts {
+        let Stmt::ClassDef(class) = stmt else {
+            continue;
+        };
+        let Some(arguments) = class.arguments.as_deref() else {
+            continue;
+        };
+        for base in &arguments.args {
+            let node = TypeNode::lower(&module.bindings, base);
+            if matches!(
+                &node,
+                TypeNode::Subscript { base, .. } if matches!(base.as_ref(), TypeNode::Builtin(_))
+            ) {
+                let _ = map.insert(class.name.as_str(), ClassBase { node, expr: base });
             }
         }
     }
-
     map
 }
 
-/// Extract type argument texts from a subscript expression.
-fn extract_subscript_args(text: &str) -> Option<Vec<&str>> {
-    let bracket_pos = text.find('[')?;
-    let inner = text.get(bracket_pos + 1..text.len().checked_sub(1)?)?;
-    Some(split_top_level_commas(inner))
+/// The positional parameters of every module-level function: name and
+/// optional annotation expression, in call order.
+fn collect_function_params(
+    stmts: &[Stmt],
+) -> HashMap<&str, Vec<(&str, Option<&Expr>)>> {
+    let mut map = HashMap::new();
+    for stmt in stmts {
+        let Stmt::FunctionDef(func) = stmt else {
+            continue;
+        };
+        let params: Vec<(&str, Option<&Expr>)> = positional_params(func)
+            .map(|param| {
+                (
+                    param.parameter.name.as_str(),
+                    param.parameter.annotation.as_deref(),
+                )
+            })
+            .collect();
+        if !params.is_empty() {
+            let _ = map.insert(func.name.as_str(), params);
+        }
+    }
+    map
 }
 
-/// Returns `true` for builtin generic types. Only the builtins are listed:
-/// they are in scope without an import. Their `typing` aliases must be
-/// resolved through the annotation cascade ([TYPEINF-ANNOTATION-RESOLUTION]),
-/// never matched by spelling.
-fn is_builtin_generic(name: &str) -> bool {
-    matches!(name, "dict" | "list" | "set" | "frozenset")
+/// The positional parameters of a function definition, in call order.
+fn positional_params(
+    func: &ast::StmtFunctionDef,
+) -> impl Iterator<Item = &ast::ParameterWithDefault> {
+    func.parameters
+        .posonlyargs
+        .iter()
+        .chain(func.parameters.args.iter())
 }
 
-/// Returns `true` for builtin invariant containers. Import-requiring
-/// containers are the cascade's job, not this function's.
-fn is_invariant_container(name: &str) -> bool {
-    matches!(name, "list" | "dict" | "set" | "frozenset")
-}
-
-/// Walk statements to find function definitions and check bodies.
+/// Walk statements to find function definitions and check their bodies.
 fn visit_stmt(
-    stmt: &ruff_python_ast::Stmt,
-    source: &str,
-    path: &str,
-    class_base_map: &HashMap<&str, (&str, Vec<&str>)>,
-    func_params: &HashMap<&str, Vec<(&str, &str)>>,
+    stmt: &Stmt,
+    module: &ResolvedModule,
+    class_bases: &HashMap<&str, ClassBase<'_>>,
+    func_params: &HashMap<&str, Vec<(&str, Option<&Expr>)>>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    use ruff_python_ast::Stmt;
-
     if let Stmt::FunctionDef(func_def) = stmt {
-        let func_param_types = build_param_type_map(func_def, source);
-
+        let caller_params = caller_param_annotations(func_def);
         for body_stmt in &func_def.body {
             check_body_stmt(
                 body_stmt,
-                source,
-                path,
-                class_base_map,
+                module,
+                class_bases,
                 func_params,
-                &func_param_types,
+                &caller_params,
                 diagnostics,
             );
         }
     } else if let Stmt::ClassDef(cls) = stmt {
         for body_stmt in &cls.body {
-            visit_stmt(
-                body_stmt,
-                source,
-                path,
-                class_base_map,
-                func_params,
-                diagnostics,
-            );
+            visit_stmt(body_stmt, module, class_bases, func_params, diagnostics);
         }
     }
 }
 
-/// Build a map from parameter name to its annotation text.
-fn build_param_type_map(
-    func_def: &ruff_python_ast::StmtFunctionDef,
-    source: &str,
-) -> HashMap<String, String> {
-    use ruff_text_size::Ranged as _;
-
-    let mut map = HashMap::new();
-    for pwd in &func_def.parameters.args {
-        let param = &pwd.parameter;
-        if let Some(ann) = &param.annotation {
-            let range = ann.range();
-            if let Some(text) = source.get(range.start().to_usize()..range.end().to_usize()) {
-                let _ = map.insert(param.name.to_string(), text.trim().to_string());
-            }
-        }
-    }
-    map
+/// Map the enclosing function's parameter names to their annotation
+/// expressions.
+fn caller_param_annotations(func_def: &ast::StmtFunctionDef) -> HashMap<&str, &Expr> {
+    positional_params(func_def)
+        .filter_map(|param| {
+            param
+                .parameter
+                .annotation
+                .as_deref()
+                .map(|annotation| (param.parameter.name.as_str(), annotation))
+        })
+        .collect()
 }
 
 /// Check a statement inside a function body for calls with invariant
 /// mismatches.
 fn check_body_stmt(
-    stmt: &ruff_python_ast::Stmt,
-    _source: &str,
-    path: &str,
-    class_base_map: &HashMap<&str, (&str, Vec<&str>)>,
-    func_params: &HashMap<&str, Vec<(&str, &str)>>,
-    caller_params: &HashMap<String, String>,
+    stmt: &Stmt,
+    module: &ResolvedModule,
+    class_bases: &HashMap<&str, ClassBase<'_>>,
+    func_params: &HashMap<&str, Vec<(&str, Option<&Expr>)>>,
+    caller_params: &HashMap<&str, &Expr>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    use ruff_python_ast::{Expr, Stmt};
-    use ruff_text_size::Ranged as _;
-
     let call = match stmt {
-        Stmt::Expr(expr_stmt) => {
-            if let Expr::Call(call) = expr_stmt.value.as_ref() {
-                call
-            } else {
-                return;
-            }
-        }
-        Stmt::Assign(assign) => {
-            if let Expr::Call(call) = assign.value.as_ref() {
-                call
-            } else {
-                return;
-            }
-        }
+        Stmt::Expr(expr_stmt) => match expr_stmt.value.as_ref() {
+            Expr::Call(call) => call,
+            _ => return,
+        },
+        Stmt::Assign(assign) => match assign.value.as_ref() {
+            Expr::Call(call) => call,
+            _ => return,
+        },
         _ => return,
     };
 
-    let callee_name = match call.func.as_ref() {
-        Expr::Name(name) => name.id.as_str(),
-        _ => return,
+    let Expr::Name(callee) = call.func.as_ref() else {
+        return;
     };
-
-    let Some(callee_param_list) = func_params.get(callee_name) else {
+    let Some(callee_param_list) = func_params.get(callee.id.as_str()) else {
         return;
     };
 
     for (arg_idx, arg_expr) in call.arguments.args.iter().enumerate() {
-        let Some(&(param_name, param_ann)) = callee_param_list.get(arg_idx) else {
+        let Some(&(param_name, Some(param_ann))) = callee_param_list.get(arg_idx) else {
             continue;
         };
-
         let Expr::Name(arg_name) = arg_expr else {
             continue;
         };
-
-        let Some(arg_type) = caller_params.get(arg_name.id.as_str()) else {
+        let Some(&arg_ann) = caller_params.get(arg_name.id.as_str()) else {
+            continue;
+        };
+        // The argument's declared type must be a Name of a class whose base is
+        // a parameterised builtin generic.
+        let Expr::Name(arg_class) = arg_ann else {
+            continue;
+        };
+        let Some(class_base) = class_bases.get(arg_class.id.as_str()) else {
             continue;
         };
 
-        let Some((class_base_generic, class_type_args)) = class_base_map.get(arg_type.as_str())
-        else {
-            continue;
-        };
-
-        let Some((param_generic, param_type_args)) = parse_generic_annotation(param_ann) else {
-            continue;
-        };
-
-        if *class_base_generic != param_generic {
+        let target = TypeNode::lower(&module.bindings, param_ann);
+        // Only relate parameterisations of the SAME builtin generic: the
+        // class may have other bases this rule does not model, so a verdict
+        // across different constructors would be unsound
+        // ([ASTREBUILD-PHASE-RESOLVER]).
+        if !same_builtin_base(&class_base.node, &target) {
             continue;
         }
-
-        for (class_arg, param_arg) in class_type_args.iter().zip(param_type_args.iter()) {
-            if class_arg.trim() == param_arg.trim() {
-                continue;
-            }
-
-            // Check nested invariant containers.
-            let class_inner = parse_generic_annotation(class_arg);
-            let param_inner = parse_generic_annotation(param_arg);
-
-            if let (Some((cig, _)), Some((pig, _))) = (&class_inner, &param_inner) {
-                if cig == pig && is_invariant_container(cig) {
-                    emit_diagnostic(
-                        callee_name,
-                        param_name,
-                        param_ann,
-                        arg_type,
-                        class_base_generic,
-                        class_type_args,
-                        class_arg,
-                        param_arg,
-                        cig,
-                        call.range(),
-                        path,
-                        diagnostics,
-                    );
-                    return;
-                }
-            }
-
-            // Direct invariant mismatch.
-            if is_invariant_container(class_base_generic) {
-                emit_diagnostic(
-                    callee_name,
-                    param_name,
-                    param_ann,
-                    arg_type,
-                    class_base_generic,
-                    class_type_args,
-                    class_arg,
-                    param_arg,
-                    class_base_generic,
-                    call.range(),
-                    path,
-                    diagnostics,
-                );
-                return;
-            }
+        if assignable(&class_base.node, &target) == Some(false) {
+            emit_diagnostic(
+                call,
+                callee.id.as_str(),
+                param_name,
+                param_ann,
+                arg_class.id.as_str(),
+                class_base.expr,
+                module,
+                diagnostics,
+            );
+            return;
         }
     }
 }
 
-/// Emit the invariant generic argument mismatch diagnostic.
+/// `true` when both nodes are parameterisations of the same builtin class.
+fn same_builtin_base(a: &TypeNode, b: &TypeNode) -> bool {
+    match (a, b) {
+        (
+            TypeNode::Subscript { base: base_a, .. },
+            TypeNode::Subscript { base: base_b, .. },
+        ) => match (base_a.as_ref(), base_b.as_ref()) {
+            (TypeNode::Builtin(class_a), TypeNode::Builtin(class_b)) => class_a == class_b,
+            _ => false,
+        },
+        _ => false,
+    }
+}
+
+/// Emit the invariant generic argument mismatch diagnostic. Source text is
+/// rendered for the message only.
 #[expect(
     clippy::too_many_arguments,
     reason = "diagnostic formatting requires all context"
 )]
 fn emit_diagnostic(
+    call: &ast::ExprCall,
     callee_name: &str,
     param_name: &str,
-    param_ann: &str,
-    arg_type: &str,
-    class_base_generic: &str,
-    class_type_args: &[&str],
-    class_arg: &str,
-    param_arg: &str,
-    invariant_container: &str,
-    range: ruff_text_size::TextRange,
-    path: &str,
+    param_ann: &Expr,
+    arg_class_name: &str,
+    class_base_expr: &Expr,
+    module: &ResolvedModule,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let span = Span {
-        start: range.start().to_u32(),
-        end: range.end().to_u32(),
-    };
+    let param_text = expr_text(&module.source, param_ann);
+    let base_text = expr_text(&module.source, class_base_expr);
     diagnostics.push(error_diagnostic_owned(
         CODE.clone(),
         format!(
-            "Argument `{param_name}` of `{callee_name}` expects \
-             `{param_ann}` but received `{arg_type}` \
-             (subclass of `{class_base_generic}[{}]`) -- \
-             `{class_arg}` is not assignable to `{param_arg}` \
-             because `{invariant_container}` is invariant",
-            class_type_args.join(", ")
+            "Argument `{param_name}` of `{callee_name}` expects `{param_text}` \
+             but received `{arg_class_name}` (subclass of `{base_text}`) -- \
+             the base parameterisation is incompatible in an invariant position"
         ),
-        span,
-        path,
+        Span::from(call.range()),
+        &module.path,
         Some(format!(
-            "`{invariant_container}` is invariant: \
-             `{class_arg}` is not a subtype of `{param_arg}`"
+            "`{base_text}` is not assignable to `{param_text}`: mutable \
+             containers are invariant in their type parameters"
         )),
         Some(
             "Mutable generic containers like `list`, `dict`, `set` \
@@ -355,11 +306,10 @@ fn emit_diagnostic(
     ));
 }
 
-/// Parse a generic annotation like `dict[str, list[object]]`.
-fn parse_generic_annotation(ann: &str) -> Option<(&str, Vec<&str>)> {
-    let ann = ann.trim();
-    let bracket_pos = ann.find('[')?;
-    let name = ann.get(..bracket_pos)?.trim();
-    let inner = ann.get(bracket_pos + 1..ann.len().checked_sub(1)?)?;
-    Some((name, split_top_level_commas(inner)))
+/// The source text of an expression, for diagnostic MESSAGES only — never a
+/// verdict.
+fn expr_text<'a>(source: &'a str, expr: &impl Ranged) -> &'a str {
+    slice_span(source, Span::from(expr.range()))
+        .unwrap_or("<expression>")
+        .trim()
 }

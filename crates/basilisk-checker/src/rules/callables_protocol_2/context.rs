@@ -3,8 +3,9 @@
 
 use ruff_python_ast::{self as ast, Stmt};
 
-// Re-export shared helpers so sibling modules can use `context::ann_str` etc.
-pub(super) use crate::rules::shared::{ann_str, expr_name};
+// Re-export the shared structural helper so sibling modules can use
+// `context::expr_name`.
+pub(super) use crate::rules::shared::expr_name;
 
 // ---------------------------------------------------------------------------
 // Data structures
@@ -15,7 +16,11 @@ pub(super) use crate::rules::shared::{ann_str, expr_name};
 pub(super) struct ParamInfo {
     /// Parameter name.
     pub(super) name: String,
-    /// The annotation text (empty string if unannotated).
+    /// Annotation text consumed by the sibling text comparators. Always
+    /// empty: rendering annotation source for verdicts is banned
+    /// ([ASTREBUILD-LAW]), so annotation-dependent compatibility checks
+    /// abstain until callable-signature subtyping exists on the resolver.
+    /// [ASTREBUILD-PHASE-RESOLVER]
     pub(super) type_annotation: String,
     /// Whether the parameter has a default value.
     pub(super) has_default: bool,
@@ -32,16 +37,21 @@ pub(super) struct FuncSig {
     pub(super) positional_params: Vec<ParamInfo>,
     /// Whether the function accepts `*args`.
     pub(super) has_varargs: bool,
-    /// Annotation text for `*args` (empty if untyped).
+    /// `*args` annotation text for the sibling text comparators. Always
+    /// empty ([ASTREBUILD-LAW]); the dependent checks abstain.
+    /// [ASTREBUILD-PHASE-RESOLVER]
     pub(super) varargs_type: String,
     /// Whether the function accepts `**kwargs`.
     pub(super) has_kwargs: bool,
-    /// Annotation text for `**kwargs` (empty if untyped).
+    /// `**kwargs` annotation text for the sibling text comparators. Always
+    /// empty ([ASTREBUILD-LAW]); the dependent checks abstain.
+    /// [ASTREBUILD-PHASE-RESOLVER]
     pub(super) kwargs_type: String,
     /// Keyword-only parameters.
     pub(super) kw_only_params: Vec<ParamInfo>,
-    /// Return type annotation text (empty if unannotated).
-    pub(super) return_type: String,
+    /// The class the return annotation names, taken structurally from the
+    /// AST (`-> C` or `-> C[...]` yields `C`); `None` otherwise.
+    pub(super) return_base_name: Option<String>,
     /// `true` when the signature's `**kwargs` were expanded into
     /// `kw_only_params`. [`callables_protocol_2`]
     pub(super) had_unpack_kwargs: bool,
@@ -63,22 +73,15 @@ pub(super) struct ProtocolInfo {
 }
 
 /// A declared attribute on a protocol.
+///
+/// The annotation-TEXT payload this once carried was deleted under
+/// [ASTREBUILD-LAW]; a rebuilt collector stores a lowered `TypeNode`
+/// instead ([ASTREBUILD-PHASE-RESOLVER]).
 #[derive(Debug, Clone)]
 pub(super) struct ProtocolAttr {
     /// Attribute name.
     pub(super) name: String,
-    /// Type annotation text (e.g. `int`, `str`).
-    pub(super) ann: String,
 }
-
-// Ensure ProtocolAttr fields are considered used for dead-code analysis.
-// These are infrastructure for protocol attribute type checking.
-const _: () = {
-    fn _assert_fields_used(attr: &ProtocolAttr) {
-        let _ = &attr.name;
-        let _ = &attr.ann;
-    }
-};
 
 /// Module-level context: collected functions and protocols.
 pub(super) struct ModuleContext {
@@ -170,31 +173,24 @@ pub(super) fn extract_func_sig(func: &ast::StmtFunctionDef, skip_self: bool) -> 
         kw_only_params.push(mk_param(param, false));
     }
     let has_varargs = params.vararg.is_some();
-    let varargs_type = params
-        .vararg
-        .as_ref()
-        .and_then(|v| v.annotation.as_ref().map(|a| ann_str(a)))
-        .unwrap_or_default();
     let has_kwargs = params.kwarg.is_some();
-    let kwargs_type = params
-        .kwarg
-        .as_ref()
-        .and_then(|k| k.annotation.as_ref().map(|a| ann_str(a)))
-        .unwrap_or_default();
-    let return_type = func
+    // Annotation TEXT is never captured ([ASTREBUILD-LAW]); the star-slot
+    // text fields stay empty so the text-based comparators abstain.
+    // [ASTREBUILD-PHASE-RESOLVER]
+    let return_base_name = func
         .returns
-        .as_ref()
-        .map(|r| ann_str(r))
-        .unwrap_or_default();
+        .as_deref()
+        .and_then(annotation_base_name)
+        .map(str::to_owned);
     FuncSig {
         name: func.name.to_string(),
         positional_params,
         has_varargs,
-        varargs_type,
+        varargs_type: String::new(),
         has_kwargs,
-        kwargs_type,
+        kwargs_type: String::new(),
         kw_only_params,
-        return_type,
+        return_base_name,
         had_unpack_kwargs: false,
     }
 }
@@ -203,19 +199,22 @@ pub(super) fn extract_func_sig(func: &ast::StmtFunctionDef, skip_self: bool) -> 
 fn mk_param(param: &ast::ParameterWithDefault, is_pos_only: bool) -> ParamInfo {
     ParamInfo {
         name: param.parameter.name.to_string(),
-        type_annotation: param
-            .parameter
-            .annotation
-            .as_ref()
-            .map(|a| ann_str(a))
-            .unwrap_or_default(),
+        // Annotation TEXT is never captured ([ASTREBUILD-LAW]); the empty
+        // field makes the text-based comparators abstain.
+        // [ASTREBUILD-PHASE-RESOLVER]
+        type_annotation: String::new(),
         has_default: param.default.is_some(),
         is_positional_only: is_pos_only,
     }
 }
 
-/// Extract the base name from a type string (strips `[...]` subscript).
-pub(super) fn extract_base_name(s: &str) -> String {
-    s.find('[')
-        .map_or_else(|| s.trim().to_owned(), |i| s[..i].trim().to_owned())
+/// The class name an annotation refers to, taken structurally from the AST:
+/// the name itself, or the subscripted base (`C[...]` yields `C`). Never
+/// derived from rendered source text ([ASTREBUILD-LAW]).
+pub(super) fn annotation_base_name(expr: &ast::Expr) -> Option<&str> {
+    match expr {
+        ast::Expr::Name(name) => Some(name.id.as_str()),
+        ast::Expr::Subscript(sub) => expr_name(&sub.value),
+        _ => None,
+    }
 }

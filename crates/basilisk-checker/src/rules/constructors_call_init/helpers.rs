@@ -5,10 +5,11 @@ use std::collections::HashMap;
 
 use basilisk_resolver::ClassInfo;
 
-use basilisk_resolver::Span;
+use basilisk_resolver::{assignable, ResolvedModule, Span, TypeNode};
+use ruff_python_ast::Expr;
 
-use crate::rules::shared::{infer_expr_literal_type, is_type_compatible};
-use crate::span_util::slice_span;
+use crate::rules::shared::ExprIndex;
+use crate::span_util::{node_message_text, node_span, slice_span};
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
@@ -107,89 +108,60 @@ pub(super) fn resolve_string_annotation(annotation: &str) -> String {
     }
 }
 
-/// Substitute each `TypeVar` name in `annotation` with its concrete binding,
-/// matching whole identifier tokens only (so `T` in `T | None` is replaced but
-/// the `T` inside `Type` is not). Example: `T | None` with `{T: int}` → `int | None`.
-fn substitute_typevars(annotation: &str, substitutions: &HashMap<&str, &str>) -> String {
-    let mut result = String::with_capacity(annotation.len());
-    let mut ident = String::new();
-    let flush = |ident: &mut String, result: &mut String| {
-        if !ident.is_empty() {
-            result.push_str(substitutions.get(ident.as_str()).copied().unwrap_or(ident));
-            ident.clear();
-        }
-    };
-    for ch in annotation.chars() {
-        if ch.is_alphanumeric() || ch == '_' {
-            ident.push(ch);
-        } else {
-            flush(&mut ident, &mut result);
-            result.push(ch);
-        }
-    }
-    flush(&mut ident, &mut result);
-    result
-}
-
-/// Extract type argument texts from a subscript slice expression.
-pub(super) fn extract_type_args_text(slice: &ruff_python_ast::Expr, source: &str) -> Vec<String> {
-    use ruff_python_ast::Expr;
-    use ruff_text_size::Ranged as _;
-
+/// The element expressions of a subscript slice: a tuple's elements, or the
+/// single expression itself.
+fn type_argument_exprs(slice: &Expr) -> Vec<&Expr> {
     match slice {
-        Expr::Tuple(tuple) => tuple
-            .elts
-            .iter()
-            .map(|e| {
-                let range = e.range();
-                source
-                    .get(range.start().to_usize()..range.end().to_usize())
-                    .unwrap_or("")
-                    .trim()
-                    .to_owned()
-            })
-            .collect(),
-        other => {
-            let range = other.range();
-            vec![source
-                .get(range.start().to_usize()..range.end().to_usize())
-                .unwrap_or("")
-                .trim()
-                .to_owned()]
-        }
+        Expr::Tuple(tuple) => tuple.elts.iter().collect(),
+        single => vec![single],
     }
 }
 
-/// Check arguments to `__init__` after type parameter substitution.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "init method validation requires substitutions, call, class info and context"
-)]
+/// Check arguments to a specialized `__init__` call, `Class[Args](values…)`.
+///
+/// Each literal argument is related to the parameter's annotation after
+/// substituting the class's type parameters with the call's type arguments —
+/// annotations and type arguments are lowered through the module's binding
+/// table and related with [`assignable`] ([ASTREBUILD-LAW]). A relation the
+/// layer cannot decide abstains instead of guessing; source text appears in
+/// diagnostic messages only.
 pub(super) fn check_init_method_args(
     init_func: &basilisk_resolver::FunctionInfo,
-    substitutions: &HashMap<&str, &str>,
     call: &ruff_python_ast::ExprCall,
     class_name: &str,
-    type_args: &[String],
-    source: &str,
-    path: &str,
     class_info: &basilisk_resolver::ClassInfo,
     typevar_names: &[&str],
+    module: &ResolvedModule,
+    index: &ExprIndex<'_>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    use ruff_text_size::Ranged as _;
+    // The callee is `ClassName[TypeArgs]`; the type arguments come from the
+    // subscript slice's AST nodes.
+    let Expr::Subscript(sub) = call.func.as_ref() else {
+        return;
+    };
+    let type_arg_exprs = type_argument_exprs(&sub.slice);
+    let arg_nodes: Vec<TypeNode> = type_arg_exprs
+        .iter()
+        .map(|expr| TypeNode::lower(&module.bindings, expr))
+        .collect();
+    // Rendered for messages and the pre-existing `self`-annotation check only.
+    let type_args: Vec<String> = type_arg_exprs
+        .iter()
+        .map(|expr| node_message_text(&module.source, *expr).trim().to_owned())
+        .collect();
 
     // Check 3: Explicit self annotation mismatch.
     if let Some(self_param) = init_func.parameters.first() {
         if let Some(ann_span) = self_param.annotation_span {
-            if let Some(ann_text) = slice_span(source, ann_span) {
+            if let Some(ann_text) = slice_span(&module.source, ann_span) {
                 let resolved = resolve_string_annotation(ann_text.trim());
                 check_self_param_init_mismatch(
                     &resolved,
                     class_name,
-                    type_args,
+                    &type_args,
                     call,
-                    path,
+                    &module.path,
                     class_info,
                     typevar_names,
                     diagnostics,
@@ -211,60 +183,66 @@ pub(super) fn check_init_method_args(
         let Some(param) = non_self_params.get(arg_idx) else {
             break;
         };
-
         let Some(ann_span) = param.annotation_span else {
             continue;
         };
-        let Some(ann_text) = slice_span(source, ann_span) else {
+        // Annotations the index cannot map to a node (e.g. string forward
+        // references) abstain ([ASTREBUILD-PHASE-RESOLVER]).
+        let Some(ann_expr) = index.expr(ann_span) else {
             continue;
         };
-
-        let ann_trimmed = ann_text.trim();
-
-        // Substitute type parameters in the annotation (handles composite forms
-        // such as `T | None`, where the whole string is not a substitution key).
-        let resolved_type = substitute_typevars(ann_trimmed, substitutions);
-
-        // If the resolved type is still a TypeVar name (function-scoped, not
-        // class-scoped), it can accept any type — skip the check.
-        if typevar_names.contains(&resolved_type.as_str()) {
-            continue;
-        }
-
-        // Classify the argument expression type.
-        let Some(arg_type) = infer_expr_literal_type(arg_expr) else {
-            continue;
-        };
-
-        // Check compatibility.
-        if !is_type_compatible(arg_type, &resolved_type) {
-            let range = arg_expr.range();
-            let span = Span {
-                start: range.start().to_u32(),
-                end: range.end().to_u32(),
-            };
+        let (target, target_expr) =
+            substituted_annotation(module, ann_expr, class_info, &type_arg_exprs, &arg_nodes);
+        if assignable(&TypeNode::of_literal_expr(arg_expr), &target) == Some(false) {
+            let arg_text = node_message_text(&module.source, arg_expr);
+            let target_text = node_message_text(&module.source, target_expr);
             diagnostics.push(error_diagnostic_owned(
                 CODE.clone(),
                 format!(
-                    "Argument type `{arg_type}` is incompatible with parameter `{}` \
-                     of type `{resolved_type}` in `{class_name}.__init__`",
+                    "Argument `{arg_text}` is incompatible with parameter `{}` \
+                     of type `{target_text}` in `{class_name}.__init__`",
                     param.name
                 ),
-                span,
-                path,
+                node_span(arg_expr),
+                &module.path,
                 Some(format!(
-                    "Pass a value of type `{resolved_type}` for parameter `{}`",
+                    "Pass a value of type `{target_text}` for parameter `{}`",
                     param.name
                 )),
                 Some(format!(
-                    "`{class_name}` is specialized with type arguments `[{}]`, \
-                     binding `{}` to `{resolved_type}`",
-                    type_args.join(", "),
-                    ann_trimmed
+                    "`{class_name}` is specialized with type arguments `[{}]`",
+                    type_args.join(", ")
                 )),
             ));
         }
     }
+}
+
+/// The parameter's target type: the matching call type argument when the
+/// annotation names one of the class's own type parameters, otherwise the
+/// annotation itself, lowered. A composite annotation containing a type
+/// parameter (`T | None`) lowers its unresolvable leaves to `Unknown`, on
+/// which the relation abstains. Also returns the expression that names the
+/// target, for the diagnostic message.
+fn substituted_annotation<'a>(
+    module: &ResolvedModule,
+    annotation: &'a Expr,
+    class_info: &ClassInfo,
+    type_args: &[&'a Expr],
+    arg_nodes: &[TypeNode],
+) -> (TypeNode, &'a Expr) {
+    if let Expr::Name(name) = annotation {
+        let position = class_info
+            .generic_params
+            .iter()
+            .position(|param| param.name == name.id.as_str());
+        if let Some(idx) = position {
+            if let (Some(node), Some(expr)) = (arg_nodes.get(idx), type_args.get(idx)) {
+                return (node.clone(), expr);
+            }
+        }
+    }
+    (TypeNode::lower(&module.bindings, annotation), annotation)
 }
 
 /// Check if the `self` parameter annotation in `__init__` is incompatible with

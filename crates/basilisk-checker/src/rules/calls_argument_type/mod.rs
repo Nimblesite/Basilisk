@@ -18,12 +18,16 @@ mod builtin_methods;
 
 use std::collections::HashMap;
 
-use basilisk_resolver::{CallSite, FunctionInfo, ResolvedModule, Span, TypeVarCallInfo};
+use basilisk_resolver::{
+    assignable, BuiltinClass, CallSite, FunctionInfo, LiteralValue as ResolvedLiteral,
+    ResolvedModule, Span, TypeNode, TypeVarCallInfo, TypingForm,
+};
+use ruff_python_ast::Expr;
 
 use crate::annotation::AnnotationResolver;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::rules::shared::judge::TypeJudge;
-use crate::rules::shared::{is_type_compatible, parse_subscript_annotation};
+use crate::rules::shared::{parse_module, ExprIndex};
 use crate::span_util::slice_span;
 use crate::types::{InferredType, LiteralValue};
 
@@ -71,6 +75,10 @@ fn check_local_function_calls(
     judge: &TypeJudge<'_, '_>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
+    let Some(parsed) = parse_module(module) else {
+        return;
+    };
+    let index = ExprIndex::build(&parsed.ast);
     let func_groups = group_module_functions(module);
     // TypeVar bounds/constraints, used to detect calls for which no TypeVar
     // assignment exists (e.g. a `list[T_int]` parameter given `list[str]`).
@@ -92,7 +100,7 @@ fn check_local_function_calls(
         let Some(func) = resolve_overload_for_call(funcs) else {
             continue;
         };
-        check_call_arguments(module, call, func, resolver, judge, &typevars, diagnostics);
+        check_call_arguments(module, &index, call, func, resolver, judge, &typevars, diagnostics);
     }
 }
 
@@ -117,8 +125,13 @@ fn group_module_functions(module: &ResolvedModule) -> HashMap<&str, Vec<&Functio
 /// prefix belong to the vararg, and `FunctionInfo.parameters` mixes
 /// keyword-only parameters into the same list — so such callees are not
 /// judged positionally at all ([CHKARCH-CONFORMANCE-MODE]).
+#[expect(
+    clippy::too_many_arguments,
+    reason = "judging a call requires the module, its expression index, and the shared judges"
+)]
 fn check_call_arguments(
     module: &ResolvedModule,
+    index: &ExprIndex<'_>,
     call: &CallSite,
     func: &FunctionInfo,
     resolver: &AnnotationResolver<'_>,
@@ -139,7 +152,9 @@ fn check_call_arguments(
         let Some(ann_text) = slice_span(&module.source, ann_span) else {
             continue;
         };
-        let mismatch = argument_mismatch(judge, resolver, ann_span, ann_text, *arg_span, typevars);
+        let mismatch = argument_mismatch(
+            module, index, judge, resolver, ann_span, ann_text, *arg_span, typevars,
+        );
         if let Some(description) = mismatch {
             diagnostics.push(make_diagnostic(
                 &call.callee,
@@ -156,7 +171,13 @@ fn check_call_arguments(
 /// The description of a proven mismatch between the argument the engine
 /// typed and the parameter's declared type, or `None` when the argument
 /// fits or the evidence is incomplete ([CHKARCH-CONFORMANCE-MODE]).
+#[expect(
+    clippy::too_many_arguments,
+    reason = "judging a call requires the module, its expression index, and the shared judges"
+)]
 fn argument_mismatch(
+    module: &ResolvedModule,
+    index: &ExprIndex<'_>,
     judge: &TypeJudge<'_, '_>,
     resolver: &AnnotationResolver<'_>,
     ann_span: Span,
@@ -165,7 +186,7 @@ fn argument_mismatch(
     typevars: &HashMap<&str, &TypeVarCallInfo>,
 ) -> Option<String> {
     let inferred = judge.inferred(Some(arg_span));
-    if let Some(description) = container_mismatch(ann_text, &inferred, typevars) {
+    if let Some(description) = container_mismatch(module, index, ann_span, ann_text, &inferred, typevars) {
         return Some(description);
     }
     if matches!(inferred, InferredType::Unknown | InferredType::Any) {
@@ -231,69 +252,129 @@ fn resolve_overload_for_call<'a>(funcs: &[&'a FunctionInfo]) -> Option<&'a Funct
 ///
 /// Implements the typing-spec rule that a call is an error when the collected
 /// constraints for a type variable have no common solution
-/// ([CHKARCH-DIAG-TYPESAFETY]).
+/// ([CHKARCH-DIAG-TYPESAFETY]). The container is recognised by resolving the
+/// annotation's base through the binding table ([ASTREBUILD-LAW]) — `list`,
+/// `typing.List`, and any alias of either behave identically — and every
+/// verdict comes from [`assignable`] over lowered [`TypeNode`]s. Annotation
+/// source text appears in the diagnostic MESSAGE only.
 fn container_mismatch(
-    annotation: &str,
+    module: &ResolvedModule,
+    index: &ExprIndex<'_>,
+    ann_span: Span,
+    ann_text: &str,
     inferred: &InferredType,
     typevars: &HashMap<&str, &TypeVarCallInfo>,
 ) -> Option<String> {
-    let (base, args) = parse_subscript_annotation(annotation)?;
-    let base = base.trim().to_ascii_lowercase();
-    if !matches!(
-        base.as_str(),
-        "list" | "set" | "frozenset" | "dict" | "tuple"
-    ) {
+    let ann_expr = index.expr(ann_span)?;
+    let Expr::Subscript(sub) = ann_expr else {
         return None;
-    }
+    };
+    let form = module.bindings.form_of_with_builtins(&sub.value)?;
+    let class = container_class(form)?;
 
     // (a) A scalar value can never satisfy a container parameter, whatever the
     //     element type — no assignment of any TypeVar makes it valid.
-    if scalar_type_name(inferred).is_some() || matches!(inferred, InferredType::None_) {
-        return Some(format!(
-            "`{inferred}` where `{annotation}` is required — no type-variable \
-             assignment makes it valid"
-        ));
+    if let Some(scalar) = scalar_node(inferred) {
+        if assignable(&scalar, &TypeNode::lower(&module.bindings, ann_expr)) == Some(false) {
+            return Some(format!(
+                "`{inferred}` where `{ann_text}` is required — no type-variable \
+                 assignment makes it valid"
+            ));
+        }
     }
 
     // (b) An invariant container of a single bounded/constrained TypeVar, given
     //     an argument whose known element type violates the bound/constraints.
-    if matches!(base.as_str(), "list" | "set" | "frozenset") {
-        let inner = args.first()?;
-        let tv = typevars.get(inner.as_str())?;
-        let elem = known_element_type(inferred)?;
-        if !typevar_accepts(tv, elem) {
+    if matches!(
+        class,
+        BuiltinClass::List | BuiltinClass::Set | BuiltinClass::Frozenset
+    ) {
+        let inner = match sub.slice.as_ref() {
+            Expr::Tuple(_) => return None,
+            single => single,
+        };
+        let Expr::Name(name) = inner else {
+            return None;
+        };
+        if !module.bindings.refers_to_local_definition(inner) {
+            return None;
+        }
+        let tv = typevars.get(name.id.as_str())?;
+        let elem = known_element_node(inferred)?;
+        if typevar_accepts(module, index, tv, &elem) == Some(false) {
             return Some(format!(
-                "`{base}[{elem}]` where `{annotation}` is required — `{elem}` does not \
-                 satisfy type variable `{inner}`"
+                "`{inferred}` where `{ann_text}` is required — the element type does \
+                 not satisfy type variable `{}`",
+                name.id
             ));
         }
     }
     None
 }
 
-/// Does the `TypeVar`'s bound or constraint set admit `elem`?
-fn typevar_accepts(tv: &TypeVarCallInfo, elem: &str) -> bool {
-    match &tv.bound_type_name {
-        Some(bound) => is_type_compatible(elem, bound),
-        None if !tv.constraint_type_names.is_empty() => tv
-            .constraint_type_names
-            .iter()
-            .any(|constraint| is_type_compatible(elem, constraint)),
-        None => true,
+/// The builtin container class a resolved form denotes, if any.
+fn container_class(form: TypingForm) -> Option<BuiltinClass> {
+    match form {
+        TypingForm::ListClass | TypingForm::ListAlias => Some(BuiltinClass::List),
+        TypingForm::SetClass | TypingForm::SetAlias => Some(BuiltinClass::Set),
+        TypingForm::FrozensetClass | TypingForm::FrozensetAlias => Some(BuiltinClass::Frozenset),
+        TypingForm::DictClass | TypingForm::DictAlias => Some(BuiltinClass::Dict),
+        TypingForm::TupleClass | TypingForm::TupleAlias => Some(BuiltinClass::Tuple),
+        _ => None,
     }
 }
 
-/// The element type name of a `list`/`set` argument whose engine-synthesised
+/// Does the `TypeVar`'s bound or constraint set admit `elem`? Three-valued:
+/// `None` abstains when the relation cannot decide. The bound and constraint
+/// expressions are read from the `TypeVar` call's AST node and lowered through
+/// the binding table — never from resolver-recorded name strings.
+fn typevar_accepts(
+    module: &ResolvedModule,
+    index: &ExprIndex<'_>,
+    tv: &TypeVarCallInfo,
+    elem: &TypeNode,
+) -> Option<bool> {
+    let Some(Expr::Call(call)) = index.expr(tv.span) else {
+        return None;
+    };
+    let bound = call
+        .arguments
+        .keywords
+        .iter()
+        .find(|kw| kw.arg.as_deref() == Some("bound"));
+    if let Some(bound) = bound {
+        return assignable(elem, &TypeNode::lower(&module.bindings, &bound.value));
+    }
+    // Positional arguments after the name string are the constraint set; the
+    // element must be assignable to at least one member (three-valued OR).
+    let mut constraints = call.arguments.args.iter().skip(1).peekable();
+    if constraints.peek().is_none() {
+        return Some(true);
+    }
+    let mut result = Some(false);
+    for constraint in constraints {
+        match assignable(elem, &TypeNode::lower(&module.bindings, constraint)) {
+            Some(true) => return Some(true),
+            Some(false) => {}
+            None => result = None,
+        }
+    }
+    result
+}
+
+/// The element node of a `list`/`set` argument whose engine-synthesised
 /// element type is a known scalar (`[""]` → `str`); `None` otherwise.
-fn known_element_type(inferred: &InferredType) -> Option<&'static str> {
+fn known_element_node(inferred: &InferredType) -> Option<TypeNode> {
     let (InferredType::List(element) | InferredType::Set(element)) = inferred else {
         return None;
     };
-    scalar_type_name(element)
+    scalar_node(element)
 }
 
-/// The Python type name of a positively-known scalar type.
-fn scalar_type_name(inferred: &InferredType) -> Option<&'static str> {
+/// The Python type name of a positively-known scalar type, consumed by the
+/// `builtin_methods` pass for its stub-declaration comparisons. This
+/// classifies the engine's resolved `InferredType` — never source text.
+pub(super) fn scalar_type_name(inferred: &InferredType) -> Option<&'static str> {
     match inferred {
         InferredType::Int => Some("int"),
         InferredType::Float => Some("float"),
@@ -315,6 +396,40 @@ fn scalar_type_name(inferred: &InferredType) -> Option<&'static str> {
                 .then_some(first)
         }
         _ => None,
+    }
+}
+
+/// The resolved node of a positively-known scalar type. `None` when the
+/// engine's synthesis is not a scalar this rule can relate.
+fn scalar_node(inferred: &InferredType) -> Option<TypeNode> {
+    match inferred {
+        InferredType::Int => Some(TypeNode::Builtin(BuiltinClass::Int)),
+        InferredType::Float => Some(TypeNode::Builtin(BuiltinClass::Float)),
+        InferredType::Str => Some(TypeNode::Builtin(BuiltinClass::Str)),
+        InferredType::LiteralString => Some(TypeNode::LiteralString),
+        InferredType::Bool => Some(TypeNode::Builtin(BuiltinClass::Bool)),
+        InferredType::Bytes => Some(TypeNode::Builtin(BuiltinClass::Bytes)),
+        InferredType::None_ => Some(TypeNode::NoneType),
+        InferredType::Literal(value) => literal_scalar_node(value),
+        InferredType::Union(members) => {
+            let nodes: Option<Vec<TypeNode>> = members.iter().map(scalar_node).collect();
+            nodes.filter(|nodes| !nodes.is_empty()).map(TypeNode::Union)
+        }
+        _ => None,
+    }
+}
+
+/// The resolved node of a literal value the engine synthesised.
+fn literal_scalar_node(value: &LiteralValue) -> Option<TypeNode> {
+    match value {
+        LiteralValue::Int(v) => Some(TypeNode::Literal(ResolvedLiteral::Int(*v))),
+        LiteralValue::Str(s) => Some(TypeNode::Literal(ResolvedLiteral::Str(s.as_str().into()))),
+        LiteralValue::Bool(b) => Some(TypeNode::Literal(ResolvedLiteral::Bool(*b))),
+        LiteralValue::Bytes(b) => Some(TypeNode::Literal(ResolvedLiteral::Bytes(
+            b.clone().into_boxed_slice(),
+        ))),
+        // `float` has no `Literal` form (PEP 586); the value's class stands in.
+        LiteralValue::Float(_) => Some(TypeNode::Builtin(BuiltinClass::Float)),
     }
 }
 

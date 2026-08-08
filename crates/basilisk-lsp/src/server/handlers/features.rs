@@ -259,7 +259,7 @@ fn extract_completion_prefix(text: &str, byte_offset: usize) -> String {
 fn build_auto_import_items(
     symbol_index: &auto_import::SymbolIndex,
     prefix: &str,
-    source: &str,
+    _source: &str,
     current_file: &std::path::Path,
 ) -> Vec<CompletionItem> {
     use tower_lsp::lsp_types::{
@@ -306,15 +306,6 @@ fn build_auto_import_items(
 }
 
 /// Convert a byte offset to an LSP `Position`.
-fn byte_offset_to_position(source: &str, offset: usize) -> tower_lsp::lsp_types::Position {
-    let clamped = offset.min(source.len());
-    let before = source.get(..clamped).unwrap_or(source);
-    let line = u32::try_from(before.chars().filter(|&c| c == '\n').count()).unwrap_or(u32::MAX);
-    let col =
-        u32::try_from(before.rfind('\n').map_or(clamped, |pos| clamped - pos - 1)).unwrap_or(0);
-    tower_lsp::lsp_types::Position::new(line, col)
-}
-
 /// Handle `completionItem/resolve`: lazily load documentation for a completion item.
 ///
 /// Called when the user selects a completion item, allowing us to lazily load

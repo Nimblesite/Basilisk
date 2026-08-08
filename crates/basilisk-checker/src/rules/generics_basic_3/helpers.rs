@@ -1,17 +1,21 @@
 //! Implements [`generics_basic_3`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! All internal types, parsing, and checking logic for `generics_basic_3`.
+//!
+//! Annotations are resolved through the module's binding table into
+//! [`TypeNode`]s and related with [`assignable`] ([ASTREBUILD-LAW]) — never
+//! compared as source text. Source text appears only inside diagnostic
+//! messages.
 
 use std::collections::HashMap;
 
 use ruff_python_ast::{self as ast, Expr, Stmt};
 use ruff_text_size::Ranged;
 
-use basilisk_resolver::Span;
+use basilisk_resolver::{assignable, BindingTable, Span, TypeNode, TypingForm};
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
-// Re-export shared helpers so sibling modules can use `helpers::ann_str` etc.
-pub(super) use crate::rules::shared::{ann_str, expr_name};
-use crate::rules::shared::{infer_expr_literal_type, is_type_compatible, split_top_level_commas};
+use crate::rules::shared::{expr_name, infer_expr_literal_type};
+use crate::span_util::slice_span;
 
 pub(super) const CODE: ErrorCode = ErrorCode {
     code: "generics_basic_3",
@@ -92,29 +96,42 @@ pub(super) struct ConstrainedFunc {
 // Module context
 // ---------------------------------------------------------------------------
 
+/// A `Mapping`-typed variable's key parameter: the resolved node for verdicts
+/// and the annotation's source text for messages only.
+pub(super) struct MappingInfo {
+    key: TypeNode,
+    key_text: String,
+}
+
 /// Module-level knowledge needed to check calls.
-pub(super) struct ModuleContext {
+pub(super) struct ModuleContext<'a> {
+    /// The module's binding table, for lowering annotations in nested scopes.
+    bindings: &'a BindingTable,
+    /// The module source, for diagnostic message rendering only.
+    source: &'a str,
     /// All constrained `TypeVars` defined at module level.
     pub(super) constrained_tvars: HashMap<String, ConstrainedTypeVar>,
     /// Functions that have at least one constrained-TypeVar parameter.
     pub(super) constrained_funcs: Vec<ConstrainedFunc>,
-    /// Variables with known types: name -> type annotation text.
+    /// Variables whose annotation is a simple name reference: name -> the
+    /// referenced type name. Structured annotations are outside the
+    /// constrained-`TypeVar` matcher's model and abstain
+    /// ([ASTREBUILD-PHASE-RESOLVER]).
     pub(super) var_types: HashMap<String, String>,
-    /// Classes that represent Mapping types with known key types.
-    /// Maps class name -> (`key_type_text`, `value_type_text`).
-    pub(super) mapping_vars: HashMap<String, (String, String)>,
+    /// Variables with a resolved mapping type: name -> key parameter.
+    pub(super) mapping_vars: HashMap<String, MappingInfo>,
     /// Class inheritance: maps class name -> list of base class names.
     /// Used for resolving subclass-to-constraint matching in `TypeVar` checks.
     pub(super) class_bases: HashMap<String, Vec<String>>,
 }
 
-impl ModuleContext {
+impl<'a> ModuleContext<'a> {
     /// Build a `ModuleContext` from the top-level AST statements.
-    pub(super) fn from_ast(stmts: &[Stmt]) -> Self {
+    pub(super) fn from_ast(stmts: &[Stmt], bindings: &'a BindingTable, source: &'a str) -> Self {
         let constrained_tvars: HashMap<String, ConstrainedTypeVar> = HashMap::new();
         let mut constrained_funcs: Vec<ConstrainedFunc> = Vec::new();
         let mut var_types: HashMap<String, String> = HashMap::new();
-        let mut mapping_vars: HashMap<String, (String, String)> = HashMap::new();
+        let mut mapping_vars: HashMap<String, MappingInfo> = HashMap::new();
 
         // Pass 2: collect function signatures and variable annotations.
         for stmt in stmts {
@@ -126,10 +143,11 @@ impl ModuleContext {
                 }
                 Stmt::AnnAssign(ann) => {
                     if let Some(var_name) = expr_name(&ann.target) {
-                        let ann_text = ann_str(&ann.annotation);
-                        let _ = var_types.insert(var_name.to_owned(), ann_text.clone());
-                        if let Some((key_ty, val_ty)) = parse_mapping_annotation(&ann_text) {
-                            let _ = mapping_vars.insert(var_name.to_owned(), (key_ty, val_ty));
+                        if let Some(type_name) = expr_name(&ann.annotation) {
+                            let _ = var_types.insert(var_name.to_owned(), type_name.to_owned());
+                        }
+                        if let Some(info) = mapping_key_info(bindings, source, &ann.annotation) {
+                            let _ = mapping_vars.insert(var_name.to_owned(), info);
                         }
                     }
                 }
@@ -142,7 +160,7 @@ impl ModuleContext {
         for stmt in stmts {
             if let Stmt::ClassDef(cls) = stmt {
                 if let Some(args) = &cls.arguments {
-                    let bases: Vec<String> = args.args.iter().map(ann_str).collect();
+                    let bases: Vec<String> = args.args.iter().filter_map(base_class_name).collect();
                     if !bases.is_empty() {
                         let _ = class_bases.insert(cls.name.to_string(), bases);
                     }
@@ -151,12 +169,28 @@ impl ModuleContext {
         }
 
         Self {
+            bindings,
+            source,
             constrained_tvars,
             constrained_funcs,
             var_types,
             mapping_vars,
             class_bases,
         }
+    }
+}
+
+/// The nominal name of a base class expression, from the AST: a bare `Name`,
+/// or the subscripted name of `Base[...]`. Structured bases without a simple
+/// name carry no nominal identity for the walk and are skipped.
+fn base_class_name(expr: &Expr) -> Option<String> {
+    match expr {
+        Expr::Name(name) => Some(name.id.to_string()),
+        Expr::Subscript(sub) => match sub.value.as_ref() {
+            Expr::Name(name) => Some(name.id.to_string()),
+            _ => None,
+        },
+        _ => None,
     }
 }
 
@@ -168,16 +202,16 @@ impl ModuleContext {
 /// module context. Locals shadow module entries; nothing is copied, so
 /// building one per function is O(parameters), not O(module).
 pub(super) struct ScopeContext<'a> {
-    module: &'a ModuleContext,
-    /// Parameter/local types for the current function: name -> annotation text.
+    module: &'a ModuleContext<'a>,
+    /// Simple-name types of the current function's parameters.
     local_types: HashMap<String, String>,
-    /// Mapping-typed locals: name -> (`key_type_text`, `value_type_text`).
-    local_mappings: HashMap<String, (String, String)>,
+    /// Mapping-typed locals: name -> key parameter.
+    local_mappings: HashMap<String, MappingInfo>,
 }
 
 impl<'a> ScopeContext<'a> {
     /// Module-level scope: no locals. `HashMap::new()` does not allocate.
-    pub(super) fn module_scope(module: &'a ModuleContext) -> Self {
+    pub(super) fn module_scope(module: &'a ModuleContext<'a>) -> Self {
         Self {
             module,
             local_types: HashMap::new(),
@@ -186,7 +220,10 @@ impl<'a> ScopeContext<'a> {
     }
 
     /// Function scope: the function's annotated parameters shadow module vars.
-    pub(super) fn function_scope(module: &'a ModuleContext, func: &ast::StmtFunctionDef) -> Self {
+    pub(super) fn function_scope(
+        module: &'a ModuleContext<'a>,
+        func: &ast::StmtFunctionDef,
+    ) -> Self {
         let mut local_types = HashMap::new();
         let mut local_mappings = HashMap::new();
         for param in func
@@ -196,11 +233,13 @@ impl<'a> ScopeContext<'a> {
             .chain(func.parameters.posonlyargs.iter())
         {
             if let Some(ann) = &param.parameter.annotation {
-                let ann_text = ann_str(ann);
-                if let Some(pair) = resolve_mapping_annotation(&ann_text) {
-                    let _ = local_mappings.insert(param.parameter.name.to_string(), pair);
+                if let Some(info) = mapping_key_info(module.bindings, module.source, ann) {
+                    let _ = local_mappings.insert(param.parameter.name.to_string(), info);
                 }
-                let _ = local_types.insert(param.parameter.name.to_string(), ann_text);
+                if let Some(type_name) = expr_name(ann) {
+                    let _ = local_types
+                        .insert(param.parameter.name.to_string(), type_name.to_owned());
+                }
             }
         }
         Self {
@@ -210,7 +249,7 @@ impl<'a> ScopeContext<'a> {
         }
     }
 
-    pub(super) fn module(&self) -> &'a ModuleContext {
+    pub(super) fn module(&self) -> &'a ModuleContext<'a> {
         self.module
     }
 
@@ -221,7 +260,7 @@ impl<'a> ScopeContext<'a> {
             .map(String::as_str)
     }
 
-    fn mapping_var(&self, name: &str) -> Option<&(String, String)> {
+    fn mapping_var(&self, name: &str) -> Option<&MappingInfo> {
         self.local_mappings
             .get(name)
             .or_else(|| self.module.mapping_vars.get(name))
@@ -269,40 +308,47 @@ fn try_parse_constrained_func(
 }
 
 // ---------------------------------------------------------------------------
-// Mapping annotation parsing
+// Mapping annotation resolution
 // ---------------------------------------------------------------------------
 
-/// Detect Mapping-like annotations with explicit key/value types.
+/// Resolve a mapping annotation `M[K, V]` to its key parameter.
 ///
-/// Recognises `Name[K, V]` patterns. Returns `(key_type, value_type)` or `None`.
-pub(super) fn parse_mapping_annotation(ann: &str) -> Option<(String, String)> {
-    let ann = ann.trim();
-    let bracket_pos = ann.find('[')?;
-    let inner = ann.get(bracket_pos + 1..ann.rfind(']')?)?;
-    let args = split_top_level_commas(inner);
-    if args.len() < 2 {
+/// The subscript base must resolve, through the binding table, to a form
+/// whose first parameter is the key type: the builtin `dict` (or its
+/// `typing.Dict` alias) or the abstract `Mapping`/`MutableMapping` protocols.
+/// A user-defined mapping subclass would require MRO-level type-parameter
+/// mapping, which this layer does not model — it abstains
+/// ([ASTREBUILD-PHASE-RESOLVER]).
+fn mapping_key_info(bindings: &BindingTable, source: &str, ann: &Expr) -> Option<MappingInfo> {
+    let Expr::Subscript(sub) = ann else {
+        return None;
+    };
+    let is_mapping_form = matches!(
+        bindings.form_of_with_builtins(&sub.value),
+        Some(
+            TypingForm::DictClass
+                | TypingForm::DictAlias
+                | TypingForm::Mapping
+                | TypingForm::MutableMapping
+        )
+    );
+    if !is_mapping_form {
         return None;
     }
-    let key_ty = args.first()?.trim().to_owned();
-    let val_ty = args.get(1)?.trim().to_owned();
-    if key_ty.is_empty() || val_ty.is_empty() {
+    let Expr::Tuple(args) = sub.slice.as_ref() else {
+        return None;
+    };
+    let key_expr = args.elts.first()?;
+    if args.elts.len() < 2 {
         return None;
     }
-    Some((key_ty, val_ty))
-}
-
-/// Resolve a `dict[K, V]` annotation to its key/value types.
-///
-/// Returns `(key_type, value_type)` for the builtin `dict` only.
-pub(super) fn resolve_mapping_annotation(ann: &str) -> Option<(String, String)> {
-    let bracket = ann.find('[')?;
-    let class_name = ann.get(..bracket)?.trim();
-
-    if class_name == "dict" {
-        return parse_mapping_annotation(ann);
-    }
-
-    None
+    Some(MappingInfo {
+        key: TypeNode::lower(bindings, key_expr),
+        key_text: slice_span(source, Span::from(key_expr.range()))
+            .unwrap_or("<key type>")
+            .trim()
+            .to_owned(),
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -377,6 +423,10 @@ pub(super) fn check_call(
 // ---------------------------------------------------------------------------
 
 /// Check a subscript expression for `Mapping` key type mismatches.
+///
+/// The verdict relates the subscript key's literal type to the resolved key
+/// parameter with [`assignable`]; a relation the layer cannot decide
+/// abstains and no diagnostic is emitted.
 pub(super) fn check_subscript(
     sub: &ast::ExprSubscript,
     scope: &ScopeContext<'_>,
@@ -386,19 +436,20 @@ pub(super) fn check_subscript(
     let Some(obj_name) = expr_name(&sub.value) else {
         return;
     };
-    let Some((key_ty, _val_ty)) = scope.mapping_var(obj_name) else {
+    let Some(mapping) = scope.mapping_var(obj_name) else {
         return;
     };
-    let Some(idx_ty) = infer_expr_literal_type(&sub.slice) else {
-        return;
-    };
-
-    if !is_type_compatible(idx_ty, key_ty) {
+    let idx_node = TypeNode::of_literal_expr(&sub.slice);
+    if assignable(&idx_node, &mapping.key) == Some(false) {
+        let key_ty = &mapping.key_text;
+        let idx_text = slice_span(scope.module().source, Span::from(sub.slice.range()))
+            .unwrap_or("<key>")
+            .trim();
         let span = Span::from(sub.range());
         diag.push(error_diagnostic_owned(
             CODE.clone(),
             format!(
-                "Invalid subscript key type `{idx_ty}` for `{obj_name}` \
+                "Invalid subscript key `{idx_text}` for `{obj_name}` \
                  which expects key type `{key_ty}`"
             ),
             span,
@@ -453,7 +504,7 @@ pub(super) fn check_class_def(cls: &ast::StmtClassDef, path: &str, diag: &mut Ve
 // Type inference helpers
 // ---------------------------------------------------------------------------
 
-/// Infer the type text of an argument expression, using the scope's type maps.
+/// Infer the type name of an argument expression, using the scope's type maps.
 fn infer_arg_type(arg: &Expr, scope: &ScopeContext<'_>) -> Option<String> {
     match arg {
         Expr::Name(n) => scope.var_type(n.id.as_str()).map(str::to_owned),

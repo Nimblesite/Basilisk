@@ -31,9 +31,7 @@ use std::collections::{HashMap, HashSet};
 use basilisk_resolver::{ResolvedModule, Span};
 
 use crate::diagnostic::{error_diagnostic, Diagnostic, ErrorCode};
-use crate::span_util::slice_span;
 
-use super::shared::extract_callee_name;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
@@ -130,7 +128,6 @@ fn check_post_init_signatures(module: &ResolvedModule, diagnostics: &mut Vec<Dia
 
 /// Check for access to `InitVar` fields as instance attributes at module level.
 fn check_initvar_attribute_access(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-    let source = &module.source;
     let path = &module.path;
 
     let initvar_field_map: HashMap<&str, HashSet<&str>> = module
@@ -152,14 +149,31 @@ fn check_initvar_attribute_access(module: &ResolvedModule, diagnostics: &mut Vec
         return;
     }
 
+    let Some(parsed) = super::shared::parse_module(module) else {
+        return;
+    };
+    let index = super::shared::ExprIndex::build(&parsed.ast);
+
+    // Map module variables to the dataclass they instantiate. The callee is
+    // identified from the AST call node behind the resolver's RHS span and
+    // must be a bare name referring to this module's own class definition —
+    // never a parse of the right-hand side's source text ([ASTREBUILD-LAW]).
     let var_class_map: HashMap<&str, &str> = module
         .module_vars
         .iter()
         .filter(|v| v.rhs_kind == basilisk_resolver::RhsKind::CallExpr)
         .filter_map(|v| {
             let rhs_span = v.rhs_span?;
-            let rhs_text = slice_span(source, rhs_span)?;
-            let class_name = extract_callee_name(rhs_text)?;
+            let Some(ruff_python_ast::Expr::Call(call)) = index.expr(rhs_span) else {
+                return None;
+            };
+            let ruff_python_ast::Expr::Name(callee) = call.func.as_ref() else {
+                return None;
+            };
+            if !module.bindings.refers_to_local_definition(call.func.as_ref()) {
+                return None;
+            }
+            let class_name = callee.id.as_str();
             if initvar_field_map.contains_key(class_name) {
                 Some((v.name.as_str(), class_name))
             } else {
@@ -171,10 +185,6 @@ fn check_initvar_attribute_access(module: &ResolvedModule, diagnostics: &mut Vec
     if var_class_map.is_empty() {
         return;
     }
-
-    let Some(parsed) = super::shared::parse_module(module) else {
-        return;
-    };
 
     for stmt in &parsed.ast.body {
         check_stmt_for_initvar_access(stmt, path, &var_class_map, &initvar_field_map, diagnostics);

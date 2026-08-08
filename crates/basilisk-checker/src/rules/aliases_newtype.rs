@@ -8,7 +8,11 @@
 //! - `NewType` accepts exactly two arguments
 //!
 //! Every verdict is structural over the parsed `ruff` AST
-//! ([LINESCANPLAN-AST-MIGRATION], issue #408).
+//! ([LINESCANPLAN-AST-MIGRATION], issue #408), and every reference to a
+//! builtin (`type`, `isinstance`, the base classes) resolves through the
+//! module's bindings and the semantic relation layer
+//! ([ASTREBUILD-LAW], [RESOLV-CANONICAL-RELATION]) — never through the
+//! spelling at the use site.
 //!
 //! ```python
 //! from typing import NewType
@@ -18,7 +22,9 @@
 
 use std::collections::{HashMap, HashSet};
 
-use basilisk_resolver::{NewTypeCallInfo, ResolvedModule, Span};
+use basilisk_resolver::{
+    assignable, BuiltinClass, NewTypeCallInfo, ResolvedModule, Span, TypeNode, TypingForm,
+};
 use ruff_python_ast::{Expr, Operator};
 
 use crate::diagnostic::{error_diagnostic, error_diagnostic_owned, Diagnostic, ErrorCode};
@@ -190,16 +196,16 @@ impl Rule for InvalidNewType {
             return;
         }
 
-        // Map: newtype name → the builtin name its base denotes, when simple.
-        let newtype_base: HashMap<&str, &str> = module
+        // Map: newtype name → the RESOLVED node of its base type, plus the
+        // base's span (used only for diagnostic message text).
+        let newtype_base: HashMap<&str, (TypeNode, Span)> = module
             .newtype_calls
             .iter()
             .filter_map(|nt| {
-                let base = nt.base_type_span.and_then(|span| index.expr(span))?;
-                let Expr::Name(name) = base else {
-                    return None;
-                };
-                Some((nt.lhs_name.as_str(), name.id.as_str()))
+                let span = nt.base_type_span?;
+                let base = index.expr(span)?;
+                let node = TypeNode::lower(&module.bindings, base);
+                Some((nt.lhs_name.as_str(), (node, span)))
             })
             .collect();
 
@@ -207,7 +213,7 @@ impl Rule for InvalidNewType {
         check_newtype_subscript_uses(module, &index, &newtype_names, diagnostics);
         check_newtype_assigned_to_type(module, &index, &newtype_names, diagnostics);
         check_isinstance_with_newtype(module, &index, &newtype_names, diagnostics);
-        check_newtype_call_arg_types(module, &newtype_base, diagnostics);
+        check_newtype_call_arg_types(module, &index, &newtype_base, diagnostics);
         check_newtype_var_literal_assignments(module, &index, &newtype_names, diagnostics);
     }
 }
@@ -309,7 +315,11 @@ fn check_newtype_subscript_uses(
 
 /// `_: type = UserId` — assigning a `NewType` to a `type`-annotated variable is invalid.
 ///
-/// PEP 484: `NewType(...)` does not return a class object; it returns a callable.
+/// PEP 484: `NewType(...)` does not return a class object; it returns a
+/// callable. The annotation is recognised by LOWERING it through the
+/// module's bindings ([ASTREBUILD-LAW]): `type`, `builtins.type`, and any
+/// alias of them all denote the builtin `type` class; a shadowing
+/// definition of the name does not.
 fn check_newtype_assigned_to_type(
     module: &ResolvedModule,
     index: &ExprIndex<'_>,
@@ -317,10 +327,12 @@ fn check_newtype_assigned_to_type(
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     for var in &module.module_vars {
-        let annotation_is_type = matches!(
-            var.annotation_span.and_then(|span| index.expr(span)),
-            Some(Expr::Name(name)) if name.id.as_str() == "type"
-        );
+        let annotation_is_type = var
+            .annotation_span
+            .and_then(|span| index.expr(span))
+            .is_some_and(|expr| {
+                TypeNode::lower(&module.bindings, expr) == TypeNode::Builtin(BuiltinClass::Type)
+            });
         if !annotation_is_type {
             continue;
         }
@@ -344,7 +356,9 @@ fn check_newtype_assigned_to_type(
 /// `isinstance(u2, UserId)` — using a `NewType` as the second argument to `isinstance` is invalid.
 ///
 /// PEP 484: the object returned by `NewType(...)` is not a class and cannot be
-/// used as the second argument to `isinstance` or `issubclass`.
+/// used as the second argument to `isinstance` or `issubclass`. The callee is
+/// recognised by what it RESOLVES to ([ASTREBUILD-LAW]) — an aliased import
+/// of the builtin is the builtin; a module-level shadowing of its name is not.
 fn check_isinstance_with_newtype(
     module: &ResolvedModule,
     index: &ExprIndex<'_>,
@@ -352,7 +366,19 @@ fn check_isinstance_with_newtype(
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     for call in &module.calls {
-        if call.callee != "isinstance" {
+        let is_runtime_check = index
+            .expr(call.span)
+            .and_then(|expr| match expr {
+                Expr::Call(node) => module.bindings.form_of_with_builtins(&node.func),
+                _ => None,
+            })
+            .is_some_and(|form| {
+                matches!(
+                    form,
+                    TypingForm::IsinstanceFunction | TypingForm::IssubclassFunction
+                )
+            });
+        if !is_runtime_check {
             continue;
         }
         let Some((_, second_span)) = call.args.get(1) else {
@@ -377,54 +403,61 @@ fn check_isinstance_with_newtype(
 
 /// Check calls to `NewType` constructors for argument type mismatches.
 ///
-/// `UserId("user")` when `UserId = NewType("UserId", int)` → error because `str` ≠ `int`.
+/// PEP 484: the `NewType` constructor accepts only values of the base type.
+/// The argument's literal type is related to the RESOLVED base node through
+/// [`assignable`] ([RESOLV-CANONICAL-RELATION]); a diagnostic is emitted
+/// only on a definite `Some(false)` — unresolved bases and non-literal
+/// arguments abstain.
 fn check_newtype_call_arg_types(
     module: &ResolvedModule,
-    newtype_base: &HashMap<&str, &str>,
+    index: &ExprIndex<'_>,
+    newtype_base: &HashMap<&str, (TypeNode, Span)>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     for call in &module.calls {
-        let Some(&base_type) = newtype_base.get(call.callee.as_str()) else {
+        let Some((base_node, base_span)) = newtype_base.get(call.callee.as_str()) else {
             continue;
         };
-
-        let Some((rhs_kind, arg_span)) = call.args.first() else {
+        let Some((_, arg_span)) = call.args.first() else {
             continue;
         };
-
-        if newtype_arg_mismatch(base_type, rhs_kind).is_some() {
-            let arg_text = crate::span_util::slice_span(&module.source, *arg_span).unwrap_or("");
-            diagnostics.push(error_diagnostic_owned(
-                CODE.clone(),
-                format!(
-                    "Argument to `{}` ({}) is not compatible with its base type `{base_type}`",
-                    call.callee,
-                    arg_text.trim()
-                ),
-                call.span,
-                &module.path,
-                Some(format!(
-                    "Pass a value of type `{base_type}` to the `{}` constructor",
-                    call.callee
-                )),
-                Some("NewType constructors accept only values of the base type".to_owned()),
-            ));
+        let Some(arg_expr) = index.expr(*arg_span) else {
+            continue;
+        };
+        let arg_node = TypeNode::of_literal_expr(arg_expr);
+        if assignable(&arg_node, base_node) == Some(false) {
+            push_newtype_arg_diagnostic(module, call, *arg_span, *base_span, diagnostics);
         }
     }
 }
 
-/// Returns a description of the mismatch when `rhs` is incompatible with the
-/// builtin base type name, else `None`.
-fn newtype_arg_mismatch(base_type: &str, rhs: &basilisk_resolver::RhsKind) -> Option<&'static str> {
-    use basilisk_resolver::RhsKind;
-
-    match (base_type, rhs) {
-        ("int" | "float" | "bool" | "bytes", RhsKind::StrLiteral) => Some("str literal"),
-        ("int" | "str" | "float", RhsKind::BytesLiteral) => Some("bytes literal"),
-        ("int" | "str" | "bool", RhsKind::FloatLiteral) => Some("float literal"),
-        ("str" | "bytes", RhsKind::IntLiteral) => Some("int literal"),
-        _ => None,
-    }
+/// The diagnostic for a constructor argument the base type cannot accept.
+/// Source text appears in the MESSAGE only — never in a verdict
+/// ([ASTREBUILD-LAW]).
+fn push_newtype_arg_diagnostic(
+    module: &ResolvedModule,
+    call: &basilisk_resolver::CallSite,
+    arg_span: Span,
+    base_span: Span,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let arg_text = crate::span_util::slice_span(&module.source, arg_span).unwrap_or("");
+    let base_text = crate::span_util::slice_span(&module.source, base_span).unwrap_or("");
+    diagnostics.push(error_diagnostic_owned(
+        CODE.clone(),
+        format!(
+            "Argument to `{}` ({}) is not compatible with its base type `{base_text}`",
+            call.callee,
+            arg_text.trim()
+        ),
+        call.span,
+        &module.path,
+        Some(format!(
+            "Pass a value of type `{base_text}` to the `{}` constructor",
+            call.callee
+        )),
+        Some("NewType constructors accept only values of the base type (PEP 484)".to_owned()),
+    ));
 }
 
 /// Check module-level variable assignments where the annotation is a `NewType` name.

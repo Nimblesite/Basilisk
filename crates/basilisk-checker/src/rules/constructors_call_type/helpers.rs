@@ -9,11 +9,11 @@ use std::collections::HashMap;
 use ruff_python_ast::{self as ast, Expr, Stmt};
 use ruff_text_size::Ranged as _;
 
-use basilisk_resolver::Span;
+use basilisk_resolver::{assignable, BindingTable, Span, TypeNode};
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
-use crate::rules::shared::{infer_expr_literal_type, is_type_compatible};
-use crate::span_util::slice_span;
+use crate::rules::shared::ExprIndex;
+use crate::span_util::{node_message_text, slice_span};
 
 pub(super) const CODE: ErrorCode = ErrorCode {
     code: "constructors_call_type",
@@ -170,6 +170,11 @@ pub(super) fn class_bases(class_info: &basilisk_resolver::ClassInfo) -> Vec<&str
 // ---------------------------------------------------------------------------
 
 /// Check that keyword arguments match the expected parameter types.
+///
+/// The literal argument is typed with [`TypeNode::of_literal_expr`] and
+/// related to the parameter's annotation lowered through the module's binding
+/// table ([ASTREBUILD-LAW]); a diagnostic is emitted only on a proven
+/// `Some(false)`. Annotation source text appears in the MESSAGE only.
 #[expect(
     clippy::too_many_arguments,
     reason = "type checking requires full context"
@@ -179,6 +184,8 @@ pub(super) fn check_kwarg_types(
     class_name: &str,
     kw_names: &[&str],
     method_map: &HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>>,
+    bindings: &BindingTable,
+    index: &ExprIndex<'_>,
     source: &str,
     path: &str,
     span: Span,
@@ -199,18 +206,19 @@ pub(super) fn check_kwarg_types(
         let Some(ann_span) = param.annotation_span else {
             continue;
         };
-        let Some(ann_text) = slice_span(source, ann_span) else {
+        // Annotations the index cannot map to a node abstain
+        // ([ASTREBUILD-PHASE-RESOLVER]).
+        let Some(ann_expr) = index.expr(ann_span) else {
             continue;
         };
-        let expected_type = ann_text.trim();
-        let Some(arg_type) = infer_expr_literal_type(&kw.value) else {
-            continue;
-        };
-        if !is_type_compatible(arg_type, expected_type) {
+        let target = TypeNode::lower(bindings, ann_expr);
+        if assignable(&TypeNode::of_literal_expr(&kw.value), &target) == Some(false) {
+            let expected_type = slice_span(source, ann_span).unwrap_or("<annotation>").trim();
+            let arg_text = node_message_text(source, &kw.value);
             diagnostics.push(error_diagnostic_owned(
                 CODE.clone(),
                 format!(
-                    "Keyword argument `{kw_name}={arg_type}` is incompatible with \
+                    "Keyword argument `{kw_name}={arg_text}` is incompatible with \
                      parameter `{kw_name}: {expected_type}` of `{class_name}` constructor"
                 ),
                 span,
@@ -227,13 +235,21 @@ pub(super) fn check_kwarg_types(
 }
 
 /// Check positional arguments against the constructor parameter types.
+///
+/// Same relation as [`check_kwarg_types`]: literal arguments against lowered
+/// annotations, emitting only on a proven `Some(false)`.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "type checking requires full context"
+)]
 pub(super) fn check_positional_arg_types(
     call: &ast::ExprCall,
     class_name: &str,
     method_map: &HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>>,
+    bindings: &BindingTable,
+    index: &ExprIndex<'_>,
     source: &str,
     path: &str,
-    span: Span,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     let func = find_constructor_func(class_name, method_map);
@@ -247,20 +263,21 @@ pub(super) fn check_positional_arg_types(
         let Some(ann_span) = param.annotation_span else {
             continue;
         };
-        let Some(ann_text) = slice_span(source, ann_span) else {
+        // Annotations the index cannot map to a node abstain
+        // ([ASTREBUILD-PHASE-RESOLVER]).
+        let Some(ann_expr) = index.expr(ann_span) else {
             continue;
         };
-        let expected_type = ann_text.trim();
-        let Some(arg_type) = infer_expr_literal_type(arg_expr) else {
-            continue;
-        };
-        if !is_type_compatible(arg_type, expected_type) {
+        let target = TypeNode::lower(bindings, ann_expr);
+        if assignable(&TypeNode::of_literal_expr(arg_expr), &target) == Some(false) {
+            let expected_type = slice_span(source, ann_span).unwrap_or("<annotation>").trim();
+            let arg_text = node_message_text(source, arg_expr);
             let arg_span = Span::from(arg_expr.range());
             diagnostics.push(error_diagnostic_owned(
                 CODE.clone(),
                 format!(
-                    "Argument {n} has type `{arg_type}` but parameter `{pname}` of \
-                     `{class_name}` constructor expects `{expected_type}`",
+                    "Argument {n} (`{arg_text}`) is incompatible with parameter `{pname}` of \
+                     `{class_name}` constructor, which expects `{expected_type}`",
                     n = idx + 1,
                     pname = param.name,
                 ),
@@ -272,9 +289,6 @@ pub(super) fn check_positional_arg_types(
                 )),
                 None,
             ));
-            // Use outer span to silence unreachable — not actually needed but
-            // keeps the variable used.
-            let _ = span;
         }
     }
 }

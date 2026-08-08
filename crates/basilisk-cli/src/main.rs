@@ -257,6 +257,16 @@ fn main() -> ExitCode {
         tracing.with_max_level(tracing::Level::WARN).init();
     }
 
+    // Fail CLOSED on a broken specification registry
+    // ([RESOLV-CANONICAL-REGISTRY]): with an empty index every canonical
+    // lookup answers `None`, so the checker would "pass" everything while
+    // recognising nothing. 3 = internal failure ([CHKARCH-CLI-EXITCODES]) —
+    // this is never a finding about the user's code.
+    if let Err(error) = basilisk_resolver::registry_health() {
+        error!(%error, "specification registry failed to load; refusing to run");
+        return ExitCode::from(3);
+    }
+
     let cli = Cli::parse();
 
     // Command dispatch runs on an analysis-sized stack: `check`/`analyze`/

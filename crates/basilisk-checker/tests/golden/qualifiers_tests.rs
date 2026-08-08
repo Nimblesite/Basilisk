@@ -25,7 +25,7 @@ use super::harness::{
 /// than one of the [PERMTEST-FAMILY-A] respelling classes: `Annotated[X, ...]`
 /// and `X` are different programs that the spec requires the checker to judge
 /// identically.
-fn verdict(source: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+pub(super) fn verdict(source: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let mut codes: Vec<String> = analyse(source)?
         .iter()
         .map(|diag| diag.code.code.to_owned())
@@ -39,7 +39,7 @@ fn verdict(source: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
 // exactly one assignment to it, the one at its declaration. The qualifier is a
 // property of the *declaration*, so it binds however the symbol was spelled.
 
-const REASSIGN_REJECTED: &str = r#"
+pub(super) const REASSIGN_REJECTED: &str = r#"
 from collections.abc import MutableMapping
 from typing import Final as Riveted
 
@@ -47,7 +47,7 @@ TOLL_TABLE: Riveted[MutableMapping[str, int]] = {"chalk": 2}
 TOLL_TABLE = {"slate": 3}
 "#;
 
-const REASSIGN_ACCEPTED: &str = r#"
+pub(super) const REASSIGN_ACCEPTED: &str = r#"
 from collections.abc import MutableMapping
 from typing import Final as Riveted
 
@@ -56,7 +56,7 @@ SPARE_TABLE: MutableMapping[str, int] = {"slate": 3}
 SPARE_TABLE = {"birch": 5}
 "#;
 
-const REASSIGN_REJECTED_ALIASED: &str = r#"
+pub(super) const REASSIGN_REJECTED_ALIASED: &str = r#"
 from collections.abc import MutableMapping
 from typing import Final as Bulwark
 
@@ -64,7 +64,7 @@ TOLL_TABLE: Bulwark[MutableMapping[str, int]] = {"chalk": 2}
 TOLL_TABLE = {"slate": 3}
 "#;
 
-const REASSIGN_REJECTED_IMPORT_FORM: &str = r#"
+pub(super) const REASSIGN_REJECTED_IMPORT_FORM: &str = r#"
 import typing
 from collections.abc import MutableMapping
 
@@ -72,7 +72,7 @@ TOLL_TABLE: typing.Final[MutableMapping[str, int]] = {"chalk": 2}
 TOLL_TABLE = {"slate": 3}
 "#;
 
-const REASSIGN_REJECTED_RENAMED: &str = r#"
+pub(super) const REASSIGN_REJECTED_RENAMED: &str = r#"
 from collections.abc import MutableMapping
 from typing import Final as Riveted
 
@@ -80,7 +80,7 @@ WHARFAGE: Riveted[MutableMapping[str, int]] = {"chalk": 2}
 WHARFAGE = {"slate": 3}
 "#;
 
-const REASSIGN_REJECTED_REFORMATTED: &str = "
+pub(super) const REASSIGN_REJECTED_REFORMATTED: &str = "
 from collections.abc import MutableMapping
 from typing import Final as Riveted
 # the toll table is fixed for the whole season
@@ -93,7 +93,7 @@ TOLL_TABLE: Riveted[MutableMapping[str, int]] = (
 TOLL_TABLE  =  {'slate': 3}   # the defect, one line down
 ";
 
-const REASSIGN_ACCEPTED_IMPORT_FORM: &str = r#"
+pub(super) const REASSIGN_ACCEPTED_IMPORT_FORM: &str = r#"
 import typing
 from collections.abc import MutableMapping
 
@@ -123,7 +123,7 @@ fn final_name_may_not_be_rebound() -> Result<(), Box<dyn std::error::Error>> {
 // A `Final` attribute declared in a class body may not be redeclared by a
 // subclass. Declaring an unrelated attribute is untouched by the rule.
 
-const FINAL_ATTR_REJECTED: &str = r"
+pub(super) const FINAL_ATTR_REJECTED: &str = r"
 from typing import Final as Riveted
 
 class Quernstone:
@@ -133,7 +133,7 @@ class Millrace(Quernstone):
     girth: int = 40
 ";
 
-const FINAL_ATTR_ACCEPTED: &str = r"
+pub(super) const FINAL_ATTR_ACCEPTED: &str = r"
 from typing import Final as Riveted
 
 class Quernstone:
@@ -143,7 +143,7 @@ class Millrace(Quernstone):
     breadth: int = 40
 ";
 
-const FINAL_ATTR_REJECTED_IMPORT_FORM: &str = r"
+pub(super) const FINAL_ATTR_REJECTED_IMPORT_FORM: &str = r"
 import typing
 
 class Quernstone:
@@ -153,7 +153,7 @@ class Millrace(Quernstone):
     girth: int = 40
 ";
 
-const FINAL_ATTR_REJECTED_RENAMED: &str = r"
+pub(super) const FINAL_ATTR_REJECTED_RENAMED: &str = r"
 from typing import Final as Riveted
 
 class Trestle:
@@ -163,7 +163,7 @@ class Corbel(Trestle):
     tare: int = 40
 ";
 
-const FINAL_ATTR_REJECTED_REFORMATTED: &str = r"
+pub(super) const FINAL_ATTR_REJECTED_REFORMATTED: &str = r"
 from typing import Final as Riveted
 
 
@@ -199,7 +199,7 @@ fn final_attribute_may_not_be_overridden() -> Result<(), Box<dyn std::error::Err
 // A method decorated `@final` may not be overridden in a subclass; adding a
 // *new* method to the subclass is unrelated to the decorator.
 
-const FINAL_METHOD_REJECTED: &str = r"
+pub(super) const FINAL_METHOD_REJECTED: &str = r"
 from typing import final as keystone
 
 class Portcullis:
@@ -212,7 +212,7 @@ class Barbican(Portcullis):
         return 2
 ";
 
-const FINAL_METHOD_ACCEPTED: &str = r"
+pub(super) const FINAL_METHOD_ACCEPTED: &str = r"
 from typing import final as keystone
 
 class Portcullis:
@@ -225,7 +225,7 @@ class Barbican(Portcullis):
         return 2
 ";
 
-const FINAL_METHOD_REJECTED_IMPORT_FORM: &str = r"
+pub(super) const FINAL_METHOD_REJECTED_IMPORT_FORM: &str = r"
 import typing
 
 class Portcullis:
@@ -238,7 +238,7 @@ class Barbican(Portcullis):
         return 2
 ";
 
-const FINAL_METHOD_REJECTED_RENAMED: &str = r"
+pub(super) const FINAL_METHOD_REJECTED_RENAMED: &str = r"
 from typing import final as keystone
 
 class Windlass:
@@ -251,7 +251,7 @@ class Bollard(Windlass):
         return 2
 ";
 
-const FINAL_METHOD_ACCEPTED_ALIASED: &str = r"
+pub(super) const FINAL_METHOD_ACCEPTED_ALIASED: &str = r"
 from typing import final as sealed_here
 
 class Portcullis:
@@ -284,7 +284,7 @@ fn final_method_may_not_be_overridden() -> Result<(), Box<dyn std::error::Error>
 // only in which class carries the decorator, so a rule that reacts to the
 // decorator's presence rather than to what it decorates cannot tell them apart.
 
-const FINAL_CLASS_REJECTED: &str = r"
+pub(super) const FINAL_CLASS_REJECTED: &str = r"
 import functools
 from typing import final as keystone
 
@@ -298,7 +298,7 @@ class Gambeson(Hauberk):
     pass
 ";
 
-const FINAL_CLASS_ACCEPTED: &str = r"
+pub(super) const FINAL_CLASS_ACCEPTED: &str = r"
 import functools
 from typing import final as keystone
 
@@ -312,7 +312,7 @@ class Gambeson(Hauberk):
     pass
 ";
 
-const FINAL_CLASS_REJECTED_IMPORT_FORM: &str = r"
+pub(super) const FINAL_CLASS_REJECTED_IMPORT_FORM: &str = r"
 import functools
 import typing
 
@@ -326,7 +326,7 @@ class Gambeson(Hauberk):
     pass
 ";
 
-const FINAL_CLASS_ACCEPTED_IMPORT_FORM: &str = r"
+pub(super) const FINAL_CLASS_ACCEPTED_IMPORT_FORM: &str = r"
 import functools
 import typing
 
@@ -357,31 +357,31 @@ fn final_class_may_not_be_subclassed() -> Result<(), Box<dyn std::error::Error>>
 // with no type argument and no assignment leaves the checker nothing to infer
 // from and nothing to freeze, and is an error on both counts.
 
-const FINAL_NO_VALUE_REJECTED: &str = r"
+pub(super) const FINAL_NO_VALUE_REJECTED: &str = r"
 from typing import Final as Riveted
 
 FREEBOARD: Riveted
 ";
 
-const FINAL_NO_VALUE_ACCEPTED: &str = r"
+pub(super) const FINAL_NO_VALUE_ACCEPTED: &str = r"
 from typing import Final as Riveted
 
 FREEBOARD: Riveted = 2.5
 ";
 
-const FINAL_NO_VALUE_REJECTED_ALIASED: &str = r"
+pub(super) const FINAL_NO_VALUE_REJECTED_ALIASED: &str = r"
 from typing import Final as Bulwark
 
 FREEBOARD: Bulwark
 ";
 
-const FINAL_NO_VALUE_REJECTED_IMPORT_FORM: &str = r"
+pub(super) const FINAL_NO_VALUE_REJECTED_IMPORT_FORM: &str = r"
 import typing
 
 FREEBOARD: typing.Final
 ";
 
-const FINAL_NO_VALUE_REJECTED_REFORMATTED: &str = r"
+pub(super) const FINAL_NO_VALUE_REJECTED_REFORMATTED: &str = r"
 from typing import Final as Riveted
 
 
@@ -393,7 +393,7 @@ FREEBOARD  :  Riveted
 
 /// A `Final` declaration with a full type and still no value — an error for
 /// the qualifier's own reason, independent of inference.
-const FINAL_NO_VALUE_TYPED: &str = r"
+pub(super) const FINAL_NO_VALUE_TYPED: &str = r"
 import weakref
 from typing import Final as Riveted
 

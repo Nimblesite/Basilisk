@@ -45,7 +45,7 @@ pub(super) fn dot_completions(
 fn builtin_class_member_items(
     class: &basilisk_resolver::scope::IndexedStubClass,
     prefix: &str,
-    literal_receiver: bool,
+    _literal_receiver: bool,
 ) -> Vec<CompletionItem> {
     let mut seen = std::collections::HashSet::new();
     class

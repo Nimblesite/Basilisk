@@ -48,6 +48,7 @@ impl Rule for TypeCallConstructorViolation {
         let Some(parsed) = super::shared::parse_module(module) else {
             return;
         };
+        let index = super::shared::ExprIndex::build(&parsed.ast);
 
         // Collect class info and method maps from resolved module.
         let class_map: HashMap<&str, &basilisk_resolver::ClassInfo> =
@@ -68,6 +69,8 @@ impl Rule for TypeCallConstructorViolation {
                     func,
                     &module.source,
                     &module.path,
+                    &module.bindings,
+                    &index,
                     &class_map,
                     &method_map,
                     &typevar_names,
@@ -93,6 +96,8 @@ fn check_function(
     func: &ast::StmtFunctionDef,
     source: &str,
     path: &str,
+    bindings: &basilisk_resolver::BindingTable,
+    index: &super::shared::ExprIndex<'_>,
     class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
     method_map: &HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>>,
     typevar_names: &[&str],
@@ -109,6 +114,8 @@ fn check_function(
     let cctx = CheckCtx {
         source,
         path,
+        bindings,
+        index,
         type_param_map: &type_param_map,
         class_map,
         method_map,
@@ -174,6 +181,8 @@ fn extract_type_subscript_text(expr: &Expr, source: &str) -> Option<String> {
 struct CheckCtx<'a> {
     source: &'a str,
     path: &'a str,
+    bindings: &'a basilisk_resolver::BindingTable,
+    index: &'a super::shared::ExprIndex<'a>,
     type_param_map: &'a HashMap<String, String>,
     class_map: &'a HashMap<&'a str, &'a basilisk_resolver::ClassInfo>,
     method_map: &'a HashMap<(&'a str, &'a str), Vec<&'a basilisk_resolver::FunctionInfo>>,
@@ -277,17 +286,7 @@ fn check_type_call(
         cctx.source,
     );
 
-    check_constructor_call(
-        call,
-        class_name,
-        &constructor_sig,
-        total_args,
-        span,
-        cctx.source,
-        cctx.path,
-        cctx.method_map,
-        diagnostics,
-    );
+    check_constructor_call(call, class_name, &constructor_sig, total_args, span, cctx, diagnostics);
 }
 
 /// Emit diagnostic for calling an unbound `TypeVar` constructor with arguments.
@@ -316,21 +315,16 @@ fn check_unbound_typevar_call(
 }
 
 /// Check a constructor call against its resolved signature.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "type checking requires full context"
-)]
 fn check_constructor_call(
     call: &ast::ExprCall,
     class_name: &str,
     constructor_sig: &ConstructorSig,
     total_args: usize,
     span: Span,
-    source: &str,
-    path: &str,
-    method_map: &HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>>,
+    cctx: &CheckCtx<'_>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
+    let path = cctx.path;
     match constructor_sig {
         ConstructorSig::NoArgs => {
             if total_args > 0 {
@@ -388,8 +382,10 @@ fn check_constructor_call(
                     call,
                     class_name,
                     &kw_names,
-                    method_map,
-                    source,
+                    cctx.method_map,
+                    cctx.bindings,
+                    cctx.index,
+                    cctx.source,
                     path,
                     span,
                     diagnostics,
@@ -397,10 +393,11 @@ fn check_constructor_call(
                 check_positional_arg_types(
                     call,
                     class_name,
-                    method_map,
-                    source,
+                    cctx.method_map,
+                    cctx.bindings,
+                    cctx.index,
+                    cctx.source,
                     path,
-                    span,
                     diagnostics,
                 );
             }

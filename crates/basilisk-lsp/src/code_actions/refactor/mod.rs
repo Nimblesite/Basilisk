@@ -6,6 +6,7 @@
 
 mod abstract_methods;
 mod change_signature;
+mod convert;
 mod extract;
 mod fstring;
 mod helpers;
@@ -16,7 +17,8 @@ mod ternary;
 
 pub(super) use abstract_methods::implement_abstract_methods;
 pub(super) use change_signature::{add_parameter, remove_parameter, reorder_parameters};
-pub(super) use extract::extract_variable;
+pub(super) use convert::{convert_optional_syntax, convert_union_syntax};
+pub(super) use extract::{extract_constant, extract_function, extract_variable};
 pub(super) use fstring::convert_fstring;
 pub(super) use inline::inline_variable;
 pub(super) use inline_function::inline_function_call;

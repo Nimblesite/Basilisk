@@ -2,7 +2,16 @@
 //! docs/plans/CHECKER-ELIMINATE-LINE-SCANNING-PLAN.md#LINESCANPLAN-AST-MIGRATION
 //!
 //! Assertion-dense structural tests for the shared type-expression judge and
-//! the four rules rebuilt on it (issues #379, #408–#412). Every test here
+//! the four rules rebuilt on it
+//! ([#379](https://github.com/Nimblesite/Basilisk/issues/379),
+//! [#408](https://github.com/Nimblesite/Basilisk/issues/408),
+//! [#409](https://github.com/Nimblesite/Basilisk/issues/409),
+//! [#410](https://github.com/Nimblesite/Basilisk/issues/410),
+//! [#411](https://github.com/Nimblesite/Basilisk/issues/411), and
+//! [#412](https://github.com/Nimblesite/Basilisk/issues/412)). The normative
+//! sources are [PEP 613](https://peps.python.org/pep-0613/),
+//! [PEP 695](https://peps.python.org/pep-0695/#generic-type-alias), and for
+//! ParamSpec positions [PEP 612](https://peps.python.org/pep-0612/). Every test here
 //! asserts EXACT flagged/unflagged name sets — never "ran without crashing".
 //!
 //! The permutation sections mirror the AST-preserving mutations that exposed

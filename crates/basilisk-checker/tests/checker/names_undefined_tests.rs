@@ -451,10 +451,13 @@ def lookup(items: dict[str, int], key: str) -> int | None:
 
 #[test]
 fn pep695_type_alias_in_return_cast_is_defined() -> Result<(), Box<dyn std::error::Error>> {
-    // Issue #372: a PEP 695 `type` statement binds its name at module scope
+    // https://github.com/Nimblesite/Basilisk/issues/372: a PEP 695 `type`
+    // statement binds its name at module scope
     // (a lazily evaluated `TypeAliasType` object), so referencing the alias
-    // in a return-position `cast(...)` call is NOT an undefined name.
-    let source = "\
+    // in a return-position `cast(...)` call is NOT an undefined name. PEP:
+    // https://peps.python.org/pep-0695/#generic-type-alias
+    let variants = [
+        "\
 from typing import cast
 
 type Fahrenheit = float
@@ -462,19 +465,45 @@ type Fahrenheit = float
 
 def to_f(celsius: float) -> Fahrenheit:
     return cast(Fahrenheit, celsius * 9 / 5 + 32)
-";
-    let diags = run(source)?;
-    assert!(
-        !codes(&diags).contains(&"names_undefined"),
-        "a `type` statement alias used in a return cast must not fire E0018, got: {:?}",
-        messages_for(&diags, "names_undefined")
-    );
+",
+        "\
+from typing import cast as convert_static_type
+
+type Temperature = float
+
+
+def convert(
+    source_value: float,
+) -> Temperature:
+    return convert_static_type(
+        Temperature,
+        source_value,
+    )
+",
+        "\
+import typing as type_tools
+
+type Reading = float
+
+
+def normalize(value: object) -> Reading:
+    return type_tools.cast(Reading, value)
+",
+    ];
+    for source in variants {
+        let diags = run(source)?;
+        assert!(
+            !codes(&diags).contains(&"names_undefined"),
+            "resolved PEP 695 aliases and cast symbols must survive renaming/reformatting, got: {:?}",
+            messages_for(&diags, "names_undefined")
+        );
+    }
     Ok(())
 }
 
 #[test]
 fn pep695_type_alias_returned_bare_is_defined() -> Result<(), Box<dyn std::error::Error>> {
-    // Issue #372 (general form): the alias object itself is a first-class
+    // https://github.com/Nimblesite/Basilisk/issues/372 (general form): the alias object itself is a first-class
     // runtime value — `return Alias` is a defined-name reference.
     let source = "\
 type Point = tuple[float, float]

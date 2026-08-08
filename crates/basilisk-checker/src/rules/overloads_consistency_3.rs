@@ -1,24 +1,25 @@
 //! Implements [`overloads_consistency_3`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 //! `overloads_consistency_3`: Overload implementation is inconsistent with its signatures.
 //!
-//! When an overload implementation is present the spec requires:
+//! When an overload implementation is present the spec requires
+//! (<https://typing.python.org/en/latest/spec/overload.html#implementation-consistency>):
 //!   * the return type of every overload is assignable to the implementation's
 //!     return type, and
 //!   * the implementation's parameter types are assignable *from* every
 //!     overload's parameter types (the implementation must accept them all).
 //!
-//! To remain false-positive free this only compares **known primitive types**
-//! (`int`/`str`/`bytes`/`float`/`bool`/`complex`/`object`/`None` and unions of
-//! them). Any `TypeVar`, generic (`list[int]`), `Callable`, or otherwise
-//! non-primitive annotation is skipped, since text-level assignability cannot be
-//! decided for it.
+//! Both annotations are lowered through the module's binding table to
+//! [`TypeNode`] and related with [`assignable`] ([ASTREBUILD-LAW]). The
+//! relation abstains (`None`) on anything it does not model — `TypeVar`s,
+//! user classes, callables — so a diagnostic is emitted only on a proven
+//! `Some(false)`, never from the spelling of an annotation.
 
 use std::collections::HashMap;
 
-use basilisk_resolver::{FunctionInfo, ParameterInfo, ResolvedModule, Span};
+use basilisk_resolver::{assignable, FunctionInfo, ParameterInfo, ResolvedModule, Span, TypeNode};
 
-use crate::rules::shared::is_type_compatible;
-use crate::span_util::slice_span;
+use crate::rules::shared::{parse_module, ExprIndex};
+use crate::span_util::node_message_text;
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
@@ -32,7 +33,7 @@ const CODE: ErrorCode = ErrorCode {
 /// `true` if a decorator only conveys typing intent and leaves the call
 /// signature unchanged. Any *other* decorator may transform the effective
 /// signature (the spec applies such transforms before consistency checks), so a
-/// group carrying one cannot be compared by raw annotation text.
+/// group carrying one cannot be compared by its declared annotations.
 fn is_type_only_decorator(decorator: &str) -> bool {
     matches!(
         decorator.rsplit('.').next().unwrap_or(decorator),
@@ -41,29 +42,12 @@ fn is_type_only_decorator(decorator: &str) -> bool {
 }
 
 /// `true` if any member of the group is `async` or carries a signature-
-/// transforming decorator, in which case raw annotation comparison is invalid.
+/// transforming decorator, in which case declared-annotation comparison is
+/// invalid.
 fn group_is_transformed(funcs: &[&FunctionInfo]) -> bool {
     funcs
         .iter()
         .any(|f| f.is_async || !f.decorators.iter().all(|d| is_type_only_decorator(d)))
-}
-
-/// `true` when every `|`-separated part of `text` is a known primitive type, so
-/// `is_type_compatible` can decide assignability with confidence.
-fn is_known_primitive(text: &str) -> bool {
-    text.split('|').map(str::trim).all(|part| {
-        matches!(
-            part,
-            "int" | "str" | "bytes" | "float" | "bool" | "complex" | "object" | "None"
-        )
-    })
-}
-
-/// The return annotation text of `func`, if present.
-fn return_text(func: &FunctionInfo, source: &str) -> Option<String> {
-    func.return_annotation_span
-        .and_then(|span| slice_span(source, span))
-        .map(|text| text.trim().to_owned())
 }
 
 /// Parameters with a leading `self`/`cls` removed.
@@ -98,6 +82,10 @@ impl Rule for OverloadImplConsistency {
         if types.annotations().is_none() {
             return;
         }
+        let Some(parsed) = parse_module(module) else {
+            return;
+        };
+        let index = ExprIndex::build(&parsed.ast);
         let mut groups: HashMap<(Option<&str>, &str), Vec<&FunctionInfo>> = HashMap::new();
         for func in &module.functions {
             groups
@@ -106,12 +94,17 @@ impl Rule for OverloadImplConsistency {
                 .push(func);
         }
         for funcs in groups.values() {
-            check_group(funcs, &module.source, &module.path, diagnostics);
+            check_group(funcs, module, &index, diagnostics);
         }
     }
 }
 
-fn check_group(funcs: &[&FunctionInfo], source: &str, path: &str, out: &mut Vec<Diagnostic>) {
+fn check_group(
+    funcs: &[&FunctionInfo],
+    module: &ResolvedModule,
+    index: &ExprIndex<'_>,
+    out: &mut Vec<Diagnostic>,
+) {
     let overloads: Vec<&&FunctionInfo> = funcs.iter().filter(|f| f.is_overload).collect();
     let Some(impl_fn) = funcs.iter().find(|f| !f.is_overload) else {
         return;
@@ -120,27 +113,32 @@ fn check_group(funcs: &[&FunctionInfo], source: &str, path: &str, out: &mut Vec<
         return;
     }
 
-    let impl_ret = return_text(impl_fn, source);
+    let impl_ret_expr = impl_fn
+        .return_annotation_span
+        .and_then(|span| index.expr(span));
     let impl_params = non_self_params(&impl_fn.parameters);
     let impl_has_varargs = impl_fn.vararg.is_some() || impl_fn.kwarg.is_some();
 
     for overload in &overloads {
         // (1) Return: each overload's return must be assignable to the impl's.
-        if let (Some(over_ret), Some(impl_ret)) =
-            (return_text(overload, source), impl_ret.as_deref())
-        {
-            if is_known_primitive(&over_ret)
-                && is_known_primitive(impl_ret)
-                && !is_type_compatible(&over_ret, impl_ret)
-            {
+        let over_ret_expr = overload
+            .return_annotation_span
+            .and_then(|span| index.expr(span));
+        if let (Some(over_expr), Some(impl_expr)) = (over_ret_expr, impl_ret_expr) {
+            let over_node = TypeNode::lower(&module.bindings, over_expr);
+            let impl_node = TypeNode::lower(&module.bindings, impl_expr);
+            if assignable(&over_node, &impl_node) == Some(false) {
+                // Source text appears in the MESSAGE only, never in the verdict.
+                let over_text = node_message_text(&module.source, over_expr);
+                let impl_text = node_message_text(&module.source, impl_expr);
                 out.push(make_diagnostic(
                     format!(
-                        "Overload of `{}` returns `{over_ret}`, which is not assignable to the \
-                         implementation's return type `{impl_ret}`",
+                        "Overload of `{}` returns `{over_text}`, which is not assignable to the \
+                         implementation's return type `{impl_text}`",
                         overload.name
                     ),
                     overload.name_span,
-                    path,
+                    &module.path,
                 ));
                 continue; // one diagnostic per overload is enough
             }
@@ -154,35 +152,47 @@ fn check_group(funcs: &[&FunctionInfo], source: &str, path: &str, out: &mut Vec<
         if over_params.len() != impl_params.len() {
             continue;
         }
-        if let Some(span) = param_inconsistency(over_params, impl_params, overload.name_span) {
+        if let Some(span) =
+            param_inconsistency(over_params, impl_params, module, index, overload.name_span)
+        {
             out.push(make_diagnostic(
                 format!(
                     "An overload of `{}` has a parameter type the implementation cannot accept",
                     overload.name
                 ),
                 span,
-                path,
+                &module.path,
             ));
         }
     }
 }
 
-/// First positional parameter whose overload type is a known primitive not
-/// assignable to the implementation's corresponding primitive type.
+/// First positional parameter whose overload type is provably not assignable
+/// to the implementation's corresponding parameter type. Undecidable pairs
+/// abstain.
 fn param_inconsistency(
     over_params: &[ParameterInfo],
     impl_params: &[ParameterInfo],
+    module: &ResolvedModule,
+    index: &ExprIndex<'_>,
     span: Span,
 ) -> Option<Span> {
     over_params
         .iter()
         .zip(impl_params)
-        .any(|(op, ip)| {
-            matches!(
-                (op.annotation_text.as_deref(), ip.annotation_text.as_deref()),
-                (Some(o), Some(i))
-                    if is_known_primitive(o) && is_known_primitive(i) && !is_type_compatible(o, i)
-            )
+        .any(|(over_param, impl_param)| {
+            let (Some(over_span), Some(impl_span)) =
+                (over_param.annotation_span, impl_param.annotation_span)
+            else {
+                return false;
+            };
+            let (Some(over_expr), Some(impl_expr)) = (index.expr(over_span), index.expr(impl_span))
+            else {
+                return false;
+            };
+            let over_node = TypeNode::lower(&module.bindings, over_expr);
+            let impl_node = TypeNode::lower(&module.bindings, impl_expr);
+            assignable(&over_node, &impl_node) == Some(false)
         })
         .then_some(span)
 }

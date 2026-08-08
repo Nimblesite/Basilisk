@@ -1,21 +1,26 @@
 //! Implements [`assignment_compatibility`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! Structural callable subtyping for classes with `__call__` methods.
 //!
-//! E0014's name-based comparison cannot evaluate structural compatibility
-//! between classes defining `__call__`.  This module resolves annotation
-//! texts to signature sets (see [`super::sig_model`]) and applies the typing
-//! spec's subtyping rules (see [`super::sig_subtype`]) so the rule can
-//! suppress assignments that are structurally valid.
+//! The name-based assignment comparison cannot evaluate structural
+//! compatibility between classes defining `__call__`.  This module resolves
+//! annotation NODES to signature sets (see [`super::sig_model`]) and applies
+//! the typing spec's subtyping rules (see [`super::sig_subtype`]) so the rule
+//! can suppress assignments that are structurally valid.
+//!
+//! Resolution is by AST identity ([ASTREBUILD-LAW]): a `Name` or
+//! `Name[...]` annotation node is matched against the module's class
+//! definitions, and every parameter type inside a signature is a lowered
+//! [`basilisk_resolver::TypeNode`] — never rendered source text.
 
 use std::collections::HashMap;
 
-use ruff_python_ast::Stmt;
+use ruff_python_ast::{Expr, Stmt};
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::rules::shared::{parse_module, split_top_level_commas};
+use crate::rules::shared::parse_module;
 
-use super::sig_model::{class_entry, ClassEntry, Sig, StarParam, TypeSigs};
+use super::sig_model::{class_entry, ClassEntry, Sig, TypeSigs};
 use super::sig_subtype::sig_subtype;
 
 // ---------------------------------------------------------------------------
@@ -42,7 +47,9 @@ pub(super) fn build_index(module: &ResolvedModule) -> CallIndex {
     };
     for stmt in &parsed.ast.body {
         if let Stmt::ClassDef(cls) = stmt {
-            let _ = index.classes.insert(cls.name.to_string(), class_entry(cls));
+            let _ = index
+                .classes
+                .insert(cls.name.to_string(), class_entry(cls, &module.bindings));
         }
     }
     index
@@ -52,42 +59,44 @@ pub(super) fn build_index(module: &ResolvedModule) -> CallIndex {
 // Entry point
 // ---------------------------------------------------------------------------
 
-/// `true` when an assignment of a value of type `rhs_text` to a variable
-/// annotated `declared_text` is structurally valid subtyping.
-/// `false` means "not provably valid" — the caller keeps its diagnostic.
-pub(super) fn assignment_compatible(
-    declared_text: &str,
-    rhs_text: &str,
-    index: &CallIndex,
-) -> bool {
+/// `true` when an assignment of a value of the callable type denoted by the
+/// `rhs` annotation node to a variable annotated with the `declared` node is
+/// structurally acceptable.  `false` means "provably incompatible, or not a
+/// callable form this module resolves" — the caller keeps the diagnostic its
+/// own evidence produced.  Both sides are judged as AST nodes; no verdict
+/// depends on how either annotation is spelled ([ASTREBUILD-LAW]).
+pub(super) fn assignment_compatible(declared: &Expr, rhs: &Expr, index: &CallIndex) -> bool {
     if index.classes.is_empty() {
         return false;
     }
-    let Some(target) = resolve(declared_text, index) else {
+    let Some(target) = resolve(declared, index) else {
         return false;
     };
-    let Some(source) = resolve(rhs_text, index) else {
+    let Some(source) = resolve(rhs, index) else {
         return false;
     };
     sigs_compatible(&index.subtyping, &source, &target)
 }
 
-/// Overload-set compatibility: every target signature must be satisfied by
-/// some source signature.  `Unknown` on either side is treated as compatible.
+/// Overload-set compatibility: incompatible only when some target signature
+/// is PROVABLY unsatisfied by every source signature ([ASTREBUILD-LAW]: a
+/// kept diagnostic needs `Some(false)`; abstention counts as compatible).
+/// `Unknown` on either side is compatible.
+///
+/// The subtyping context is unused for now: signature relations that need
+/// nominal user-class verdicts abstain until the relation layer models them
+/// ([ASTREBUILD-PHASE-RESOLVER]); the parameter is kept for the
+/// protocol-member call sites.
 pub(super) fn sigs_compatible(
-    subtyping: &crate::subtyping::SubtypingContext,
+    _subtyping: &crate::subtyping::SubtypingContext,
     source: &TypeSigs,
     target: &TypeSigs,
 ) -> bool {
     match (source, target) {
         (TypeSigs::Unknown, _) | (_, TypeSigs::Unknown) => true,
-        (TypeSigs::Sigs(src), TypeSigs::Sigs(tgt)) => {
-            !src.is_empty()
-                && !tgt.is_empty()
-                && tgt
-                    .iter()
-                    .all(|b| src.iter().any(|a| sig_subtype(subtyping, a, b)))
-        }
+        (TypeSigs::Sigs(src), TypeSigs::Sigs(tgt)) => tgt
+            .iter()
+            .all(|b| src.is_empty() || src.iter().any(|a| sig_subtype(a, b) != Some(false))),
     }
 }
 
@@ -95,116 +104,55 @@ pub(super) fn sigs_compatible(
 // Type-expression resolution
 // ---------------------------------------------------------------------------
 
-/// Resolve a type expression text into callable signatures.
-/// `None` means "not a callable form we understand" — the caller keeps its flag.
-fn resolve(text: &str, index: &CallIndex) -> Option<TypeSigs> {
-    let text = text.trim();
-    let (base, args) = split_subscript(text);
+/// Resolve a type-expression NODE into the callable signatures of a
+/// same-module class defining `__call__`.  `None` means "not such a form" —
+/// the caller keeps its own judgment.  The class is found by its AST
+/// identifier, never by slicing or re-parsing source text
+/// ([ASTREBUILD-LAW]).
+fn resolve(expr: &Expr, index: &CallIndex) -> Option<TypeSigs> {
+    let (base, subscripted) = match expr {
+        Expr::Name(name) => (name.id.as_str(), false),
+        Expr::Subscript(sub) => match sub.value.as_ref() {
+            Expr::Name(name) => (name.id.as_str(), true),
+            _ => return None,
+        },
+        _ => return None,
+    };
     let entry = index.classes.get(base)?;
     let call_sigs = entry.methods.get("__call__")?;
+    if subscripted && !entry.generic_params.is_empty() {
+        // [ASTREBUILD-PHASE-RESOLVER]: specializing a generic class's
+        // signatures requires TypeVar substitution over resolved nodes,
+        // which this layer does not model.  Abstain rather than guess.
+        return Some(TypeSigs::Unknown);
+    }
     Some(specialize_class_sigs(
         call_sigs,
         &entry.generic_params,
-        args.as_deref(),
+        None,
         index,
     ))
-}
-
-/// Split `Name[args]` into `("Name", Some(["arg", ...]))`; bare names get `None`.
-fn split_subscript(text: &str) -> (&str, Option<Vec<String>>) {
-    let text = text.trim();
-    let Some(bracket) = text.find('[') else {
-        return (text, None);
-    };
-    let base = text[..bracket].trim();
-    let inner = text[bracket + 1..]
-        .strip_suffix(']')
-        .unwrap_or(&text[bracket + 1..]);
-    let args = split_top_level_commas(inner)
-        .into_iter()
-        .map(|s| s.trim().to_owned())
-        .collect();
-    (base, Some(args))
 }
 
 // ---------------------------------------------------------------------------
 // Specialization
 // ---------------------------------------------------------------------------
 
-/// Specialize a class's method signatures with subscript arguments
-/// (e.g. `Proto5[Any]` substitutes `T_contra := Any`).
+/// Specialize a class's method signatures with subscript arguments.
+///
+/// Substituting type arguments into lowered signatures requires a resolved
+/// `TypeVar` model this layer does not have, and rendered-text arguments are
+/// never parsed ([ASTREBUILD-LAW]); whenever substitution would be required,
+/// the whole set abstains as [`TypeSigs::Unknown`] instead of guessing
+/// ([ASTREBUILD-PHASE-RESOLVER]).
 pub(super) fn specialize_class_sigs(
     sigs: &[Sig],
     generic_params: &[String],
     args: Option<&[String]>,
     _index: &CallIndex,
 ) -> TypeSigs {
-    let substitutions: HashMap<&str, &str> = generic_params
-        .iter()
-        .zip(args.unwrap_or(&[]).iter())
-        .map(|(param, arg)| (param.as_str(), arg.as_str()))
-        .collect();
-
-    TypeSigs::Sigs(
-        sigs.iter()
-            .map(|sig| specialize_sig(sig, &substitutions))
-            .collect(),
-    )
-}
-
-/// Apply substitutions to one signature.
-fn specialize_sig(sig: &Sig, substitutions: &HashMap<&str, &str>) -> Sig {
-    let subst_text = |t: &str| -> String {
-        substitutions
-            .iter()
-            .fold(t.to_owned(), |text, (param, arg)| {
-                replace_word(&text, param, arg)
-            })
-    };
-    let subst = |ty: &Option<String>| -> Option<String> { ty.as_deref().map(subst_text) };
-    let subst_star = |star: &StarParam| -> StarParam {
-        match star {
-            StarParam::Typed(ty) => StarParam::Typed(subst_text(ty)),
-            other => other.clone(),
-        }
-    };
-
-    let map_params = |params: &[super::sig_model::Param]| {
-        params
-            .iter()
-            .map(|p| super::sig_model::Param {
-                ty: subst(&p.ty),
-                ..p.clone()
-            })
-            .collect()
-    };
-    Sig {
-        positional: map_params(&sig.positional),
-        kwonly: map_params(&sig.kwonly),
-        vararg: subst_star(&sig.vararg),
-        kwarg: subst_star(&sig.kwarg),
-        ret: subst(&sig.ret),
-        gradual: sig.gradual,
+    if args.is_some_and(|args| !args.is_empty()) && !generic_params.is_empty() {
+        return TypeSigs::Unknown;
     }
-}
-
-/// Replace whole-identifier occurrences of `word` in `text`.
-pub(super) fn replace_word(text: &str, word: &str, replacement: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    let mut rest = text;
-    let is_ident = |c: char| c.is_ascii_alphanumeric() || c == '_';
-    while let Some(pos) = rest.find(word) {
-        let before_ok = !rest[..pos].chars().next_back().is_some_and(is_ident);
-        let after = &rest[pos + word.len()..];
-        let after_ok = !after.chars().next().is_some_and(is_ident);
-        out.push_str(&rest[..pos]);
-        if before_ok && after_ok {
-            out.push_str(replacement);
-        } else {
-            out.push_str(word);
-        }
-        rest = after;
-    }
-    out.push_str(rest);
-    out
+    TypeSigs::Sigs(sigs.to_vec())
 }

@@ -157,7 +157,9 @@ which is what review enforces against. Automated enforcement remains open:
 - [ ] Wire it into the existing lint/CI path; do not add a Make target.
 - [ ] Keep the allowlist explicit, documented, and reviewed so it cannot grow
   silently. Current lawful entries: line geometry, `# basilisk:` directive
-  parsing, and Basilisk's own rendered stub-signature output.
+  parsing, and Basilisk's own rendered stub-signature output **for display
+  only** — the moment rendered text feeds a typing verdict the entry does not
+  apply ([CHKARCH-RECOGNITION-PERMITTED](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-RECOGNITION-PERMITTED)).
 
 A lint cannot catch the semantic form of this defect — the deleted
 `denotes(expr, "TypeVar")` API would pass any text-based check. Behavioural

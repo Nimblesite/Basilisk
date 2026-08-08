@@ -13,6 +13,12 @@
 //! disjoint from the suite's 913.
 
 use super::harness::{aliased, import_form, reformatted, renamed, SpecObligation};
+#[allow(
+    clippy::wildcard_imports,
+    unused_imports,
+    reason = "shared golden fixtures: each sibling uses the subset it references"
+)]
+use super::narrowing::*;
 
 #[test]
 fn isinstance_removes_the_matched_member_from_the_else_branch()

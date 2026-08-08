@@ -87,24 +87,53 @@ fn build_index(source: &str) -> Result<RegistryIndex, RegistryLoadError> {
     Ok(index)
 }
 
-/// The parsed registry, or an empty index if the data file fails to load.
-///
-/// A bad registry is a build-time defect pinned by
-/// `tests/canonical_registry.rs`; at runtime the failure is reported loudly
-/// and every canonical lookup answers `None`, because panicking in a library
-/// the LSP links would take the whole server down with it.
-pub(crate) fn registry() -> &'static RegistryIndex {
-    static REGISTRY: OnceLock<RegistryIndex> = OnceLock::new();
-    REGISTRY.get_or_init(|| match build_index(REGISTRY_SOURCE) {
-        Ok(index) => index,
-        Err(error) => {
+/// The registry load result, computed once. A bad registry is a build-time
+/// defect pinned by `tests/canonical_registry.rs`; keeping the `Err` here —
+/// instead of swallowing it into an empty index — is what lets
+/// [`registry_health`] fail CLOSED.
+fn load() -> &'static Result<RegistryIndex, RegistryLoadError> {
+    static REGISTRY: OnceLock<Result<RegistryIndex, RegistryLoadError>> = OnceLock::new();
+    REGISTRY.get_or_init(|| {
+        let result = build_index(REGISTRY_SOURCE);
+        if let Err(error) = &result {
             tracing::error!(
                 %error,
                 "canonical registry failed to load; every canonical lookup will answer None"
             );
-            RegistryIndex::new()
         }
+        result
     })
+}
+
+/// The parsed registry, or an empty index if the data file failed to load.
+///
+/// Lookups stay non-panicking because this library links into the LSP —
+/// taking the server down is worse than answering `None`. But the failure is
+/// NOT invisible: drivers must consult [`registry_health`] before trusting
+/// verdicts, and refuse to run when it errs ([RESOLV-CANONICAL-REGISTRY]).
+pub(crate) fn registry() -> &'static RegistryIndex {
+    static EMPTY: OnceLock<RegistryIndex> = OnceLock::new();
+    match load() {
+        Ok(index) => index,
+        Err(_) => EMPTY.get_or_init(RegistryIndex::new),
+    }
+}
+
+/// Whether the specification registry loaded ([RESOLV-CANONICAL-REGISTRY]).
+///
+/// `Err` means every canonical lookup is answering `None` and no
+/// recognition-based verdict can be trusted. Drivers (CLI, LSP) call this at
+/// startup and fail closed instead of silently checking nothing.
+///
+/// # Errors
+///
+/// The load failure, rendered for reporting, when the registry data file did
+/// not parse or declared a duplicate definition site.
+pub fn registry_health() -> Result<(), String> {
+    match load() {
+        Ok(_) => Ok(()),
+        Err(error) => Err(error.to_string()),
+    }
 }
 
 #[cfg(test)]

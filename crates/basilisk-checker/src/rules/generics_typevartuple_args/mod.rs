@@ -16,13 +16,12 @@
 
 use std::collections::HashMap;
 
-use basilisk_resolver::{ResolvedModule, Span};
+use basilisk_resolver::{equivalent, BindingTable, ResolvedModule, Span, TypeNode};
 use ruff_python_ast::{Expr, Stmt};
 use ruff_text_size::Ranged as _;
 
 use super::Rule;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
-use crate::span_util::slice_span;
 
 mod star_args;
 
@@ -52,7 +51,14 @@ impl Rule for TypeVarTupleArgCountMismatch {
         // Unpacked-tuple `*args` validation applies with or without any
         // `TypeVarTuple` declarations in the module (the `*tuple[...]` forms need
         // none; the `tuple[*Ts]` form consults `tvt_names`).
-        star_args::check_star_args_calls(&parsed.ast.body, &tvt_names, &module.path, diagnostics);
+        star_args::check_star_args_calls(
+            &parsed.ast.body,
+            &module.bindings,
+            &module.source,
+            &tvt_names,
+            &module.path,
+            diagnostics,
+        );
 
         if tvt_names.is_empty() {
             return;
@@ -78,27 +84,35 @@ impl Rule for TypeVarTupleArgCountMismatch {
             return;
         }
 
-        // Collect __init__ parameter info for TypeVarTuple classes.
-        // We need to know which params use `tuple[*Ts]`.
+        // Collect __init__ parameter info for TypeVarTuple classes: does any
+        // parameter annotation reference a `TypeVarTuple`? Decided on the AST
+        // — a `Name` node whose identifier is a declared `TypeVarTuple` —
+        // never on annotation text ([ASTREBUILD-LAW]).
         let mut tvt_init_info: HashMap<&str, bool> = HashMap::new();
-        for func in &module.functions {
-            let Some(ref class_name) = func.class_name else {
+        for stmt in &parsed.ast.body {
+            let Stmt::ClassDef(cls) = stmt else {
                 continue;
             };
-            if !tvt_classes.contains_key(class_name.as_str()) {
+            if !tvt_classes.contains_key(cls.name.as_str()) {
                 continue;
             }
-            if func.name == "__init__" {
-                // Check if any parameter annotation contains a TypeVarTuple reference.
-                let has_tvt_param = func.parameters.iter().any(|p| {
-                    if let Some(ref ann_span) = p.annotation_span {
-                        let ann_text = slice_span(&module.source, *ann_span).unwrap_or("");
-                        tvt_names.iter().any(|tvt| ann_text.contains(tvt))
-                    } else {
-                        false
-                    }
-                });
-                let _ = tvt_init_info.insert(class_name.as_str(), has_tvt_param);
+            for body_stmt in &cls.body {
+                let Stmt::FunctionDef(func) = body_stmt else {
+                    continue;
+                };
+                if func.name.as_str() != "__init__" {
+                    continue;
+                }
+                let has_tvt_param = basilisk_resolver::iter_all_params(&func.parameters).any(
+                    |param| {
+                        param
+                            .parameter
+                            .annotation
+                            .as_deref()
+                            .is_some_and(|ann| expr_references_tvt(ann, &tvt_names))
+                    },
+                );
+                let _ = tvt_init_info.insert(cls.name.as_str(), has_tvt_param);
             }
         }
 
@@ -281,31 +295,42 @@ fn check_element_order(
 /// When a function binds the same `TypeVarTuple` in several parameters
 /// (`def f(a: tuple[*Ts], b: tuple[*Ts])`), every call must bind it
 /// identically: tuple-literal arguments must have equal lengths, and
-/// parameter-reference arguments must carry identical annotations.
+/// parameter-reference arguments must carry provably-equivalent annotations.
+///
+/// A parameter participates when its annotation is exactly the resolved
+/// tuple form subscripted by one unpacked `TypeVarTuple` — decided through
+/// the binding table and the AST, never annotation text ([ASTREBUILD-LAW]).
+/// Annotations that merely mention a `TypeVarTuple` in a wider shape
+/// (`tuple[int, *Ts]`) are outside this check's model and abstain
+/// ([ASTREBUILD-PHASE-RESOLVER]).
 fn check_shared_tvt_call_consistency(
     module: &ResolvedModule,
     stmts: &[Stmt],
     tvt_names: &std::collections::HashSet<&str>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    // Functions with two or more identically-annotated `*Ts` parameters:
-    // name → positions of those parameters.
+    // Module-level functions binding the same `TypeVarTuple` in two or more
+    // positional parameters: name → positions of those parameters.
     let mut shared: HashMap<&str, Vec<usize>> = HashMap::new();
-    for func in &module.functions {
-        if func.class_name.is_some() {
+    for stmt in stmts {
+        let Stmt::FunctionDef(func) = stmt else {
             continue;
-        }
-        let mut by_annotation: HashMap<&str, Vec<usize>> = HashMap::new();
-        for (idx, param) in func.parameters.iter().enumerate() {
-            let Some(ann) = param.annotation_text.as_deref() else {
+        };
+        let mut by_tvt: HashMap<&str, Vec<usize>> = HashMap::new();
+        let positional = func
+            .parameters
+            .posonlyargs
+            .iter()
+            .chain(func.parameters.args.iter());
+        for (idx, param) in positional.enumerate() {
+            let Some(ann) = param.parameter.annotation.as_deref() else {
                 continue;
             };
-            let binds_tvt = tvt_names.iter().any(|tvt| ann.contains(&format!("*{tvt}")));
-            if binds_tvt {
-                by_annotation.entry(ann).or_default().push(idx);
+            if let Some(tvt) = star_args::shared_tvt_name(&module.bindings, ann, tvt_names) {
+                by_tvt.entry(tvt).or_default().push(idx);
             }
         }
-        if let Some(positions) = by_annotation.into_values().find(|p| p.len() >= 2) {
+        if let Some(positions) = by_tvt.into_values().find(|p| p.len() >= 2) {
             let _ = shared.insert(func.name.as_str(), positions);
         }
     }
@@ -314,55 +339,73 @@ fn check_shared_tvt_call_consistency(
     }
 
     let scope = HashMap::new();
-    walk_calls_with_scope(stmts, &scope, &shared, &module.path, diagnostics);
+    walk_calls_with_scope(
+        stmts,
+        &scope,
+        &shared,
+        &module.bindings,
+        &module.path,
+        diagnostics,
+    );
 }
 
-/// Parameter-name → annotation-text scope for one function.
-type ParamScope = HashMap<String, String>;
+/// Parameter-name → resolved annotation scope for one function.
+type ParamScope = HashMap<String, TypeNode>;
 
-/// Walk statements tracking the enclosing function's parameter annotations,
-/// checking shared-`TypeVarTuple` calls in expression positions.
+/// Walk statements tracking the enclosing function's parameter annotations
+/// (lowered through the binding table), checking shared-`TypeVarTuple` calls
+/// in expression positions.
 fn walk_calls_with_scope(
     stmts: &[Stmt],
     scope: &ParamScope,
     shared: &HashMap<&str, Vec<usize>>,
+    bindings: &BindingTable,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     for stmt in stmts {
         match stmt {
             Stmt::FunctionDef(func) => {
-                let inner: ParamScope = func
-                    .parameters
-                    .posonlyargs
-                    .iter()
-                    .chain(func.parameters.args.iter())
-                    .chain(func.parameters.kwonlyargs.iter())
+                let inner: ParamScope = basilisk_resolver::iter_all_params(&func.parameters)
                     .filter_map(|p| {
                         p.parameter.annotation.as_deref().map(|ann| {
                             (
                                 p.parameter.name.to_string(),
-                                crate::rules::shared::ann_str(ann),
+                                TypeNode::lower(bindings, ann),
                             )
                         })
                     })
                     .collect();
-                walk_calls_with_scope(&func.body, &inner, shared, path, diagnostics);
+                walk_calls_with_scope(&func.body, &inner, shared, bindings, path, diagnostics);
             }
             Stmt::ClassDef(cls) => {
-                walk_calls_with_scope(&cls.body, scope, shared, path, diagnostics);
+                walk_calls_with_scope(&cls.body, scope, shared, bindings, path, diagnostics);
             }
             Stmt::If(if_stmt) => {
-                walk_calls_with_scope(&if_stmt.body, scope, shared, path, diagnostics);
+                walk_calls_with_scope(&if_stmt.body, scope, shared, bindings, path, diagnostics);
                 for clause in &if_stmt.elif_else_clauses {
-                    walk_calls_with_scope(&clause.body, scope, shared, path, diagnostics);
+                    walk_calls_with_scope(
+                        &clause.body,
+                        scope,
+                        shared,
+                        bindings,
+                        path,
+                        diagnostics,
+                    );
                 }
             }
             Stmt::For(for_stmt) => {
-                walk_calls_with_scope(&for_stmt.body, scope, shared, path, diagnostics);
+                walk_calls_with_scope(&for_stmt.body, scope, shared, bindings, path, diagnostics);
             }
             Stmt::While(while_stmt) => {
-                walk_calls_with_scope(&while_stmt.body, scope, shared, path, diagnostics);
+                walk_calls_with_scope(
+                    &while_stmt.body,
+                    scope,
+                    shared,
+                    bindings,
+                    path,
+                    diagnostics,
+                );
             }
             Stmt::Expr(node) => scan_expr_calls(&node.value, scope, shared, path, diagnostics),
             Stmt::Assign(node) => scan_expr_calls(&node.value, scope, shared, path, diagnostics),
@@ -463,6 +506,11 @@ fn arg_binding(arg: &Expr) -> Binding {
 }
 
 /// `true` when two bindings are provably consistent (or not provably wrong).
+///
+/// Two name references are inconsistent only when the relation REFUTES the
+/// equivalence of their resolved annotations; an abstention (`None`) — e.g.
+/// annotations with unresolved parts — never produces a verdict
+/// ([ASTREBUILD-LAW]).
 fn binding_matches(a: &Binding, b: &Binding, scope: &ParamScope) -> bool {
     match (a, b) {
         (Binding::TupleLen(la), Binding::TupleLen(lb)) => la == lb,
@@ -471,7 +519,7 @@ fn binding_matches(a: &Binding, b: &Binding, scope: &ParamScope) -> bool {
                 return true;
             }
             match (scope.get(na), scope.get(nb)) {
-                (Some(ann_a), Some(ann_b)) => ann_a == ann_b,
+                (Some(node_a), Some(node_b)) => equivalent(node_a, node_b) != Some(false),
                 _ => true,
             }
         }
@@ -645,5 +693,29 @@ fn expr_simple_name(expr: &Expr) -> Option<&str> {
     match expr {
         Expr::Name(name) => Some(name.id.as_str()),
         _ => None,
+    }
+}
+
+/// Does a type expression reference one of the module's `TypeVarTuple`s?
+///
+/// Walks the annotation's AST looking for a `Name` node whose identifier is a
+/// declared `TypeVarTuple` — the structural positions a type expression can
+/// carry one in (subscript slices, starred unpacks, unions, tuples) — never
+/// the annotation's source text ([ASTREBUILD-LAW]).
+fn expr_references_tvt(expr: &Expr, tvt_names: &std::collections::HashSet<&str>) -> bool {
+    match expr {
+        Expr::Name(name) => tvt_names.contains(name.id.as_str()),
+        Expr::Starred(starred) => expr_references_tvt(&starred.value, tvt_names),
+        Expr::Subscript(sub) => {
+            expr_references_tvt(&sub.value, tvt_names) || expr_references_tvt(&sub.slice, tvt_names)
+        }
+        Expr::Tuple(tuple) => tuple
+            .elts
+            .iter()
+            .any(|element| expr_references_tvt(element, tvt_names)),
+        Expr::BinOp(op) => {
+            expr_references_tvt(&op.left, tvt_names) || expr_references_tvt(&op.right, tvt_names)
+        }
+        _ => false,
     }
 }

@@ -306,13 +306,6 @@ fn find_google_numpy_param_refs(
 }
 
 /// Check that the byte after `pos` is not an identifier character (word boundary).
-fn has_word_boundary_after(source: &str, pos: usize) -> bool {
-    source
-        .as_bytes()
-        .get(pos)
-        .is_none_or(|&b| !is_ident_byte(b))
-}
-
 /// Find all whole-word occurrences of `name` in `source`, returning LSP ranges.
 ///
 /// This is the **non-scope-aware** version, still used by cross-file reference

@@ -46,7 +46,7 @@ impl Rule for GenericTypeArgViolation {
             return;
         };
 
-        let ctx = ModuleContext::from_ast(&parsed.ast.body);
+        let ctx = ModuleContext::from_ast(&parsed.ast.body, &module.bindings, &module.source);
         let scope = ScopeContext::module_scope(&ctx);
         check_stmts(&parsed.ast.body, &scope, &module.path, diagnostics);
     }
@@ -72,7 +72,7 @@ fn check_stmts(stmts: &[Stmt], scope: &ScopeContext<'_>, path: &str, diag: &mut 
 
 fn check_func_body(
     func: &ruff_python_ast::StmtFunctionDef,
-    ctx: &ModuleContext,
+    ctx: &ModuleContext<'_>,
     path: &str,
     diag: &mut Vec<Diagnostic>,
 ) {

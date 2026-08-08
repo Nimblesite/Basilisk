@@ -1,7 +1,9 @@
 //! Tests for [`tuples_index_2`] from [CHKARCH-DIAG-CATEGORIES]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-CATEGORIES
 //!
 //! Regression coverage for [#284](https://github.com/Nimblesite/Basilisk/issues/284),
-//! grounded in [PEP 484 tuple types](https://peps.python.org/pep-0484/#the-typing-module).
+//! grounded in [PEP 484 tuple types](https://peps.python.org/pep-0484/#the-typing-module)
+//! and [PEP 585 builtin generics](https://peps.python.org/pep-0585/). Import aliases
+//! denote the same builtin generic and therefore must produce the same verdict.
 
 use super::common::*;
 
@@ -23,33 +25,127 @@ def f(v: tuple[int, str, float]) -> None:
 
 #[test]
 fn out_of_range_index() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let variants = [
+        r"
 def f(v: tuple[int, str, float]) -> None:
+    valid = v[2]
     x = v[4]
-";
-    let diags = run(source)?;
-    assert_rule_count(
-        &diags,
-        "tuples_index_2",
-        1,
-        "index 4 is outside a fixed three-element tuple parameter",
-    );
+",
+        r"
+def inspect(
+    sediment: tuple[
+        int,
+        str,
+        float,
+    ],
+) -> None:
+    valid = sediment[2]
+    selected = sediment[
+        4
+    ]
+",
+        r"
+import builtins as runtime_types
+
+def inspect(
+    sediment: runtime_types.tuple[
+        runtime_types.int,
+        runtime_types.str,
+        runtime_types.float,
+    ],
+) -> None:
+    valid = sediment[2]
+    selected = sediment[4]
+",
+        r"
+from builtins import float as DecimalValue
+from builtins import int as WholeValue
+from builtins import str as TextValue
+from builtins import tuple as FixedSequence
+
+def inspect(sediment: FixedSequence[WholeValue, TextValue, DecimalValue]) -> None:
+    valid = sediment[2]
+    selected = sediment[4]
+",
+    ];
+    for source in variants {
+        let diags = run(source)?;
+        assert_rule_count(
+            &diags,
+            "tuples_index_2",
+            1,
+            "renaming, reformatting, and resolved aliases cannot change the AST tuple-index verdict",
+        );
+        let messages = messages_for(&diags, "tuples_index_2");
+        assert!(
+            messages
+                .iter()
+                .all(|message| message.contains('4') && message.contains('3')),
+            "the sole diagnostic must describe index 4 against a three-element tuple: {messages:?}"
+        );
+    }
     Ok(())
 }
 
 #[test]
 fn negative_out_of_range() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
+    let variants = [
+        r"
 def f(v: tuple[int, str, float]) -> None:
+    valid = v[-3]
     x = v[-4]
-";
-    let diags = run(source)?;
-    assert_rule_count(
-        &diags,
-        "tuples_index_2",
-        1,
-        "index -4 is outside a fixed three-element tuple parameter",
-    );
+",
+        r"
+def inspect(
+    sediment: tuple[int, str, float],
+) -> None:
+    valid = sediment[-3]
+    selected = sediment[
+        -(
+            4
+        )
+    ]
+",
+        r"
+import builtins as runtime_types
+
+def inspect(
+    sediment: runtime_types.tuple[
+        runtime_types.int,
+        runtime_types.str,
+        runtime_types.float,
+    ],
+) -> None:
+    valid = sediment[-3]
+    selected = sediment[-4]
+",
+        r"
+from builtins import float as DecimalValue
+from builtins import int as WholeValue
+from builtins import str as TextValue
+from builtins import tuple as FixedSequence
+
+def inspect(sediment: FixedSequence[WholeValue, TextValue, DecimalValue]) -> None:
+    valid = sediment[-3]
+    selected = sediment[-(4)]
+",
+    ];
+    for source in variants {
+        let diags = run(source)?;
+        assert_rule_count(
+            &diags,
+            "tuples_index_2",
+            1,
+            "renaming, aliasing, and parenthesized unary syntax cannot change the AST tuple-index verdict",
+        );
+        let messages = messages_for(&diags, "tuples_index_2");
+        assert!(
+            messages
+                .iter()
+                .all(|message| message.contains("-4") && message.contains('3')),
+            "the sole diagnostic must describe index -4 against a three-element tuple: {messages:?}"
+        );
+    }
     Ok(())
 }
 

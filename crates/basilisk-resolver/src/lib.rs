@@ -18,8 +18,8 @@ mod visitor;
 /// answer the same recognition questions and cannot depend on this crate.
 pub use basilisk_canonical as canonical;
 pub use basilisk_canonical::{
-    assignable, equivalent, BindingTable, BuiltinClass, CanonicalSymbol, LiteralValue, TypeNode,
-    TypingForm,
+    assignable, equivalent, registry_health, BindingTable, BuiltinClass, CanonicalSymbol,
+    LiteralValue, TypeNode, TypingForm,
 };
 pub use ident::{is_simple_ascii_python_identifier, is_simple_python_identifier};
 pub use static_condition::{evaluate, parse_static_condition, BranchTruth, StaticCondition};

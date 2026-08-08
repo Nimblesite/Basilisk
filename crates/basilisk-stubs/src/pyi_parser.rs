@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use basilisk_canonical::{BindingTable, TypingForm};
+use basilisk_canonical::{BindingTable, BranchView, TypingForm};
 
 use ruff_python_ast::{
     Expr, Operator, Stmt, StmtAnnAssign, StmtAssign, StmtAugAssign, StmtFunctionDef, StmtIf,
@@ -172,6 +172,15 @@ pub fn platform_guard_literals(
     Ok(guard::platform_guard_literals(&module_ast.body))
 }
 
+/// Coerce a closure to the higher-ranked branch-filter signature
+/// [`basilisk_canonical::BranchFilter`] expects.
+fn branch_selector<F>(select: F) -> F
+where
+    F: for<'a> Fn(&'a StmtIf) -> BranchView<'a>,
+{
+    select
+}
+
 fn parse_pyi_source_with_target(
     content: &str,
     path: &Path,
@@ -187,10 +196,24 @@ fn parse_pyi_source_with_target(
                 message: err.to_string(),
             })?
             .ast;
-    // One table for the whole module: `BindingTable::from_module` already
-    // descends into `if TYPE_CHECKING:` and `try`/`except ImportError` bodies,
-    // so branch visiting never needs a different view of the imports.
-    let bindings = Arc::new(BindingTable::from_module(&module_ast.body));
+    // Two passes ([RESOLV-CANONICAL-BINDING]): a preliminary whole-module
+    // table resolves the guard expressions themselves (`sys.version_info`,
+    // `sys.platform`), then the real table is built with statically
+    // infeasible branches EXCLUDED — mutually exclusive version branches
+    // never execute together, and a symbol bound only in the branch the
+    // target rules out must not control resolution in the selected one.
+    let preliminary = BindingTable::from_module(&module_ast.body);
+    let select_branch = branch_selector(|if_stmt| {
+        let branches = feasible_branches(&preliminary, if_stmt, target.as_ref());
+        match branches.as_slice() {
+            [only] => only.map_or(BranchView::NoBranch, BranchView::Only),
+            _ => BranchView::AllBranches,
+        }
+    });
+    let bindings = Arc::new(BindingTable::from_module_with_branch_filter(
+        &module_ast.body,
+        &select_branch,
+    ));
     let mut extractor = StubExtractor::new(module_name, path, source, tier, target, bindings);
     extractor.visit_body(&module_ast.body);
     Ok(extractor.into_module())

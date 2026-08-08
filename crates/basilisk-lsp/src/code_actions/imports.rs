@@ -10,7 +10,7 @@
 
 use std::collections::HashMap;
 
-use tower_lsp::lsp_types::{CodeAction, CodeActionKind, Position, Range, TextEdit, Url};
+use tower_lsp::lsp_types::{CodeAction, CodeActionKind, TextEdit, Url};
 
 use super::full_document_range;
 

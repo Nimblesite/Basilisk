@@ -21,6 +21,10 @@ use crate::diagnostic::{Diagnostic, ErrorCode};
 
 use super::Rule;
 
+#[expect(
+    dead_code,
+    reason = "rule is registered but INERT: its text-matched verdict path was deleted under [ASTREBUILD-LAW] and no diagnostic is emitted until the semantic rebuild ([ASTREBUILD-PHASE-RESOLVER])"
+)]
 const CODE: ErrorCode = ErrorCode {
     code: "generics_upper_bound_2",
     docs_url: "https://www.basilisk-python.dev/errors/generics_upper_bound_2",

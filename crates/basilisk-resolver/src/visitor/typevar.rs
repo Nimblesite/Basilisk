@@ -73,6 +73,40 @@ fn collect_typevar_calls_from_stmts(
             Stmt::ClassDef(cls) => {
                 collect_typevar_calls_from_stmts(bindings, &cls.body, out);
             }
+            // Compound statements whose bodies execute in the module frame:
+            // a declaration under `if TYPE_CHECKING:`, in `try:`, a loop, a
+            // `with`, or a `match` case binds the module name like any other
+            // assignment (PEP 484 declares type variables by assignment;
+            // Python's execution model does not care about the nesting).
+            Stmt::If(node) => {
+                collect_typevar_calls_from_stmts(bindings, &node.body, out);
+                for clause in &node.elif_else_clauses {
+                    collect_typevar_calls_from_stmts(bindings, &clause.body, out);
+                }
+            }
+            Stmt::Try(node) => {
+                collect_typevar_calls_from_stmts(bindings, &node.body, out);
+                for handler in &node.handlers {
+                    let ruff_python_ast::ExceptHandler::ExceptHandler(handler) = handler;
+                    collect_typevar_calls_from_stmts(bindings, &handler.body, out);
+                }
+                collect_typevar_calls_from_stmts(bindings, &node.orelse, out);
+                collect_typevar_calls_from_stmts(bindings, &node.finalbody, out);
+            }
+            Stmt::With(node) => collect_typevar_calls_from_stmts(bindings, &node.body, out),
+            Stmt::For(node) => {
+                collect_typevar_calls_from_stmts(bindings, &node.body, out);
+                collect_typevar_calls_from_stmts(bindings, &node.orelse, out);
+            }
+            Stmt::While(node) => {
+                collect_typevar_calls_from_stmts(bindings, &node.body, out);
+                collect_typevar_calls_from_stmts(bindings, &node.orelse, out);
+            }
+            Stmt::Match(node) => {
+                for case in &node.cases {
+                    collect_typevar_calls_from_stmts(bindings, &case.body, out);
+                }
+            }
             _ => {}
         }
     }
@@ -150,6 +184,10 @@ fn typevar_call_info_from(
 /// this walk collected its declaration — never from the shape of the name.
 fn expr_parameterized_by_typevar(expr: &Expr, known_typevars: &[TypeVarCallInfo]) -> bool {
     match expr {
+        // A BARE type variable as the whole bound/constraint (`bound=T`) is
+        // the simplest forbidden case (typing spec, generics: bounds must
+        // not contain type variables).
+        Expr::Name(_) => expr_references_known_typevar(expr, known_typevars),
         Expr::Subscript(sub) => expr_references_known_typevar(&sub.slice, known_typevars),
         Expr::BinOp(bin) => {
             expr_parameterized_by_typevar(&bin.left, known_typevars)

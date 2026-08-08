@@ -17,7 +17,7 @@ use super::harness::{aliased, import_form, reformatted, renamed, SpecObligation}
 // ill-typed after decoration. A `ParamSpec` decorator is transparent, not a
 // `(*args, **kwargs)` escape hatch.
 
-const SPINDLE_REJECTED: &str = r#"
+pub(super) const SPINDLE_REJECTED: &str = r#"
 import collections.abc
 from typing import ParamSpec as SignatureOf, TypeVar as Quantified
 PSpindle = SignatureOf("PSpindle")
@@ -31,7 +31,7 @@ def brattice(gauge: int, sigil: str) -> bytes: return sigil.encode()
 brattice("shallow", "stope")
 "#;
 
-const SPINDLE_ACCEPTED: &str = r#"
+pub(super) const SPINDLE_ACCEPTED: &str = r#"
 import collections.abc
 from typing import ParamSpec as SignatureOf, TypeVar as Quantified
 PSpindle = SignatureOf("PSpindle")
@@ -45,7 +45,7 @@ def brattice(gauge: int, sigil: str) -> bytes: return sigil.encode()
 brattice(3, "stope")
 "#;
 
-const SPINDLE_REJECTED_ALIASED: &str = r#"
+pub(super) const SPINDLE_REJECTED_ALIASED: &str = r#"
 from typing import Callable as Applicable, ParamSpec as SignatureOf, TypeVar as Quantified
 PSpindle = SignatureOf("PSpindle")
 TQuarry = Quantified("TQuarry")
@@ -58,7 +58,7 @@ def brattice(gauge: int, sigil: str) -> bytes: return sigil.encode()
 brattice("shallow", "stope")
 "#;
 
-const SPINDLE_REJECTED_IMPORT_FORM: &str = r#"
+pub(super) const SPINDLE_REJECTED_IMPORT_FORM: &str = r#"
 import typing
 PSpindle = typing.ParamSpec("PSpindle")
 TQuarry = typing.TypeVar("TQuarry")
@@ -71,7 +71,7 @@ def brattice(gauge: int, sigil: str) -> bytes: return sigil.encode()
 brattice("shallow", "stope")
 "#;
 
-const SPINDLE_REJECTED_RENAMED: &str = r#"
+pub(super) const SPINDLE_REJECTED_RENAMED: &str = r#"
 import collections.abc
 from typing import ParamSpec as SignatureOf, TypeVar as Quantified
 PWithy = SignatureOf("PWithy")
@@ -106,7 +106,7 @@ fn paramspec_decorator_preserves_parameter_types() -> Result<(), Box<dyn std::er
 // `PSpindle` captures parameter names as well as types, so a keyword the
 // wrapped function does not declare is an error at the decorated call site.
 
-const KEYWORD_REJECTED: &str = r#"
+pub(super) const KEYWORD_REJECTED: &str = r#"
 import collections.abc
 def bracing[**PSpindle, TQuarry](inner: collections.abc.Callable[PSpindle, TQuarry]) -> collections.abc.Callable[PSpindle, TQuarry]:
     def sheath(*args: PSpindle.args, **kwargs: PSpindle.kwargs) -> TQuarry:
@@ -117,7 +117,7 @@ def brattice(gauge: int, sigil: str) -> bytes: return sigil.encode()
 brattice(gauge=3, spoil="stope")
 "#;
 
-const KEYWORD_ACCEPTED: &str = r#"
+pub(super) const KEYWORD_ACCEPTED: &str = r#"
 import collections.abc
 def bracing[**PSpindle, TQuarry](inner: collections.abc.Callable[PSpindle, TQuarry]) -> collections.abc.Callable[PSpindle, TQuarry]:
     def sheath(*args: PSpindle.args, **kwargs: PSpindle.kwargs) -> TQuarry:
@@ -128,7 +128,7 @@ def brattice(gauge: int, sigil: str) -> bytes: return sigil.encode()
 brattice(gauge=3, sigil="stope")
 "#;
 
-const KEYWORD_REJECTED_REFORMATTED: &str = "
+pub(super) const KEYWORD_REJECTED_REFORMATTED: &str = "
 import collections.abc
 
 # a decorator obliged to stay transparent
@@ -165,7 +165,7 @@ fn paramspec_decorator_preserves_keyword_names() -> Result<(), Box<dyn std::erro
 // `TQuarry` solves to `bytes` at the decoration site, so the decorated call
 // yields `bytes` — not `Any`, and not the decorator's own type.
 
-const RETURN_REJECTED: &str = r#"
+pub(super) const RETURN_REJECTED: &str = r#"
 import collections.abc
 def bracing[**PSpindle, TQuarry](inner: collections.abc.Callable[PSpindle, TQuarry]) -> collections.abc.Callable[PSpindle, TQuarry]:
     def sheath(*args: PSpindle.args, **kwargs: PSpindle.kwargs) -> TQuarry:
@@ -176,7 +176,7 @@ def brattice(gauge: int, sigil: str) -> bytes: return sigil.encode()
 tallage: str = brattice(3, "stope")
 "#;
 
-const RETURN_ACCEPTED: &str = r#"
+pub(super) const RETURN_ACCEPTED: &str = r#"
 import collections.abc
 def bracing[**PSpindle, TQuarry](inner: collections.abc.Callable[PSpindle, TQuarry]) -> collections.abc.Callable[PSpindle, TQuarry]:
     def sheath(*args: PSpindle.args, **kwargs: PSpindle.kwargs) -> TQuarry:
@@ -202,7 +202,7 @@ fn paramspec_decorator_preserves_return_type() -> Result<(), Box<dyn std::error:
 
 // ── ParamSpec preserves arity ────────────────────────────────────────────
 
-const ARITY_REJECTED: &str = r#"
+pub(super) const ARITY_REJECTED: &str = r#"
 import typing
 def swaling[**PWithy, TMarl](outer: typing.Callable[PWithy, TMarl]) -> typing.Callable[PWithy, TMarl]:
     def liner(*args: PWithy.args, **kwargs: PWithy.kwargs) -> TMarl:
@@ -213,7 +213,7 @@ def coppice(rung: int) -> str: return str(rung)
 coppice(2, 5)
 "#;
 
-const ARITY_ACCEPTED: &str = r#"
+pub(super) const ARITY_ACCEPTED: &str = r#"
 import typing
 def swaling[**PWithy, TMarl](outer: typing.Callable[PWithy, TMarl]) -> typing.Callable[PWithy, TMarl]:
     def liner(*args: PWithy.args, **kwargs: PWithy.kwargs) -> TMarl:
@@ -242,7 +242,7 @@ fn paramspec_decorator_preserves_arity() -> Result<(), Box<dyn std::error::Error
 // `**kwargs` parameter annotated `PSpindle.kwargs`. A lone `.args` is
 // ill-formed however the surrounding code is spelled.
 
-const PAIR_REJECTED: &str = r#"
+pub(super) const PAIR_REJECTED: &str = r#"
 import collections.abc
 def girth[**PSpindle](inner: collections.abc.Callable[PSpindle, bytes]) -> collections.abc.Callable[PSpindle, bytes]:
     def sheath(*args: PSpindle.args) -> bytes:
@@ -250,7 +250,7 @@ def girth[**PSpindle](inner: collections.abc.Callable[PSpindle, bytes]) -> colle
     return sheath
 "#;
 
-const PAIR_ACCEPTED: &str = r#"
+pub(super) const PAIR_ACCEPTED: &str = r#"
 import collections.abc
 def girth[**PSpindle](inner: collections.abc.Callable[PSpindle, bytes]) -> collections.abc.Callable[PSpindle, bytes]:
     def sheath(*args: PSpindle.args, **kwargs: PSpindle.kwargs) -> bytes:
@@ -258,7 +258,7 @@ def girth[**PSpindle](inner: collections.abc.Callable[PSpindle, bytes]) -> colle
     return sheath
 "#;
 
-const PAIR_ACCEPTED_ALIASED: &str = r#"
+pub(super) const PAIR_ACCEPTED_ALIASED: &str = r#"
 from typing import Callable as Applicable, ParamSpec as SignatureOf
 PSpindle = SignatureOf("PSpindle")
 def girth(inner: Applicable[PSpindle, bytes]) -> Applicable[PSpindle, bytes]:

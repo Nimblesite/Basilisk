@@ -12,6 +12,12 @@
 //! vocabulary disjoint from the suite's 913.
 
 use super::harness::{aliased, import_form, reformatted, renamed, SpecObligation};
+#[allow(
+    clippy::wildcard_imports,
+    unused_imports,
+    reason = "shared golden fixtures: each sibling uses the subset it references"
+)]
+use super::r#async::*;
 
 #[test]
 fn async_generator_may_not_return_a_value() -> Result<(), Box<dyn std::error::Error>> {

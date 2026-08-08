@@ -46,7 +46,6 @@ fn severity_label(severity: Severity) -> &'static str {
         Severity::Error => "error",
         Severity::Warning => "warning",
         Severity::Info => "info",
-        Severity::SafetyViolation => "safety violation",
     }
 }
 

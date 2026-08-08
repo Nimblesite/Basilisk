@@ -27,14 +27,14 @@ use basilisk_resolver::scope::GeneratorViolationKind;
 use basilisk_resolver::{FunctionInfo, ResolvedModule};
 
 use super::annotations_generators_helpers::{
-    base_type_name, check_yield_from, extract_return_type_from_generator, extract_yield_type,
-    OuterAnnotation, CODE,
+    check_yield_from, generator_return_type_expr, generator_yield_type_expr, CODE,
 };
 use super::Rule;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic};
 use crate::rules::shared::judge::TypeJudge;
 use crate::rules::shared::module_types::ModuleTypes;
-use crate::span_util::slice_span;
+use crate::rules::shared::{parse_module, ExprIndex};
+use crate::span_util::{node_span, slice_span};
 use crate::types::InferredType;
 
 /// Emits `annotations_generators` for generator return type and yield type violations.
@@ -132,43 +132,48 @@ impl Rule for GeneratorReturnTypeViolation {
         let Some(resolver) = types.annotations() else {
             return;
         };
+        let Some(parsed) = parse_module(module) else {
+            return;
+        };
+        let index = ExprIndex::build(&parsed.ast);
         let judge = TypeJudge::new(types.oracle(), resolver, types.subtyping());
         for func in &module.functions {
             if !func.is_generator || func.yield_exprs.is_empty() {
                 continue;
             }
-            check_yield_types(func, module, resolver, &judge, diagnostics);
-            check_return_in_generator(func, module, resolver, &judge, diagnostics);
+            check_yield_types(func, module, resolver, &judge, &index, diagnostics);
+            check_return_in_generator(func, module, resolver, &judge, &index, diagnostics);
         }
     }
 }
 
 /// Check yield expression types against the declared yield type parameter.
+///
+/// The annotation's generator form is recognised by resolving its base
+/// through the binding table ([ASTREBUILD-LAW]), and the yield parameter is
+/// the subscript slice's AST node.
 fn check_yield_types(
     func: &FunctionInfo,
     module: &ResolvedModule,
     resolver: &crate::annotation::AnnotationResolver<'_>,
     judge: &TypeJudge<'_, '_>,
+    index: &ExprIndex<'_>,
     out: &mut Vec<Diagnostic>,
 ) {
     let Some(ann_span) = func.return_annotation_span else {
         return;
     };
-    let Some(ann_text) = slice_span(&module.source, ann_span) else {
+    let Some(yield_node) = generator_yield_type_expr(module, index, ann_span) else {
+        return;
+    };
+    let Some(yield_type_str) = slice_span(&module.source, node_span(yield_node)) else {
         return;
     };
 
-    let base = base_type_name(ann_text);
-
-    // Extract the yield type parameter from the annotation.
-    let Some(yield_type_str) = extract_yield_type(ann_text, base) else {
-        return;
-    };
-
-    // The parameter is a type expression the CASCADE evaluates — the legacy
-    // parser folded class case (`C` → `c`), which no judgment could ground.
+    // The parameter is a type expression the CASCADE evaluates
+    // ([TYPEINF-ANNOTATION-RESOLUTION]).
     let declared_yield_type = resolver
-        .resolve_text(&yield_type_str)
+        .resolve_text(yield_type_str.trim())
         .unwrap_or(InferredType::Unknown);
 
     // Skip if the declared yield type is Unknown/Any - can't check.
@@ -185,10 +190,7 @@ fn check_yield_types(
                 func,
                 yield_expr,
                 &declared_yield_type,
-                &OuterAnnotation {
-                    text: ann_text,
-                    base,
-                },
+                index,
                 judge,
                 module,
                 out,
@@ -230,31 +232,31 @@ fn check_yield_types(
 }
 
 /// Check return statements in generator functions against the `ReturnType` parameter.
+///
+/// Only `Generator[Y, S, R]` carries a return type parameter; that is decided
+/// by resolving the annotation's base through the binding table
+/// ([ASTREBUILD-LAW]), never by matching the spelling `Generator`.
 fn check_return_in_generator(
     func: &FunctionInfo,
     module: &ResolvedModule,
     resolver: &crate::annotation::AnnotationResolver<'_>,
     judge: &TypeJudge<'_, '_>,
+    index: &ExprIndex<'_>,
     out: &mut Vec<Diagnostic>,
 ) {
     let Some(ann_span) = func.return_annotation_span else {
         return;
     };
-    let Some(ann_text) = slice_span(&module.source, ann_span) else {
+    let Some(return_node) = generator_return_type_expr(module, index, ann_span) else {
         return;
     };
-
-    // Only `Generator[Y, S, R]` carries a return type parameter, but deciding
-    // that by matching the annotation's text against the spelling `Generator`
-    // is not import resolution — that gate is deleted pending a cascade-based
-    // one ([TYPEINF-ANNOTATION-RESOLUTION]).
-    let Some(return_type_str) = extract_return_type_from_generator(ann_text) else {
+    let Some(return_type_str) = slice_span(&module.source, node_span(return_node)) else {
         return;
     };
 
     // Same cascade evaluation as the yield parameter — case preserved.
     let declared_return_type = resolver
-        .resolve_text(&return_type_str)
+        .resolve_text(return_type_str.trim())
         .unwrap_or(InferredType::Unknown);
 
     if matches!(

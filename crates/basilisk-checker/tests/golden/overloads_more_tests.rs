@@ -11,6 +11,12 @@
 //! a namespace disjoint from the suite's 913 defined names.
 
 use super::harness::{aliased, import_form, reformatted, renamed, SpecObligation};
+#[allow(
+    clippy::wildcard_imports,
+    unused_imports,
+    reason = "shared golden fixtures: each sibling uses the subset it references"
+)]
+use super::overloads::*;
 
 #[test]
 fn a_call_matching_no_declaration_is_an_error() -> Result<(), Box<dyn std::error::Error>> {

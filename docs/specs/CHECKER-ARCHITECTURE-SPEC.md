@@ -474,15 +474,27 @@ vocabulary into Rust.
 
 These decide nothing about typing, so naming them is lawful:
 
-- **True builtins** (`int`, `str`, `list`, `isinstance`, `object`) and dunder
-  names — they need no import, so a name cannot be rebound by one.
+- **Builtin names inside the registry and its fallback ONLY.** Python's
+  [name-binding rules](https://docs.python.org/3/reference/executionmodel.html#binding-of-names)
+  let ANY name — builtins included — be shadowed, rebound, or imported under
+  an alias, so a use of `int`, `isinstance`, or `object` must resolve through
+  the binding table's positional lookup with the canonical builtin fallback
+  (`form_of_with_builtins`). The builtin spellings themselves may appear in
+  exactly two places: `typing_symbols.toml` entries for the `builtins`
+  module, and the registry lookup that implements the fallback. A rule that
+  compares a use-site name against a builtin spelling is broken, whatever it
+  scores. Dunder names on DEFINITION sites (`def __init__`) remain lawful —
+  a definition's own name is identity, not a reference to resolve.
 - **Keyword-argument names at call sites** (`bound=`, `kw_only=`, `total=`) —
   part of a signature already identified by resolution.
 - **Basilisk's own directive syntax** (`# basilisk:`, `# type:`) — genuinely
   comments, which the AST does not carry, so parsing them from text is the only
   possible mechanism.
-- **Basilisk's own rendered output** — text this codebase produced, such as a
-  stub signature it formatted, parsed back for display.
+- **Basilisk's own rendered output, for display ONLY** — text this codebase
+  produced, such as a stub signature it formatted, parsed back solely to
+  present it. Rendered text may NEVER feed a typing verdict: the moment a
+  comparison, compatibility answer, or diagnostic condition reads it, the
+  code is in violation regardless of who produced the text.
 - **Line geometry** — computing a span or indentation for a diagnostic's
   location, provided no Python structure is inferred from it.
 - **Diagnostic message text** shown to users.
@@ -1147,6 +1159,12 @@ already produced by other files in the same run. This distinction and the
 text/JSON parity obligation are pinned by
 [#384](https://github.com/Nimblesite/Basilisk/issues/384) in
 `crates/basilisk-cli/tests/cli_binary_tests.rs`.
+
+Malformed or semantically invalid `pyproject.toml` configuration is code 2 and
+aborts source checking with an actionable configuration message. It must never
+fall back to defaults as though no configuration existed. This regression is
+tracked by [#227](https://github.com/Nimblesite/Basilisk/issues/227) in
+`crates/basilisk-cli/tests/e2e_scope.rs`.
 
 ### CI use {#CHKARCH-CLI-CI}
 

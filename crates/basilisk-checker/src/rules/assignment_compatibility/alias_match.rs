@@ -9,21 +9,17 @@
 //! j4: Json = {"a": 1, "b": 3j}  # E: complex is not a Json value
 //! ```
 //!
-//! and *generic* recursive aliases such as
-//!
-//! ```python
-//! G = list["G[T]" | T]            # T = TypeVar("T", str, int)
-//! S = G[str]
-//! g1: S = ["hi", ["hi", "hi"]]    # OK
-//! g3: G[str] = ["hi", [2.4]]      # E: float is not a `str` leaf
-//! ```
-//!
 //! cannot be validated by the plain `is_assignable_to` check because the
 //! annotation is a `Named` reference and the right-hand side is a literal
-//! structure. This module resolves a bare or specialised alias name to its
-//! (possibly recursive) definition — substituting `TypeVar` arguments for
-//! generic aliases — and verifies whether the inferred RHS literal type
+//! structure. This module resolves a bare alias name to its (possibly
+//! recursive) definition and verifies whether the inferred RHS literal type
 //! *positively* matches it.
+//!
+//! *Generic* alias references (`G[str]` where `G = list["G[T]" | T]`) are NOT
+//! specialised any more: substituting the use-site arguments would require
+//! splitting and rewriting the rendered reference text, which is banned
+//! ([ASTREBUILD-LAW]). Those references now abstain — the caller stays
+//! lenient and emits nothing ([ASTREBUILD-PHASE-RESOLVER]).
 //!
 //! **Positive-match semantics.** A value matches only when every part is
 //! demonstrably compatible. `Unknown`/`Any` values do **not** positively match a
@@ -33,8 +29,6 @@
 
 use std::collections::{HashMap, HashSet};
 
-use super::callable_check::replace_word;
-use crate::rules::shared::split_top_level_commas;
 use crate::span_util::slice_span;
 use crate::types::InferredType;
 use basilisk_resolver::{ResolvedModule, VariableInfo};
@@ -133,10 +127,11 @@ fn free_typevars(lowered: &str, typevars: &HashSet<String>) -> Vec<String> {
 /// `G = list["G[T]" | T]`), then specialisations that reference a root via a
 /// subscript (e.g. `S = G[str]`) and therefore bind no params of their own.
 ///
-/// Annotated assignments are skipped: substituting into a generic alias is
-/// textual here, which is sound for the container bodies this pass targets but
-/// not for the parameterised callable forms left to the callable-compatibility
-/// path that does model them.
+/// The collected roots are no longer specialised — [`resolve_generic`]
+/// abstains for any alias that binds params ([ASTREBUILD-LAW]) — but the
+/// table still identifies which annotations name a value alias, so the
+/// caller can stay lenient on them instead of misjudging the reference
+/// through the ordinary assignability path.
 pub(super) fn collect_generic_aliases(module: &ResolvedModule) -> HashMap<String, GenericAlias> {
     let typevars: HashSet<String> = module
         .typevar_calls
@@ -297,10 +292,11 @@ fn match_named_target(value: &InferredType, name: &str, ctx: &AliasCtx<'_>, dept
         return alias_assignable(value, def, ctx, depth + 1);
     }
     if let Some(generic) = ctx.generic.get(base) {
-        return match resolve_generic(name, generic) {
+        return match resolve_generic(generic) {
             Some(resolved) => alias_assignable(value, &resolved, ctx, depth + 1),
-            // Arity mismatch (e.g. a bare generic alias used without args):
-            // the checker cannot prove a mismatch, so stay lenient.
+            // A parameterised alias cannot be specialised here (see
+            // [`resolve_generic`]): the checker cannot prove a mismatch, so
+            // stay lenient and emit nothing.
             None => true,
         };
     }
@@ -313,37 +309,21 @@ fn match_named_target(value: &InferredType, name: &str, ctx: &AliasCtx<'_>, dept
     }
 }
 
-/// Specialise a generic alias use-site (`Name[Arg, …]`) into a concrete type by
-/// substituting its `TypeVar` params. Returns `None` on arity mismatch.
-fn resolve_generic(name: &str, alias: &GenericAlias) -> Option<InferredType> {
-    let args = subscript_args(name);
-    let mut text = alias.def_text.clone();
-    if alias.params.len() == args.len() {
-        for (param, arg) in alias.params.iter().zip(args.iter()) {
-            text = replace_word(&text, param, arg);
-        }
-    } else if !alias.params.is_empty() {
+/// Expand a generic alias into a matchable type.
+///
+/// A parameterised alias (`G[str]`) would need its use-site subscript
+/// arguments resolved and substituted, but this matcher only holds the
+/// rendered reference text, which may not lawfully be split or rewritten
+/// ([ASTREBUILD-LAW]). Such references return `None` and the caller stays
+/// lenient ([ASTREBUILD-PHASE-RESOLVER]); the matcher itself dies with the
+/// alias tables in [NARROWPLAN-INTEGRATION] Step 7. A parameterless
+/// specialisation (`S = G[str]` collected as its own entry) expands its
+/// stored definition directly.
+fn resolve_generic(alias: &GenericAlias) -> Option<InferredType> {
+    if !alias.params.is_empty() {
         return None;
     }
-    Some(InferredType::from_annotation(&text))
-}
-
-/// Extract the top-level subscript arguments from a `Name[A, B]` reference.
-fn subscript_args(name: &str) -> Vec<String> {
-    let trimmed = name.trim().trim_matches(|c| c == '"' || c == '\'');
-    let Some(open) = trimmed.find('[') else {
-        return Vec::new();
-    };
-    let Some(close) = trimmed.rfind(']') else {
-        return Vec::new();
-    };
-    if close <= open + 1 {
-        return Vec::new();
-    }
-    split_top_level_commas(&trimmed[open + 1..close])
-        .into_iter()
-        .map(|arg| arg.trim().to_owned())
-        .collect()
+    Some(InferredType::from_annotation(&alias.def_text))
 }
 
 /// Match a value against a tuple target, handling the homogeneous

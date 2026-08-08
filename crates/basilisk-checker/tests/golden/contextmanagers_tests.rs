@@ -19,7 +19,7 @@ use super::harness::{aliased, import_form, reformatted, renamed, SpecObligation}
 // supplying neither is not a context manager, however ordinary the rest of
 // its interface looks.
 
-const NO_PROTOCOL_REJECTED: &str = r"
+pub(super) const NO_PROTOCOL_REJECTED: &str = r"
 class Grommet:
     def seat(self) -> int:
         return 4
@@ -29,7 +29,7 @@ def fit_bushing() -> None:
         pass
 ";
 
-const NO_PROTOCOL_ACCEPTED: &str = r"
+pub(super) const NO_PROTOCOL_ACCEPTED: &str = r"
 class Grommet:
     def seat(self) -> int:
         return 4
@@ -41,7 +41,7 @@ def fit_bushing() -> None:
         pass
 ";
 
-const NO_PROTOCOL_REJECTED_RENAMED: &str = r"
+pub(super) const NO_PROTOCOL_REJECTED_RENAMED: &str = r"
 class Spigot:
     def bore(self) -> int:
         return 4
@@ -51,7 +51,7 @@ def tap_cask() -> None:
         pass
 ";
 
-const NO_PROTOCOL_REJECTED_REFORMATTED: &str = r"
+pub(super) const NO_PROTOCOL_REJECTED_REFORMATTED: &str = r"
 class Grommet:  # a rubber ring, not a context manager
 
         def seat(self) -> int:
@@ -82,7 +82,7 @@ fn with_requires_the_context_manager_protocol() -> Result<(), Box<dyn std::error
 // Half the protocol is not the protocol: `__enter__` alone leaves the
 // with-statement's exit path unimplementable.
 
-const HALF_PROTOCOL_REJECTED: &str = r"
+pub(super) const HALF_PROTOCOL_REJECTED: &str = r"
 class Tailrace:
     def __enter__(self) -> int:
         return 9
@@ -92,7 +92,7 @@ def run_off() -> None:
         print(depth)
 ";
 
-const HALF_PROTOCOL_ACCEPTED: &str = r"
+pub(super) const HALF_PROTOCOL_ACCEPTED: &str = r"
 class Tailrace:
     def __enter__(self) -> int:
         return 9
@@ -119,7 +119,7 @@ fn enter_without_exit_is_not_a_context_manager() -> Result<(), Box<dyn std::erro
 // `with EXPR as NAME:` binds NAME to whatever `__enter__` returns, not to the
 // context manager itself. That distinction is the whole point of `as`.
 
-const AS_TARGET_REJECTED: &str = r"
+pub(super) const AS_TARGET_REJECTED: &str = r"
 class Sluice:
     def draw(self) -> int:
         return 11
@@ -134,7 +134,7 @@ def draw_off() -> None:
         gate.spill()
 ";
 
-const AS_TARGET_ACCEPTED: &str = r"
+pub(super) const AS_TARGET_ACCEPTED: &str = r"
 class Sluice:
     def draw(self) -> int:
         return 11
@@ -149,7 +149,7 @@ def draw_off() -> None:
         gate.draw()
 ";
 
-const AS_TARGET_REJECTED_RENAMED: &str = r"
+pub(super) const AS_TARGET_REJECTED_RENAMED: &str = r"
 class Weir:
     def siphon(self) -> int:
         return 11
@@ -181,7 +181,7 @@ fn as_target_takes_the_enter_return_type() -> Result<(), Box<dyn std::error::Err
 // managers over `T`, so a generator yielding `str` gives an `as` target of
 // type `str` and nothing else.
 
-const YIELD_TYPE_REJECTED: &str = r#"
+pub(super) const YIELD_TYPE_REJECTED: &str = r#"
 import collections.abc
 import contextlib
 
@@ -197,7 +197,7 @@ def broach() -> None:
         stave_count(stencil)
 "#;
 
-const YIELD_TYPE_ACCEPTED: &str = r#"
+pub(super) const YIELD_TYPE_ACCEPTED: &str = r#"
 import collections.abc
 import contextlib
 
@@ -213,7 +213,7 @@ def broach() -> None:
         brand(stencil)
 "#;
 
-const YIELD_TYPE_REJECTED_ALIASED: &str = r#"
+pub(super) const YIELD_TYPE_REJECTED_ALIASED: &str = r#"
 from collections.abc import Iterator as YieldsOf
 from contextlib import contextmanager as scoped
 
@@ -245,7 +245,7 @@ fn contextmanager_yield_type_reaches_the_as_target() -> Result<(), Box<dyn std::
 // `contextmanager` accepts an iterator-returning callable. A plain function
 // returning `str` is not one, so the decoration itself is ill-typed.
 
-const NON_GENERATOR_REJECTED: &str = r#"
+pub(super) const NON_GENERATOR_REJECTED: &str = r#"
 import contextlib
 
 @contextlib.contextmanager
@@ -253,7 +253,7 @@ def shuttered_kiln() -> str:
     return "cool"
 "#;
 
-const NON_GENERATOR_ACCEPTED: &str = r#"
+pub(super) const NON_GENERATOR_ACCEPTED: &str = r#"
 import collections.abc
 import contextlib
 
@@ -262,7 +262,7 @@ def shuttered_kiln() -> collections.abc.Iterator[str]:
     yield "cool"
 "#;
 
-const NON_GENERATOR_REJECTED_ALIASED: &str = r#"
+pub(super) const NON_GENERATOR_REJECTED_ALIASED: &str = r#"
 from contextlib import contextmanager as scoped
 
 @scoped
@@ -289,7 +289,7 @@ fn contextmanager_requires_an_iterator_returning_callable(
 // always raises can still fall through and the narrowing that preceded it
 // does not hold afterwards. A `None` return cannot suppress, so it does.
 
-const SUPPRESSING_EXIT_REJECTED: &str = r"
+pub(super) const SUPPRESSING_EXIT_REJECTED: &str = r"
 class Cofferdam:
     def __enter__(self) -> None: return None
     def __exit__(self, kind: object, value: object, trace: object) -> bool: return True
@@ -301,7 +301,7 @@ def gauge(datum: int | str) -> str:
     return datum
 ";
 
-const SUPPRESSING_EXIT_ACCEPTED: &str = r"
+pub(super) const SUPPRESSING_EXIT_ACCEPTED: &str = r"
 class Cofferdam:
     def __enter__(self) -> None: return None
     def __exit__(self, kind: object, value: object, trace: object) -> None: return None
@@ -313,7 +313,7 @@ def gauge(datum: int | str) -> str:
     return datum
 ";
 
-const SUPPRESSING_EXIT_REJECTED_REFORMATTED: &str = r"
+pub(super) const SUPPRESSING_EXIT_REJECTED_REFORMATTED: &str = r"
 class Cofferdam:
         def __enter__(self) -> None:
                 return None
