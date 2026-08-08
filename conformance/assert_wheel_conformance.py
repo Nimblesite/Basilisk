@@ -17,8 +17,11 @@ installed wheel, and enforces:
   * at least `--min-files` graded (guards against a broken/empty run silently
     "passing" — the exact failure mode the ratchet is meant to catch).
 
-Thresholds default to the repo ratchet in coverage-thresholds.json
-(conformance.threshold = 100%, conformance.max_false_positives = 0).
+The repo-wide conformance ratchet was deleted from coverage-thresholds.json on
+2026-08-08 at the user's direction (see its _conformance_gate_removed note) —
+conformance is a regression indicator, never a build gate. This script's
+built-in defaults (threshold 100, max false positives 0) apply only when it is
+invoked explicitly; nothing in `make test` or CI calls it any more.
 
 The percentage here is an internal threshold over frozen fixtures. It is not a
 current official conformance score and must not be published as one.

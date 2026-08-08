@@ -159,10 +159,12 @@ ok "instrumented basilisk binary ready: $BASILISK_BIN"
 #      the coverage pool and the checker/resolver paths these fixtures exercise
 #      count toward coverage.
 #   2. GATE pass — the freshly-built CLEAN RELEASE binary (target/release/basilisk,
-#      un-instrumented, exactly what ships) is scored by the REAL harness and MUST
-#      hit 100% pass / 0 false positives (coverage-thresholds.json) or the build
-#      DIES. run_conformance.py regenerates conformance/conformance_status.csv from
-#      the harness's OWN results/basilisk/*.toml on each pass.
+#      un-instrumented, exactly what ships) is scored by the REAL harness.
+#      run_conformance.py regenerates conformance/conformance_status.csv from
+#      the harness's OWN results/basilisk/*.toml on each pass. The 100%/0-FP
+#      floor that once backed this gate was deleted from coverage-thresholds.json
+#      on 2026-08-08 at the user's direction — conformance is a regression
+#      indicator, never a gate ([CHKARCH-CONFORMANCE]).
 # There is NO Rust conformance test, NO vendored calculator, and NO cached
 # fixtures: the score is the real suite's own verdict on the CLEAN RELEASE build —
 # never an instrumented one, never a prior (PyPI) release. If the real harness
@@ -172,8 +174,8 @@ ok "instrumented basilisk binary ready: $BASILISK_BIN"
 # TYPE_CHECKERS tuple, so `--only-run basilisk` grades nothing and writes no
 # results/basilisk/*.toml; run_harness() then raises "the real harness wrote no
 # results ... it did not run". Both passes below could therefore only ever fail.
-# See the conformance._doc note in coverage-thresholds.json. The fixture sync
-# above still runs — it only mirrors files and does not invoke the harness.
+# See the _conformance_gate_removed note in coverage-thresholds.json. The fixture
+# sync above still runs — it only mirrors files and does not invoke the harness.
 #
 # header "Conformance coverage pass (instrumented binary over the real suite)"
 # python3 "$REPO_ROOT/conformance/run_conformance.py" --suite-dir "$TYPING_SUITE_DIR" --bin "$BASILISK_BIN" --reuse-clone

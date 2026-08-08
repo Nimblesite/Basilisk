@@ -17,7 +17,10 @@ mod visitor;
 /// The registry lives in `basilisk-canonical` because `basilisk-stubs` must
 /// answer the same recognition questions and cannot depend on this crate.
 pub use basilisk_canonical as canonical;
-pub use basilisk_canonical::{BindingTable, CanonicalSymbol, TypingForm};
+pub use basilisk_canonical::{
+    assignable, equivalent, BindingTable, BuiltinClass, CanonicalSymbol, LiteralValue, TypeNode,
+    TypingForm,
+};
 pub use ident::{is_simple_ascii_python_identifier, is_simple_python_identifier};
 pub use static_condition::{evaluate, parse_static_condition, BranchTruth, StaticCondition};
 pub use visitor::walks::{iter_all_params, visit_calls, walk_all_stmts, walk_function_stmts};

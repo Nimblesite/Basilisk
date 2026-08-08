@@ -33,8 +33,7 @@
 
 use std::collections::HashMap;
 
-use basilisk_canonical::{assignable, equivalent, TypeNode, TypingForm};
-use basilisk_resolver::{ResolvedModule, Span};
+use basilisk_resolver::{assignable, equivalent, ResolvedModule, Span, TypeNode, TypingForm};
 use ruff_python_ast::{self as ast, Expr, Stmt};
 use ruff_text_size::Ranged;
 
@@ -306,7 +305,7 @@ fn check_cls_annotation(
 fn cls_constraint<'a>(
     new_def: &'a ast::StmtFunctionDef,
     class_name: &str,
-    bindings: &basilisk_canonical::BindingTable,
+    bindings: &basilisk_resolver::BindingTable,
 ) -> Option<&'a ast::ExprSubscript> {
     let cls_param = new_def
         .parameters
