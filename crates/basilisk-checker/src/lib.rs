@@ -367,7 +367,6 @@ fn is_cascade_suppressible(code: &str) -> bool {
         "calls_argument_type"  // wrong call
         | "returns_compatibility_2" // attribute not found
         | "assignment_compatibility" // type mismatch
-        | "callables_annotation" // missing return type
         | "names_undefined" // undefined variable
         | "calls_argument_count" // too few arguments
         | "directives_assert_type_2" // assert_type mismatch

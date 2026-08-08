@@ -210,6 +210,51 @@ value: Final = 1
     Ok(())
 }
 
+/// The builtin fallback resolves a bare unrebound builtin name, follows the
+/// alias when the builtin is imported, and answers nothing once the module
+/// rebinds the name.
+#[test]
+fn builtin_fallback_respects_module_rebinds() -> TestResult {
+    use basilisk_canonical::TypingForm;
+
+    let decorator_of = |source: &str| -> Result<Option<TypingForm>, String> {
+        let module = parsed(source).map_err(|error| error.to_string())?;
+        let table = BindingTable::from_module(&module.body);
+        let decorator = module
+            .body
+            .iter()
+            .find_map(|stmt| match stmt {
+                Stmt::FunctionDef(function) => function.decorator_list.first(),
+                _ => None,
+            })
+            .ok_or("no decorated function in fixture")?;
+        Ok(table.form_of_with_builtins(&decorator.expression))
+    };
+
+    let bare = "
+@staticmethod
+def f() -> None: ...
+";
+    assert_eq!(decorator_of(bare)?, Some(TypingForm::StaticMethod));
+
+    let aliased = "
+from builtins import staticmethod as sm
+
+@sm
+def f() -> None: ...
+";
+    assert_eq!(decorator_of(aliased)?, Some(TypingForm::StaticMethod));
+
+    let rebound = "
+def staticmethod(func): ...
+
+@staticmethod
+def f() -> None: ...
+";
+    assert_eq!(decorator_of(rebound)?, None);
+    Ok(())
+}
+
 /// A star import from a registry module binds that module's specification
 /// names for uses after it, and a later explicit rebind still wins.
 #[test]
