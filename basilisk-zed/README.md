@@ -14,7 +14,7 @@ Basilisk is an open-source Python type checker and language server built in Rust
 >
 > **The type checker still contains code that isn't doing real type checking, and it is not yet trustworthy.** Some rules decide from the way code is *spelled* rather than what it means, so they can be wrong in both directions — a false error on correct code, or silence where there is a genuine bug. Don't gate CI on it, and don't read a clean run as a clean codebase. Our former conformance claim and our benchmark figures are withdrawn, and Basilisk was [removed from the official results](https://github.com/python/typing/blob/main/conformance/results/results.html) at our request.
 >
-> **This was a mistake and a failure to verify — not an attempt to game the suite.** Nothing was concealed from `python/typing`; the submission ran the suite's own unmodified harness, and we published on a green run without ever checking whether our rules survived a semantics-preserving change. Basilisk's author has published a [personal account and apology](https://www.christianfindlay.com/blog/basilisk-conformance-apology).
+> **This was a mistake and a failure to verify.** We published on a green run without ever checking whether our rules survived a semantics-preserving change. Basilisk's author has published a [personal account and apology](https://www.christianfindlay.com/blog/basilisk-conformance-apology).
 >
 > **We are auditing every rule and deleting the ones that don't hold up** — not rewriting them, not patching them, with a failing test left behind so the gap stays visible. Where a rule can't be made reliable in a straightforward way, we will depend on a different, established type checker rather than ship our own unreliable version of it.
 >
