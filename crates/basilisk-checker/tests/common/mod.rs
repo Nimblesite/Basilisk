@@ -100,3 +100,20 @@ pub fn messages_for<'a>(diags: &'a [Diagnostic], code: &str) -> Vec<&'a str> {
         .map(|d| d.message.as_str())
         .collect()
 }
+
+/// Assert one isolated typing-spec obligation against one diagnostic family.
+///
+/// Unlike `!diagnostics.is_empty()`, this cannot pass because an unrelated rule
+/// happened to reject the fixture.
+pub fn assert_rule_count(diags: &[Diagnostic], code: &str, expected: usize, obligation: &str) {
+    let matching: Vec<&Diagnostic> = diags
+        .iter()
+        .filter(|diagnostic| diagnostic.code.code == code)
+        .collect();
+    assert_eq!(
+        matching.len(),
+        expected,
+        "{obligation}: expected {expected} `{code}` diagnostic(s), got {}: {matching:#?}",
+        matching.len(),
+    );
+}

@@ -79,6 +79,7 @@ impl Rule for ConstructorCallError {
             return;
         };
         let ctx = Ctx {
+            module,
             source,
             path,
             class_map: &class_map,
@@ -188,6 +189,7 @@ fn check_class_scoped_typevars_in_self(
 
 /// Bundle of state threaded through all E0111 statement/expression walkers.
 struct Ctx<'a> {
+    module: &'a ResolvedModule,
     source: &'a str,
     path: &'a str,
     class_map: &'a HashMap<&'a str, &'a basilisk_resolver::ClassInfo>,
@@ -224,6 +226,7 @@ fn check_constructor_call(
                 class_info,
                 class_map,
                 method_map,
+                ctx.module,
                 path,
                 diagnostics,
             );
@@ -253,6 +256,7 @@ fn check_subscript_constructor(
 ) {
     use ruff_python_ast::Expr;
     let Ctx {
+        module: _,
         source,
         path,
         class_map,
@@ -305,6 +309,7 @@ fn check_no_init_with_args(
     class_info: &basilisk_resolver::ClassInfo,
     class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
     method_map: &HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>>,
+    module: &ResolvedModule,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
@@ -367,7 +372,7 @@ fn check_no_init_with_args(
 
     // Class-applied or metaclass-applied `@dataclass_transform` bases synthesize
     // an `__init__` from the subclass's annotated fields (PEP 681).
-    if crate::rules::guards::inherits_dataclass_transform(class_info, class_map) {
+    if crate::rules::guards::inherits_dataclass_transform(module, class_info) {
         return;
     }
 

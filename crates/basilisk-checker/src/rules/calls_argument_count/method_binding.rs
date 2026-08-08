@@ -10,16 +10,11 @@
 //! does not; `staticmethod` never consumes one and `classmethod` always does.
 
 use basilisk_resolver::scope::CallReceiver;
-use basilisk_resolver::{CallSite, ClassInfo, FunctionInfo, ResolvedModule};
+use basilisk_resolver::{CallSite, ClassInfo, DescriptorKind, FunctionInfo, ResolvedModule};
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic};
 
 use super::super::shared;
-
-/// Decorators that leave a method's call signature intact. Anything else
-/// (`property`, custom descriptors, wrappers) may change what a call accepts,
-/// so the arity check abstains rather than guess.
-const SIGNATURE_PRESERVING: [&str; 2] = ["staticmethod", "classmethod"];
 
 /// How a resolved class attribute binds its underlying callable.
 struct BoundMethod<'a> {
@@ -27,7 +22,7 @@ struct BoundMethod<'a> {
     /// the call is accepted when ANY candidate accepts it.
     candidates: Vec<&'a FunctionInfo>,
     /// The `staticmethod` / `classmethod` wrapper applied by assignment, if any.
-    wrapper: Option<&'a str>,
+    wrapper: Option<DescriptorKind>,
 }
 
 /// Check method calls through a class receiver — `C.m(...)` and `C().m(...)` —
@@ -86,9 +81,7 @@ fn resolve_bound_method<'a>(
     method_map: &std::collections::HashMap<(&str, &str), Vec<&'a FunctionInfo>>,
 ) -> Option<BoundMethod<'a>> {
     if let Some(defs) = method_map.get(&(class_info.name.as_str(), method)) {
-        let all_preserving = defs
-            .iter()
-            .all(|f| signature_preserving_decorators(&f.decorators));
+        let all_preserving = defs.iter().all(|f| signature_preserving_decorators(f));
         return all_preserving.then(|| BoundMethod {
             candidates: defs.clone(),
             wrapper: None,
@@ -103,24 +96,30 @@ fn resolve_bound_method<'a>(
         .functions
         .iter()
         .filter(|f| f.class_name.is_none() && !f.nested_in_class && f.name == bound_name)
-        .filter(|f| signature_preserving_decorators(&f.decorators))
+        .filter(|f| signature_preserving_decorators(f))
         .collect();
     if candidates.is_empty() {
         return None;
     }
     Some(BoundMethod {
         candidates,
-        wrapper: attribute.rhs_descriptor.as_deref(),
+        wrapper: attribute.rhs_descriptor,
     })
 }
 
 /// `true` when every decorator on a function is known to preserve its
 /// signature, so the raw parameter list is what a call binds against.
-fn signature_preserving_decorators(decorators: &[String]) -> bool {
-    decorators.iter().all(|d| {
-        let leaf = d.rsplit('.').next().unwrap_or(d.as_str());
-        SIGNATURE_PRESERVING.contains(&leaf)
-    })
+///
+/// Only the builtin `staticmethod` / `classmethod` descriptors qualify, and
+/// they are decided from the resolver's binding-resolved flags — anything else
+/// (`property`, custom descriptors, wrappers) may change what a call accepts,
+/// so the arity check abstains rather than guess.
+fn signature_preserving_decorators(func: &FunctionInfo) -> bool {
+    match func.decorators.len() {
+        0 => true,
+        1 => func.is_staticmethod || func.is_classmethod,
+        _ => false,
+    }
 }
 
 /// How many leading parameters the descriptor protocol consumes for this
@@ -128,15 +127,13 @@ fn signature_preserving_decorators(decorators: &[String]) -> bool {
 /// both paths, a plain function its `self` on instance access only.
 fn receiver_params_consumed(
     func: &FunctionInfo,
-    wrapper: Option<&str>,
+    wrapper: Option<DescriptorKind>,
     instance_access: bool,
 ) -> usize {
-    let spelled =
-        |name: &str| wrapper == Some(name) || shared::decorator_spelled(&func.decorators, name);
-    if spelled("staticmethod") {
+    if wrapper == Some(DescriptorKind::StaticMethod) || func.is_staticmethod {
         return 0;
     }
-    usize::from(spelled("classmethod") || instance_access)
+    usize::from(wrapper == Some(DescriptorKind::ClassMethod) || func.is_classmethod || instance_access)
 }
 
 /// The positional arguments a signature requires once `consumed` leading

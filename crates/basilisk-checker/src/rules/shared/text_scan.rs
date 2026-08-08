@@ -7,54 +7,6 @@
 //! ([TYPEINF-ALGO]). No new code may call into this module — it is deleted
 //! outright per [NARROWPLAN-INTEGRATION] when its last consumer migrates.
 
-use basilisk_resolver::Span;
-
-/// Number of leading whitespace bytes on `line`. Identical to what every rule
-/// re-implemented as `line.len() - line.trim_start().len()`.
-pub(crate) fn leading_indent(line: &str) -> usize {
-    line.len() - line.trim_start().len()
-}
-
-/// Return the byte offset (as `u32`) of the start of the given 1-based line.
-/// If `target_line` is past the end of `source`, returns `source.len()`.
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::as_conversions,
-    reason = "byte offsets fit u32 for source files"
-)]
-fn line_to_byte_offset(source: &str, target_line: usize) -> u32 {
-    let mut current = 1usize;
-    for (byte_idx, ch) in source.char_indices() {
-        if current == target_line {
-            return byte_idx as u32;
-        }
-        if ch == '\n' {
-            current += 1;
-        }
-    }
-    source.len() as u32
-}
-
-/// Build a `Span` covering the trimmed content of a given 1-based line.
-#[expect(
-    clippy::as_conversions,
-    clippy::cast_possible_truncation,
-    reason = "u32<->usize safe on 32-bit+"
-)]
-pub(crate) fn span_for_line(source: &str, line_number: usize) -> Span {
-    let start = line_to_byte_offset(source, line_number) as usize;
-    let line_text = source
-        .get(start..)
-        .and_then(|s| s.lines().next())
-        .unwrap_or("");
-    let trimmed_start = start + (line_text.len() - line_text.trim_start().len());
-    let trimmed_end = start + line_text.trim_end().len();
-    Span {
-        start: trimmed_start as u32,
-        end: trimmed_end as u32,
-    }
-}
-
 /// Split `s` at every top-level comma, respecting bracket nesting and string
 /// literals — a comma inside quotes (`Literal[',']`) is part of the literal
 /// value, not a separator (issue #316).

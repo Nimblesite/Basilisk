@@ -47,30 +47,6 @@ pub(crate) fn class_or_base_matches<'a>(
     false
 }
 
-/// Returns `true` when any base name in the transitive chain of `cls`
-/// satisfies `matches`. Each base name is tested with `matches` and then
-/// resolved through `resolve` to continue the walk.
-pub(crate) fn any_base_name_matches<'a>(
-    cls: &'a ClassInfo,
-    resolve: &dyn Fn(&str) -> Option<&'a ClassInfo>,
-    matches: &dyn Fn(&str) -> bool,
-) -> bool {
-    let mut visited: HashSet<&str> = HashSet::new();
-    let _ = visited.insert(cls.name.as_str());
-    let mut worklist: Vec<&'a ClassInfo> = vec![cls];
-    while let Some(current) = worklist.pop() {
-        for base in &current.bases {
-            if matches(base) {
-                return true;
-            }
-            if visited.insert(base.as_str()) {
-                worklist.extend(resolve(base));
-            }
-        }
-    }
-    false
-}
-
 /// Build a `(class_name, method_name) -> Vec<&FunctionInfo>` lookup for every
 /// method in the module (functions carrying a `class_name`).
 ///

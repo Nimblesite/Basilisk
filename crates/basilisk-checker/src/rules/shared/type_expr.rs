@@ -16,10 +16,25 @@
 
 use std::collections::HashMap;
 
-use basilisk_resolver::Span;
+use basilisk_resolver::{ResolvedModule, Span, TypingForm};
 use ruff_python_ast::visitor::{walk_expr, Visitor};
 use ruff_python_ast::{Expr, ModModule, Operator};
 use ruff_text_size::Ranged;
+
+/// PEP 613: is this annotation the explicit `TypeAlias` qualifier?
+///
+/// The question is the annotation NODE at `span`; the answer comes from the
+/// module's bindings, so `TypeAlias`, `typing.TypeAlias`, and `from typing
+/// import TypeAlias as TA` are one symbol, and a module that defines its own
+/// `TypeAlias` is not it.
+pub(crate) fn annotation_is_type_alias(
+    module: &ResolvedModule,
+    index: &ExprIndex<'_>,
+    span: Option<Span>,
+) -> bool {
+    span.and_then(|span| index.expr(span))
+        .is_some_and(|expr| module.bindings.is_form(expr, TypingForm::TypeAliasQualifier))
+}
 
 /// How string literals inside the judged expression are treated.
 ///

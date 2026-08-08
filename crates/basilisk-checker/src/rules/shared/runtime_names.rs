@@ -18,8 +18,6 @@ use std::collections::HashSet;
 use basilisk_resolver::{ResolvedModule, RhsKind};
 use ruff_python_ast::Expr;
 
-use crate::annotation::AnnotationResolver;
-
 use super::type_expr::{annotation_is_type_alias, is_type_expression, ExprIndex};
 use super::{StringPolicy, TypeExprJudge};
 
@@ -53,7 +51,6 @@ pub(crate) fn type_constructor_names(module: &ResolvedModule) -> HashSet<&str> {
 /// name-to-name assignments (`B = A` where `A` is runtime) to a fixpoint.
 pub(crate) fn runtime_value_names(
     module: &ResolvedModule,
-    resolver: &AnnotationResolver<'_>,
     index: &ExprIndex<'_>,
 ) -> HashSet<String> {
     let constructors = type_constructor_names(module);
@@ -63,7 +60,7 @@ pub(crate) fn runtime_value_names(
     };
     let mut runtime: HashSet<String> = HashSet::new();
     for var in &module.module_vars {
-        if annotation_is_type_alias(resolver, var.annotation_span) {
+        if annotation_is_type_alias(module, index, var.annotation_span) {
             continue; // Explicit aliases are judged separately.
         }
         if var.has_annotation

@@ -27,7 +27,6 @@ use basilisk_resolver::{ResolvedModule, Span};
 use ruff_python_ast::visitor::{walk_expr, Visitor};
 use ruff_python_ast::{Expr, Operator};
 
-use crate::annotation::AnnotationResolver;
 use crate::diagnostic::{error_diagnostic, error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::rules::shared::{
     annotation_is_type_alias, is_type_expression, runtime_value_names, type_constructor_names,
@@ -69,15 +68,12 @@ impl Rule for TypeAliasInvalidRhs {
         let Some(parsed) = module.lazy_ast.get_or_parse(&module.source, &module.path) else {
             return;
         };
-        let Some(resolver) = AnnotationResolver::for_module(module) else {
-            return;
-        };
         let index = ExprIndex::build(&parsed.ast);
-        let runtime_vars = runtime_value_names(module, &resolver, &index);
+        let runtime_vars = runtime_value_names(module, &index);
 
-        check_explicit_alias_values(module, &resolver, &index, &runtime_vars, diagnostics);
+        check_explicit_alias_values(module, &index, &runtime_vars, diagnostics);
 
-        let alias_map = build_alias_info_map(module, &resolver, &index, &runtime_vars);
+        let alias_map = build_alias_info_map(module, &index, &runtime_vars);
         check_alias_parameterization(module, &index, &alias_map, diagnostics);
         check_union_alias_instantiation(module, &alias_map, diagnostics);
         check_runtime_name_annotations(module, &index, &runtime_vars, diagnostics);
@@ -93,7 +89,6 @@ impl Rule for TypeAliasInvalidRhs {
 /// `X: TypeAlias = "int" | str` is a runtime error).
 fn check_explicit_alias_values(
     module: &ResolvedModule,
-    resolver: &AnnotationResolver<'_>,
     index: &ExprIndex<'_>,
     runtime_vars: &HashSet<String>,
     diagnostics: &mut Vec<Diagnostic>,
@@ -103,7 +98,7 @@ fn check_explicit_alias_values(
         strings: StringPolicy::EagerForwardRef,
     };
     for var in &module.module_vars {
-        if !annotation_is_type_alias(resolver, var.annotation_span) {
+        if !annotation_is_type_alias(module, index, var.annotation_span) {
             continue;
         }
         let Some(rhs) = var.rhs_span.and_then(|span| index.expr(span)) else {
@@ -203,7 +198,6 @@ fn alias_type_params(module: &ResolvedModule, rhs: &Expr) -> Vec<TypeParam> {
 /// binding's structure, never from the spelling of its name.
 fn build_alias_info_map(
     module: &ResolvedModule,
-    resolver: &AnnotationResolver<'_>,
     index: &ExprIndex<'_>,
     runtime_vars: &HashSet<String>,
 ) -> HashMap<String, AliasInfo> {
@@ -217,7 +211,7 @@ fn build_alias_info_map(
         let Some(rhs) = var.rhs_span.and_then(|span| index.expr(span)) else {
             continue;
         };
-        let explicit = annotation_is_type_alias(resolver, var.annotation_span);
+        let explicit = annotation_is_type_alias(module, index, var.annotation_span);
         if !explicit {
             let is_implicit = !var.has_annotation
                 && !runtime_vars.contains(&var.name)

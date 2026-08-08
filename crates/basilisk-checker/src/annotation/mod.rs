@@ -68,6 +68,11 @@ pub struct AnnotationResolver<'m> {
     /// resulting type. The cascade is pure, so the second answer is the first
     /// one ([CHKARCH-TESTING-BENCH]).
     resolved: RefCell<HashMap<(u32, u32), InferredType>>,
+    /// Names of the STRUCTURAL classes this module declares — `Protocol` and
+    /// `TypedDict` subclasses, from the resolver's binding-resolved flags
+    /// ([RESOLV-CANONICAL-BINDING]). Structural types are satisfied by shape,
+    /// not identity, so nominal judgments abstain on them.
+    structural: std::collections::HashSet<&'m str>,
 }
 
 /// One step of resolution: the alias parameters currently bound, the aliases
