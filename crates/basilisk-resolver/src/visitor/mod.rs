@@ -16,7 +16,6 @@ mod function_info;
 mod generics;
 mod historical;
 mod module_level;
-mod narrowing;
 mod pep695_scoping;
 mod protocol;
 mod protocol_ext;

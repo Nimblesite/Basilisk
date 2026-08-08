@@ -229,48 +229,6 @@ pub(super) fn parameter_to_info(p: &Parameter) -> ParameterInfo {
             .annotation
             .as_deref()
             .map(|e| text_range_to_span(e.range())),
-        annotation_text: p.annotation.as_deref().map(annotation_source_text),
-    }
-}
-
-/// Produce a canonical text representation of an annotation `Expr` for
-/// structural comparison (e.g. overlapping-overload detection).
-pub(super) fn annotation_source_text(expr: &Expr) -> String {
-    match expr {
-        Expr::Name(n) => n.id.to_string(),
-        Expr::Attribute(a) => format!("{}.{}", annotation_source_text(&a.value), a.attr),
-        Expr::Subscript(s) => format!(
-            "{}[{}]",
-            annotation_source_text(&s.value),
-            annotation_source_text(&s.slice)
-        ),
-        Expr::Tuple(t) => t
-            .elts
-            .iter()
-            .map(annotation_source_text)
-            .collect::<Vec<_>>()
-            .join(", "),
-        Expr::BinOp(b) => format!(
-            "{} | {}",
-            annotation_source_text(&b.left),
-            annotation_source_text(&b.right)
-        ),
-        Expr::NoneLiteral(_) => "None".to_owned(),
-        Expr::EllipsisLiteral(_) => "...".to_owned(),
-        Expr::StringLiteral(s) => format!("\"{}\"", s.value),
-        Expr::NumberLiteral(n) => format!("{n:?}"),
-        Expr::BooleanLiteral(b) => if b.value { "True" } else { "False" }.to_owned(),
-        Expr::Starred(s) => format!("*{}", annotation_source_text(&s.value)),
-        Expr::List(l) => {
-            let inner = l
-                .elts
-                .iter()
-                .map(annotation_source_text)
-                .collect::<Vec<_>>()
-                .join(", ");
-            format!("[{inner}]")
-        }
-        _ => format!("{expr:?}"),
     }
 }
 

@@ -10,13 +10,11 @@ pub(crate) mod module_types;
 pub(crate) mod oracle;
 pub(crate) mod returns_judge;
 mod runtime_names;
-mod text_scan;
 mod type_expr;
 pub(crate) mod typing_form;
 
 pub(crate) use class_walks::{class_name_map, class_or_base_matches, method_name_map};
 pub(crate) use runtime_names::{runtime_value_names, type_constructor_names};
-pub(crate) use text_scan::split_top_level_commas;
 pub(crate) use type_expr::{
     annotation_is_type_alias, is_type_expression, ExprIndex, StringPolicy, TypeExprJudge,
 };
@@ -59,32 +57,6 @@ pub(crate) fn typevar_tuple_names(typevar_calls: &[TypeVarCallInfo]) -> HashSet<
 }
 
 // ---------------------------------------------------------------------------
-// Annotation parsing
-// ---------------------------------------------------------------------------
-
-/// Parse a subscript annotation like `Name[A, B]` into `(name, [A, B])`.
-///
-/// Returns a borrowed name and owned, trimmed type argument strings.
-/// Returns `None` when the annotation is not a valid subscript form.
-pub(crate) fn parse_subscript_annotation(text: &str) -> Option<(&str, Vec<String>)> {
-    let bracket_pos = text.find('[')?;
-    let name = text[..bracket_pos].trim();
-    if name.is_empty() {
-        return None;
-    }
-    let inner = text.get(bracket_pos + 1..text.rfind(']')?)?;
-    let args: Vec<String> = split_top_level_commas(inner)
-        .iter()
-        .map(|s| s.trim().to_owned())
-        .filter(|s| !s.is_empty())
-        .collect();
-    if args.is_empty() {
-        return None;
-    }
-    Some((name, args))
-}
-
-// ---------------------------------------------------------------------------
 // Expression helpers
 // ---------------------------------------------------------------------------
 
@@ -93,31 +65,6 @@ pub(crate) fn expr_name(expr: &Expr) -> Option<&str> {
     match expr {
         Expr::Name(n) => Some(n.id.as_str()),
         _ => None,
-    }
-}
-
-/// Convert an annotation expression to a readable string.
-pub(crate) fn ann_str(expr: &Expr) -> String {
-    match expr {
-        Expr::Name(n) => n.id.to_string(),
-        Expr::Subscript(s) => format!("{}[{}]", ann_str(&s.value), ann_str(&s.slice)),
-        Expr::Attribute(a) => format!("{}.{}", ann_str(&a.value), a.attr),
-        Expr::Tuple(t) => t.elts.iter().map(ann_str).collect::<Vec<_>>().join(", "),
-        Expr::BinOp(b) => format!("{} | {}", ann_str(&b.left), ann_str(&b.right)),
-        Expr::NoneLiteral(_) => "None".to_owned(),
-        Expr::StringLiteral(s) => s.value.to_str().to_owned(),
-        Expr::List(l) => format!(
-            "[{}]",
-            l.elts.iter().map(ann_str).collect::<Vec<_>>().join(", ")
-        ),
-        Expr::NumberLiteral(n) => match &n.value {
-            ast::Number::Int(int) => int.to_string(),
-            ast::Number::Float(float) => float.to_string(),
-            ast::Number::Complex { real, imag } => format!("complex({real}, {imag})"),
-        },
-        Expr::BooleanLiteral(b) => if b.value { "True" } else { "False" }.to_owned(),
-        Expr::Starred(s) => format!("*{}", ann_str(&s.value)),
-        _ => "...".to_owned(),
     }
 }
 
@@ -137,83 +84,6 @@ pub(crate) fn infer_expr_literal_type(expr: &Expr) -> Option<&'static str> {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Type compatibility
-// ---------------------------------------------------------------------------
-
-/// Check if `actual` is assignable to `expected` with no class context:
-/// `Any`, `object`, the numeric tower, and `X | Y` unions.
-///
-/// Delegates to the ONE subtyping implementation
-/// (`subtyping::SubtypingContext::is_subtype`, [TYPEINF-SUBTYPING],
-/// [NARROWPLAN-SUBTYPING]) over an empty context — rules that know the
-/// module's class hierarchy seed `subtyping::module_context` instead.
-pub(crate) fn is_type_compatible(actual: &str, expected: &str) -> bool {
-    static EMPTY: std::sync::LazyLock<crate::subtyping::SubtypingContext> =
-        std::sync::LazyLock::new(crate::subtyping::SubtypingContext::default);
-    EMPTY.is_subtype(actual, expected)
-}
-
-// ---------------------------------------------------------------------------
-// RHS helpers
-// ---------------------------------------------------------------------------
-
-/// Extract the callee name from a RHS text like `ClassName(...)` or `ClassName[T](...)`.
-pub(crate) fn extract_callee_name(rhs_text: &str) -> Option<&str> {
-    // Handle `ClassName[T](...)` by stripping everything from `[` onwards first.
-    let before_bracket = rhs_text.split('[').next()?;
-    let before_paren = before_bracket.split('(').next()?;
-    let name = before_paren.trim();
-    if name.is_empty() {
-        return None;
-    }
-    // Class names start with uppercase (heuristic).
-    if !name.starts_with(|c: char| c.is_ascii_uppercase()) {
-        return None;
-    }
-    Some(name)
-}
-
-// ---------------------------------------------------------------------------
-// Identifier / typevar matching
-// ---------------------------------------------------------------------------
-
-pub(crate) fn contains_typevar_reference(text: &str, name: &str) -> bool {
-    let name_bytes = name.as_bytes();
-    let text_bytes = text.as_bytes();
-    let name_len = name_bytes.len();
-
-    if name_len > text_bytes.len() {
-        return false;
-    }
-
-    for start in 0..=(text_bytes.len() - name_len) {
-        let Some(slice) = text_bytes.get(start..start + name_len) else {
-            continue;
-        };
-        if slice != name_bytes {
-            continue;
-        }
-        if start > 0
-            && text_bytes
-                .get(start - 1)
-                .is_some_and(|&b| b.is_ascii_alphanumeric() || b == b'_')
-        {
-            continue;
-        }
-        let end = start + name_len;
-        if end < text_bytes.len()
-            && text_bytes
-                .get(end)
-                .is_some_and(|&b| b.is_ascii_alphanumeric() || b == b'_')
-        {
-            continue;
-        }
-        return true;
-    }
-    false
-}
-
 /// Generic parameter names of a class definition: its PEP 695 type parameters.
 pub(crate) fn class_generic_param_names(cls: &ruff_python_ast::StmtClassDef) -> Vec<String> {
     cls.type_params
@@ -225,38 +95,6 @@ pub(crate) fn class_generic_param_names(cls: &ruff_python_ast::StmtClassDef) -> 
                 .collect()
         })
         .unwrap_or_default()
-}
-
-/// A `*args` or `**kwargs` parameter slot in a parsed signature.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(crate) enum StarParam {
-    /// The signature has no such parameter.
-    #[default]
-    Absent,
-    /// Present without an annotation (implicitly `Any`).
-    Untyped,
-    /// Present with an annotation.
-    Typed(String),
-}
-
-impl StarParam {
-    /// `true` when the parameter exists in the signature.
-    pub(crate) fn is_present(&self) -> bool {
-        !matches!(self, StarParam::Absent)
-    }
-
-    /// The annotation text; `None` for absent or untyped (gradual `Any`).
-    pub(crate) fn ty(&self) -> Option<&str> {
-        match self {
-            StarParam::Typed(ty) => Some(ty),
-            StarParam::Absent | StarParam::Untyped => None,
-        }
-    }
-
-    /// Build from an optional annotation of a present parameter.
-    pub(crate) fn from_annotation(annotation: Option<String>) -> StarParam {
-        annotation.map_or(StarParam::Untyped, StarParam::Typed)
-    }
 }
 
 // ---------------------------------------------------------------------------
