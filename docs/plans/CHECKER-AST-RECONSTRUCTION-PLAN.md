@@ -1,10 +1,16 @@
 # Rebuild the checker on the AST {#ASTREBUILD}
 
 > **Status (2026-08-08):** the deletion phase is complete and the rebuild has
-> begun: [Phase 0a](#ASTREBUILD-PHASE-COMPILE-CANONICAL) and
-> [0b](#ASTREBUILD-PHASE-COMPILE-OVERLOAD) are done, so the build now reaches
-> `basilisk-resolver` and stops there —
-> [0d](#ASTREBUILD-PHASE-COMPILE-MEASURE) has the measured breakdown.
+> begun: [Phase 0a](#ASTREBUILD-PHASE-COMPILE-CANONICAL),
+> [0b](#ASTREBUILD-PHASE-COMPILE-OVERLOAD), and the binding-table threading of
+> [0d](#ASTREBUILD-PHASE-COMPILE-MEASURE) are done — `basilisk-canonical`,
+> `basilisk-resolver`, and `basilisk-stubs` compile clean under workspace lints
+> and the build now stops in `basilisk-checker`. The registry-load defect that
+> silently emptied the `TypingForm` index is fixed and pinned by
+> `crates/basilisk-canonical/tests/canonical_registry.rs`. Deleted resolver
+> collectors are stubbed to empty vectors (inert, never satisfied), pinned by
+> 14 failing `annotation_tests` — [Phase 2](#ASTREBUILD-PHASE-RESOLVER) owns
+> them.
 > Basilisk's former 100% `python/typing` claim is withdrawn, the
 > project is not listed in the [official results](https://github.com/python/typing/blob/main/conformance/results/results.html),
 > and the current conformance level is **unknown**. Nothing in this plan
@@ -84,9 +90,12 @@ and LSP have still never been reached, so their error counts remain unknown.
   keystone. (The stub parser now builds its own table per `.pyi` module —
   [0b](#ASTREBUILD-PHASE-COMPILE-OVERLOAD) — which is correct: stubs are
   separate modules with separate imports.)
-- `crates/basilisk-resolver/tests/canonical_registry.rs` does not exist. The 92
-  registry entries in `resources/typing_symbols.toml` are unvalidated against
-  bundled typeshed.
+- `crates/basilisk-canonical/tests/canonical_registry.rs` now pins the load
+  contract: every `[[symbol]]` entry in `resources/typing_symbols.toml` must
+  resolve through the live registry to a `TypingForm` (a parse failure was
+  silently degrading to an empty index, deadening every `form_of` in the
+  workspace). Validation of the entries **against bundled typeshed** is still
+  missing — that half stays a [Phase 1](#ASTREBUILD-PHASE-BINDING) item.
 - `visitor/protocol.rs` is an empty module. `visitor/enum_checks.rs` retains
   only an unrelated builtin-attribute constant.
 - `visitor/protocol_ext.rs` keeps `base_type_name` / `unqualified_base`, which
@@ -437,8 +446,11 @@ already take `&BindingTable` and decide through `form_of`. They are correct and
 they are unreachable — nothing constructs a table or passes one. Threading it is
 what makes them live, and it is the cheapest way to shrink the error count.
 
-- [ ] Thread `&BindingTable` from `visitor::collect` to the 13 migrated
-      predicates, closing the 7 arity errors.
+- [x] Thread `&BindingTable` from `visitor::collect` to the 13 migrated
+      predicates, closing the 7 arity errors. `visitor::collect` builds one
+      table and passes it through `core::collect_from_body` (via
+      `CollectSinks`), the typevar collector, and the `Final` violation walk;
+      the resolver compiles clean under workspace lints.
 - [ ] Rebuild the 17 collectors ([Phase 2](#ASTREBUILD-PHASE-RESOLVER)); only
       `collect_typevar_calls` is recoverable from history, and only its
       traversal — see [ASTREBUILD-SALVAGE-COLLECTORS](#ASTREBUILD-SALVAGE-COLLECTORS).
@@ -457,8 +469,13 @@ Deleted under the [CLAUDE.md](../../CLAUDE.md) protocol, with two failing tests
 left behind in `tests/resolver/test_pep695.rs` pinning both directions. The
 explicit `outer_typeparams` membership test remains and is lawful.
 
-- [ ] Make those two tests pass by resolving the bound expression through the
-      module's bindings, not by restoring a name-shape guess.
+- [x] Make those two tests pass by resolving the bound expression through the
+      module's bindings, not by restoring a name-shape guess. `typevar.rs`
+      resolves factory callees via `factory_form(bindings, …)` and decides
+      outer-parameter references by explicit `outer_typeparams` membership;
+      both directions pass
+      (`pep695_bound_referencing_an_outer_multiletter_typeparam_is_a_violation`,
+      `pep695_bound_naming_a_real_class_is_not_an_outer_typeparam`).
 
 ### Phase 1 — deliver binding resolution to consumers {#ASTREBUILD-PHASE-BINDING}
 
@@ -466,8 +483,9 @@ The keystone. Every later phase depends only on this.
 
 - [ ] Add `pub bindings: BindingTable` to `ResolvedModule`, built once in
       `visitor::collect` from the module body.
-- [ ] Thread it through `core::collect_from_body` so collectors can consult it
-      while building their records.
+- [x] Thread it through `core::collect_from_body` so collectors can consult it
+      while building their records. Done as part of 0d: `&BindingTable` is the
+      first parameter of every collection walk in `visitor/core.rs`.
 - [ ] Hang the parsed AST on the analysis context. 28 rules currently call
       `shared::parse_module(module)` and re-parse the file; that is
       O(rules × source) and it is the natural place for the binding table to

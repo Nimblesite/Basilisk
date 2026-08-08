@@ -59,7 +59,7 @@ fn parse_pyi_file_for_target_selects_the_matching_guarded_branch() {
     let mut tmp = tempfile::NamedTempFile::new().expect("create temp file");
     writeln!(
         tmp,
-        "if sys.version_info >= (3, 11):\n    modern: int\nelse:\n    legacy: str"
+        "import sys\nif sys.version_info >= (3, 11):\n    modern: int\nelse:\n    legacy: str"
     )
     .expect("write");
     let target = StubTarget {
