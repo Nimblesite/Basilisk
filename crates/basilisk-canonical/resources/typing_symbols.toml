@@ -261,6 +261,16 @@ name = "abstractmethod"
 form = "abstract-method"
 
 [[symbol]]
+modules = ["builtins"]
+name = "staticmethod"
+form = "static-method"
+
+[[symbol]]
+modules = ["builtins"]
+name = "classmethod"
+form = "class-method"
+
+[[symbol]]
 modules = ["abc"]
 name = "ABC"
 form = "abstract-base"

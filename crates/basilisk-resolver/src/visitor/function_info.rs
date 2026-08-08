@@ -32,6 +32,18 @@ fn has_decorator_form(bindings: &BindingTable, decorators: &[Decorator], form: T
         .any(|decorator| bindings.form_of(&decorator.expression) == Some(form))
 }
 
+/// Does any decorator resolve to `form`, extending resolution to the builtin
+/// scope for a bare, unrebound builtin name (`@staticmethod` needs no import)?
+fn has_builtin_decorator_form(
+    bindings: &BindingTable,
+    decorators: &[Decorator],
+    form: TypingForm,
+) -> bool {
+    decorators
+        .iter()
+        .any(|decorator| bindings.form_of_with_builtins(&decorator.expression) == Some(form))
+}
+
 pub(super) fn function_info_from(
     bindings: &BindingTable,
     func: &StmtFunctionDef,
@@ -126,8 +138,21 @@ pub(super) fn function_info_from(
         local_vars,
         local_unannotated_vars,
         is_overload: has_decorator_form(bindings, &func.decorator_list, TypingForm::Overload),
-        is_staticmethod: false,
-        is_classmethod: false,
+        is_staticmethod: has_builtin_decorator_form(
+            bindings,
+            &func.decorator_list,
+            TypingForm::StaticMethod,
+        ),
+        is_classmethod: has_builtin_decorator_form(
+            bindings,
+            &func.decorator_list,
+            TypingForm::ClassMethod,
+        ),
+        is_abstractmethod: has_decorator_form(
+            bindings,
+            &func.decorator_list,
+            TypingForm::AbstractMethod,
+        ),
         is_no_type_check: has_decorator_form(
             bindings,
             &func.decorator_list,

@@ -15,33 +15,59 @@
 //! import typing as t; t.ClassVar        # t.X    -> typing.ClassVar
 //! class ClassVar: ...                   # local  -> not a specification form
 //! ```
+//!
+//! Scope and order. Only statements that execute in the module's own frame
+//! contribute bindings: an import inside a `def` or `class` body binds that
+//! scope, never the module's. Bindings are POSITIONAL — a use refers to the
+//! latest module-level binding at or before its own offset — so a later
+//! rebind does not corrupt earlier uses, and an import placed after a rebind
+//! wins for uses after the import.
+//!
+//! Known gaps, recorded rather than guessed around: assignment expressions
+//! (`:=`) inside module-level expressions are not collected, and a star
+//! import from a module the registry does not describe contributes no
+//! bindings. A module that rebinds a specification name through either still
+//! resolves the earlier import for later uses.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
-use ruff_python_ast::{Expr, Stmt};
+use ruff_python_ast::{ExceptHandler, Expr, Pattern, Stmt};
+use ruff_text_size::{Ranged, TextSize};
 
-use crate::form::{form_at, form_in_module, CanonicalSymbol, TypingForm};
+use crate::form::{form_at, CanonicalSymbol, TypingForm};
+use crate::registry::registry;
 
 /// The name a star-import binds, as it appears in the AST.
 const STAR_IMPORT: &str = "*";
 
-/// Every name a module binds, and what each one refers to.
+/// One module-level binding of a name, at a statement position.
+#[derive(Debug, Clone)]
+struct BindingEvent {
+    /// Start offset of the binding statement.
+    offset: TextSize,
+    /// What the name refers to from this point on.
+    kind: BindingKind,
+}
+
+/// What a binding makes a name refer to.
+#[derive(Debug, Clone)]
+enum BindingKind {
+    /// A definition imported from another module.
+    Symbol(CanonicalSymbol),
+    /// A module object (`import x`, `import x as y`).
+    Module(String),
+    /// A local definition or assignment — not an imported symbol.
+    LocalDefinition,
+}
+
+/// Every name the module scope binds, and what each one refers to where.
 ///
 /// Built once per module from its AST. Lookups are pure functions of the
-/// bindings — no source text is consulted.
+/// bindings and the use-site offset — no source text is consulted.
 #[derive(Debug, Default, Clone)]
 pub struct BindingTable {
-    /// Local name → the definition it was imported from.
-    /// `from typing import ClassVar as CV` → `CV` → `typing.ClassVar`.
-    symbols: HashMap<String, CanonicalSymbol>,
-    /// Local name → the module it refers to.
-    /// `import typing as t` → `t` → `typing`.
-    modules: HashMap<String, String>,
-    /// Modules star-imported into this one.
-    star_modules: Vec<String>,
-    /// Module-level names rebound by a definition or assignment. A rebound
-    /// name is NOT the imported symbol, however it is spelled.
-    shadowed: HashSet<String>,
+    /// Name → its binding events, ascending by offset.
+    names: HashMap<String, Vec<BindingEvent>>,
 }
 
 impl BindingTable {
@@ -49,31 +75,150 @@ impl BindingTable {
     #[must_use]
     pub fn from_module(body: &[Stmt]) -> Self {
         let mut table = Self::default();
-        table.collect_imports(body);
-        table.collect_module_level_shadows(body);
+        table.collect(body);
+        for events in table.names.values_mut() {
+            events.sort_by_key(|event| event.offset);
+        }
         table
     }
 
-    /// Collect every import in the module, at any nesting depth.
-    ///
-    /// Imports under `if TYPE_CHECKING:` or in a `try`/`except ImportError`
-    /// fallback still bind at module level, so the walk descends into compound
-    /// statements rather than looking only at the top level.
-    fn collect_imports(&mut self, body: &[Stmt]) {
+    /// Collect binding events from statements executing in the module frame.
+    fn collect(&mut self, body: &[Stmt]) {
         for stmt in body {
-            match stmt {
-                Stmt::Import(import) => self.bind_plain_import(import),
-                Stmt::ImportFrom(import) => self.bind_from_import(import),
-                _ => {}
+            self.collect_stmt(stmt);
+        }
+    }
+
+    /// Binding events of one module-frame statement.
+    fn collect_stmt(&mut self, stmt: &Stmt) {
+        let offset = stmt.range().start();
+        match stmt {
+            Stmt::Import(import) => self.bind_plain_import(offset, import),
+            Stmt::ImportFrom(import) => self.bind_from_import(offset, import),
+            Stmt::ClassDef(class) => self.push_local(offset, class.name.as_str()),
+            Stmt::FunctionDef(function) => self.push_local(offset, function.name.as_str()),
+            Stmt::Assign(assign) => self.bind_each_target(offset, &assign.targets),
+            Stmt::AnnAssign(assign) => self.bind_target(offset, &assign.target),
+            Stmt::AugAssign(assign) => self.bind_target(offset, &assign.target),
+            Stmt::TypeAlias(alias) => self.bind_target(offset, &alias.name),
+            Stmt::Delete(delete) => self.bind_each_target(offset, &delete.targets),
+            _ => self.collect_compound(offset, stmt),
+        }
+    }
+
+    /// Descend into compound statements whose bodies run in the module frame.
+    ///
+    /// `def` and `class` bodies are NOT among them: they execute in their own
+    /// scopes, so nothing inside them binds a module-level name.
+    fn collect_compound(&mut self, offset: TextSize, stmt: &Stmt) {
+        match stmt {
+            Stmt::If(node) => {
+                self.collect(&node.body);
+                for clause in &node.elif_else_clauses {
+                    self.collect(&clause.body);
+                }
             }
-            for nested in nested_bodies(stmt) {
-                self.collect_imports(nested);
+            Stmt::While(node) => {
+                self.collect(&node.body);
+                self.collect(&node.orelse);
             }
+            Stmt::For(node) => {
+                self.bind_target(offset, &node.target);
+                self.collect(&node.body);
+                self.collect(&node.orelse);
+            }
+            Stmt::With(node) => self.collect_with(offset, node),
+            Stmt::Try(node) => self.collect_try(node),
+            Stmt::Match(node) => self.collect_match(node),
+            _ => {}
+        }
+    }
+
+    /// `with … as target:` targets and body.
+    fn collect_with(&mut self, offset: TextSize, node: &ruff_python_ast::StmtWith) {
+        for item in &node.items {
+            if let Some(target) = &item.optional_vars {
+                self.bind_target(offset, target);
+            }
+        }
+        self.collect(&node.body);
+    }
+
+    /// `try` body, handlers (and their `as` names), `else`, `finally`.
+    fn collect_try(&mut self, node: &ruff_python_ast::StmtTry) {
+        self.collect(&node.body);
+        for handler in &node.handlers {
+            let ExceptHandler::ExceptHandler(handler) = handler;
+            if let Some(name) = &handler.name {
+                self.push_local(name.range().start(), name.as_str());
+            }
+            self.collect(&handler.body);
+        }
+        self.collect(&node.orelse);
+        self.collect(&node.finalbody);
+    }
+
+    /// `match` case bodies and the names their patterns capture.
+    fn collect_match(&mut self, node: &ruff_python_ast::StmtMatch) {
+        for case in &node.cases {
+            let offset = case.pattern.range().start();
+            self.bind_pattern(offset, &case.pattern);
+            self.collect(&case.body);
+        }
+    }
+
+    /// The names a match pattern captures.
+    fn bind_pattern(&mut self, offset: TextSize, pattern: &Pattern) {
+        match pattern {
+            Pattern::MatchValue(_) | Pattern::MatchSingleton(_) => {}
+            Pattern::MatchSequence(node) => self.bind_patterns(offset, &node.patterns),
+            Pattern::MatchMapping(node) => self.bind_match_mapping(offset, node),
+            Pattern::MatchClass(node) => self.bind_match_class(offset, node),
+            Pattern::MatchStar(node) => {
+                if let Some(name) = &node.name {
+                    self.push_local(offset, name.as_str());
+                }
+            }
+            Pattern::MatchAs(node) => self.bind_match_as(offset, node),
+            Pattern::MatchOr(node) => self.bind_patterns(offset, &node.patterns),
+        }
+    }
+
+    /// Each pattern in a sequence.
+    fn bind_patterns(&mut self, offset: TextSize, patterns: &[Pattern]) {
+        for pattern in patterns {
+            self.bind_pattern(offset, pattern);
+        }
+    }
+
+    /// `case {…, **rest}:` — value sub-patterns and the rest capture.
+    fn bind_match_mapping(&mut self, offset: TextSize, node: &ruff_python_ast::PatternMatchMapping) {
+        self.bind_patterns(offset, &node.patterns);
+        if let Some(rest) = &node.rest {
+            self.push_local(offset, rest.as_str());
+        }
+    }
+
+    /// `case Point(x=px):` — positional and keyword sub-patterns.
+    fn bind_match_class(&mut self, offset: TextSize, node: &ruff_python_ast::PatternMatchClass) {
+        self.bind_patterns(offset, &node.arguments.patterns);
+        for keyword in &node.arguments.keywords {
+            self.bind_pattern(offset, &keyword.pattern);
+        }
+    }
+
+    /// `case … as name:` — the inner pattern and the capture name.
+    fn bind_match_as(&mut self, offset: TextSize, node: &ruff_python_ast::PatternMatchAs) {
+        if let Some(pattern) = &node.pattern {
+            self.bind_pattern(offset, pattern);
+        }
+        if let Some(name) = &node.name {
+            self.push_local(offset, name.as_str());
         }
     }
 
     /// `import X`, `import X.Y`, `import X as Z`.
-    fn bind_plain_import(&mut self, import: &ruff_python_ast::StmtImport) {
+    fn bind_plain_import(&mut self, offset: TextSize, import: &ruff_python_ast::StmtImport) {
         for alias in &import.names {
             let module = alias.name.as_str();
             // `import X.Y as Z` binds Z to the submodule X.Y; a plain
@@ -85,108 +230,123 @@ impl BindingTable {
                 },
                 |asname| (asname.to_string(), module.to_owned()),
             );
-            let _ = self.modules.insert(local, target);
+            self.push_event(local, offset, BindingKind::Module(target));
         }
     }
 
     /// `from X import A`, `from X import A as B`, `from X import *`.
     ///
-    /// Relative imports are skipped: they cannot reach a specification module.
-    fn bind_from_import(&mut self, import: &ruff_python_ast::StmtImportFrom) {
-        if import.level > 0 {
-            return;
-        }
-        let Some(module) = import
-            .module
-            .as_ref()
-            .map(ruff_python_ast::Identifier::as_str)
-        else {
-            return;
-        };
+    /// A relative import cannot reach a specification module, but it still
+    /// BINDS its local names, so each becomes a local-definition event.
+    fn bind_from_import(&mut self, offset: TextSize, import: &ruff_python_ast::StmtImportFrom) {
+        let module = (import.level == 0)
+            .then(|| import.module.as_ref())
+            .flatten()
+            .map(ruff_python_ast::Identifier::as_str);
         for alias in &import.names {
             let name = alias.name.as_str();
             if name == STAR_IMPORT {
-                self.star_modules.push(module.to_owned());
+                if let Some(module) = module {
+                    self.bind_star_import(offset, module);
+                }
                 continue;
             }
             let local = alias
                 .asname
                 .as_ref()
                 .map_or(name, ruff_python_ast::Identifier::as_str);
-            let _ = self
-                .symbols
-                .insert(local.to_owned(), CanonicalSymbol::new(module, name));
+            let kind = module.map_or(BindingKind::LocalDefinition, |module| {
+                BindingKind::Symbol(CanonicalSymbol::new(module, name))
+            });
+            self.push_event(local.to_owned(), offset, kind);
         }
     }
 
-    /// Record module-level names bound by something other than an import.
-    ///
-    /// A module-level `class Protocol:` or `Protocol = object` rebinds the
-    /// name, so uses of it are not the specification form.
-    fn collect_module_level_shadows(&mut self, body: &[Stmt]) {
-        for stmt in body {
-            match stmt {
-                Stmt::ClassDef(class) => {
-                    let _ = self.shadowed.insert(class.name.to_string());
-                }
-                Stmt::FunctionDef(function) => {
-                    let _ = self.shadowed.insert(function.name.to_string());
-                }
-                Stmt::Assign(assign) => {
-                    for target in &assign.targets {
-                        self.shadow_if_name(target);
-                    }
-                }
-                Stmt::AnnAssign(assign) => self.shadow_if_name(&assign.target),
-                _ => {}
-            }
+    /// `from M import *` for a registry module binds every specification name
+    /// M defines. A module outside the registry contributes nothing — see the
+    /// module docs.
+    fn bind_star_import(&mut self, offset: TextSize, module: &str) {
+        let Some(names) = registry().get(module) else {
+            return;
+        };
+        for name in names.keys() {
+            let symbol = CanonicalSymbol::new(module, name.clone());
+            self.push_event(name.clone(), offset, BindingKind::Symbol(symbol));
         }
     }
 
-    /// Mark a plain `Name` assignment target as shadowed.
-    fn shadow_if_name(&mut self, target: &Expr) {
-        if let Expr::Name(name) = target {
-            let _ = self.shadowed.insert(name.id.to_string());
+    /// Record binding events for an assignment-like target expression.
+    fn bind_target(&mut self, offset: TextSize, target: &Expr) {
+        match target {
+            Expr::Name(name) => self.push_local(offset, name.id.as_str()),
+            Expr::Tuple(tuple) => self.bind_each_target(offset, &tuple.elts),
+            Expr::List(list) => self.bind_each_target(offset, &list.elts),
+            Expr::Starred(starred) => self.bind_target(offset, &starred.value),
+            // Attribute and subscript targets bind no module-level name.
+            _ => {}
         }
     }
 
-    /// The definition a local name refers to, if it refers to an import.
-    #[must_use]
-    pub fn canonical_of_name(&self, name: &str) -> Option<CanonicalSymbol> {
-        if self.shadowed.contains(name) {
-            return None;
+    /// Record binding events for each target in a list.
+    fn bind_each_target(&mut self, offset: TextSize, targets: &[Expr]) {
+        for target in targets {
+            self.bind_target(offset, target);
         }
-        if let Some(symbol) = self.symbols.get(name) {
-            return Some(symbol.clone());
-        }
-        // A star-import binds every public name of the module, so a name the
-        // registry knows in a star-imported module resolves there.
-        self.star_modules
+    }
+
+    /// Append one binding event for `name`.
+    fn push_event(&mut self, name: String, offset: TextSize, kind: BindingKind) {
+        self.names
+            .entry(name)
+            .or_default()
+            .push(BindingEvent { offset, kind });
+    }
+
+    /// Append a local-definition event for `name`.
+    fn push_local(&mut self, offset: TextSize, name: &str) {
+        self.push_event(name.to_owned(), offset, BindingKind::LocalDefinition);
+    }
+
+    /// The binding governing a use of `name` at `offset`: the latest event at
+    /// or before it.
+    fn binding_at(&self, name: &str, offset: TextSize) -> Option<&BindingKind> {
+        let events = self.names.get(name)?;
+        events
             .iter()
-            .find(|module| form_in_module(module, name).is_some())
-            .map(|module| CanonicalSymbol::new(module.clone(), name))
+            .rev()
+            .find(|event| event.offset <= offset)
+            .map(|event| &event.kind)
     }
 
-    /// Whether the module binds this name itself, by import or by definition.
+    /// Whether the module scope binds this name anywhere, by import or by
+    /// definition.
     ///
     /// The question a builtin recognition must ask first. `staticmethod` is a
     /// builtin only while the module has not rebound the name — after
-    /// `from x import staticmethod` or a local `def staticmethod`, the name
-    /// refers to that definition and nothing may assume otherwise.
+    /// `from x import staticmethod`, `import staticmethod`, or a local
+    /// `def staticmethod`, the name refers to that binding and nothing may
+    /// assume otherwise. Existential on purpose: a rebinding anywhere in the
+    /// module suppresses builtin recognition conservatively.
     #[must_use]
     pub fn binds_name(&self, name: &str) -> bool {
-        self.shadowed.contains(name) || self.symbols.contains_key(name)
+        self.names.contains_key(name)
     }
 
     /// The definition an expression refers to.
     ///
     /// Unwraps the forms a specification symbol is used through: subscripting
     /// (`Final[int]`), calling (`TypeVar("T")`), and module attribute access
-    /// (`t.ClassVar`).
+    /// (`t.ClassVar`). Resolution is positional: the expression refers to the
+    /// latest module-level binding at or before its own offset.
     #[must_use]
     pub fn canonical_of(&self, expr: &Expr) -> Option<CanonicalSymbol> {
         match expr {
-            Expr::Name(name) => self.canonical_of_name(name.id.as_str()),
+            Expr::Name(name) => {
+                match self.binding_at(name.id.as_str(), name.range().start())? {
+                    BindingKind::Symbol(symbol) => Some(symbol.clone()),
+                    BindingKind::Module(_) | BindingKind::LocalDefinition => None,
+                }
+            }
             Expr::Attribute(attribute) => {
                 let module = self.module_path_of(&attribute.value)?;
                 Some(CanonicalSymbol::new(module, attribute.attr.as_str()))
@@ -204,11 +364,10 @@ impl BindingTable {
     fn module_path_of(&self, expr: &Expr) -> Option<String> {
         match expr {
             Expr::Name(name) => {
-                let id = name.id.as_str();
-                if self.shadowed.contains(id) {
-                    return None;
+                match self.binding_at(name.id.as_str(), name.range().start())? {
+                    BindingKind::Module(module) => Some(module.clone()),
+                    BindingKind::Symbol(_) | BindingKind::LocalDefinition => None,
                 }
-                self.modules.get(id).cloned()
             }
             Expr::Attribute(attribute) => {
                 let base = self.module_path_of(&attribute.value)?;
@@ -227,10 +386,25 @@ impl BindingTable {
         form_at(&self.canonical_of(expr)?)
     }
 
-    /// The specification form a local name denotes, if any.
+    /// The specification form an expression denotes, extended to the builtin
+    /// scope: a bare name the module never rebinds resolves to the form its
+    /// `builtins` definition carries.
+    ///
+    /// This is how `@staticmethod` is recognised without an import, while
+    /// `from builtins import staticmethod as sm` resolves by its binding and
+    /// a module-level `def staticmethod(…)` stops both.
     #[must_use]
-    pub fn form_of_name(&self, name: &str) -> Option<TypingForm> {
-        form_at(&self.canonical_of_name(name)?)
+    pub fn form_of_with_builtins(&self, expr: &Expr) -> Option<TypingForm> {
+        if let Some(form) = self.form_of(expr) {
+            return Some(form);
+        }
+        let Expr::Name(name) = expr else {
+            return None;
+        };
+        if self.binds_name(name.id.as_str()) {
+            return None;
+        }
+        crate::form::builtin_form_of_name(name.id.as_str())
     }
 
     /// Whether an expression denotes exactly `form`.
@@ -261,42 +435,5 @@ impl BindingTable {
         };
         self.is_form(&subscript.value, form)
             .then_some(subscript.slice.as_ref())
-    }
-}
-
-/// The statement bodies nested inside a compound statement.
-///
-/// Used to find imports wherever they appear. Returning borrowed slices keeps
-/// the walk allocation-free apart from the outer vector.
-fn nested_bodies(stmt: &Stmt) -> Vec<&[Stmt]> {
-    match stmt {
-        Stmt::If(node) => {
-            let mut bodies = vec![node.body.as_slice()];
-            bodies.extend(
-                node.elif_else_clauses
-                    .iter()
-                    .map(|clause| clause.body.as_slice()),
-            );
-            bodies
-        }
-        Stmt::Try(node) => {
-            let mut bodies = vec![
-                node.body.as_slice(),
-                node.orelse.as_slice(),
-                node.finalbody.as_slice(),
-            ];
-            bodies.extend(node.handlers.iter().map(|handler| {
-                let ruff_python_ast::ExceptHandler::ExceptHandler(handler) = handler;
-                handler.body.as_slice()
-            }));
-            bodies
-        }
-        Stmt::For(node) => vec![node.body.as_slice(), node.orelse.as_slice()],
-        Stmt::While(node) => vec![node.body.as_slice(), node.orelse.as_slice()],
-        Stmt::With(node) => vec![node.body.as_slice()],
-        Stmt::FunctionDef(node) => vec![node.body.as_slice()],
-        Stmt::ClassDef(node) => vec![node.body.as_slice()],
-        Stmt::Match(node) => node.cases.iter().map(|case| case.body.as_slice()).collect(),
-        _ => Vec::new(),
     }
 }

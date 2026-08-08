@@ -196,6 +196,13 @@ pub struct FunctionInfo {
     /// `true` when a decorator is the builtin `classmethod` and the module does
     /// not rebind that name. Implements [RESOLV-CANONICAL-BINDING].
     pub is_classmethod: bool,
+    /// `true` when a decorator resolves to `abc.abstractmethod`.
+    ///
+    /// Resolved through the module's bindings at collection time — an aliased
+    /// `from abc import abstractmethod as am` answers identically and a local
+    /// `def abstractmethod` does not answer. Implements
+    /// [RESOLV-CANONICAL-BINDING].
+    pub is_abstractmethod: bool,
     /// `true` when a decorator resolves to `typing.no_type_check`.
     ///
     /// Resolved through the module's bindings at collection time. Implements

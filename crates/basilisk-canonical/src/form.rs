@@ -136,6 +136,10 @@ pub enum TypingForm {
     NoTypeCheck,
     /// `@abstractmethod` — a concrete subclass must implement it.
     AbstractMethod,
+    /// `staticmethod` — the builtin static-method descriptor.
+    StaticMethod,
+    /// `classmethod` — the builtin class-method descriptor.
+    ClassMethod,
     /// `abc.ABC` — the abstract base class.
     AbstractBase,
     /// `abc.ABCMeta` — the abstract base metaclass.
@@ -325,6 +329,16 @@ pub fn form_in_module(module: &str, name: &str) -> Option<TypingForm> {
         .get(module)
         .and_then(|names| names.get(name))
         .copied()
+}
+
+/// The form `name` carries when it resolves to the builtin scope.
+///
+/// The builtin scope is the outermost LEGB scope; its definition site is the
+/// `builtins` module, so the lookup is still by definition site. Callers must
+/// first establish that the module does not bind `name` itself.
+#[must_use]
+pub(crate) fn builtin_form_of_name(name: &str) -> Option<TypingForm> {
+    form_in_module("builtins", name)
 }
 
 /// Every (module, name) definition site in the registry, for validation.
