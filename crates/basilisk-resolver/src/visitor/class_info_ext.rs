@@ -102,6 +102,8 @@ pub(super) fn class_info_from(
     match_stmts: &mut Vec<MatchStmtInfo>,
 ) -> ClassInfo {
     let bases = extract_class_bases(class);
+    let forms = base_forms(bindings, class);
+    let dataclass = dataclass_decoration(bindings, class);
 
     let (attributes, method_names, method_decorators) =
         collect_class_body(bindings, class, functions, match_stmts);

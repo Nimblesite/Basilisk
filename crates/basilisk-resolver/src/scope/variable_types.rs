@@ -72,6 +72,11 @@ pub struct AttributeInfo {
     /// Resolved through the module's bindings at collection time, so consumers
     /// never re-derive it from annotation text. Implements [RESOLV-CANONICAL-BINDING].
     pub is_final: bool,
+    /// `true` when the annotation is the `ClassVar` qualifier, bare or subscripted.
+    ///
+    /// Resolved through the module's bindings at collection time, so consumers
+    /// never re-derive it from annotation text. Implements [RESOLV-CANONICAL-BINDING].
+    pub is_class_var: bool,
     /// `true` when the field is keyword-only in a dataclass `__init__`.
     ///
     /// A field is `kw_only` when:

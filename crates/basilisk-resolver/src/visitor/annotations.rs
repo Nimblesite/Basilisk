@@ -37,6 +37,11 @@ pub(super) fn annotation_is_final(bindings: &BindingTable, ann: &Expr) -> bool {
     bindings.is_form(ann, TypingForm::FinalQualifier)
 }
 
+/// Whether an annotation is the `ClassVar` qualifier, bare or subscripted.
+pub(super) fn annotation_is_class_var(bindings: &BindingTable, ann: &Expr) -> bool {
+    bindings.is_form(ann, TypingForm::ClassVar)
+}
+
 /// Whether a `ReadOnly` qualifier appears anywhere within an annotation.
 ///
 /// Recurses through the composition forms an item type can be built from, so
