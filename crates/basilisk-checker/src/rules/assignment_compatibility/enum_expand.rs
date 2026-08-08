@@ -11,7 +11,6 @@ use std::collections::{HashMap, HashSet};
 
 use basilisk_resolver::{AttributeInfo, ResolvedModule};
 
-use crate::rules::guards::is_enum_class;
 use crate::types::InferredType;
 
 /// Member names (lowercase) for every enum class in a module, keyed by the
@@ -27,7 +26,7 @@ pub(super) fn collect_enum_member_sets(module: &ResolvedModule) -> EnumMembers {
     module
         .classes
         .iter()
-        .filter(|class| is_enum_class(class))
+        .filter(|class| class.is_enum)
         .map(|class| {
             let members = class
                 .attributes

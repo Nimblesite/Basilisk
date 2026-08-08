@@ -25,7 +25,6 @@ use ruff_python_ast::{Expr, Stmt};
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
-use super::guards::is_enum_class;
 use super::shared::parse_module;
 use super::Rule;
 
@@ -47,7 +46,7 @@ impl Rule for EnumMemberAccess {
         let enum_names: HashSet<&str> = module
             .classes
             .iter()
-            .filter(|cls| is_enum_class(cls))
+            .filter(|cls| cls.is_enum)
             .map(|cls| cls.name.as_str())
             .collect();
         if enum_names.is_empty() {
@@ -63,7 +62,13 @@ impl Rule for EnumMemberAccess {
 
         // enum class name -> member names whose guard is statically false at the target.
         let mut excluded: HashMap<String, HashSet<String>> = HashMap::new();
-        collect_excluded_members(&parsed.ast.body, &enum_names, target_version, &mut excluded);
+        collect_excluded_members(
+            module,
+            &parsed.ast.body,
+            &enum_names,
+            target_version,
+            &mut excluded,
+        );
         if excluded.is_empty() {
             return;
         }
