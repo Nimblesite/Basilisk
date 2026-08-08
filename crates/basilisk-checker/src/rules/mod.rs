@@ -167,7 +167,6 @@ pub(crate) mod tuples_type_form_2;
 pub(crate) mod typeddicts_alt_syntax;
 pub(crate) mod typeddicts_class_syntax;
 pub(crate) mod typeddicts_class_syntax_2;
-pub(crate) mod typeddicts_extra_items;
 pub(crate) mod typeddicts_inheritance;
 pub(crate) mod typeddicts_operations;
 pub(crate) mod typeddicts_readonly;
@@ -375,7 +374,6 @@ fn all_rules() -> &'static [&'static dyn Rule] {
         &missing_type_stubs::MissingTypeStubs,
         &imports_module_attribute::ModuleAttributeUndefined,
         &version_target_syntax::Pep695BelowTargetViolation,
-        &typeddicts_extra_items::TypedDictExtraItemsViolation,
         &dataclasses_inheritance::DataclassFieldOrder,
         &overloads_consistency_2::OverloadDecoratorConsistency,
         &classes_override_3::OverrideWithoutBaseMethod,
