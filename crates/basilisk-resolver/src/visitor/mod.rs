@@ -1,7 +1,6 @@
 //! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
 //! AST visitor that collects function definitions and module-level information.
 
-mod annotated_tuple_index;
 mod annotations;
 mod assert_narrow;
 mod assigns;
@@ -199,20 +198,8 @@ fn build_resolved_module(
     // and depended on the equally-deleted `TypeVar` census. Inert pending
     // [ASTREBUILD-PHASE-RESOLVER].
     let type_alias_type_violations = Vec::new();
-    let mut tuple_index_violations = key_lambda::collect_key_lambda_tuple_violations(
-        stmts,
-        &functions,
-        &module_vars,
-        &module.source,
-    );
-    tuple_index_violations.extend(
-        annotated_tuple_index::collect_annotated_tuple_index_violations(
-            stmts,
-            &functions,
-            &module_vars,
-            &module.source,
-        ),
-    );
+    let tuple_index_violations =
+        key_lambda::collect_key_lambda_tuple_violations(stmts, &functions, &module_vars);
     ResolvedModule {
         bindings: crate::scope::ModuleBindings::new(bindings),
         functions,

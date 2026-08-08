@@ -14,8 +14,6 @@ use basilisk_resolver::{FunctionInfo, ResolvedModule};
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
-use super::guards::is_protocol_class;
-use super::shared::overload_decorated;
 
 use super::Rule;
 
@@ -47,16 +45,15 @@ impl Rule for MissingOverloadImpl {
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        // Whether a decorator IS `typing.overload` is a binding question,
-        // answered by the resolver's tables ([#380]) — never by its spelling.
-        let Some(resolver) = types.annotations() else {
+        // Bail on parse errors — those are reported separately as BSK-0000.
+        if types.annotations().is_none() {
             return;
-        };
+        }
         // Build a set of Protocol class names so we can exempt their methods.
         let protocol_classes: std::collections::HashSet<&str> = module
             .classes
             .iter()
-            .filter(|cls| is_protocol_class(cls))
+            .filter(|cls| cls.is_protocol)
             .map(|cls| cls.name.as_str())
             .collect();
 
@@ -71,20 +68,15 @@ impl Rule for MissingOverloadImpl {
         }
 
         for ((class_name, name), funcs) in &groups {
-            let overloaded: Vec<&&FunctionInfo> = funcs
-                .iter()
-                .filter(|f| overload_decorated(resolver, &f.decorators))
-                .collect();
+            let overloaded: Vec<&&FunctionInfo> = funcs.iter().filter(|f| f.is_overload).collect();
 
             // No @overload decorators in this group — nothing to check.
             if overloaded.is_empty() {
                 continue;
             }
 
-            let non_overloaded: Vec<&&FunctionInfo> = funcs
-                .iter()
-                .filter(|f| !overload_decorated(resolver, &f.decorators))
-                .collect();
+            let non_overloaded: Vec<&&FunctionInfo> =
+                funcs.iter().filter(|f| !f.is_overload).collect();
 
             // Case 1: ALL definitions carry @overload (no implementation).
             if non_overloaded.is_empty() {

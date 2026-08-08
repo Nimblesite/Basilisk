@@ -2,20 +2,18 @@
 //! Tuple-index checking for `key=` lambda parameters.
 //!
 //! `sorted(items, key=lambda pair: pair[4])` binds `pair` to an element of
-//! `items`. When `items` is provably a collection of fixed-length tuples —
-//! from an annotation (`list[tuple[str, int, int]]`) or a literal of uniform
-//! tuples — an out-of-range literal index on the lambda parameter is a static
-//! error (GitHub #284 follow-up). Emitted as [`TupleIndexViolation`]s, which
-//! the `tuples_index` rule reports.
+//! `items`. When `items` is provably a literal collection of uniform fixed-length
+//! tuples, an out-of-range literal index on the lambda parameter is a static
+//! error (GitHub #284 follow-up). Emitted as [`TupleIndexViolation`]s, which the
+//! `tuples_index` rule reports.
 
 use ruff_python_ast::visitor::{walk_expr, Visitor};
 use ruff_python_ast::{Expr, ExprCall, ExprLambda, Number, Stmt, UnaryOp};
 use ruff_text_size::Ranged;
 
-use crate::scope::{FunctionInfo, RhsKind, Span, TupleIndexViolation, VariableInfo};
+use crate::scope::{FunctionInfo, RhsKind, TupleIndexViolation, VariableInfo};
 
 use super::core::text_range_to_span;
-use super::typeddict::split_top_level_args;
 
 /// Builtins whose `key=` callback receives one element of the first argument
 /// (receiver for the `list.sort` method form).
@@ -26,12 +24,10 @@ pub(super) fn collect_key_lambda_tuple_violations(
     stmts: &[Stmt],
     functions: &[FunctionInfo],
     module_vars: &[VariableInfo],
-    source: &str,
 ) -> Vec<TupleIndexViolation> {
     let mut collector = KeyLambdaCollector {
         functions,
         module_vars,
-        source,
         out: Vec::new(),
     };
     for stmt in stmts {
@@ -43,7 +39,6 @@ pub(super) fn collect_key_lambda_tuple_violations(
 struct KeyLambdaCollector<'a> {
     functions: &'a [FunctionInfo],
     module_vars: &'a [VariableInfo],
-    source: &'a str,
     out: Vec<TupleIndexViolation>,
 }
 
@@ -90,7 +85,7 @@ impl KeyLambdaCollector<'_> {
             }
             for param in &func.parameters {
                 if param.name == name {
-                    return self.annotation_tuple_len(param.annotation_span);
+                    return None;
                 }
             }
         }
@@ -104,15 +99,9 @@ impl KeyLambdaCollector<'_> {
     /// uniform tuple length of its literal right-hand side.
     fn variable_tuple_len(&self, var: &VariableInfo) -> Option<usize> {
         if var.annotation_span.is_some() {
-            return self.annotation_tuple_len(var.annotation_span);
+            return None;
         }
         uniform_tuple_len_from_rhs(&var.rhs_kind)
-    }
-
-    /// Tuple length from a container annotation like `list[tuple[str, int]]`.
-    fn annotation_tuple_len(&self, span: Option<Span>) -> Option<usize> {
-        let ann = span?.slice_source(self.source)?;
-        fixed_tuple_len_from_container_annotation(ann)
     }
 }
 
@@ -238,44 +227,4 @@ fn uniform_tuple_len_from_rhs(rhs: &RhsKind) -> Option<usize> {
     });
     let first = lens.next()??;
     lens.all(|len| len == Some(first)).then_some(first)
-}
-
-/// The fixed tuple length inside a one-argument container annotation:
-/// `list[tuple[str, int, int]]` → `Some(3)`. Variadic inner tuples
-/// (`tuple[int, ...]`) and non-container bases yield `None`.
-fn fixed_tuple_len_from_container_annotation(annotation: &str) -> Option<usize> {
-    const ELEMENT_CONTAINERS: &[&str] = &["list", "set", "frozenset"];
-    let annotation = annotation.trim();
-    let bracket = annotation.find('[')?;
-    let base = annotation
-        .get(..bracket)?
-        .rsplit('.')
-        .next()?
-        .trim()
-        .to_ascii_lowercase();
-    if !ELEMENT_CONTAINERS.contains(&base.as_str()) {
-        return None;
-    }
-    let inner = annotation.get(bracket + 1..annotation.len().checked_sub(1)?)?;
-    fixed_tuple_len(inner.trim())
-}
-
-/// The length of a fixed-size tuple annotation: `tuple[str, int]` → `Some(2)`.
-///
-/// Variadic (`tuple[int, ...]`) and PEP 646 unpacked (`tuple[int, *Ts]`,
-/// `tuple[int, *tuple[str, ...]]`) forms have no fixed length and yield `None`.
-pub(super) fn fixed_tuple_len(annotation: &str) -> Option<usize> {
-    let inner = annotation.strip_prefix("tuple[")?.strip_suffix(']')?;
-    let elements = split_top_level_args(inner);
-    if elements
-        .iter()
-        .any(|e| e.trim() == "..." || e.trim().starts_with('*'))
-    {
-        return None;
-    }
-    match elements.as_slice() {
-        [] => Some(0),
-        [only] if only.trim().is_empty() => Some(0),
-        _ => Some(elements.len()),
-    }
 }

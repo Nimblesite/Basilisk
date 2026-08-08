@@ -52,6 +52,12 @@ mod contextmanagers_more;
 #[path = "golden/dataclasses_tests.rs"]
 mod dataclasses;
 
+#[path = "golden/directives_tests.rs"]
+mod directives;
+
+#[path = "golden/directives_more_tests.rs"]
+mod directives_more;
+
 #[path = "golden/enums_tests.rs"]
 mod enums;
 
@@ -67,6 +73,12 @@ mod introspection_stdlib;
 #[path = "golden/introspection_stdlib_more_tests.rs"]
 mod introspection_stdlib_more;
 
+#[path = "golden/literals_tests.rs"]
+mod literals;
+
+#[path = "golden/literals_more_tests.rs"]
+mod literals_more;
+
 #[path = "golden/narrowing_tests.rs"]
 mod narrowing;
 
@@ -79,6 +91,9 @@ mod overloads;
 #[path = "golden/overloads_more_tests.rs"]
 mod overloads_more;
 
+#[path = "golden/override_tests.rs"]
+mod r#override;
+
 #[path = "golden/protocols_structural_tests.rs"]
 mod protocols_structural;
 
@@ -88,5 +103,26 @@ mod qualifiers;
 #[path = "golden/qualifiers_more_tests.rs"]
 mod qualifiers_more;
 
+#[path = "golden/self_type_tests.rs"]
+mod self_type;
+
+#[path = "golden/specialtypes_tests.rs"]
+mod specialtypes;
+
 #[path = "golden/typeddicts_tests.rs"]
 mod typeddicts;
+
+#[path = "golden/typeddicts_keys_tests.rs"]
+mod typeddicts_keys;
+
+#[path = "golden/typeddicts_readonly_tests.rs"]
+mod typeddicts_readonly;
+
+#[path = "golden/typeis_tests.rs"]
+mod typeis;
+
+#[path = "golden/typevar_defaults_tests.rs"]
+mod typevar_defaults;
+
+#[path = "golden/typevartuple_tests.rs"]
+mod typevartuple;

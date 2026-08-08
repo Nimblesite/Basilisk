@@ -14,7 +14,6 @@ use basilisk_resolver::{FunctionInfo, ResolvedModule, Span};
 use crate::annotation::AnnotationResolver;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
-use super::shared::overload_decorated;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
@@ -48,11 +47,10 @@ impl Rule for OverloadDecoratorConsistency {
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        // Overload membership is a binding question ([#380]); the
-        // staticmethod/classmethod checks below stay spelling-based.
-        let Some(resolver) = types.annotations() else {
+        // Bail on parse errors — those are reported separately as BSK-0000.
+        if types.annotations().is_none() {
             return;
-        };
+        }
         let mut groups: HashMap<(Option<&str>, &str), Vec<&FunctionInfo>> = HashMap::new();
         for func in &module.functions {
             groups
@@ -62,27 +60,17 @@ impl Rule for OverloadDecoratorConsistency {
         }
 
         for funcs in groups.values() {
-            check_group(funcs, resolver, &module.path, diagnostics);
+            check_group(funcs, &module.path, diagnostics);
         }
     }
 }
 
-fn check_group(
-    funcs: &[&FunctionInfo],
-    resolver: &AnnotationResolver<'_>,
-    path: &str,
-    out: &mut Vec<Diagnostic>,
-) {
-    let overloads: Vec<&&FunctionInfo> = funcs
-        .iter()
-        .filter(|f| overload_decorated(resolver, &f.decorators))
-        .collect();
+fn check_group(funcs: &[&FunctionInfo], path: &str, out: &mut Vec<Diagnostic>) {
+    let overloads: Vec<&&FunctionInfo> = funcs.iter().filter(|f| f.is_overload).collect();
     if overloads.is_empty() {
         return;
     }
-    let implementation = funcs
-        .iter()
-        .find(|f| !overload_decorated(resolver, &f.decorators));
+    let implementation = funcs.iter().find(|f| !f.is_overload);
 
     match implementation {
         // Group WITH an implementation.
