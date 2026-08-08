@@ -11,9 +11,13 @@
 mod binding;
 mod form;
 mod registry;
+mod relation;
+mod type_node;
 
 pub use binding::BindingTable;
 pub use form::{
     all_definition_sites, form_at, form_in_module, module_is_registered, CanonicalSymbol,
     TypingForm,
 };
+pub use relation::{assignable, equivalent};
+pub use type_node::{BuiltinClass, LiteralValue, TypeNode};

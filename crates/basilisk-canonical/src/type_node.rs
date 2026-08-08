@@ -300,7 +300,11 @@ fn union_of(members: Vec<TypeNode>) -> TypeNode {
     for member in members {
         match member {
             TypeNode::Union(inner) => {
-                flat.extend(inner.into_iter().filter(|node| !flat.contains(node)));
+                for node in inner {
+                    if !flat.contains(&node) {
+                        flat.push(node);
+                    }
+                }
             }
             node => {
                 if !flat.contains(&node) {
