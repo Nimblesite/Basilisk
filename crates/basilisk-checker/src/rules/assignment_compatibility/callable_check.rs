@@ -1,3 +1,27 @@
+// ############################################################################
+// # BROKEN — THIS FILE DOES NOT COMPILE. DO NOT "FIX" IT BY RESTORING TEXT   #
+// # MATCHING.                                                                #
+// #                                                                          #
+// # Deleted helper this file called:                                         #
+// #   crate::subtyping (SubtypingContext::is_subtype / name_subtype)
+// #                                                                          #
+// # That helper decided types from the SPELLING of source text (lowercased   #
+// # annotation strings, `"int"`/`"str"`/`"object"` literal matching, `|`     #
+// # splitting, `starts_with("tuple[")`). It was deleted, not replaced.       #
+// #                                                                          #
+// # The call sites below are LEFT BROKEN ON PURPOSE. They are the map of     #
+// # what must be rebuilt on the resolved AST — resolved bindings, canonical  #
+// # `TypeNode`, and `assignable`/`equivalent` — or made to abstain.          #
+// #                                                                          #
+// # Restoring the deleted helper, vendoring a copy of it, or re-deriving a   #
+// # type from source text anywhere below is FORBIDDEN.                       #
+// #                                                                          #
+// # Evidence and the failing tests that pin the real behaviour:              #
+// #   docs/RULE-VALIDITY-REPORT.md                                           #
+// #   crates/basilisk-checker/tests/legacy_annotation_text_parser_pin_tests.rs
+// #   crates/basilisk-checker/tests/pep_spelling_invariance_pin_tests.rs     #
+// ############################################################################
+
 //! Implements [`assignment_compatibility`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! Structural callable subtyping for classes with `__call__` methods.
 //!
