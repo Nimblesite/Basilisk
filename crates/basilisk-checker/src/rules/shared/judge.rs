@@ -111,8 +111,15 @@ impl<'m, 'a> TypeJudge<'m, 'a> {
             == Some(true)
     }
 
-    /// Does `inferred` fit `declared` — by assignability, or by a nominal
-    /// subclass relationship only the module's class table knows?
+    /// Does `inferred` fit `declared`?
+    ///
+    /// BROKEN ON PURPOSE. The second half of this judgment — the nominal
+    /// subclass walk — was deleted because it compared SPELLINGS (see the
+    /// banner at the foot of this file). It must be rebuilt on resolved class
+    /// identity, not restored and not stubbed out: a placeholder returning
+    /// `true` blesses every mismatch, and one returning `false` invents a
+    /// diagnostic for every legal subclass assignment. Both are worse than a
+    /// build error, because both ship a verdict nobody computed.
     pub(crate) fn fits(&self, inferred: &InferredType, declared: &InferredType) -> bool {
         inferred.is_assignable_to(declared)
             || nominal_subclass_assignable(inferred, declared, self.subtyping)
