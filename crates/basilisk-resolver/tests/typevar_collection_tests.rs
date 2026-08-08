@@ -30,16 +30,17 @@ fn typevar_names(src: &str) -> Vec<String> {
 fn typevar_under_type_checking_guard_is_collected() {
     let names = typevar_names(
         r#"
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING as ANALYSIS_BRANCH
+from typing import TypeVar as parameter_factory
 
-if TYPE_CHECKING:
-    T = TypeVar("T")
+if ANALYSIS_BRANCH:
+    SedimentKind = parameter_factory("SedimentKind")
 "#,
     );
-    assert!(
-        names.contains(&"T".to_owned()),
-        "the module frame executes the guarded body; the declaration is a \
-         declaration — got: {names:?}"
+    assert_eq!(
+        names,
+        vec!["SedimentKind"],
+        "a typing-only branch still contributes exactly its module-scoped TypeVar declaration"
     );
 }
 
@@ -47,17 +48,18 @@ if TYPE_CHECKING:
 fn typevar_inside_try_is_collected() {
     let names = typevar_names(
         r#"
-from typing import TypeVar
+from typing import TypeVar as parameter_factory
 
 try:
-    T = TypeVar("T")
+    CoreSampleKind = parameter_factory("CoreSampleKind")
 except ImportError:
     pass
 "#,
     );
-    assert!(
-        names.contains(&"T".to_owned()),
-        "a `try:` body runs in the module frame — got: {names:?}"
+    assert_eq!(
+        names,
+        vec!["CoreSampleKind"],
+        "a module-level try body contributes exactly its TypeVar declaration"
     );
 }
 
@@ -65,22 +67,29 @@ except ImportError:
 fn bare_typevar_bound_is_flagged_as_parameterized() {
     let resolved = common::resolve_src(
         r#"
-from typing import TypeVar
+from typing import TypeVar as parameter_factory
 
-T = TypeVar("T")
-U = TypeVar("U", bound=T)
+ElementKind = parameter_factory("ElementKind")
+ContainerKind = parameter_factory(
+    "ContainerKind",
+    bound=ElementKind,
+)
 "#,
     )
     .expect("source must resolve");
+    assert_eq!(
+        resolved.typevar_calls.len(),
+        2,
+        "both renamed declarations must be collected exactly once"
+    );
     let u = resolved
         .typevar_calls
         .iter()
-        .find(|tv| tv.name == "U")
-        .expect("U must be collected");
+        .find(|tv| tv.name == "ContainerKind")
+        .expect("ContainerKind must be collected");
     assert!(
         u.has_parameterized_bound,
-        "`bound=T` embeds a type variable in a bound, which the generics \
-         spec forbids; the bare case is the simplest instance"
+        "the bound resolves to `ElementKind`, another TypeVar; spelling and layout cannot hide the forbidden parameterized bound"
     );
 }
 
@@ -88,17 +97,26 @@ U = TypeVar("U", bound=T)
 fn concrete_bound_is_not_flagged() {
     let resolved = common::resolve_src(
         r#"
-from typing import TypeVar
+import builtins as runtime_types
+import typing as type_contracts
 
-T = TypeVar("T", bound=int)
+SampleKind = type_contracts.TypeVar(
+    "SampleKind",
+    bound=runtime_types.int,
+)
 "#,
     )
     .expect("source must resolve");
+    assert_eq!(
+        resolved.typevar_calls.len(),
+        1,
+        "the qualified and reformatted declaration must be collected exactly once"
+    );
     let t = resolved
         .typevar_calls
         .iter()
-        .find(|tv| tv.name == "T")
-        .expect("T must be collected");
+        .find(|tv| tv.name == "SampleKind")
+        .expect("SampleKind must be collected");
     assert!(
         !t.has_parameterized_bound,
         "`bound=int` is a concrete bound, exactly what PEP 484 permits"

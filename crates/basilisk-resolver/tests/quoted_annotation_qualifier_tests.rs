@@ -2,10 +2,10 @@
 //! ([RESOLV-CANONICAL-BINDING]).
 //!
 //! A string annotation contains a type expression evaluated lazily
-//! (<https://peps.python.org/pep-0484/#forward-references>): `"ClassVar[int]"`
-//! means exactly what `ClassVar[int]` means. Dropping the qualifier because
-//! the annotation is quoted decides from the surface form of the source, not
-//! its meaning ([ASTREBUILD-LAW]).
+//! (<https://peps.python.org/pep-0484/#forward-references>): the string must be
+//! parsed as a type expression and resolved in the module namespace. The tests
+//! deliberately avoid the conformance examples' local names and use qualified
+//! or renamed imports so matching qualifier text cannot satisfy them.
 #![allow(
     clippy::allow_attributes,
     clippy::indexing_slicing,
@@ -32,17 +32,17 @@ fn class_attribute_flags(src: &str, attribute: &str) -> (bool, bool) {
 fn quoted_classvar_keeps_its_qualifier() {
     let (is_class_var, _) = class_attribute_flags(
         r#"
-from typing import ClassVar
+import builtins as runtime_types
+import typing as type_contracts
 
-class C:
-    a: "ClassVar[int]" = 0
+class MineralLedger:
+    shared_depth: "type_contracts.ClassVar[runtime_types.int]" = 0
 "#,
-        "a",
+        "shared_depth",
     );
     assert!(
         is_class_var,
-        "`\"ClassVar[int]\"` is a forward reference to `ClassVar[int]`; \
-         quoting must not drop the qualifier (PEP 484)"
+        "the quoted expression resolves qualified aliases to the ClassVar qualifier"
     );
 }
 
@@ -50,17 +50,17 @@ class C:
 fn quoted_aliased_classvar_keeps_its_qualifier() {
     let (is_class_var, _) = class_attribute_flags(
         r#"
-from typing import ClassVar as CV
+from builtins import int as depth_number
+from typing import ClassVar as shared_slot
 
-class C:
-    a: "CV[int]" = 0
+class MineralLedger:
+    shared_depth: "shared_slot[depth_number]" = 0
 "#,
-        "a",
+        "shared_depth",
     );
     assert!(
         is_class_var,
-        "the quoted alias resolves through the module's bindings like any \
-         other use; `CV` IS `ClassVar`"
+        "the quoted alias resolves through module bindings rather than qualifier spelling"
     );
 }
 
@@ -68,17 +68,17 @@ class C:
 fn quoted_final_keeps_its_qualifier() {
     let (_, is_final) = class_attribute_flags(
         r#"
-from typing import Final
+from builtins import int as depth_number
+from typing import Final as sealed_slot
 
-class C:
-    b: "Final[int]" = 1
+class MineralLedger:
+    survey_revision: "sealed_slot[depth_number]" = 1
 "#,
-        "b",
+        "survey_revision",
     );
     assert!(
         is_final,
-        "`\"Final[int]\"` is a forward reference to `Final[int]` (PEP 591 \
-         via PEP 484 forward references)"
+        "PEP 591 Final semantics survive a PEP 484 forward-reference alias"
     );
 }
 
@@ -86,16 +86,17 @@ class C:
 fn quoted_shadowed_qualifier_is_not_the_qualifier() {
     let (is_class_var, _) = class_attribute_flags(
         r#"
-ClassVar = dict
+from builtins import dict as mapping_factory
 
-class C:
-    a: "ClassVar[int]" = 0
+shared_slot = mapping_factory
+
+class MineralLedger:
+    shared_depth: "shared_slot[int]" = 0
 "#,
-        "a",
+        "shared_depth",
     );
     assert!(
         !is_class_var,
-        "the module rebound `ClassVar`; the forward reference resolves to \
-         that binding, not to `typing.ClassVar`"
+        "the quoted name resolves to the unrelated module binding, not typing.ClassVar"
     );
 }

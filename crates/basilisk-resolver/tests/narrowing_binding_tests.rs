@@ -61,18 +61,18 @@ fn type_of_guards(guards: &[NarrowingGuard]) -> Vec<(String, String)> {
 fn aliased_hasattr_still_narrows() {
     let guards = function_guards(
         r#"
-from builtins import hasattr as ha
+from builtins import hasattr as attribute_probe
 
-def probe(x):
-    if ha(x, "field"):
-        return x.field
+def inspect_record(specimen):
+    if attribute_probe(specimen, "crystal_depth"):
+        return specimen.crystal_depth
     return None
 "#,
-        "probe",
+        "inspect_record",
     );
     assert_eq!(
         hasattr_guards(&guards),
-        vec![("x".to_owned(), "field".to_owned())],
+        vec![("specimen".to_owned(), "crystal_depth".to_owned())],
         "an aliased import of `hasattr` is `hasattr`; recognition must come \
          from binding resolution, not the callee's spelling"
     );
@@ -82,21 +82,22 @@ def probe(x):
 fn shadowed_hasattr_does_not_narrow() {
     let guards = function_guards(
         r#"
-def hasattr(obj, name):
+from builtins import hasattr as attribute_probe
+
+def attribute_probe(candidate, label):
     return False
 
-def probe(x):
-    if hasattr(x, "field"):
-        return x.field
+def inspect_record(specimen):
+    if attribute_probe(specimen, "crystal_depth"):
+        return specimen.crystal_depth
     return None
 "#,
-        "probe",
+        "inspect_record",
     );
     assert_eq!(
         hasattr_guards(&guards),
         Vec::<(String, String)>::new(),
-        "a module-level `def hasattr` shadows the builtin; treating the \
-         spelling as the builtin fabricates narrowing"
+        "the later local definition replaces the imported builtin alias; treating its spelling as semantic fabricates narrowing"
     );
 }
 
@@ -104,47 +105,50 @@ def probe(x):
 fn shadowed_type_does_not_narrow() {
     let guards = function_guards(
         r#"
-def type(x):
+from builtins import type as category_probe
+
+def category_probe(specimen):
     return 0
 
-class C:
+class MineralSample:
     pass
 
-def probe(x):
-    if type(x) is C:
-        return x
+def inspect_record(specimen):
+    if category_probe(specimen) is MineralSample:
+        return specimen
     return None
 "#,
-        "probe",
+        "inspect_record",
     );
     assert_eq!(
         type_of_guards(&guards),
         Vec::<(String, String)>::new(),
-        "a module-level `def type` shadows the builtin; `type(x) is C` must \
-         not narrow when `type` is not the builtin"
+        "the later local definition replaces the imported type alias and must not narrow"
     );
 }
 
 #[test]
-fn qualified_type_still_narrows() {
+fn aliased_and_reformatted_type_still_narrows() {
     let guards = function_guards(
         r#"
-import builtins
+from builtins import type as category_probe
 
-class C:
+class MineralSample:
     pass
 
-def probe(x):
-    if builtins.type(x) is C:
-        return x
+def inspect_record(specimen):
+    if category_probe(
+        specimen,
+    ) is MineralSample:
+        return specimen
     return None
 "#,
-        "probe",
+        "inspect_record",
     );
     assert_eq!(
         type_of_guards(&guards),
-        vec![("x".to_owned(), "C".to_owned())],
-        "`builtins.type` is `type`; qualification must not change recognition"
+        vec![("specimen".to_owned(), "MineralSample".to_owned())],
+        "the renamed builtin and reformatted call must resolve to the type narrowing guard"
     );
 }
 
@@ -152,11 +156,16 @@ def probe(x):
 fn assert_hasattr_narrows_after_binding_resolution() {
     let guards = function_guards(
         r#"
-def probe(x):
-    assert hasattr(x, "field")
-    return x.field
+from builtins import hasattr as attribute_probe
+
+def inspect_record(specimen):
+    assert attribute_probe(
+        specimen,
+        "crystal_depth",
+    )
+    return specimen.crystal_depth
 "#,
-        "probe",
+        "inspect_record",
     );
     let asserted: Vec<(String, String)> = guards
         .iter()
@@ -174,8 +183,7 @@ def probe(x):
         .collect();
     assert_eq!(
         asserted,
-        vec![("x".to_owned(), "field".to_owned())],
-        "`assert hasattr(x, ...)` narrows subsequent flow (§7.8); the call \
-         guard must be produced through binding resolution"
+        vec![("specimen".to_owned(), "crystal_depth".to_owned())],
+        "the assert guard must resolve the renamed builtin before narrowing subsequent flow"
     );
 }

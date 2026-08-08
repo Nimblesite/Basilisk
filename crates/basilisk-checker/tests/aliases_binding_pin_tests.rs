@@ -19,25 +19,40 @@
 
 mod common;
 
-fn messages(source: &str) -> Vec<String> {
-    let diags = common::run(source).expect("source must check");
-    diags.into_iter().map(|d| d.message).collect()
+fn diagnostics(source: &str) -> Vec<common::Diagnostic> {
+    common::run(source).expect("source must check")
+}
+
+fn assert_rule(source: &str, rule: &str, expected: usize, obligation: &str) -> Vec<String> {
+    let diagnostics = diagnostics(source);
+    common::assert_rule_count(&diagnostics, rule, expected, obligation);
+    common::messages_for(&diagnostics, rule)
+        .into_iter()
+        .map(str::to_owned)
+        .collect()
 }
 
 // --- aliases_newtype: PEP 484 `NewType` -----------------------------------
 
 #[test]
 fn aliased_base_type_still_relates_constructor_arguments() {
-    // PEP 484: "the module type checker will treat UserId as if it were a
-    // subclass of int" — the constructor accepts only base-type values.
-    let msgs = messages(
+    // PEP 484 and the typing specification require the generated constructor
+    // to accept exactly one value assignable to its base type. None of the
+    // symbols used at the call site retain the conformance example's spelling.
+    let msgs = assert_rule(
         r#"
-from typing import NewType
-from builtins import int as I
+from typing import NewType as mint_nominal
+from builtins import int as mineral_number
 
-UserId = NewType("UserId", I)
-bad = UserId("user")
+QuarryTicket = mint_nominal(
+    "QuarryTicket",
+    mineral_number,
+)
+rejected_ticket = QuarryTicket("granite")
 "#,
+        "aliases_newtype",
+        1,
+        "a NewType constructor must reject a value not assignable to its resolved base",
     );
     assert!(
         msgs.iter()
@@ -51,14 +66,18 @@ bad = UserId("user")
 fn aliased_isinstance_with_newtype_is_flagged() {
     // PEP 484: the object returned by NewType is not a real class; it
     // "cannot be used in isinstance() checks".
-    let msgs = messages(
+    let msgs = assert_rule(
         r#"
-from typing import NewType
-from builtins import isinstance as chk
+from typing import NewType as mint_nominal
+from builtins import int as mineral_number
+from builtins import isinstance as runtime_probe
 
-UserId = NewType("UserId", int)
-ok = chk(1, UserId)
+CoreSample = mint_nominal("CoreSample", mineral_number)
+invalid_probe = runtime_probe(1, CoreSample)
 "#,
+        "aliases_newtype",
+        1,
+        "the object returned by NewType is not a runtime class",
     );
     assert!(
         msgs.iter()
@@ -69,24 +88,27 @@ ok = chk(1, UserId)
 
 #[test]
 fn shadowed_isinstance_with_newtype_is_not_flagged() {
-    let msgs = messages(
+    let msgs = assert_rule(
         r#"
-from typing import NewType
+from typing import NewType as mint_nominal
+from builtins import int as mineral_number
 
-UserId = NewType("UserId", int)
+CoreSample = mint_nominal("CoreSample", mineral_number)
 
-def isinstance(a, b):
+def runtime_probe(candidate, category):
     return True
 
-ok = isinstance(1, UserId)
+ordinary_result = runtime_probe(1, CoreSample)
 "#,
+        "aliases_newtype",
+        0,
+        "an unrelated user function must not be mistaken for the isinstance builtin",
     );
     assert!(
         !msgs
             .iter()
             .any(|m| m.contains("cannot be used as the second argument")),
-        "a module-level `def isinstance` shadows the builtin; the call is \
-         not a runtime type check — got: {msgs:?}"
+        "the unrelated `runtime_probe` function is not the builtin runtime type check: {msgs:?}"
     );
 }
 
@@ -94,14 +116,17 @@ ok = isinstance(1, UserId)
 fn qualified_type_annotation_flags_newtype_assignment() {
     // PEP 484: `NewType(...)` returns a callable, not a class object, so it
     // is not assignable to a `type`-annotated variable.
-    let msgs = messages(
+    let msgs = assert_rule(
         r#"
-import builtins
-from typing import NewType
+import builtins as runtime_types
+from typing import NewType as mint_nominal
 
-UserId = NewType("UserId", int)
-t: builtins.type = UserId
+CoreSample = mint_nominal("CoreSample", runtime_types.int)
+category_object: runtime_types.type = CoreSample
 "#,
+        "aliases_newtype",
+        1,
+        "NewType returns a callable rather than a class object assignable to builtins.type",
     );
     assert!(
         msgs.iter().any(|m| m.contains("does not return a class object")),
@@ -112,22 +137,25 @@ t: builtins.type = UserId
 
 #[test]
 fn shadowed_type_annotation_does_not_flag_newtype_assignment() {
-    let msgs = messages(
+    let msgs = assert_rule(
         r#"
-from typing import NewType
+from typing import NewType as mint_nominal
+from builtins import int as mineral_number
 
-UserId = NewType("UserId", int)
+CoreSample = mint_nominal("CoreSample", mineral_number)
 
-class type:
+class category_object:
     pass
 
-t: type = UserId
+record: category_object = CoreSample
 "#,
+        "aliases_newtype",
+        0,
+        "an unrelated user class must not be treated as builtins.type by spelling",
     );
     assert!(
         !msgs.iter().any(|m| m.contains("does not return a class object")),
-        "a module-level `class type` shadows the builtin; the annotation \
-         does not denote the builtin `type` — got: {msgs:?}"
+        "the unrelated `category_object` class does not denote the builtin `type`: {msgs:?}"
     );
 }
 
@@ -137,56 +165,81 @@ t: type = UserId
 fn aliased_bound_and_argument_still_check() {
     // Typing spec, generics: "the type parameter must be a subtype of the
     // bound" — identity comes from bindings, not spelling.
-    let msgs = messages(
+    let msgs = assert_rule(
         r#"
-from typing import TypeAlias, TypeVar
-from builtins import int as I, str as S
+from typing import TypeAlias as alias_declaration
+from typing import TypeVar as parameter_factory
 
-T = TypeVar("T", bound=I)
-Alias: TypeAlias = list[T]
-x: Alias[S] = []
+class GeologicalRecord:
+    pass
+
+class UnrelatedArtifact:
+    pass
+
+RecordKind = parameter_factory("RecordKind", bound=GeologicalRecord)
+RecordShelf: alias_declaration = list[RecordKind]
+rejected_shelf: RecordShelf[UnrelatedArtifact] = []
 "#,
+        "aliases_implicit",
+        1,
+        "a substituted type must be assignable to the TypeVar's resolved upper bound",
     );
     assert!(
         msgs.iter().any(|m| m.contains("does not satisfy bound")),
-        "aliased `str` is not a subtype of aliased `int`; the bound \
-         violation must be flagged regardless of spellings — got: {msgs:?}"
+        "`UnrelatedArtifact` is not assignable to `GeologicalRecord`: {msgs:?}"
     );
 }
 
 #[test]
 fn plain_bound_violation_still_flagged() {
-    let msgs = messages(
+    let msgs = assert_rule(
         r#"
-from typing import TypeAlias, TypeVar
+import typing as type_contracts
 
-T = TypeVar("T", bound=int)
-Alias: TypeAlias = list[T]
-y: Alias[str] = []
+class FoundationLayer:
+    pass
+
+class SurfaceArtifact:
+    pass
+
+LayerKind = type_contracts.TypeVar("LayerKind", bound=FoundationLayer)
+LayerShelf: type_contracts.TypeAlias = list[LayerKind]
+rejected_shelf: LayerShelf[SurfaceArtifact] = []
 "#,
+        "aliases_implicit",
+        1,
+        "a nominally unrelated type must violate the resolved upper bound",
     );
     assert!(
         msgs.iter().any(|m| m.contains("does not satisfy bound")),
-        "`str` is not a subtype of bound `int` — got: {msgs:?}"
+        "`SurfaceArtifact` is not assignable to `FoundationLayer`: {msgs:?}"
     );
 }
 
 #[test]
 fn satisfied_bound_is_not_flagged() {
-    // `bool` is a subclass of `int`, so the bound is satisfied (PEP 484
-    // numeric tower / nominal subtyping).
-    let msgs = messages(
+    let msgs = assert_rule(
         r#"
-from typing import TypeAlias, TypeVar
+from typing import TypeAlias as alias_declaration
+from typing import TypeVar as parameter_factory
 
-T = TypeVar("T", bound=int)
-Alias: TypeAlias = list[T]
-z: Alias[bool] = []
+class GeologicalRecord:
+    pass
+
+class VerifiedRecord(GeologicalRecord):
+    pass
+
+RecordKind = parameter_factory("RecordKind", bound=GeologicalRecord)
+RecordShelf: alias_declaration = list[RecordKind]
+accepted_shelf: RecordShelf[VerifiedRecord] = []
 "#,
+        "aliases_implicit",
+        0,
+        "a subclass is assignable to its TypeVar upper bound",
     );
     assert!(
         !msgs.iter().any(|m| m.contains("does not satisfy bound")),
-        "`bool` is a subtype of `int`; no violation exists — got: {msgs:?}"
+        "`VerifiedRecord` is a subclass of `GeologicalRecord`: {msgs:?}"
     );
 }
 
@@ -194,15 +247,19 @@ z: Alias[bool] = []
 fn unresolved_bound_or_argument_abstains() {
     // Unresolvable imports lower to Unknown; the relation abstains rather
     // than inventing a verdict ([RESOLV-CANONICAL-RELATION]).
-    let msgs = messages(
+    let msgs = assert_rule(
         r#"
-from typing import TypeAlias, TypeVar
-from somewhere import Base, Impl
+from typing import TypeAlias as alias_declaration
+from typing import TypeVar as parameter_factory
+from unavailable_geology import FoundationLayer, CandidateLayer
 
-T = TypeVar("T", bound=Base)
-Alias: TypeAlias = list[T]
-w: Alias[Impl] = []
+LayerKind = parameter_factory("LayerKind", bound=FoundationLayer)
+LayerShelf: alias_declaration = list[LayerKind]
+unknown_shelf: LayerShelf[CandidateLayer] = []
 "#,
+        "aliases_implicit",
+        0,
+        "unknown types must not fabricate an upper-bound incompatibility",
     );
     assert!(
         !msgs.iter().any(|m| m.contains("does not satisfy bound")),

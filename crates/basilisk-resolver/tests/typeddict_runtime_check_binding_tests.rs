@@ -1,6 +1,9 @@
 //! Pins for the `isinstance`/`issubclass`-on-`TypedDict` collector under
 //! [ASTREBUILD-LAW]: both the callee and the checked class must resolve
 //! through the binding table, never by comparing identifier spellings.
+//! [PEP 589](https://peps.python.org/pep-0589/#using-typeddict-types) forbids
+//! runtime instance and subclass checks because TypedDict classes are not
+//! runtime-checkable. Fixtures use renamed imports and unrelated local names.
 #![allow(
     clippy::allow_attributes,
     clippy::indexing_slicing,
@@ -21,13 +24,14 @@ fn violation_count(src: &str) -> usize {
 fn aliased_isinstance_on_typeddict_is_flagged() {
     let count = violation_count(
         r#"
-from typing import TypedDict
-from builtins import isinstance as chk
+from typing import TypedDict as record_shape
+from builtins import int as depth_number
+from builtins import isinstance as runtime_probe
 
-class TD(TypedDict):
-    x: int
+class BoreholeRecord(record_shape):
+    crystal_depth: depth_number
 
-ok = chk({"x": 1}, TD)
+invalid_probe = runtime_probe({"crystal_depth": 1}, BoreholeRecord)
 "#,
     );
     assert_eq!(
@@ -41,21 +45,22 @@ ok = chk({"x": 1}, TD)
 fn shadowed_isinstance_is_not_flagged() {
     let count = violation_count(
         r#"
-from typing import TypedDict
+from typing import TypedDict as record_shape
+from builtins import int as depth_number
+from builtins import isinstance as runtime_probe
 
-class TD(TypedDict):
-    x: int
+class BoreholeRecord(record_shape):
+    crystal_depth: depth_number
 
-def isinstance(a, b):
+def runtime_probe(candidate, category):
     return True
 
-ok = isinstance({"x": 1}, TD)
+ordinary_result = runtime_probe({"crystal_depth": 1}, BoreholeRecord)
 "#,
     );
     assert_eq!(
         count, 0,
-        "a module-level `def isinstance` shadows the builtin; the call is \
-         not a runtime type check and must not be flagged"
+        "the later user function replaces the imported builtin alias and must not be treated as a runtime type check"
     );
 }
 
@@ -63,19 +68,20 @@ ok = isinstance({"x": 1}, TD)
 fn rebound_typeddict_name_is_not_flagged() {
     let count = violation_count(
         r#"
-from typing import TypedDict
+from typing import TypedDict as record_shape
+from builtins import int as depth_number
+from builtins import isinstance as runtime_probe
 
-class TD(TypedDict):
-    x: int
+class BoreholeRecord(record_shape):
+    crystal_depth: depth_number
 
-from other_mod import TD
+from unavailable_geology import BoreholeRecord
 
-ok = isinstance({"x": 1}, TD)
+ordinary_result = runtime_probe({"crystal_depth": 1}, BoreholeRecord)
 "#,
     );
     assert_eq!(
         count, 0,
-        "after the import rebinds `TD`, the name no longer refers to the \
-         TypedDict class; flagging it decides from spelling, not bindings"
+        "after rebinding, `BoreholeRecord` no longer denotes the TypedDict class"
     );
 }

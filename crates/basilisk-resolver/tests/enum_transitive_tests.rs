@@ -5,7 +5,9 @@
 //! agrees: a subclass of an `Enum` subclass is an enum
 //! (<https://docs.python.org/3/library/enum.html#enum.Enum>). Classifying
 //! only direct bases breaks the promise for every module-local enum
-//! hierarchy.
+//! hierarchy. This is the class model introduced by
+//! [PEP 435](https://peps.python.org/pep-0435/); fixtures deliberately rename
+//! the imported enum roots and every user-defined symbol.
 #![allow(
     clippy::allow_attributes,
     clippy::indexing_slicing,
@@ -30,67 +32,65 @@ fn is_enum(src: &str, class: &str) -> bool {
 #[test]
 fn subclass_of_local_enum_class_is_an_enum() {
     let src = r"
-from enum import Enum
+from enum import Enum as category_root
 
-class Base(Enum):
+class MineralFamily(category_root):
     pass
 
-class Color(Base):
-    RED = 1
+class IgneousGrade(MineralFamily):
+    BASALT = 1
 ";
     assert!(
-        is_enum(src, "Color"),
-        "`Color` inherits `Enum` through the module-local `Base`; \
-         enum-ness is transitive"
+        is_enum(src, "IgneousGrade"),
+        "`IgneousGrade` inherits the resolved enum root through `MineralFamily`"
     );
 }
 
 #[test]
 fn deeper_local_enum_chain_is_still_an_enum() {
     let src = r"
-from enum import IntEnum
+import enum as category_tools
 
-class A(IntEnum):
+class SurveyCode(category_tools.IntEnum):
     pass
 
-class B(A):
+class RegionalCode(SurveyCode):
     pass
 
-class C(B):
-    X = 1
+class BoreholeCode(RegionalCode):
+    DEEP_SAMPLE = 1
 ";
     assert!(
-        is_enum(src, "C"),
-        "three levels of module-local inheritance from `IntEnum` is still \
-         an enum"
+        is_enum(src, "BoreholeCode"),
+        "three levels of module-local inheritance from the qualified enum root remain an enum"
     );
 }
 
 #[test]
 fn aliased_direct_enum_base_is_an_enum() {
     let src = r"
-from enum import Enum as E
+from enum import Enum as category_root
 
-class Color(E):
-    RED = 1
+class MineralGrade(category_root):
+    GRANITE = 1
 ";
     assert!(
-        is_enum(src, "Color"),
-        "an aliased import of `Enum` is `Enum`"
+        is_enum(src, "MineralGrade"),
+        "the renamed import resolves to the enum root"
     );
 }
 
 #[test]
 fn unrelated_local_base_is_not_an_enum() {
     let src = r"
-class Base:
+class GeologicalRecord:
     pass
 
-class Child(Base):
+class DerivedRecord(GeologicalRecord):
     pass
 ";
     assert!(
-        !is_enum(src, "Child"),
+        !is_enum(src, "DerivedRecord"),
         "a plain local hierarchy is not an enum"
     );
 }

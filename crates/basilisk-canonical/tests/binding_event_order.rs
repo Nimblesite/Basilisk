@@ -29,8 +29,8 @@ fn parsed(source: &str) -> ModModule {
 fn assignment_rhs_use_sees_the_preceding_binding() {
     let module = parsed(
         r"
-from typing import Final as F
-F = F
+from typing import Final as sealing_marker
+sealing_marker = sealing_marker
 ",
     );
     let table = BindingTable::from_module(&module.body);
@@ -39,8 +39,7 @@ F = F
     };
     assert!(
         table.resolves_to(&assign.value, "typing", "Final"),
-        "in `F = F` the RHS evaluates before the new binding exists; it \
-         refers to the import, not the name being defined"
+        "the renamed RHS evaluates before the assignment replaces its binding"
     );
 }
 
@@ -48,9 +47,9 @@ F = F
 fn class_base_use_sees_the_preceding_binding() {
     let module = parsed(
         r"
-from typing import Protocol as P
+from typing import Protocol as structural_contract
 
-class P(P): ...
+class structural_contract(structural_contract): ...
 ",
     );
     let table = BindingTable::from_module(&module.body);
@@ -64,8 +63,7 @@ class P(P): ...
         .expect("class must have one base");
     assert!(
         table.resolves_to(base, "typing", "Protocol"),
-        "class bases evaluate before the class name binds; `P` in the base \
-         list is the import, not the class being defined"
+        "the renamed base evaluates before the class definition replaces its binding"
     );
 }
 
@@ -73,10 +71,10 @@ class P(P): ...
 fn decorator_use_sees_the_preceding_binding() {
     let module = parsed(
         r"
-from typing import final
+from typing import final as seal_callable
 
-@final
-def final(): ...
+@seal_callable
+def seal_callable(): ...
 ",
     );
     let table = BindingTable::from_module(&module.body);
@@ -90,8 +88,7 @@ def final(): ...
         .expression;
     assert!(
         table.resolves_to(decorator, "typing", "final"),
-        "decorators evaluate before the function name binds; `@final` is \
-         the import, not the function being defined"
+        "the renamed decorator evaluates before the function definition replaces its binding"
     );
 }
 
@@ -99,9 +96,9 @@ def final(): ...
 fn use_after_the_statement_sees_the_new_binding() {
     let module = parsed(
         r"
-from typing import Final as F
-F = 3
-x: F = 1
+from typing import Final as sealing_marker
+sealing_marker = 3
+survey_revision: sealing_marker = 1
 ",
     );
     let table = BindingTable::from_module(&module.body);
