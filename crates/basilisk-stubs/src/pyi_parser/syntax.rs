@@ -21,6 +21,18 @@ pub(super) fn has_decorator_form(
         .any(|decorator| bindings.form_of(&decorator.expression) == Some(form))
 }
 
+/// Does any decorator on this definition denote the `staticmethod` builtin?
+///
+/// Unlike [`has_decorator_form`], the builtin needs no import, so resolution
+/// falls back to the registry's builtin entries when the module leaves the
+/// name unbound. A stub that rebinds `staticmethod` itself does not resolve;
+/// an aliased or `builtins.`-qualified spelling does.
+fn has_staticmethod_decorator(bindings: &BindingTable, decorators: &[Decorator]) -> bool {
+    decorators.iter().any(|decorator| {
+        bindings.form_of_with_builtins(&decorator.expression) == Some(TypingForm::StaticMethod)
+    })
+}
+
 pub(super) fn ann_assign_target_name(ann: &StmtAnnAssign) -> Option<String> {
     if let Expr::Name(name_expr) = ann.target.as_ref() {
         Some(name_expr.id.to_string())

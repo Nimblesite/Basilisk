@@ -229,7 +229,10 @@ pub(super) fn parameter_to_info(p: &Parameter) -> ParameterInfo {
             .annotation
             .as_deref()
             .map(|e| text_range_to_span(e.range())),
-        annotation_text: p.annotation.as_deref().map(annotation_source_text),
+        // The rendered-text serializer behind this field was deleted as
+        // text-matched logic; consumers comparing parameter types must move
+        // to resolved annotation nodes ([ASTREBUILD-PHASE-TYPEEXPR]).
+        annotation_text: None,
     }
 }
 

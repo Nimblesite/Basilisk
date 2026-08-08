@@ -12,7 +12,7 @@ use ruff_python_ast::{CmpOp, ExceptHandler, Expr, Stmt};
 use ruff_text_size::Ranged;
 
 use crate::scope::{
-    narrowing_types::{MatchCaseNarrowing, NarrowingGuard, NarrowingGuardKind},
+    narrowing_types::{NarrowingGuard, NarrowingGuardKind},
     Span,
 };
 
@@ -78,37 +78,14 @@ fn collect_from_stmt(stmt: &Stmt, guards: &mut Vec<NarrowingGuard>, in_loop: boo
                 });
             }
         }
-        // Implements [TYPEINF-NARROWING-MATCH] — per-case pattern narrowing and
-        // wildcard tracking for exhaustiveness.
+        // [TYPEINF-NARROWING-MATCH]: per-case pattern narrowing classified
+        // patterns by rendered class-name text and was deleted with that
+        // recogniser. Only body recursion survives; no `Match` guard is
+        // produced until patterns resolve through bindings
+        // ([ASTREBUILD-PHASE-RESOLVER]).
         Stmt::Match(node) => {
-            if let Some(variable) = expr_simple_name(&node.subject) {
-                let mut cases = Vec::new();
-                let mut has_wildcard = false;
-
-                for case in &node.cases {
-                    if is_wildcard_pattern(&case.pattern) {
-                        has_wildcard = true;
-                    }
-                    if let Some(pattern_type) = extract_match_pattern_type(&case.pattern) {
-                        cases.push(MatchCaseNarrowing {
-                            pattern_type,
-                            body_span: body_span(&case.body),
-                        });
-                    }
-                    collect_from_stmts(&case.body, guards, in_loop);
-                }
-
-                if !cases.is_empty() {
-                    guards.push(NarrowingGuard {
-                        kind: NarrowingGuardKind::Match {
-                            variable,
-                            cases,
-                            has_wildcard,
-                        },
-                        span: text_range_to_span(node.range),
-                        in_loop,
-                    });
-                }
+            for case in &node.cases {
+                collect_from_stmts(&case.body, guards, in_loop);
             }
         }
         // Loops: narrowing inside does NOT persist after the loop (§7.10)
@@ -192,25 +169,11 @@ fn extract_call_guard(
     let variable = expr_simple_name(call.arguments.args.first()?)?;
     let second = call.arguments.args.get(1)?;
     match func_name.as_str() {
-        "isinstance" => {
-            let type_names = extract_type_names(second);
-            (!type_names.is_empty()).then_some(NarrowingGuardKind::IsInstance {
-                variable,
-                type_names,
-                if_body_span,
-                else_body_span,
-            })
-        }
-        // Implements [TYPEINF-NARROWING-ISSUBCLASS].
-        "issubclass" => {
-            let type_names = extract_type_names(second);
-            (!type_names.is_empty()).then_some(NarrowingGuardKind::IsSubclass {
-                variable,
-                type_names,
-                if_body_span,
-                else_body_span,
-            })
-        }
+        // [TYPEINF-NARROWING-ISINSTANCE] / [TYPEINF-NARROWING-ISSUBCLASS]:
+        // the second-argument reader rendered class references to name text
+        // and was deleted with it. No guard is produced until the argument
+        // resolves through bindings ([ASTREBUILD-PHASE-RESOLVER]).
+        "isinstance" | "issubclass" => None,
         // Implements [TYPEINF-NARROWING-HASATTR] (groundwork).
         "hasattr" => match second {
             Expr::StringLiteral(lit) => Some(NarrowingGuardKind::HasAttr {
@@ -243,18 +206,11 @@ fn extract_compare_guard(
             }
             extract_none_guard(cmp, op, right, if_body_span, else_body_span)
         }
-        // Implements [TYPEINF-NARROWING-EQ-LITERAL].
-        CmpOp::Eq | CmpOp::NotEq => {
-            let variable = expr_simple_name(&cmp.left)?;
-            let literal_text = literal_source_text(right)?;
-            Some(NarrowingGuardKind::EqualsLiteral {
-                variable,
-                literal_text,
-                is_positive: matches!(op, CmpOp::Eq),
-                if_body_span,
-                else_body_span,
-            })
-        }
+        // [TYPEINF-NARROWING-EQ-LITERAL]: the comparator was captured as
+        // rendered literal text and that renderer was deleted. No guard is
+        // produced until literals carry a semantic value representation
+        // ([ASTREBUILD-PHASE-RESOLVER]).
+        CmpOp::Eq | CmpOp::NotEq => None,
         CmpOp::In | CmpOp::NotIn => {
             extract_membership_guard(cmp, op, right, if_body_span, else_body_span)
         }
@@ -331,54 +287,22 @@ fn extract_membership_guard(
             else_body_span,
         });
     }
-    // Implements [TYPEINF-NARROWING-IN-LITERAL]: `x in ("a", "b")`.
-    let variable = expr_simple_name(&cmp.left)?;
-    let elements: &[Expr] = match right {
-        Expr::Tuple(tuple) => &tuple.elts,
-        Expr::List(list) => &list.elts,
-        Expr::Set(set) => &set.elts,
-        _ => return None,
-    };
-    let literal_texts: Vec<String> = elements.iter().filter_map(literal_source_text).collect();
-    if literal_texts.len() != elements.len() || literal_texts.is_empty() {
-        return None;
-    }
-    Some(NarrowingGuardKind::InLiterals {
-        variable,
-        literal_texts,
-        is_positive,
-        if_body_span,
-        else_body_span,
-    })
+    // [TYPEINF-NARROWING-IN-LITERAL]: membership elements were captured as
+    // rendered literal text and that renderer was deleted. No guard is
+    // produced until literals carry a semantic value representation
+    // ([ASTREBUILD-PHASE-RESOLVER]).
+    None
 }
 
-/// Case-preserving literal text for equality/membership guards: quoted
-/// strings, decimal ints (including negated), and booleans. Anything else —
-/// including strings containing a double quote — is skipped rather than
-/// approximated.
 /// Extract a narrowing guard from an `assert` statement's test expression.
 // Implements [TYPEINF-NARROWING-ASSERT] — `assert isinstance(x, T)` /
 // `assert x is not None` narrows for all subsequent code in the flow path.
 fn extract_assert_guard(test: &Expr) -> Option<NarrowingGuardKind> {
     match test {
-        // assert isinstance(x, T)
-        Expr::Call(call) => {
-            let func_name = expr_simple_name(&call.func)?;
-            if func_name == "isinstance" && call.arguments.args.len() == 2 {
-                let variable = expr_simple_name(call.arguments.args.first()?)?;
-                let type_names = extract_type_names(call.arguments.args.get(1)?);
-                if !type_names.is_empty() {
-                    // Dummy spans — assert narrows for ALL subsequent code, not a specific body
-                    return Some(NarrowingGuardKind::IsInstance {
-                        variable,
-                        type_names,
-                        if_body_span: Span::new(0, 0),
-                        else_body_span: None,
-                    });
-                }
-            }
-            None
-        }
+        // `assert isinstance(x, T)` shares the deleted second-argument
+        // reader; see `extract_call_guard`. Inert pending
+        // [ASTREBUILD-PHASE-RESOLVER].
+        Expr::Call(_) => None,
         // assert x is not None
         Expr::Compare(cmp) if cmp.comparators.len() == 1 => {
             let is_none_target = matches!(cmp.comparators.first(), Some(Expr::NoneLiteral(_)));
@@ -411,9 +335,6 @@ fn extract_assert_guard(test: &Expr) -> Option<NarrowingGuardKind> {
     }
 }
 
-/// Extract type names from an isinstance second argument.
-///
-/// Handles both `isinstance(x, int)` and `isinstance(x, (int, str))`.
 /// Extract the simple name from an expression, if it's a bare `Name` node.
 fn expr_simple_name(expr: &Expr) -> Option<String> {
     match expr {
@@ -422,12 +343,6 @@ fn expr_simple_name(expr: &Expr) -> Option<String> {
     }
 }
 
-/// Check if a match pattern is a wildcard (`_` or no binding).
-fn is_wildcard_pattern(pattern: &ruff_python_ast::Pattern) -> bool {
-    matches!(pattern, ruff_python_ast::Pattern::MatchAs(p) if p.name.is_none() && p.pattern.is_none())
-}
-
-/// Extract the type name from a match case pattern.
 /// Compute the span covering all statements in a body.
 fn body_span(stmts: &[Stmt]) -> Span {
     if stmts.is_empty() {
