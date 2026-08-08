@@ -14,6 +14,8 @@ We found that at least one Basilisk rule earns its conformance result by pattern
 
 We did not find this ourselves. It was reported from outside, in [issue #379](https://github.com/Nimblesite/Basilisk/issues/379), from a [public reproduction](https://x.com/cyanchanges/status/2083115048143364512). That is itself a finding, and it is covered in §6.
 
+**On intent.** This was a verification failure, not an attempt to game the conformance suite. Nobody set out to defeat it, and nothing was concealed from `python/typing`: the submission ran the suite's own unmodified harness, with default configuration and every specification rule enabled — no special-casing of the harness, no doctored output, no disabled rules, no edited results file. What went wrong is set out in §6: the process named the score as the target, matching source text raises a score faster than real analysis does, and the control that would have caught the drift — semantics-preserving mutation (§7) — did not exist, so every green run reinforced a conclusion we had no basis for. When the defect was demonstrated we accepted it and requested our own removal from the results table. Basilisk's author has published a [personal account and apology](https://www.christianfindlay.com/blog/basilisk-conformance-apology). This document describes defective engineering and a failure of review; it does not describe deception, and nothing in it should be read as alleging any.
+
 Our conformance number is self-measured. Where a passing file is carried by predicates shaped to that file, the honest statement is that **the file passes and the rule is not implemented**. That is the case for the files listed in §3.
 
 ---

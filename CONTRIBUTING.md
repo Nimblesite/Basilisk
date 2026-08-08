@@ -21,7 +21,7 @@ Basilisk is built by a **human + AI partnership**, split on purpose. AI agents d
 
 You don't need to write Rust to make Basilisk better. **The highest-leverage thing a human can do here is verify that the checker actually analyses code** — not that a number went up.
 
-This isn't hypothetical. Checker logic was fitted to the conformance fixtures, the resulting 100% was published, and we didn't catch it until much later; both published numbers — conformance and performance — are now **withdrawn**. See the [conformance correction](https://www.basilisk-python.dev/docs/conformance/) and the [integrity audit](docs/CONFORMANCE-INTEGRITY-AUDIT.md). None of it was deliberate — the instructions named the score as the goal, and matching text moves a score faster than analysing code does. In rough order of impact:
+This isn't hypothetical. Checker logic was fitted to the conformance fixtures, the resulting score was published, and we didn't catch it until much later; both published numbers — conformance and performance — are now **withdrawn**. See the [conformance correction](https://www.basilisk-python.dev/docs/conformance/), the [integrity audit](docs/CONFORMANCE-INTEGRITY-AUDIT.md), and the author's [personal account and apology](https://www.christianfindlay.com/blog/basilisk-conformance-apology). None of it was deliberate — nobody set out to game the suite; the instructions named the score as the goal, matching text moves a score faster than analysing code does, and nothing verified the difference. In rough order of impact:
 
 ### 1. Verify the metrics yourself
 

@@ -12,9 +12,15 @@ Basilisk 是用 Rust 打造的开源 Python 类型检查器与语言服务器：
   <img src="https://raw.githubusercontent.com/Nimblesite/Basilisk/main/website/src/assets/images/screenshot.png" alt="Basilisk in action — type checking, diagnostics, and refactoring in the editor" width="900">
 </p>
 
-**当前的类型检查器存在不准确之处，请勿将其用于你的开发流水线。我们正在尽快移除任何具有误导性的分析器。详情请见下文**
-
-> **我们撤回了类型一致性结果。** 100% 的宣称与基准测试数字均已撤回，并主动请求[从官方结果中移除](https://github.com/python/typing/blob/main/conformance/results/results.html)。无论是按规范重建检查器，还是让扩展由一个成熟的开源检查器驱动，我们都在把 Basilisk 打造成准确的 Python 开发体验。[阅读更正](https://www.basilisk-python.dev/zh/docs/conformance/)。
+> ## ⚠️ 请勿在流水线中使用 Basilisk 的类型检查器
+>
+> **类型检查器中仍然存在没有做真正类型检查的代码，它目前还不值得信任。** 有些规则依据的是代码的**写法**而不是含义，因此两个方向上都可能出错 —— 既可能对正确的代码报出虚假错误，也可能对真实的缺陷保持沉默。请不要用它作为 CI 的门禁，也不要把一次干净的运行结果当作代码库是干净的。此前的一致性宣称与基准测试数字均已撤回，并主动请求[从官方结果中移除](https://github.com/python/typing/blob/main/conformance/results/results.html)。
+>
+> **这是一个错误、一次验证上的失职，而不是有意操纵测试套件。** 我们没有向 `python/typing` 隐瞒任何东西：提交时运行的是套件自己未经修改的评分工具；我们仅凭一次全绿的运行就发布了结果，却从未检查过我们的规则能否经受住保持语义的改写。Basilisk 作者已发表[个人说明与致歉](https://www.christianfindlay.com/blog/basilisk-conformance-apology)。
+>
+> **我们正在逐条审计规则，并删除那些站不住脚的规则** —— 不是重写，也不是打补丁，而是删除，并留下一个失败的测试，让缺口保持可见。如果一条规则无法以直截了当的方式做到可靠，我们会转而依赖另一个成熟的类型检查器，而不是端出我们自己那份不可靠的实现。
+>
+> **Basilisk 远不只是一个类型检查器。** 语言服务器、重构、格式化、调试与性能分析都不建立在正在接受审计的规则之上 —— 审计期间，这些正是我们着力打磨的部分，并移除任何可能给出误导性结果的东西。我们这样做，是为了重建信任，把 Basilisk 变回一个你可以信赖的工具。[阅读更正](https://www.basilisk-python.dev/zh/docs/conformance/)。
 
 ## 在 Basilisk 中的角色
 

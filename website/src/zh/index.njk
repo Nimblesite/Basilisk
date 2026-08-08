@@ -20,10 +20,13 @@ permalink: /zh/
         </h1>
 
         <p class="hero__subheadline">
+          <strong>请暂时不要把类型检查器放进你的流水线。</strong>其中仍有没有做真正
+          类型检查的代码，因此它目前还不值得信任。
           我们已撤回此前的符合性声明和公开的基准测试数据，应我们的请求，Basilisk
           已从官方 <code>python/typing</code> 结果中移除。我们正在逐条审计规则，
           并<strong>删除</strong>那些只匹配源文本、并未做真正类型检查的规则。
           Basilisk 会先变小，再变好；留下来的，将是对自己所做之事诚实的代码。
+          当前符合性百分比暂时未知；在通过稳健性与变异测试之前，我们不会发布任何替代数字。
         </p>
 
         <div class="hero__cta-group">
@@ -74,8 +77,9 @@ permalink: /zh/
       </div>
     </div>
     <p class="hero__proof-cta">
-      审计期间，两组数据均已撤回。
+      审计期间，两组数据均已撤回。这是一个错误、一次验证上的失职，而不是有意操纵测试套件。
       <a href="/zh/docs/conformance/">阅读符合性更正 &rarr;</a>
+      <a href="https://www.christianfindlay.com/blog/basilisk-conformance-apology">阅读作者的致歉 &rarr;</a>
       <a href="/docs/benchmarks/">阅读基准测试说明 &rarr;</a>
     </p>
   </div>
