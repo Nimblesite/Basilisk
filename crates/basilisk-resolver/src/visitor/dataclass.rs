@@ -18,7 +18,7 @@ use crate::canonical::{BindingTable, TypingForm};
 // ---------------------------------------------------------------------------
 
 /// The literal boolean passed to keyword `argument` of `call`, when present.
-fn keyword_bool(call: &ExprCall, argument: &str) -> Option<bool> {
+pub(super) fn keyword_bool(call: &ExprCall, argument: &str) -> Option<bool> {
     call.arguments
         .keywords
         .iter()

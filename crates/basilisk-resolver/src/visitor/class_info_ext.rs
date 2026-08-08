@@ -7,7 +7,7 @@ use ruff_python_ast::{
 };
 use ruff_text_size::Ranged;
 
-use crate::canonical::BindingTable;
+use crate::canonical::{BindingTable, TypingForm};
 use crate::scope::{
     BaseSubscriptEntry, ClassInfo, FunctionInfo, ImportInfo, ImportKind, ImportResolution,
     MatchStmtInfo, Span, TypeArg,
@@ -16,8 +16,84 @@ use crate::scope::{
 use super::calls_and_reveal::expr_to_type_arg;
 use super::class_info::collect_class_body;
 use super::core::text_range_to_span;
+use super::dataclass::keyword_bool;
 use super::function_info::collect_name_refs_from_expr;
 use super::type_alias::type_param_name;
+
+/// The [`TypingForm`]s this class's declared bases resolve to, in order.
+///
+/// Each base expression — bare, subscripted, or module-qualified — resolves
+/// through the module's bindings; bases the registry does not describe simply
+/// contribute nothing. Implements [RESOLV-CANONICAL-BINDING].
+fn base_forms(bindings: &BindingTable, class: &StmtClassDef) -> Vec<TypingForm> {
+    class
+        .arguments
+        .as_ref()
+        .map(|args| {
+            args.args
+                .iter()
+                .filter_map(|base| bindings.form_of(base))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// The literal boolean value of a class keyword, e.g. `total` in
+/// `class Movie(TypedDict, total=False)`.
+///
+/// Keyword names at a definition site need no import and decide nothing about
+/// typing on their own, so reading one is permitted.
+fn class_keyword_bool(class: &StmtClassDef, name: &str) -> Option<bool> {
+    class
+        .arguments
+        .as_ref()?
+        .keywords
+        .iter()
+        .find(|kw| kw.arg.as_ref().is_some_and(|arg| arg.as_str() == name))
+        .and_then(|kw| match &kw.value {
+            Expr::BooleanLiteral(literal) => Some(literal.value),
+            _ => None,
+        })
+}
+
+/// Behaviour flags carried by a resolved `@dataclass` decoration.
+struct DataclassDecoration {
+    frozen: bool,
+    kw_only: bool,
+    match_args_false: bool,
+    order: bool,
+    unsafe_hash: bool,
+    eq_false: bool,
+    init_false: bool,
+    slots: bool,
+}
+
+/// The `@dataclass` / `@dataclass(...)` decoration on this class, if one of its
+/// decorators resolves to `dataclasses.dataclass` through the module's
+/// bindings. Implements [RESOLV-CANONICAL-BINDING].
+fn dataclass_decoration(
+    bindings: &BindingTable,
+    class: &StmtClassDef,
+) -> Option<DataclassDecoration> {
+    let decorator = class
+        .decorator_list
+        .iter()
+        .find(|dec| bindings.is_form(&dec.expression, TypingForm::Dataclass))?;
+    let keyword = |name: &str| match &decorator.expression {
+        Expr::Call(call) => keyword_bool(call, name),
+        _ => None,
+    };
+    Some(DataclassDecoration {
+        frozen: keyword("frozen") == Some(true),
+        kw_only: keyword("kw_only") == Some(true),
+        match_args_false: keyword("match_args") == Some(false),
+        order: keyword("order") == Some(true),
+        unsafe_hash: keyword("unsafe_hash") == Some(true),
+        eq_false: keyword("eq") == Some(false),
+        init_false: keyword("init") == Some(false),
+        slots: keyword("slots") == Some(true),
+    })
+}
 
 pub(super) fn class_info_from(
     bindings: &BindingTable,
@@ -66,25 +142,29 @@ pub(super) fn class_info_from(
         base_subscripts: extract_base_subscripts(class),
         has_manual_slots: class_has_manual_slots(class),
         docstring: extract_docstring(&class.body),
-        // Every flag below was set by a decorator-name / base-name spelling
-        // scanner. Those scanners were deleted as text-matched logic, so the
-        // classifications they carried are INERT — not "false because the class
-        // is not one". Rules keyed to them report nothing until
-        // [ASTREBUILD-PHASE-RESOLVER] rebuilds the classification on resolved
-        // symbols; see docs/plans/CHECKER-AST-RECONSTRUCTION-PLAN.md.
-        is_typed_dict: false,
-        is_typeddict_total: true,
-        is_dataclass: false,
-        is_dataclass_frozen: false,
-        is_dataclass_kw_only: false,
-        is_dataclass_match_args_false: false,
-        is_dataclass_order: false,
-        is_dataclass_unsafe_hash: false,
-        is_dataclass_eq_false: false,
-        is_dataclass_init_false: false,
-        is_dataclass_slots: false,
-        is_final: false,
-        is_enum: false,
+        // Declared-nature flags resolve through the module's bindings: base
+        // forms for the class families, decorator forms for `@dataclass` and
+        // `@final`. A `dataclass_transform` factory contributes nothing here —
+        // its rebuild is scoped by [ASTREBUILD-PHASE-RESOLVER].
+        is_typed_dict: forms.contains(&TypingForm::TypedDict),
+        is_typeddict_total: class_keyword_bool(class, "total").unwrap_or(true),
+        is_dataclass: dataclass.is_some(),
+        is_dataclass_frozen: dataclass.as_ref().is_some_and(|d| d.frozen),
+        is_dataclass_kw_only: dataclass.as_ref().is_some_and(|d| d.kw_only),
+        is_dataclass_match_args_false: dataclass.as_ref().is_some_and(|d| d.match_args_false),
+        is_dataclass_order: dataclass.as_ref().is_some_and(|d| d.order),
+        is_dataclass_unsafe_hash: dataclass.as_ref().is_some_and(|d| d.unsafe_hash),
+        is_dataclass_eq_false: dataclass.as_ref().is_some_and(|d| d.eq_false),
+        is_dataclass_init_false: dataclass.as_ref().is_some_and(|d| d.init_false),
+        is_dataclass_slots: dataclass.as_ref().is_some_and(|d| d.slots),
+        is_final: class
+            .decorator_list
+            .iter()
+            .any(|dec| bindings.is_form(&dec.expression, TypingForm::FinalDecorator)),
+        is_enum: forms.iter().any(|form| form.is_enum_base()),
+        is_protocol: forms.contains(&TypingForm::Protocol),
+        is_namedtuple: forms.contains(&TypingForm::NamedTuple)
+            || forms.contains(&TypingForm::CollectionsNamedTuple),
     }
 }
 
