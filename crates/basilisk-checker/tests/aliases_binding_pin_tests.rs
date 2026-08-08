@@ -129,7 +129,8 @@ category_object: runtime_types.type = CoreSample
         "NewType returns a callable rather than a class object assignable to builtins.type",
     );
     assert!(
-        msgs.iter().any(|m| m.contains("does not return a class object")),
+        msgs.iter()
+            .any(|m| m.contains("does not return a class object")),
         "`builtins.type` IS `type`; qualification must not change the \
          verdict — got: {msgs:?}"
     );
@@ -154,7 +155,9 @@ record: category_object = CoreSample
         "an unrelated user class must not be treated as builtins.type by spelling",
     );
     assert!(
-        !msgs.iter().any(|m| m.contains("does not return a class object")),
+        !msgs
+            .iter()
+            .any(|m| m.contains("does not return a class object")),
         "the unrelated `category_object` class does not denote the builtin `type`: {msgs:?}"
     );
 }

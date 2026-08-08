@@ -1,4 +1,7 @@
-//! `TypeIs` and `TypeGuard` narrowing (PEP 742 / PEP 647).
+//! `TypeIs` and `TypeGuard` narrowing
+//! ([PEP 742](https://peps.python.org/pep-0742/) /
+//! [PEP 647](https://peps.python.org/pep-0647/)), with the current normative
+//! behavior in the [typing narrowing specification](https://typing.python.org/en/latest/spec/narrowing.html).
 //! [PERMTEST-FAMILY-B] / [PERMTEST-VOCABULARY].
 //!
 //! PEP 742 states two obligations a checker must enforce:
@@ -20,24 +23,24 @@ use super::harness::{aliased, import_form, reformatted, renamed, SpecObligation}
 // ── the narrowed type must be consistent with the parameter ──────────────
 
 #[test]
-fn a_typeis_return_must_be_consistent_with_its_parameter()
--> Result<(), Box<dyn std::error::Error>> {
+fn a_typeis_return_must_be_consistent_with_its_parameter() -> Result<(), Box<dyn std::error::Error>>
+{
     SpecObligation {
         spec_reason: "PEP 742 requires the narrowed type `R` to be consistent with the parameter \
                       type `I` and says the checker should emit an error otherwise; `str` is not \
                       consistent with `int`",
         rejected: r#"
-import typing
+from typing import TypeIs as narrows_static_kind
 
 
-def is_measured(sample: int) -> typing.TypeIs[str]:
+def is_measured(sample: int) -> narrows_static_kind[str]:
     return True
 "#,
         accepted: r#"
-import typing
+from typing import TypeIs as narrows_static_kind
 
 
-def is_measured(sample: object) -> typing.TypeIs[int]:
+def is_measured(sample: object) -> narrows_static_kind[int]:
     return True
 "#,
         rejected_variants: &[
@@ -104,7 +107,10 @@ def is_sparged(wort: object) -> typing.TypeIs[int]:
             ),
         ],
     }
-    .assert("a TypeIs return must be consistent with its parameter")
+    .assert_by(
+        "a TypeIs return must be consistent with its parameter",
+        "narrowing_typeis_2",
+    )
 }
 
 // ── a narrowing function needs something to narrow ───────────────────────
@@ -116,17 +122,17 @@ fn a_typeis_function_needs_a_positional_parameter() -> Result<(), Box<dyn std::e
                       argument, since narrowing is applied to the first positional argument; a \
                       keyword-only parameter is not positional",
         rejected: r#"
-import typing
+from typing import TypeIs as narrows_static_kind
 
 
-def is_measured(*, sample: object) -> typing.TypeIs[int]:
+def is_measured(*, sample: object) -> narrows_static_kind[int]:
     return True
 "#,
         accepted: r#"
-import typing
+from typing import TypeIs as narrows_static_kind
 
 
-def is_measured(sample: object) -> typing.TypeIs[int]:
+def is_measured(sample: object) -> narrows_static_kind[int]:
     return True
 "#,
         rejected_variants: &[
@@ -191,7 +197,10 @@ def is_sparged(wort: object) -> typing.TypeIs[int]:
             ),
         ],
     }
-    .assert("a TypeIs function needs a positional parameter")
+    .assert_by(
+        "a TypeIs function needs a positional parameter",
+        "narrowing_typeguard",
+    )
 }
 
 // ── TypeIs narrows the negative branch ───────────────────────────────────
@@ -203,30 +212,32 @@ fn typeis_narrows_the_negative_branch() -> Result<(), Box<dyn std::error::Error>
                       variable to *exclude* the narrowed type, so the else branch of an \
                       `int | str` subject is `str`, not the original union",
         rejected: r#"
-import typing
+from typing import TypeIs as narrows_static_kind
+from typing import assert_type as verify_static_shape
 
 
-def is_whole(sample: int | str) -> typing.TypeIs[int]:
+def is_whole(sample: int | str) -> narrows_static_kind[int]:
     return True
 
 
 def brew(sample: int | str) -> None:
     if is_whole(sample):
         return None
-    typing.assert_type(sample, int | str)
+    verify_static_shape(sample, int | str)
 "#,
         accepted: r#"
-import typing
+from typing import TypeIs as narrows_static_kind
+from typing import assert_type as verify_static_shape
 
 
-def is_whole(sample: int | str) -> typing.TypeIs[int]:
+def is_whole(sample: int | str) -> narrows_static_kind[int]:
     return True
 
 
 def brew(sample: int | str) -> None:
     if is_whole(sample):
         return None
-    typing.assert_type(sample, str)
+    verify_static_shape(sample, str)
 "#,
         rejected_variants: &[
             aliased(
@@ -328,7 +339,10 @@ def rack(trub: int | str) -> None:
             ),
         ],
     }
-    .assert("TypeIs narrows the negative branch")
+    .assert_by(
+        "TypeIs narrows the negative branch",
+        "directives_assert_type_2",
+    )
 }
 
 // ── TypeGuard does not ───────────────────────────────────────────────────
@@ -341,30 +355,32 @@ fn typeguard_leaves_the_negative_branch_unnarrowed() -> Result<(), Box<dyn std::
                       This is the same program as the TypeIs case with one symbol changed, so a \
                       checker that treats the two forms alike must fail one of the two tests",
         rejected: r#"
-import typing
+from typing import TypeGuard as asserts_static_kind
+from typing import assert_type as verify_static_shape
 
 
-def is_whole(sample: int | str) -> typing.TypeGuard[int]:
+def is_whole(sample: int | str) -> asserts_static_kind[int]:
     return True
 
 
 def brew(sample: int | str) -> None:
     if is_whole(sample):
         return None
-    typing.assert_type(sample, str)
+    verify_static_shape(sample, str)
 "#,
         accepted: r#"
-import typing
+from typing import TypeGuard as asserts_static_kind
+from typing import assert_type as verify_static_shape
 
 
-def is_whole(sample: int | str) -> typing.TypeGuard[int]:
+def is_whole(sample: int | str) -> asserts_static_kind[int]:
     return True
 
 
 def brew(sample: int | str) -> None:
     if is_whole(sample):
         return None
-    typing.assert_type(sample, int | str)
+    verify_static_shape(sample, int | str)
 "#,
         rejected_variants: &[
             aliased(
@@ -465,5 +481,8 @@ def rack(trub: int | str) -> None:
             ),
         ],
     }
-    .assert("TypeGuard leaves the negative branch unnarrowed")
+    .assert_by(
+        "TypeGuard leaves the negative branch unnarrowed",
+        "directives_assert_type_2",
+    )
 }

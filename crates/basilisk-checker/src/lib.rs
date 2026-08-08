@@ -50,6 +50,7 @@ pub mod inference;
 pub mod narrow;
 pub mod param_infer;
 pub mod rule_catalog;
+pub mod rule_status;
 pub mod rule_tags;
 pub mod rules;
 pub mod span_util;

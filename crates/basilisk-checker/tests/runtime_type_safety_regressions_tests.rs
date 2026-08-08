@@ -381,7 +381,7 @@ red_pin!(
 #[test]
 fn issue_401_none_admitting_returns_do_not_fire() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
-from typing import Any
+from typing import Any as unconstrained_result
 
 def explicit_none() -> None:
     print("ok")
@@ -390,7 +390,7 @@ def optional(value: bool) -> int | None:
     if value:
         return 1
 
-def gradual() -> Any:
+def gradual() -> unconstrained_result:
     print("unknown")
 "#;
     let diagnostics = run(source)?;
@@ -433,10 +433,9 @@ fn assert_single_reveal_reports(
 /// built on [PEP 484](https://peps.python.org/pep-0484/) requires a diagnostic
 /// that reveals the inferred static type.
 #[test]
-fn issue_418_reveal_type_reports_inferred_builtin_type(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn issue_418_reveal_type_reports_inferred_builtin_type() -> Result<(), Box<dyn std::error::Error>> {
     assert_single_reveal_reports(
-        "from typing import reveal_type\nvalue: int = 1\nreveal_type(value)\n",
+        "from builtins import int as depth_number\nfrom typing import reveal_type as disclose_static_shape\nsurvey_depth: depth_number = 1\ndisclose_static_shape(survey_depth)\n",
         "int",
     )
 }
@@ -448,7 +447,7 @@ fn issue_418_reveal_type_reports_inferred_builtin_type(
 #[test]
 fn issue_418_reveal_type_resolves_aliased_import() -> Result<(), Box<dyn std::error::Error>> {
     assert_single_reveal_reports(
-        "from typing import reveal_type as disclose\nvalue: str = \"x\"\ndisclose(value)\n",
+        "from builtins import str as mineral_label\nfrom typing import reveal_type as disclose_static_shape\nquarry_label: mineral_label = \"granite\"\ndisclose_static_shape(quarry_label)\n",
         "str",
     )
 }
@@ -460,7 +459,7 @@ fn issue_418_reveal_type_resolves_aliased_import() -> Result<(), Box<dyn std::er
 #[test]
 fn issue_418_reveal_type_resolves_qualified_import() -> Result<(), Box<dyn std::error::Error>> {
     assert_single_reveal_reports(
-        "import typing as t\nvalue: bytes = b\"x\"\nt.reveal_type(value)\n",
+        "import builtins as runtime_types\nimport typing as type_contracts\ncore_payload: runtime_types.bytes = b\"granite\"\ntype_contracts.reveal_type(core_payload)\n",
         "bytes",
     )
 }
@@ -489,16 +488,23 @@ fn issue_419_substitutes_type_parameter_inside_tuple_return(
 ) -> Result<(), Box<dyn std::error::Error>> {
     assert_generic_assert_type_pair(
         r#"
-from typing import assert_type
+import builtins as runtime_types
+from typing import assert_type as verify_static_shape
 
-class P:
+class BoreholeSample:
     pass
 
-def duplicate[T](value: T) -> tuple[T, T]:
-    return value, value
+def pair_samples[SampleKind](specimen: SampleKind) -> runtime_types.tuple[SampleKind, SampleKind]:
+    return specimen, specimen
 
-assert_type(duplicate(P()), tuple[P, P])
-assert_type(duplicate(P()), tuple[str, str])
+verify_static_shape(
+    pair_samples(BoreholeSample()),
+    runtime_types.tuple[BoreholeSample, BoreholeSample],
+)
+verify_static_shape(
+    pair_samples(BoreholeSample()),
+    runtime_types.tuple[runtime_types.str, runtime_types.str],
+)
 "#,
     )
 }
@@ -512,7 +518,8 @@ fn issue_419_generic_substitution_is_symbol_and_format_invariant(
 ) -> Result<(), Box<dyn std::error::Error>> {
     assert_generic_assert_type_pair(
         r#"
-from typing import assert_type as verify_static_type
+import builtins as runtime_types
+from typing import assert_type as verify_static_shape
 
 class Sediment:
     pass
@@ -521,7 +528,7 @@ def replicate[
     element_type
 ](
     specimen: element_type,
-) -> tuple[
+) -> runtime_types.tuple[
     element_type,
     element_type,
 ]:
@@ -530,8 +537,14 @@ def replicate[
         specimen,
     )
 
-verify_static_type(replicate(Sediment()), tuple[Sediment, Sediment])
-verify_static_type(replicate(Sediment()), tuple[bytes, bytes])
+verify_static_shape(
+    replicate(Sediment()),
+    runtime_types.tuple[Sediment, Sediment],
+)
+verify_static_shape(
+    replicate(Sediment()),
+    runtime_types.tuple[runtime_types.bytes, runtime_types.bytes],
+)
 "#,
     )
 }
@@ -544,13 +557,14 @@ fn issue_419_substitutes_type_parameter_inside_list_return(
 ) -> Result<(), Box<dyn std::error::Error>> {
     assert_generic_assert_type_pair(
         r#"
-from typing import assert_type
+import builtins as runtime_types
+from typing import assert_type as verify_static_shape
 
-def singleton[T](value: T) -> list[T]:
-    return [value]
+def archive_sample[SampleKind](specimen: SampleKind) -> runtime_types.list[SampleKind]:
+    return [specimen]
 
-assert_type(singleton(1), list[int])
-assert_type(singleton(1), list[str])
+verify_static_shape(archive_sample(1), runtime_types.list[runtime_types.int])
+verify_static_shape(archive_sample(1), runtime_types.list[runtime_types.str])
 "#,
     )
 }
@@ -563,13 +577,20 @@ fn issue_419_substitutes_type_parameter_inside_union_return(
 ) -> Result<(), Box<dyn std::error::Error>> {
     assert_generic_assert_type_pair(
         r#"
-from typing import assert_type
+import builtins as runtime_types
+import typing as type_contracts
 
-def include_zero[T](value: T) -> int | T:
-    return value
+def preserve_or_depth[SampleKind](specimen: SampleKind) -> runtime_types.int | SampleKind:
+    return specimen
 
-assert_type(include_zero("x"), int | str)
-assert_type(include_zero("x"), int | bytes)
+type_contracts.assert_type(
+    preserve_or_depth("granite"),
+    runtime_types.int | runtime_types.str,
+)
+type_contracts.assert_type(
+    preserve_or_depth("granite"),
+    runtime_types.int | runtime_types.bytes,
+)
 "#,
     )
 }
@@ -578,17 +599,17 @@ assert_type(include_zero("x"), int | bytes)
 /// Type-parameter identity in [PEP 695](https://peps.python.org/pep-0695/#type-parameter-scopes)
 /// is semantic and places no capitalization requirement on the identifier.
 #[test]
-fn issue_419_lowercase_type_parameter_is_substituted(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn issue_419_lowercase_type_parameter_is_substituted() -> Result<(), Box<dyn std::error::Error>> {
     assert_generic_assert_type_pair(
         r#"
-from typing import assert_type
+import builtins as runtime_types
+from typing import assert_type as verify_static_shape
 
-def identity[t](value: t) -> t:
-    return value
+def preserve_sample[specimen_kind](specimen: specimen_kind) -> specimen_kind:
+    return specimen
 
-assert_type(identity(1), int)
-assert_type(identity(1), str)
+verify_static_shape(preserve_sample(1), runtime_types.int)
+verify_static_shape(preserve_sample(1), runtime_types.str)
 "#,
     )
 }

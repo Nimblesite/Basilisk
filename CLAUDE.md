@@ -8,6 +8,7 @@ Basilisk is a strict Python type checker written in Rust. It must be correct on 
 1. **Find text-pattern-matching logic and delete it.** A rule whose behaviour depends on the *spelling* of its input rather than its *meaning* is broken, whatever it scores. Finding and removing it outranks every other task here.
 2. **Rebuild what was deleted on the real AST** — every decision from resolved bindings, types, and symbol identity; never from how the source happens to be spelled. `from typing import Final as F` behaves identically to `typing.Final`; reformatting a file changes no diagnostic.
 3. **Prove which rules actually work, and name the ones that never did.** A rule carried by text matching was never a rule. Saying so out loud is the deliverable.
+4. **Add spelling mutations to tests that currently prove nothing**. Illegal: tests that observe diagnostics and assert nothing, reporting "ok" or similar while proving nothing.
 
 **Not the job: raising the conformance score.** That number is what caused this. A change that lifts it without improving analysis of arbitrary Python is a regression.
 

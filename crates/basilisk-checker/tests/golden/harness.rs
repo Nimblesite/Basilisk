@@ -181,8 +181,8 @@ pub fn assert_rejected(case: &str, spec_reason: &str, source: &str) -> Result<()
 }
 
 /// **Family B oracle, positive and specific.** As [`assert_rejected`], but the
-/// diagnostic must come from a named rule. Use only where the spec obligation
-/// maps to exactly one rule; prefer [`assert_rejected`] otherwise.
+/// fixture must produce exactly one diagnostic from the named rule. Use only
+/// where the spec obligation maps to exactly one rule.
 pub fn assert_rejected_by(
     case: &str,
     code: &str,
@@ -190,9 +190,14 @@ pub fn assert_rejected_by(
     source: &str,
 ) -> Result<(), Box<dyn Error>> {
     let diags = analyse(source)?;
-    assert!(
-        diags.iter().any(|diag| diag.code.code == code),
-        "{case}: expected `{code}`, got [{}]. Spec: {spec_reason}.\n\
+    let matching = diags
+        .iter()
+        .filter(|diagnostic| diagnostic.code.code == code)
+        .count();
+    assert_eq!(
+        matching,
+        1,
+        "{case}: expected exactly one `{code}`, got {matching} in [{}]. Spec: {spec_reason}.\n\
          Source:\n{source}\nSee [PERMTEST-FAMILY-B].",
         render(&diags)
     );
@@ -232,6 +237,16 @@ pub struct SpecObligation<'a> {
 }
 
 impl SpecObligation<'_> {
+    /// Run every leg while requiring the ill-typed program to produce exactly
+    /// one diagnostic from the rule that owns this obligation. This prevents
+    /// an unrelated diagnostic from proving a PEP requirement.
+    pub fn assert_by(&self, case: &str, code: &str) -> Result<(), Box<dyn Error>> {
+        assert_rejected_by(case, code, self.spec_reason, self.rejected)?;
+        assert_accepted(case, self.spec_reason, self.accepted)?;
+        assert_invariant(case, self.rejected, self.rejected_variants)?;
+        assert_invariant(case, self.accepted, self.accepted_variants)
+    }
+
     /// Run every leg. Directed first: an invariance pass over a rule that never
     /// fires is vacuous, so the directed failure is the one worth reporting.
     pub fn assert(&self, case: &str) -> Result<(), Box<dyn Error>> {

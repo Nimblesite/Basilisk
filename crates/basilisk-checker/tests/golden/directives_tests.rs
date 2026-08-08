@@ -36,7 +36,7 @@ fn assert_type_rejects_a_mismatched_type() -> Result<(), Box<dyn std::error::Err
                       checker's literal-inference strategy — asserting `str` is an error \
                       and asserting `int` is not",
         rejected: r#"
-import typing
+from typing import assert_type as verify_static_shape
 
 
 def quarry() -> int:
@@ -45,10 +45,10 @@ def quarry() -> int:
 
 def assay() -> None:
     feldspar = quarry()
-    typing.assert_type(feldspar, str)
+    verify_static_shape(feldspar, str)
 "#,
         accepted: r#"
-import typing
+from typing import assert_type as verify_static_shape
 
 
 def quarry() -> int:
@@ -57,7 +57,7 @@ def quarry() -> int:
 
 def assay() -> None:
     feldspar = quarry()
-    typing.assert_type(feldspar, int)
+    verify_static_shape(feldspar, int)
 "#,
         rejected_variants: &[
             aliased(
@@ -168,33 +168,44 @@ def probe() -> None:
             ),
         ],
     }
-    .assert("assert_type rejects a mismatched type")
+    .assert_by(
+        "assert_type rejects a mismatched type",
+        "directives_assert_type_2",
+    )
 }
 
-// ── the declared type wins over the assigned value ───────────────────────
+// ── a declared return type fixes the call expression's type ──────────────
 
 #[test]
-fn assert_type_uses_the_declared_type_not_the_runtime_class()
--> Result<(), Box<dyn std::error::Error>> {
+fn assert_type_uses_a_declared_return_type_not_the_runtime_class(
+) -> Result<(), Box<dyn std::error::Error>> {
     SpecObligation {
-        spec_reason: "a declared annotation fixes the static type of the binding; `basalt: object \
-                      = 1` has static type `object`, so asserting `int` is an error even though \
-                      the value is an `int` at runtime",
+        spec_reason: "the result of a call declared `-> object` has static type `object`; \
+                      `assert_type` therefore rejects `int` and accepts `object` without relying \
+                      on an implementation-specific assignment-narrowing strategy",
         rejected: r#"
-import typing
+from typing import assert_type as verify_static_shape
+
+
+def quarry_sample() -> object:
+    return 1
 
 
 def assay() -> None:
-    basalt: object = 1
-    typing.assert_type(basalt, int)
+    basalt = quarry_sample()
+    verify_static_shape(basalt, int)
 "#,
         accepted: r#"
-import typing
+from typing import assert_type as verify_static_shape
+
+
+def quarry_sample() -> object:
+    return 1
 
 
 def assay() -> None:
-    basalt: object = 1
-    typing.assert_type(basalt, object)
+    basalt = quarry_sample()
+    verify_static_shape(basalt, object)
 "#,
         rejected_variants: &[
             aliased(
@@ -204,8 +215,12 @@ from builtins import object as Base
 from builtins import int as Whole
 
 
+def quarry_sample() -> Base:
+    return 1
+
+
 def assay() -> None:
-    basalt: Base = 1
+    basalt = quarry_sample()
     claim(basalt, Whole)
 "#,
             ),
@@ -215,8 +230,12 @@ import typing
 import builtins
 
 
+def quarry_sample() -> builtins.object:
+    return 1
+
+
 def assay() -> None:
-    basalt: builtins.object = 1
+    basalt = quarry_sample()
     typing.assert_type(basalt, builtins.int)
 "#,
             ),
@@ -225,8 +244,12 @@ def assay() -> None:
 import typing
 
 
+def extract_record() -> object:
+    return 1
+
+
 def probe() -> None:
-    gneiss: object = 1
+    gneiss = extract_record()
     typing.assert_type(gneiss, int)
 "#,
             ),
@@ -234,10 +257,13 @@ def probe() -> None:
                 "
 import typing
 
-def assay() -> None:
-        basalt : object = 1
+def quarry_sample() -> object:
+        return 1
 
-        # declared `object`; the value being an int is irrelevant
+def assay() -> None:
+        basalt = quarry_sample()
+
+        # declared return `object`; the runtime value is irrelevant
         typing.assert_type( basalt , int )
 ",
             ),
@@ -249,8 +275,12 @@ from typing import assert_type as claim
 from builtins import object as Base
 
 
+def quarry_sample() -> Base:
+    return 1
+
+
 def assay() -> None:
-    basalt: Base = 1
+    basalt = quarry_sample()
     claim(basalt, Base)
 "#,
             ),
@@ -259,21 +289,28 @@ def assay() -> None:
 import typing
 
 
+def extract_record() -> object:
+    return 1
+
+
 def probe() -> None:
-    gneiss: object = 1
+    gneiss = extract_record()
     typing.assert_type(gneiss, object)
 "#,
             ),
         ],
     }
-    .assert("assert_type uses the declared type, not the runtime class")
+    .assert_by(
+        "assert_type uses a declared return type, not the runtime class",
+        "directives_assert_type_2",
+    )
 }
 
 // ── alias identity: same call site, opposite verdicts ────────────────────
 
 #[test]
-fn assert_type_resolves_the_alias_target_not_the_alias_name()
--> Result<(), Box<dyn std::error::Error>> {
+fn assert_type_resolves_the_alias_target_not_the_alias_name(
+) -> Result<(), Box<dyn std::error::Error>> {
     SpecObligation {
         spec_reason: "a type alias is transparent: `Grain = str` makes `assert_type(quarry(), \
                       Grain)` the same error as asserting `str` outright, while `Grain = int` \
@@ -282,7 +319,7 @@ fn assert_type_resolves_the_alias_target_not_the_alias_name()
                       and the assertion site is byte-identical in both programs — only the \
                       resolved alias target can decide the verdict",
         rejected: r#"
-import typing
+from typing import assert_type as verify_static_shape
 
 Grain = str
 
@@ -292,10 +329,10 @@ def quarry() -> int:
 
 
 def assay() -> None:
-    typing.assert_type(quarry(), Grain)
+    verify_static_shape(quarry(), Grain)
 "#,
         accepted: r#"
-import typing
+from typing import assert_type as verify_static_shape
 
 Grain = int
 
@@ -305,7 +342,7 @@ def quarry() -> int:
 
 
 def assay() -> None:
-    typing.assert_type(quarry(), Grain)
+    verify_static_shape(quarry(), Grain)
 "#,
         rejected_variants: &[
             aliased(
@@ -420,6 +457,8 @@ def probe() -> None:
             ),
         ],
     }
-    .assert("assert_type resolves the alias target, not the alias name")
+    .assert_by(
+        "assert_type resolves the alias target, not the alias name",
+        "directives_assert_type_2",
+    )
 }
-

@@ -10,7 +10,9 @@
 //! signature. `reveal_type` always emits, so neither directed leg applies to it
 //! and its property is purely Family A.
 
-use super::harness::{assert_invariant, aliased, import_form, reformatted, renamed, SpecObligation};
+use super::harness::{
+    aliased, analyse, assert_invariant, import_form, reformatted, renamed, SpecObligation,
+};
 
 // ── cast is an escape hatch, but still a two-argument call ───────────────
 
@@ -21,18 +23,18 @@ fn cast_takes_a_type_and_a_value() -> Result<(), Box<dyn std::error::Error>> {
                       does not bind `val`. The value's own type is deliberately unchecked — that \
                       is what makes `cast` an escape hatch — so the two-argument form is clean",
         rejected: r#"
-import typing
+from typing import cast as coerce_static_value
 
 
 def assay() -> None:
-    typing.cast(int)
+    coerce_static_value(int)
 "#,
         accepted: r#"
-import typing
+from typing import cast as coerce_static_value
 
 
 def assay() -> None:
-    typing.cast(int, "olivine")
+    coerce_static_value(int, "olivine")
 "#,
         rejected_variants: &[
             aliased(
@@ -99,25 +101,35 @@ def assay() -> None:
             ),
         ],
     }
-    .assert("cast takes a type and a value")
+    .assert_by("cast takes a type and a value", "directives_cast")
 }
 
 // ── reveal_type: invariance only, since it always reports ────────────────
 
 #[test]
-fn reveal_type_reports_identically_however_it_is_spelled()
--> Result<(), Box<dyn std::error::Error>> {
+fn reveal_type_reports_identically_however_it_is_spelled() -> Result<(), Box<dyn std::error::Error>>
+{
     // `reveal_type` always emits, so neither directed leg applies; the property
     // under test is purely Family A — the same program respelled must produce
     // the same number of revelations, no more and no fewer.
     let canonical = r#"
-import typing
+from typing import reveal_type as disclose_static_shape
 
 
 def assay() -> None:
     quartzite = 1
-    typing.reveal_type(quartzite)
+    disclose_static_shape(quartzite)
 "#;
+
+    let diagnostics = analyse(canonical)?;
+    let revelations = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic.code.code == "directives_reveal_type")
+        .count();
+    assert_eq!(
+        revelations, 1,
+        "the typing directive specification requires exactly one reveal diagnostic for one call"
+    );
 
     assert_invariant(
         "reveal_type reports identically however it is spelled",

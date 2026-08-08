@@ -30,7 +30,7 @@ fn class_attribute_flags(src: &str, attribute: &str) -> (bool, bool) {
 
 #[test]
 fn quoted_classvar_keeps_its_qualifier() {
-    let (is_class_var, _) = class_attribute_flags(
+    let flags = class_attribute_flags(
         r#"
 import builtins as runtime_types
 import typing as type_contracts
@@ -40,15 +40,16 @@ class MineralLedger:
 "#,
         "shared_depth",
     );
-    assert!(
-        is_class_var,
-        "the quoted expression resolves qualified aliases to the ClassVar qualifier"
+    assert_eq!(
+        flags,
+        (true, false),
+        "the quoted expression must resolve to ClassVar and must not fabricate Final"
     );
 }
 
 #[test]
 fn quoted_aliased_classvar_keeps_its_qualifier() {
-    let (is_class_var, _) = class_attribute_flags(
+    let flags = class_attribute_flags(
         r#"
 from builtins import int as depth_number
 from typing import ClassVar as shared_slot
@@ -58,15 +59,16 @@ class MineralLedger:
 "#,
         "shared_depth",
     );
-    assert!(
-        is_class_var,
-        "the quoted alias resolves through module bindings rather than qualifier spelling"
+    assert_eq!(
+        flags,
+        (true, false),
+        "the quoted alias must resolve to ClassVar and must not fabricate Final"
     );
 }
 
 #[test]
 fn quoted_final_keeps_its_qualifier() {
-    let (_, is_final) = class_attribute_flags(
+    let flags = class_attribute_flags(
         r#"
 from builtins import int as depth_number
 from typing import Final as sealed_slot
@@ -76,15 +78,16 @@ class MineralLedger:
 "#,
         "survey_revision",
     );
-    assert!(
-        is_final,
-        "PEP 591 Final semantics survive a PEP 484 forward-reference alias"
+    assert_eq!(
+        flags,
+        (false, true),
+        "PEP 591 Final semantics survive a PEP 484 forward-reference alias without fabricating ClassVar"
     );
 }
 
 #[test]
 fn quoted_shadowed_qualifier_is_not_the_qualifier() {
-    let (is_class_var, _) = class_attribute_flags(
+    let flags = class_attribute_flags(
         r#"
 from builtins import dict as mapping_factory
 
@@ -95,8 +98,9 @@ class MineralLedger:
 "#,
         "shared_depth",
     );
-    assert!(
-        !is_class_var,
-        "the quoted name resolves to the unrelated module binding, not typing.ClassVar"
+    assert_eq!(
+        flags,
+        (false, false),
+        "the quoted name resolves to the unrelated module binding, not either typing qualifier"
     );
 }
