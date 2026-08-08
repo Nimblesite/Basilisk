@@ -190,6 +190,13 @@ pub fn assert_rejected_by(
     source: &str,
 ) -> Result<(), Box<dyn Error>> {
     let diags = analyse(source)?;
+    assert_eq!(
+        diags.len(),
+        1,
+        "{case}: expected exactly one diagnostic total (`{code}`), got [{}]. Spec: \
+         {spec_reason}.\nSource:\n{source}\nSee [PERMTEST-FAMILY-B].",
+        render(&diags),
+    );
     let matching = diags
         .iter()
         .filter(|diagnostic| diagnostic.code.code == code)

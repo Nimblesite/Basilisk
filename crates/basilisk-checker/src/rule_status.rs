@@ -386,7 +386,7 @@ mod tests {
                     let Some(tail) = rest.get(open + 1..) else { break };
                     let Some(close) = tail.find('"') else { break };
                     if let Some(literal) = tail.get(..close) {
-                        codes.insert(literal.to_owned());
+                        let _ = codes.insert(literal.to_owned());
                     }
                     rest = tail.get(close + 1..).unwrap_or("");
                 }

@@ -55,7 +55,6 @@ pub mod rule_tags;
 pub mod rules;
 pub mod span_util;
 pub mod stub_constructor;
-pub mod subtyping;
 pub mod suppression;
 mod suppression_audit;
 /// Bounded type-level alias evaluation groundwork.
@@ -63,8 +62,6 @@ mod suppression_audit;
 /// Implements [TYPEINF-TARGET] and [TYPEINF-TARGET-TYPELEVEL].
 pub mod tyeval;
 pub mod types;
-pub mod types_parsing;
-pub(crate) mod types_star_tuples;
 
 pub use cached::CachedDiagnostic;
 pub use diagnostic::{Diagnostic, ErrorCode, Severity};
