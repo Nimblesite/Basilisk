@@ -63,7 +63,7 @@ impl Rule for EnumMemberAccess {
         // enum class name -> member names whose guard is statically false at the target.
         let mut excluded: HashMap<String, HashSet<String>> = HashMap::new();
         collect_excluded_members(
-            module,
+            &module.bindings,
             &parsed.ast.body,
             &enum_names,
             target_version,
@@ -91,6 +91,7 @@ impl Rule for EnumMemberAccess {
 /// Walk the module, recording for each enum class the member names defined only
 /// under a statically-false `if`-guard.
 fn collect_excluded_members(
+    bindings: &BindingTable,
     stmts: &[Stmt],
     enum_names: &HashSet<&str>,
     target: (u32, u32),
@@ -100,13 +101,13 @@ fn collect_excluded_members(
         if let Stmt::ClassDef(cls) = stmt {
             if enum_names.contains(cls.name.as_str()) {
                 let mut members = HashSet::new();
-                collect_dead_branch_members(&cls.body, target, &mut members);
+                collect_dead_branch_members(bindings, &cls.body, target, &mut members);
                 if !members.is_empty() {
                     let _ = out.insert(cls.name.to_string(), members);
                 }
             }
             // Nested classes may also be enums.
-            collect_excluded_members(&cls.body, enum_names, target, out);
+            collect_excluded_members(bindings, &cls.body, enum_names, target, out);
         }
     }
 }
