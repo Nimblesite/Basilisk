@@ -52,103 +52,192 @@ impl CanonicalSymbol {
 #[serde(rename_all = "kebab-case")]
 pub enum TypingForm {
     // Type-parameter factories
+    /// `TypeVar` — a single type parameter (PEP 484, PEP 695).
     TypeVar,
+    /// `TypeVarTuple` — a variadic type parameter (PEP 646).
     TypeVarTuple,
+    /// `ParamSpec` — a callable parameter-list parameter (PEP 612).
     ParamSpec,
     // Class-construction special bases
+    /// `Protocol` — the structural base class (PEP 544).
     Protocol,
+    /// `Generic` — the explicit generic base class (PEP 484).
     Generic,
+    /// `TypedDict` — a dictionary with per-key types (PEP 589).
     TypedDict,
+    /// `typing.NamedTuple` — the typed tuple subclass (PEP 484).
     NamedTuple,
+    /// `collections.namedtuple` — the untyped runtime factory.
     CollectionsNamedTuple,
     // Alias and distinct-type factories
+    /// `NewType` — a distinct type over a base type (PEP 484).
     NewType,
+    /// `TypeAliasType` — the PEP 695 alias object.
     TypeAliasType,
+    /// `TypeAlias` — the PEP 613 explicit-alias qualifier.
     TypeAliasQualifier,
     // Annotation qualifiers
+    /// `ClassVar` — a class-level attribute, never per-instance (PEP 526).
     ClassVar,
+    /// `Final` as an annotation qualifier — no rebinding (PEP 591).
     FinalQualifier,
+    /// `Annotated` — a type carrying arbitrary metadata (PEP 593).
     Annotated,
+    /// `Required` — a `TypedDict` key that must be present (PEP 655).
     Required,
+    /// `NotRequired` — a `TypedDict` key that may be absent (PEP 655).
     NotRequired,
+    /// `ReadOnly` — a `TypedDict` key that cannot be reassigned (PEP 705).
     ReadOnly,
+    /// `dataclasses.InitVar` — an `__init__`-only pseudo-field.
     InitVar,
+    /// `dataclasses.KW_ONLY` — the keyword-only field separator.
     KwOnlySentinel,
     // Type forms
+    /// `Union` — a union of types (PEP 484).
     Union,
+    /// `Optional[T]` — shorthand for `T | None` (PEP 484).
     Optional,
+    /// `Literal` — a type inhabited by specific values (PEP 586).
     Literal,
+    /// `LiteralString` — any literal-derived string (PEP 675).
     LiteralString,
+    /// `Self` — the enclosing class's own type (PEP 673).
     SelfType,
+    /// `Never` — the empty type, inhabited by no value.
     Never,
+    /// `NoReturn` — a callable that never returns normally (PEP 484).
     NoReturn,
+    /// `Any` — the gradual type (PEP 484).
     Any,
+    /// `Concatenate` — prepends positional parameters to a `ParamSpec` (PEP 612).
     Concatenate,
+    /// `Unpack` — unpacks a `TypeVarTuple` or `TypedDict` (PEP 646, PEP 692).
     Unpack,
+    /// `TypeGuard` — a user-defined one-way narrowing return type (PEP 647).
     TypeGuard,
+    /// `TypeIs` — a user-defined two-way narrowing return type (PEP 742).
     TypeIs,
+    /// `TypeForm` — the type of a type expression itself.
     TypeForm,
+    /// `Callable` — a callable's parameter and return types (PEP 484).
     Callable,
     // Decorators
+    /// `@overload` — one signature of an overloaded callable (PEP 484).
     Overload,
+    /// `@final` — no subclassing or overriding (PEP 591).
     FinalDecorator,
+    /// `@override` — declares a method overrides a base method (PEP 698).
     Override,
+    /// `@runtime_checkable` — permits `isinstance` against a protocol (PEP 544).
     RuntimeCheckable,
+    /// `@dataclass_transform` — dataclass-like decorator semantics (PEP 681).
     DataclassTransform,
+    /// `@no_type_check` — suppresses checking of a definition.
     NoTypeCheck,
+    /// `@abstractmethod` — a concrete subclass must implement it.
     AbstractMethod,
+    /// `abc.ABC` — the abstract base class.
     AbstractBase,
+    /// `abc.ABCMeta` — the abstract base metaclass.
     AbstractBaseMeta,
+    /// `@dataclass` — synthesizes `__init__` and friends (PEP 557).
     Dataclass,
+    /// `dataclasses.field` — a per-field specifier.
     DataclassField,
+    /// `@total_ordering` — fills in the remaining comparisons.
     TotalOrdering,
+    /// `@cached_property` — a property computed once per instance.
     CachedProperty,
+    /// `@deprecated` — marks a symbol deprecated (PEP 702).
     Deprecated,
     // Diagnostic and introspection calls
+    /// `assert_type` — asserts the static type at a point.
     AssertType,
+    /// `reveal_type` — reports the inferred type.
     RevealType,
+    /// `cast` — asserts a type the checker cannot verify.
     Cast,
+    /// `assert_never` — asserts exhaustiveness at a point.
     AssertNever,
+    /// `TYPE_CHECKING` — true only during static analysis.
     TypeCheckingFlag,
+    /// `get_type_hints` — resolves annotations at runtime.
     GetTypeHints,
     // Abstract collection protocols
+    /// `Iterable` — supports `__iter__`.
     Iterable,
+    /// `Iterator` — supports `__iter__` and `__next__`.
     Iterator,
+    /// `Generator` — a synchronous generator's yield/send/return types.
     Generator,
+    /// `AsyncGenerator` — an asynchronous generator's yield/send types.
     AsyncGenerator,
+    /// `AsyncIterator` — supports `__aiter__` and `__anext__`.
     AsyncIterator,
+    /// `AsyncIterable` — supports `__aiter__`.
     AsyncIterable,
+    /// `Awaitable` — supports `__await__`.
     Awaitable,
+    /// `Coroutine` — an awaitable with send and throw.
     Coroutine,
+    /// `Sequence` — an ordered, indexable, sized collection.
     Sequence,
+    /// `MutableSequence` — a `Sequence` supporting in-place mutation.
     MutableSequence,
+    /// `Mapping` — a read-only key-to-value collection.
     Mapping,
+    /// `MutableMapping` — a `Mapping` supporting in-place mutation.
     MutableMapping,
+    /// `Collection` — sized, iterable, and supports `in`.
     Collection,
+    /// `Container` — supports `in`.
     Container,
+    /// `Hashable` — supports `__hash__`.
     Hashable,
+    /// `Sized` — supports `__len__`.
     Sized,
+    /// `AbstractSet` — a read-only set.
     AbstractSet,
     // Deprecated capitalised container aliases (PEP 585)
+    /// `typing.List` — the deprecated alias for `list` (PEP 585).
     ListAlias,
+    /// `typing.Dict` — the deprecated alias for `dict` (PEP 585).
     DictAlias,
+    /// `typing.Set` — the deprecated alias for `set` (PEP 585).
     SetAlias,
+    /// `typing.FrozenSet` — the deprecated alias for `frozenset` (PEP 585).
     FrozensetAlias,
+    /// `typing.Tuple` — the deprecated alias for `tuple` (PEP 585).
     TupleAlias,
+    /// `typing.Type` — the deprecated alias for `type` (PEP 585).
     TypeAliasBuiltin,
+    /// `typing.Deque` — the deprecated alias for `collections.deque` (PEP 585).
     DequeAlias,
+    /// `OrderedDict` — an insertion-ordered mapping.
     OrderedDict,
+    /// `defaultdict` — a mapping with a default factory.
     DefaultDict,
     // Enumerations
+    /// `enum.Enum` — the enumeration base class.
     EnumBase,
+    /// `enum.EnumMeta` — the enumeration metaclass.
     EnumMeta,
+    /// `enum.IntEnum` — an enumeration whose members are `int`s.
     IntEnum,
+    /// `enum.StrEnum` — an enumeration whose members are `str`s.
     StrEnum,
+    /// `enum.Flag` — a bit-combinable enumeration.
     FlagEnum,
+    /// `enum.IntFlag` — a bit-combinable `int` enumeration.
     IntFlagEnum,
+    /// `enum.ReprEnum` — an enumeration keeping its mixin's `__repr__`.
     ReprEnum,
+    /// `enum.member` — forces a value to be an enumeration member.
     EnumMember,
+    /// `enum.nonmember` — excludes a value from membership.
     EnumNonmember,
+    /// `enum.auto` — assigns the next automatic member value.
     EnumAuto,
 }
 
@@ -224,7 +313,7 @@ struct RegistryFile {
 }
 
 /// The specification registry, as data. No Rust file contains these spellings.
-const REGISTRY_SOURCE: &str = include_str!("../../resources/typing_symbols.toml");
+const REGISTRY_SOURCE: &str = include_str!("../resources/typing_symbols.toml");
 
 /// Module → name → form, built once from the registry data file.
 type RegistryIndex = HashMap<String, HashMap<String, TypingForm>>;
@@ -243,7 +332,7 @@ fn registry() -> &'static RegistryIndex {
         };
         for entry in parsed.symbol {
             for module in entry.modules {
-                index
+                let _ = index
                     .entry(module)
                     .or_default()
                     .insert(entry.name.clone(), entry.form);

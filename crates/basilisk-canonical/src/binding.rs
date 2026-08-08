@@ -20,7 +20,7 @@ use std::collections::{HashMap, HashSet};
 
 use ruff_python_ast::{Expr, Stmt};
 
-use super::form::{form_at, form_in_module, CanonicalSymbol, TypingForm};
+use crate::form::{form_at, form_in_module, CanonicalSymbol, TypingForm};
 
 /// The name a star-import binds, as it appears in the AST.
 const STAR_IMPORT: &str = "*";
@@ -76,17 +76,16 @@ impl BindingTable {
     fn bind_plain_import(&mut self, import: &ruff_python_ast::StmtImport) {
         for alias in &import.names {
             let module = alias.name.as_str();
-            match alias.asname.as_ref() {
-                // `import X.Y as Z` binds Z to the submodule X.Y.
-                Some(asname) => {
-                    self.modules.insert(asname.to_string(), module.to_owned());
-                }
-                // `import X.Y` binds only the top-level package name X.
-                None => {
+            // `import X.Y as Z` binds Z to the submodule X.Y; a plain
+            // `import X.Y` binds only the top-level package name X.
+            let (local, target) = alias.asname.as_ref().map_or_else(
+                || {
                     let top = module.split('.').next().unwrap_or(module);
-                    self.modules.insert(top.to_owned(), top.to_owned());
-                }
-            }
+                    (top.to_owned(), top.to_owned())
+                },
+                |asname| (asname.to_string(), module.to_owned()),
+            );
+            let _ = self.modules.insert(local, target);
         }
     }
 
@@ -97,7 +96,11 @@ impl BindingTable {
         if import.level > 0 {
             return;
         }
-        let Some(module) = import.module.as_ref().map(ruff_python_ast::Identifier::as_str) else {
+        let Some(module) = import
+            .module
+            .as_ref()
+            .map(ruff_python_ast::Identifier::as_str)
+        else {
             return;
         };
         for alias in &import.names {
@@ -110,7 +113,8 @@ impl BindingTable {
                 .asname
                 .as_ref()
                 .map_or(name, ruff_python_ast::Identifier::as_str);
-            self.symbols
+            let _ = self
+                .symbols
                 .insert(local.to_owned(), CanonicalSymbol::new(module, name));
         }
     }
@@ -123,10 +127,10 @@ impl BindingTable {
         for stmt in body {
             match stmt {
                 Stmt::ClassDef(class) => {
-                    self.shadowed.insert(class.name.to_string());
+                    let _ = self.shadowed.insert(class.name.to_string());
                 }
                 Stmt::FunctionDef(function) => {
-                    self.shadowed.insert(function.name.to_string());
+                    let _ = self.shadowed.insert(function.name.to_string());
                 }
                 Stmt::Assign(assign) => {
                     for target in &assign.targets {
@@ -142,7 +146,7 @@ impl BindingTable {
     /// Mark a plain `Name` assignment target as shadowed.
     fn shadow_if_name(&mut self, target: &Expr) {
         if let Expr::Name(name) = target {
-            self.shadowed.insert(name.id.to_string());
+            let _ = self.shadowed.insert(name.id.to_string());
         }
     }
 
@@ -161,6 +165,17 @@ impl BindingTable {
             .iter()
             .find(|module| form_in_module(module, name).is_some())
             .map(|module| CanonicalSymbol::new(module.clone(), name))
+    }
+
+    /// Whether the module binds this name itself, by import or by definition.
+    ///
+    /// The question a builtin recognition must ask first. `staticmethod` is a
+    /// builtin only while the module has not rebound the name — after
+    /// `from x import staticmethod` or a local `def staticmethod`, the name
+    /// refers to that definition and nothing may assume otherwise.
+    #[must_use]
+    pub fn binds_name(&self, name: &str) -> bool {
+        self.shadowed.contains(name) || self.symbols.contains_key(name)
     }
 
     /// The definition an expression refers to.
@@ -245,11 +260,19 @@ fn nested_bodies(stmt: &Stmt) -> Vec<&[Stmt]> {
     match stmt {
         Stmt::If(node) => {
             let mut bodies = vec![node.body.as_slice()];
-            bodies.extend(node.elif_else_clauses.iter().map(|clause| clause.body.as_slice()));
+            bodies.extend(
+                node.elif_else_clauses
+                    .iter()
+                    .map(|clause| clause.body.as_slice()),
+            );
             bodies
         }
         Stmt::Try(node) => {
-            let mut bodies = vec![node.body.as_slice(), node.orelse.as_slice(), node.finalbody.as_slice()];
+            let mut bodies = vec![
+                node.body.as_slice(),
+                node.orelse.as_slice(),
+                node.finalbody.as_slice(),
+            ];
             bodies.extend(node.handlers.iter().map(|handler| {
                 let ruff_python_ast::ExceptHandler::ExceptHandler(handler) = handler;
                 handler.body.as_slice()
@@ -261,11 +284,7 @@ fn nested_bodies(stmt: &Stmt) -> Vec<&[Stmt]> {
         Stmt::With(node) => vec![node.body.as_slice()],
         Stmt::FunctionDef(node) => vec![node.body.as_slice()],
         Stmt::ClassDef(node) => vec![node.body.as_slice()],
-        Stmt::Match(node) => node
-            .cases
-            .iter()
-            .map(|case| case.body.as_slice())
-            .collect(),
+        Stmt::Match(node) => node.cases.iter().map(|case| case.body.as_slice()).collect(),
         _ => Vec::new(),
     }
 }

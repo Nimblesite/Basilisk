@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/basilisk-db",
     "crates/basilisk-parser",
+    "crates/basilisk-canonical",
     "crates/basilisk-resolver",
     "crates/basilisk-checker",
     "crates/basilisk-cli",
@@ -72,6 +73,7 @@ salsa     = "0.28"
 # Workspace crates
 basilisk-db       = { path = "crates/basilisk-db" }
 basilisk-parser   = { path = "crates/basilisk-parser" }
+basilisk-canonical = { path = "crates/basilisk-canonical" }
 basilisk-resolver = { path = "crates/basilisk-resolver" }
 basilisk-checker  = { path = "crates/basilisk-checker" }
 basilisk-lsp      = { path = "crates/basilisk-lsp" }

@@ -162,15 +162,56 @@ Deleted because keyword scanning **was** the whole mechanism, not a detail of it
 
 ## Salvage: what survives, what returns, what stays deleted {#ASTREBUILD-SALVAGE}
 
-The deletion commits (`31ef02d8`, `d79e955c`, `7234dd20`, `4f6044f7`) removed
-6,326 lines. Every deleted file over 60 lines was triaged by counting AST
-signals (`Expr::`, `Stmt::`, `ruff_python_ast`, span access) against text
-signals (`starts_with("`, `slice_span`, `.lines()`, `== "`) in the deleted
-hunks. **The purge was overwhelmingly correct**: the large deleted rule and
-refactoring modules score zero AST signal. Nothing in that set is rebuilt by
-restoring it — it is rebuilt by [the pattern](#ASTREBUILD-PATTERN).
+Scanned exhaustively, not sampled. All 216 `.rs` files ever deleted anywhere in
+history were recovered at their parent commit and scored three ways: AST signal
+(`Expr::`, `Stmt::`, `Visitor`, span access), text-mechanism signal
+(`starts_with("`, `slice_span`, `.lines()`, `split(`), and — the decisive one —
+**Python typing-symbol string literals**, which catch the
+`denotes(resolver, expr, "ClassVar")` cheat that signal-counting alone misses.
+Deleted hunks in files that survived were scored the same way.
 
-Three exceptions, and the reasoning for each.
+**No deleted file is restorable as-is.** Every candidate splits along the same
+seam, and it is worth stating precisely because it recurs in Phase 4:
+
+| Half | State | Disposition |
+|---|---|---|
+| Traversal and structure — visitors, depth tracking, node matching, span extraction | Lawful AST work | Read as reference; re-derive |
+| Recognition — which symbol is this? | `denotes_form(resolver, expr, "ClassVar")` | The banned mechanism; never returns |
+| Type comparison — are these compatible? | `ann_str`, `slice_span`, rendered-text matching | The condemned layer; Phase 5 |
+
+Three classes of apparent loss turned out not to be losses at all, and are
+recorded so nobody re-investigates them: `names_unbound.rs` (594 LOC) was
+**split** into `names_unbound/{mod,bindings,scan}.rs` and is 635 LOC today;
+`e0145`/`e0148` predate the error-code rename; and `visitor.rs` (7,730 LOC,
+March 2026) became the `visitor/` directory.
+
+### Reference material, not restorable: the gutted rule bodies {#ASTREBUILD-SALVAGE-RULES}
+
+`4c2f124b` gutted two rules far below what the inventory's "emits nothing"
+count conveys — `classes_classvar` went from 737 LOC across five files to 33,
+and `dataclasses_transform_class` from 855 to 37. Both are on the
+[Phase 4 list](#ASTREBUILD-INVENTORY-RULES), and what they lost is spec
+semantics that took real work to encode:
+
+- `classes_classvar/instance.rs` (193 LOC, **zero** symbol literals) walked
+  method bodies with a proper `Visitor`, tracking class and method depth, to
+  find `self.x: ClassVar[T]` — invalid per PEP 526 — and instance assignments
+  to class-level `ClassVar`. Its own header records that it was written *to
+  replace* a byte scanner that "could not tell code from a docstring and
+  hardcoded the fixture's `CV` import alias". The traversal is exemplary. It
+  calls `helpers::is_classvar`, which is `denotes_form(resolver, expr,
+  "ClassVar")` — so the file dies on its recognition call, not its structure.
+- `dataclasses_transform_class/converter.rs` (475 LOC, zero symbol literals)
+  implemented PEP 681 `converter=`: the synthesized `__init__` accepts the
+  converter's first parameter type, not the field's declared type, across
+  defaults, constructor arguments, and attribute assignment. The rule is
+  correct and hard-won; it compares types through `ann_str` and `slice_span`,
+  so it cannot return before [Phase 5](#ASTREBUILD-PHASE-TYPEEXPR).
+
+- [ ] When Phase 4 reaches these two rules, read the deleted bodies first at
+      `4c2f124b^` for the spec cases they enumerate, then derive the rule from
+      the typing specification as [Phase 4](#ASTREBUILD-PHASE-RULES) requires.
+      They are a checklist of edge cases, never a source to copy.
 
 ### Rebuild from, do not restore: the type-expression evaluator {#ASTREBUILD-SALVAGE-FORMS}
 
@@ -194,24 +235,52 @@ construction.
       argument-walking structure intact and the dispatch re-keyed from
       lowercased strings to `BindingTable::form_of`.
 
-### Already in the tree: the inference and narrowing foundations {#ASTREBUILD-SALVAGE-INFERENCE}
+### Already in the tree, and clean: the inference engine {#ASTREBUILD-SALVAGE-INFERENCE}
 
-Commit `e3e97d30` (#377, "shared inference, narrowing, and subtyping
-foundations") was **not** lost to the purge. Every file it added survives, and
-the tests grew rather than shrank (`narrow_flow_tests.rs` 284 → 997 lines).
-Scanned for the banned mechanisms:
+**The type-inference system is not among the losses.** It survives whole, it is
+larger than when it was written, and it is very nearly free of the defect this
+plan exists to remove. This is the single most important fact for sequencing
+the rebuild, because it means Phase 5 has a working engine to swap *into*.
 
-| File | Verdict |
+Its history reads as a loss and is not one. `e3e97d30` ([#377](https://github.com/Nimblesite/Basilisk/pull/377)) built the shared
+inference, narrowing, and subtyping foundations. `3c328130` ([#413](https://github.com/Nimblesite/Basilisk/pull/413)) then appears
+to gut it — `inference.rs` drops from 670 lines to 130, `rules/shared.rs` from
+628 to 307. Both are **consolidations**: that commit created `expr_type.rs`
+(+359) and exploded `tyeval.rs` into `tyeval/{lower,eval,accept,term,queries}`
+(~1,390 lines), while `shared.rs` became `shared/{oracle,judge,class_walks,
+module_types,returns_judge}`. Today the machinery totals roughly 8,200 lines:
+
+| Component | LOC |
 |---|---|
-| `inference.rs`, `narrow/reachability.rs`, `narrow/env.rs`, `narrow/set_ops.rs`, `bidir/generics.rs` | Clean. `rhs_fully_determines_type` consumes the resolver's `RhsKind` ADT — a resolved answer, not a spelling. |
-| `narrow/flow.rs`, `narrow/guards.rs`, `subtyping.rs` | Algorithms are sound; they consume `InferredType::Named(String)`, so they inherit the condemned layer (`from_annotation` calls, `name == "range"`, `sup == "object"`). |
+| `bidir/` — bidirectional engine, constraints, solving, tyvars | 2,966 |
+| `narrow/` — flow, guards, reachability, rebinding, set ops | 2,253 |
+| `tyeval/` — lowering, evaluation, acceptance, terms | 1,374 |
+| `types.rs`, `expr_type.rs`, `subtyping.rs`, `inference.rs` | 1,319 |
 
-The narrowing and subtyping **algorithms** are real work that does not need
-redoing. What they sit on does. That makes
-[Phase 5](#ASTREBUILD-PHASE-TYPEEXPR) a representation swap underneath working
-code, not a rewrite of it — and it is the reason Phase 5 is worth its size.
+Audited with both scans — text mechanisms (`slice_span`, `from_annotation`,
+`ann_str`, `.lines()`, `starts_with("`) and Python typing-symbol string
+literals, over production code with comments stripped:
 
----
+- **Zero** unlawful symbol recognition. The only symbol literals in the whole
+  system are `write!(f, "Any")` and `write!(f, "Never")` inside
+  `impl fmt::Display for InferredType` — rendering, which
+  [the law](#ASTREBUILD-LAW) permits.
+- **Nine** text-mechanism sites, and every one is the *same* boundary:
+  `InferredType::from_annotation` (six calls, in `tyeval/lower.rs`,
+  `narrow/flow.rs`, `narrow/guards.rs`) and three
+  `name == "type" || name.starts_with("type[")` tests that exist only because
+  the name is a `String`. `type` is a true builtin, so the *name* is permitted;
+  the *mechanism* is not.
+
+The algorithms — bidirectional checking, constraint solving, type-term
+lowering and acceptance, flow-sensitive narrowing, reachability, subtyping —
+never touch source text. `InferredType::Named(String)` is the sole leak, and it
+is a boundary rather than a diffusion.
+
+- [ ] Sequence [Phase 5](#ASTREBUILD-PHASE-TYPEEXPR) accordingly. Its 130-site
+      count lives in the **rules**, not the engine; the engine needs one
+      representation change at nine call sites. Do the engine's boundary first
+      and the rules' call sites become mechanical.
 
 ## The pattern every rebuild follows {#ASTREBUILD-PATTERN}
 
