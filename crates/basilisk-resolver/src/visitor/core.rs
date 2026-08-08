@@ -61,7 +61,7 @@ pub(super) fn collect_from_stmt(
 ) {
     match stmt {
         Stmt::FunctionDef(func) => {
-            functions.push(function_info_from(func, None));
+            functions.push(function_info_from(bindings, func, None));
             collect_from_body(
                 bindings,
                 &func.body,

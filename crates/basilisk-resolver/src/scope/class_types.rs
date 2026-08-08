@@ -112,6 +112,17 @@ pub struct ClassInfo {
     pub is_final: bool,
     /// `true` when the class directly or transitively inherits from an `Enum` family class.
     pub is_enum: bool,
+    /// `true` when a declared base resolves to `typing.Protocol` (bare or subscripted).
+    ///
+    /// Resolved through the module's bindings at collection time — never from
+    /// the base's spelling. Implements [RESOLV-CANONICAL-BINDING].
+    pub is_protocol: bool,
+    /// `true` when a declared base resolves to `typing.NamedTuple` or
+    /// `collections.namedtuple`'s class form.
+    ///
+    /// Resolved through the module's bindings at collection time — never from
+    /// the base's spelling. Implements [RESOLV-CANONICAL-BINDING].
+    pub is_namedtuple: bool,
     /// `true` when the class uses PEP 695 type parameter syntax (`class Foo[T]: ...`).
     pub has_pep695_type_params: bool,
     /// Names of the PEP 695 type parameters declared in `[...]` for this class.

@@ -86,7 +86,7 @@ pub(super) fn collect_class_body(
                 );
             }
             Stmt::FunctionDef(func) => {
-                let func_info = function_info_from(func, Some(class.name.to_string()));
+                let func_info = function_info_from(bindings, func, Some(class.name.to_string()));
                 let method_name = func_info.name.clone();
                 let decs = func_info.decorators.clone();
                 functions.push(func_info);

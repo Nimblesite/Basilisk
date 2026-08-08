@@ -184,6 +184,23 @@ pub struct FunctionInfo {
     /// `LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-INLAYHINTS`).  Kept separate
     /// from `local_vars`, which is annotated-only for the checker rules.
     pub local_unannotated_vars: Vec<VariableInfo>,
+    /// `true` when a decorator resolves to `typing.overload`.
+    ///
+    /// Resolved through the module's bindings at collection time — an aliased
+    /// `from typing import overload as ov` answers identically and a local
+    /// `def overload` does not answer. Implements [RESOLV-CANONICAL-BINDING].
+    pub is_overload: bool,
+    /// `true` when a decorator is the builtin `staticmethod` and the module does
+    /// not rebind that name. Implements [RESOLV-CANONICAL-BINDING].
+    pub is_staticmethod: bool,
+    /// `true` when a decorator is the builtin `classmethod` and the module does
+    /// not rebind that name. Implements [RESOLV-CANONICAL-BINDING].
+    pub is_classmethod: bool,
+    /// `true` when a decorator resolves to `typing.no_type_check`.
+    ///
+    /// Resolved through the module's bindings at collection time. Implements
+    /// [RESOLV-CANONICAL-BINDING].
+    pub is_no_type_check: bool,
     /// `true` when the function body contains at least one `yield` or `yield from`.
     pub is_generator: bool,
     /// `true` when the function is declared with `async def`.

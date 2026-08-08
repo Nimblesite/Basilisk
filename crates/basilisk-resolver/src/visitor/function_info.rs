@@ -1,9 +1,12 @@
 //! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
 //! Function Info visitor functions.
 
-use ruff_python_ast::{Expr, Parameter, ParameterWithDefault, Stmt, StmtFunctionDef, StmtReturn};
+use ruff_python_ast::{
+    Decorator, Expr, Parameter, ParameterWithDefault, Stmt, StmtFunctionDef, StmtReturn,
+};
 use ruff_text_size::Ranged;
 
+use crate::canonical::{BindingTable, TypingForm};
 use crate::scope::{
     FunctionInfo, ParameterInfo, ReturnAnnotationKind, ReturnStmtInfo, RhsKind, Span, VariableInfo,
 };
@@ -19,7 +22,37 @@ use super::type_alias::type_param_name;
 use super::unhashable::collect_unhashable_keys_from_stmts;
 use super::yield_exprs::{collect_yield_exprs, stmt_contains_yield};
 
+/// Does any decorator on this definition resolve to `form`?
+///
+/// The question is the decorator **node**, resolved through the module's
+/// bindings — never its spelling. Implements [RESOLV-CANONICAL-BINDING].
+fn has_decorator_form(bindings: &BindingTable, decorators: &[Decorator], form: TypingForm) -> bool {
+    decorators
+        .iter()
+        .any(|decorator| bindings.form_of(&decorator.expression) == Some(form))
+}
+
+/// Does any decorator denote the builtin named `builtin`?
+///
+/// Builtins need no import, so no registry entry describes them and
+/// [`BindingTable::form_of`] cannot answer. Recognition is a bare `Name` node
+/// carrying the identifier, and only while the module has not bound that name
+/// to something of its own — which [`BindingTable::binds_name`] decides. Only
+/// [`function_info_from`] calls this, with the two method-descriptor builtins
+/// fixed at the call sites.
+fn has_builtin_decorator(
+    bindings: &BindingTable,
+    decorators: &[Decorator],
+    builtin: &str,
+) -> bool {
+    !bindings.binds_name(builtin)
+        && decorators.iter().any(|decorator| {
+            matches!(&decorator.expression, Expr::Name(name) if name.id.as_str() == builtin)
+        })
+}
+
 pub(super) fn function_info_from(
+    bindings: &BindingTable,
     func: &StmtFunctionDef,
     class_name: Option<String>,
 ) -> FunctionInfo {
@@ -111,6 +144,14 @@ pub(super) fn function_info_from(
         pep695_type_param_names,
         local_vars,
         local_unannotated_vars,
+        is_overload: has_decorator_form(bindings, &func.decorator_list, TypingForm::Overload),
+        is_staticmethod: has_builtin_decorator(bindings, &func.decorator_list, "staticmethod"),
+        is_classmethod: has_builtin_decorator(bindings, &func.decorator_list, "classmethod"),
+        is_no_type_check: has_decorator_form(
+            bindings,
+            &func.decorator_list,
+            TypingForm::NoTypeCheck,
+        ),
         is_generator: func.body.iter().any(stmt_contains_yield),
         is_async: func.is_async,
         yield_exprs,
