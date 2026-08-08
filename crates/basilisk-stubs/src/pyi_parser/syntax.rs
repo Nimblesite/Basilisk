@@ -21,23 +21,24 @@ pub(super) fn has_decorator_form(
         .any(|decorator| bindings.form_of(&decorator.expression) == Some(form))
 }
 
-/// Does any decorator on this definition denote the builtin named `builtin`?
+/// Does any decorator on this definition denote the builtin `staticmethod`?
 ///
-/// `staticmethod` and `classmethod` need no import, so no registry entry
-/// describes them and [`BindingTable::form_of`] cannot answer. Recognition is
-/// therefore a bare `Name` node carrying that identifier, and only while the
-/// module has not bound the name to something of its own — which
-/// [`BindingTable::binds_name`] is what decides. No source text is consulted.
-pub(super) fn has_builtin_decorator(
+/// `staticmethod` needs no import, so no registry entry describes it and
+/// [`BindingTable::form_of`] cannot answer. Recognition is therefore a bare
+/// `Name` node carrying that identifier, and only while the module has not
+/// bound the name to something of its own — which [`BindingTable::binds_name`]
+/// decides. The builtin is fixed here on purpose: an API taking the name as a
+/// parameter would let callers recognise arbitrary symbols by spelling.
+pub(super) fn has_staticmethod_decorator(
     bindings: &BindingTable,
     decorators: &[Decorator],
-    builtin: &str,
 ) -> bool {
-    if bindings.binds_name(builtin) {
+    const BUILTIN: &str = "staticmethod";
+    if bindings.binds_name(BUILTIN) {
         return false;
     }
     decorators.iter().any(|decorator| {
-        matches!(&decorator.expression, Expr::Name(name) if name.id.as_str() == builtin)
+        matches!(&decorator.expression, Expr::Name(name) if name.id.as_str() == BUILTIN)
     })
 }
 
@@ -58,7 +59,7 @@ pub(super) fn stub_method(
     let mut params = extract_params(&function.parameters);
     // A static method has no receiver to strip; every other method binds its
     // first parameter as one.
-    let receiver = if has_builtin_decorator(bindings, &function.decorator_list, "staticmethod")
+    let receiver = if has_staticmethod_decorator(bindings, &function.decorator_list)
         || params.is_empty()
     {
         None
@@ -74,6 +75,7 @@ pub(super) fn stub_method(
             .as_ref()
             .map(|annotation| expr_to_annotation(annotation)),
         is_async: function.is_async,
+        is_overload: has_decorator_form(bindings, &function.decorator_list, TypingForm::Overload),
         decorators,
         class_name: Some(class_name.to_owned()),
         source_span: StubSpan {

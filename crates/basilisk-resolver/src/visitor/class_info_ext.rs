@@ -7,6 +7,7 @@ use ruff_python_ast::{
 };
 use ruff_text_size::Ranged;
 
+use crate::canonical::BindingTable;
 use crate::scope::{
     BaseSubscriptEntry, ClassInfo, FunctionInfo, ImportInfo, ImportKind, ImportResolution,
     MatchStmtInfo, Span, TypeArg,
@@ -16,10 +17,10 @@ use super::calls_and_reveal::expr_to_type_arg;
 use super::class_info::collect_class_body;
 use super::core::text_range_to_span;
 use super::function_info::collect_name_refs_from_expr;
-use super::generics::extract_generic_params;
 use super::type_alias::type_param_name;
 
 pub(super) fn class_info_from(
+    bindings: &BindingTable,
     class: &StmtClassDef,
     functions: &mut Vec<FunctionInfo>,
     match_stmts: &mut Vec<MatchStmtInfo>,
@@ -27,9 +28,13 @@ pub(super) fn class_info_from(
     let bases = extract_class_bases(class);
 
     let (attributes, method_names, method_decorators) =
-        collect_class_body(class, functions, match_stmts);
+        collect_class_body(bindings, class, functions, match_stmts);
 
-    let (generic_params, generic_non_typevar_args) = extract_generic_params(class);
+    // The `Generic[...]` / `Protocol[...]` base-name scanner that produced this
+    // pair was deleted as text-matched logic. PEP 695 parameters are still read
+    // from the AST below; the legacy subscripted-base form is inert pending
+    // [ASTREBUILD-PHASE-RESOLVER].
+    let (generic_params, generic_non_typevar_args) = (Vec::new(), Vec::new());
 
     let (base_expression_names, has_subscript_base) = extract_base_refs(class);
 
@@ -61,6 +66,25 @@ pub(super) fn class_info_from(
         base_subscripts: extract_base_subscripts(class),
         has_manual_slots: class_has_manual_slots(class),
         docstring: extract_docstring(&class.body),
+        // Every flag below was set by a decorator-name / base-name spelling
+        // scanner. Those scanners were deleted as text-matched logic, so the
+        // classifications they carried are INERT — not "false because the class
+        // is not one". Rules keyed to them report nothing until
+        // [ASTREBUILD-PHASE-RESOLVER] rebuilds the classification on resolved
+        // symbols; see docs/plans/CHECKER-AST-RECONSTRUCTION-PLAN.md.
+        is_typed_dict: false,
+        is_typeddict_total: true,
+        is_dataclass: false,
+        is_dataclass_frozen: false,
+        is_dataclass_kw_only: false,
+        is_dataclass_match_args_false: false,
+        is_dataclass_order: false,
+        is_dataclass_unsafe_hash: false,
+        is_dataclass_eq_false: false,
+        is_dataclass_init_false: false,
+        is_dataclass_slots: false,
+        is_final: false,
+        is_enum: false,
     }
 }
 

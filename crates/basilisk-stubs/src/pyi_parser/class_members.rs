@@ -61,7 +61,9 @@ impl StubExtractor {
     ) {
         for stmt in stmts {
             match stmt {
-                Stmt::FunctionDef(function) => methods.push(stub_method(function, class_name)),
+                Stmt::FunctionDef(function) => {
+                    methods.push(stub_method(function, class_name, &self.bindings));
+                }
                 Stmt::AnnAssign(annotation) => {
                     if let Some(name) = ann_assign_target_name(annotation) {
                         attributes.push(StubVariable {

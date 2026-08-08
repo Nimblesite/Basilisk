@@ -137,7 +137,14 @@ fn check_call_sites(
 
         // For each matching function, check its parameter bounds
         for func in matching_functions {
-            check_function_call(func, call, source, typevar_bounds, &module.path, diagnostics);
+            check_function_call(
+                func,
+                call,
+                source,
+                typevar_bounds,
+                &module.path,
+                diagnostics,
+            );
         }
     }
 }

@@ -276,5 +276,4 @@ mod tests {
         let path = PathBuf::from("/workspace/foo/bar.py");
         assert!(file_path_to_module(&path, &roots).is_none());
     }
-
 }

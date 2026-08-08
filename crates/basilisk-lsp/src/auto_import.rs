@@ -250,8 +250,6 @@ mod tests {
         assert_eq!(derive_module_path(&path, &roots), "main");
     }
 
-
-
     #[test]
     fn generate_import_text_function() {
         let sym = ExportedSymbol {

@@ -44,7 +44,14 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
     let mut imports = Vec::new();
     let mut match_stmts = Vec::new();
 
+    // Which `typing` symbol a name denotes is decided by resolving it through
+    // the module's own imports, never by its spelling — `KW_ONLY as KO`,
+    // `dataclasses.KW_ONLY`, and a locally-defined `KW_ONLY` all answer
+    // correctly. Implements [RESOLV-CANONICAL-BINDING].
+    let bindings = basilisk_canonical::BindingTable::from_module(&module.ast.body);
+
     core::collect_from_body(
+        &bindings,
         &module.ast.body,
         &mut functions,
         &mut classes,
@@ -54,13 +61,15 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
         true,
     );
 
-    dataclass::apply_dataclass_transform(&module.ast.body, &mut classes);
-
     let calls = calls_and_reveal::collect_calls_from_stmts(&module.ast.body);
-    let typevar_calls = typevar::collect_typevar_calls(&module.ast.body);
+    // Which callee is a type-parameter factory is decided by resolving the
+    // callee node through the same bindings, so `TypeVar as TV` and
+    // `typing.TypeVar` answer identically and a locally-defined `TypeVar` does
+    // not answer at all.
+    let typevar_calls = typevar::collect_typevar_calls(&bindings, &module.ast.body);
     reclassify_generic_params(&mut classes, &typevar_calls);
 
-    let collected = collect_analysis_results(module, &classes, &functions);
+    let collected = collect_analysis_results(module, &bindings, &classes, &functions);
     build_resolved_module(
         module,
         functions,
@@ -122,6 +131,7 @@ struct AnalysisResults {
 
 fn collect_analysis_results(
     module: &ParsedModule,
+    bindings: &basilisk_canonical::BindingTable,
     classes: &[crate::scope::ClassInfo],
     functions: &[crate::scope::FunctionInfo],
 ) -> AnalysisResults {
@@ -135,37 +145,37 @@ fn collect_analysis_results(
         .collect();
     let mut isinstance_typeddict_spans =
         typeddict_ext::collect_isinstance_typeddict_violations(stmts, &typeddict_class_names);
-    isinstance_typeddict_spans.extend(typevar::collect_typevar_bound_typeddict_violations(stmts));
+    isinstance_typeddict_spans.extend(typevar::collect_typevar_bound_typeddict_violations(
+        bindings, stmts,
+    ));
 
+    // Fields initialised to an empty collection below had their collectors
+    // deleted as text-matched logic. The rules downstream of them are
+    // registered and INERT — never silently satisfied — pending
+    // [ASTREBUILD-PHASE-RESOLVER]; see docs/plans/CHECKER-AST-RECONSTRUCTION-PLAN.md.
     AnalysisResults {
         reveal_type_calls: calls_and_reveal::collect_reveal_type_calls(stmts),
         assert_type_calls: calls_and_reveal::collect_assert_type_calls_from_stmts(stmts, source),
-        typeddict_calls: typeddict::collect_typeddict_calls(stmts),
-        newtype_calls: type_alias::collect_newtype_calls(stmts),
-        namedtuple_defs: type_alias::collect_namedtuple_defs(stmts, source),
+        typeddict_calls: Vec::new(),
+        newtype_calls: Vec::new(),
+        namedtuple_defs: Vec::new(),
         multiple_unbounded_tuple_spans: annotations::collect_multiple_unbounded_tuple_spans(stmts),
         module_bare_assignments: assigns::collect_module_bare_assignments(stmts),
         module_attr_assignments: assigns::collect_module_attr_assignments(stmts),
-        final_issues: final_readonly_ext::collect_final_violations(stmts, classes, source),
+        final_issues: final_readonly_ext::collect_final_violations(bindings, stmts, classes, source),
         float_param_int_attr_accesses: module_level::collect_float_param_int_attr_accesses(
             stmts, source,
         ),
-        literal_string_enum_mismatches: enum_checks::collect_literal_string_enum_mismatches(
-            stmts, source,
-        ),
+        literal_string_enum_mismatches: Vec::new(),
         readonly_issues: final_readonly::collect_readonly_violations(stmts, classes, source),
-        protocol_self_issues: protocol::collect_protocol_self_violations(
-            stmts, classes, functions, source,
-        ),
-        protocol_instantiation_issues: protocol::collect_protocol_instantiation_violations(
-            stmts, classes,
-        ),
+        protocol_self_issues: Vec::new(),
+        protocol_instantiation_issues: Vec::new(),
         isinstance_typeddict_spans,
         typeddict_key_issues: typeddict::collect_typeddict_key_violations(stmts, classes, source),
         generic_subscript_sites: generics::collect_generic_subscript_sites(stmts),
         type_alias_defs: type_alias::collect_type_alias_defs(stmts),
         unhashable_hash_calls: unhashable::collect_unhashable_hash_calls(stmts, classes),
-        protocol_rtc_issues: protocol_ext::collect_protocol_rtc_violations(stmts, classes),
+        protocol_rtc_issues: Vec::new(),
         generator_issues: module_level::collect_generator_violations(functions, source),
     }
 }
@@ -186,11 +196,10 @@ fn build_resolved_module(
     results: AnalysisResults,
 ) -> ResolvedModule {
     let stmts = &module.ast.body;
-    let type_alias_type_violations = {
-        let tv_names: std::collections::HashSet<String> =
-            typevar_calls.iter().map(|tv| tv.name.clone()).collect();
-        type_alias::collect_type_alias_type_violations(stmts, &tv_names)
-    };
+    // `TypeAliasType` validation was deleted with its text-matched recogniser
+    // and depended on the equally-deleted `TypeVar` census. Inert pending
+    // [ASTREBUILD-PHASE-RESOLVER].
+    let type_alias_type_violations = Vec::new();
     let mut tuple_index_violations = key_lambda::collect_key_lambda_tuple_violations(
         stmts,
         &functions,
@@ -236,18 +245,15 @@ fn build_resolved_module(
         readonly_violations: results.readonly_issues,
         annotated_direct_call_spans: Vec::new(),
         imported_final_names: final_readonly::collect_imported_final_names(stmts, &module.path),
-        imported_final_methods: final_readonly::collect_imported_final_methods(stmts, &module.path),
-        type_alias_type_calls: type_alias::collect_type_alias_type_calls(stmts),
+        imported_final_methods: std::collections::HashMap::new(),
+        type_alias_type_calls: Vec::new(),
         type_alias_type_violations,
         type_statements: type_alias::collect_type_statements(stmts),
         annotated_too_few_args: Vec::new(),
         namedtuple_defs: results.namedtuple_defs,
         float_param_int_attr_accesses: results.float_param_int_attr_accesses,
         literal_string_enum_mismatches: results.literal_string_enum_mismatches,
-        enum_value_type_violations: enum_checks::collect_enum_value_type_violations(
-            stmts,
-            &module.source,
-        ),
+        enum_value_type_violations: Vec::new(),
         local_classvar_violations: Vec::new(),
         pep695_bound_violations: generics::collect_pep695_bound_violations(stmts),
         historical_positional_violations: historical::collect_historical_positional_violations(

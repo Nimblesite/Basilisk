@@ -60,6 +60,7 @@ Plans contain only unfinished work. Delete a plan when its acceptance gate passe
 | [Runtime typeshed resolution](plans/CHECKER-TYPESHED-RUNTIME-PLAN.md) | Two open items: a socket-instrumented witness that checking is offline across CLI/LSP/MCP, and byte-exact per-artifact licensing verification inside the VSIX (binaries and wheels are already verified). |
 | [PyPI typeshed package pin](plans/CHECKER-TYPESHED-PYPI-PLAN.md) | Pin a PyPI typeshed distribution by wheel SHA-256, verify offline, auto-resolve from `uv.lock`; suppresses the source-status advisory (issue #312). |
 | [Delete checker text matching](plans/CHECKER-ELIMINATE-LINE-SCANNING-PLAN.md) | The inventory of rules that decide from source text, the failing-test → delete → report disposal, and the unbuilt semantics-preserving mutation harness. |
+| [Python permutation testing](plans/CHECKER-PYTHON-PERMUTATION-PLAN.md) | The permutation engine, corpus tiers, and three oracles that test the checker on Python it has never seen — plus the five metrics (grid fill, seeded-defect kill rate, construct coverage, discovery curve, rule-layer source access) that say when the suite is strong enough. |
 | [WASM](plans/WASM-PLAN.md) | CI wasm build and size ratchet, multi-file in-memory VFS, and the playground site. |
 | [Advanced checker features](plans/CHECKER-ADVANCED-FEATURES-PLAN.md) | Dependency-hygiene rules, plugin host, migration, and CI helpers. |
 

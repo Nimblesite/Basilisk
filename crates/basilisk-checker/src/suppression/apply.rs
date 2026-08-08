@@ -87,11 +87,9 @@ pub(crate) fn changing_audit_directive(
             };
             changes.then_some(audit_index).flatten()
         }
-        SelectedOverride::Relaxed { audit_index } => {
-            (severity == Severity::Error)
-                .then_some(audit_index)
-                .flatten()
-        }
+        SelectedOverride::Relaxed { audit_index } => (severity == Severity::Error)
+            .then_some(audit_index)
+            .flatten(),
     }
 }
 

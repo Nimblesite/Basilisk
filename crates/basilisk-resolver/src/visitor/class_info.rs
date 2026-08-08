@@ -45,6 +45,7 @@ fn mark_nested_in_class(functions: &mut [FunctionInfo], from: usize) {
 }
 
 pub(super) fn collect_class_body(
+    bindings: &BindingTable,
     class: &StmtClassDef,
     functions: &mut Vec<FunctionInfo>,
     match_stmts: &mut Vec<MatchStmtInfo>,
@@ -59,21 +60,29 @@ pub(super) fn collect_class_body(
         match stmt {
             Stmt::AnnAssign(ann) => {
                 // Detect `_: KW_ONLY` sentinel — skip it as a real attribute.
-                if is_kw_only_sentinel(ann) {
+                if is_kw_only_sentinel(bindings, ann) {
                     after_kw_only_sentinel = true;
-                } else if let Some(attr) = ann_attribute(ann, after_kw_only_sentinel, None) {
+                } else if let Some(attr) =
+                    ann_attribute(bindings, ann, after_kw_only_sentinel, None)
+                {
                     attributes.push(attr);
                 }
             }
             Stmt::Assign(assign) => {
-                assign_attributes(assign, None, &mut attributes);
+                assign_attributes(bindings, assign, None, &mut attributes);
             }
             // A `if sys.version_info >= (...)` / `if TYPE_CHECKING` guard inside a
             // class body conditionally defines fields. Collect them, tagged with
             // the guard so `resolve_with_target` can prune the ones that do not
             // exist for the target version.
             Stmt::If(if_stmt) => {
-                collect_guarded_fields(if_stmt, None, after_kw_only_sentinel, &mut attributes);
+                collect_guarded_fields(
+                    bindings,
+                    if_stmt,
+                    None,
+                    after_kw_only_sentinel,
+                    &mut attributes,
+                );
             }
             Stmt::FunctionDef(func) => {
                 let func_info = function_info_from(func, Some(class.name.to_string()));
@@ -85,6 +94,7 @@ pub(super) fn collect_class_body(
                 // `generics_self_usage` does not treat their `Self` as module-level usage.
                 let nested_start = functions.len();
                 collect_from_body(
+                    bindings,
                     &func.body,
                     functions,
                     &mut Vec::new(),
@@ -100,7 +110,7 @@ pub(super) fn collect_class_body(
             Stmt::ClassDef(inner_class) => {
                 // Nested classes contribute method FunctionInfos for annotation
                 // checking; only module-level classes enter the module schema.
-                let _inner_info = class_info_from(inner_class, functions, match_stmts);
+                let _inner_info = class_info_from(bindings, inner_class, functions, match_stmts);
             }
             _ => {}
         }
@@ -280,6 +290,7 @@ fn assign_attributes(
 /// enclosing guard). Methods and nested classes inside guards are intentionally
 /// left to the existing unconditional handling.
 fn collect_guarded_fields(
+    bindings: &BindingTable,
     if_stmt: &StmtIf,
     outer: Option<&StaticCondition>,
     after_kw_only_sentinel: bool,
@@ -287,7 +298,13 @@ fn collect_guarded_fields(
 ) {
     let test = parse_static_condition(&if_stmt.test);
     let if_guard = combine_guards(outer, test.clone());
-    collect_fields_in_branch(&if_stmt.body, &if_guard, after_kw_only_sentinel, attributes);
+    collect_fields_in_branch(
+        bindings,
+        &if_stmt.body,
+        &if_guard,
+        after_kw_only_sentinel,
+        attributes,
+    );
 
     // Each elif/else branch is reached only when every preceding test was false.
     let mut prior_negations = vec![StaticCondition::Not(Box::new(test))];
@@ -303,12 +320,19 @@ fn collect_guarded_fields(
             None => StaticCondition::All(prior_negations.clone()),
         };
         let guard = combine_guards(outer, branch);
-        collect_fields_in_branch(&clause.body, &guard, after_kw_only_sentinel, attributes);
+        collect_fields_in_branch(
+            bindings,
+            &clause.body,
+            &guard,
+            after_kw_only_sentinel,
+            attributes,
+        );
     }
 }
 
 /// Collect the field statements (and nested `if`s) of a single guarded branch.
 fn collect_fields_in_branch(
+    bindings: &BindingTable,
     stmts: &[Stmt],
     guard: &StaticCondition,
     after_kw_only_sentinel: bool,
@@ -316,18 +340,24 @@ fn collect_fields_in_branch(
 ) {
     for stmt in stmts {
         match stmt {
-            Stmt::AnnAssign(ann) if !is_kw_only_sentinel(ann) => {
+            Stmt::AnnAssign(ann) if !is_kw_only_sentinel(bindings, ann) => {
                 if let Some(attr) =
-                    ann_attribute(ann, after_kw_only_sentinel, Some(guard.clone()))
+                    ann_attribute(bindings, ann, after_kw_only_sentinel, Some(guard.clone()))
                 {
                     attributes.push(attr);
                 }
             }
             Stmt::Assign(assign) => {
-                assign_attributes(assign, Some(guard), attributes);
+                assign_attributes(bindings, assign, Some(guard), attributes);
             }
             Stmt::If(nested) => {
-                collect_guarded_fields(nested, Some(guard), after_kw_only_sentinel, attributes);
+                collect_guarded_fields(
+                    bindings,
+                    nested,
+                    Some(guard),
+                    after_kw_only_sentinel,
+                    attributes,
+                );
             }
             _ => {}
         }

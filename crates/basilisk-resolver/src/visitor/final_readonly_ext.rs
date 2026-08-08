@@ -4,13 +4,15 @@
 use ruff_python_ast::{Expr, Stmt, StmtClassDef, StmtFunctionDef};
 use ruff_text_size::Ranged;
 
+use crate::canonical::BindingTable;
 use crate::scope::ClassInfo;
 
-use super::annotations::ann_text_is_final;
+use super::annotations::annotation_is_final;
 use super::assigns::collect_unconditional_self_assigns;
 use super::core::{source_slice_range, source_slice_span, text_range_to_span};
 
 pub(super) fn collect_final_violations(
+    bindings: &BindingTable,
     stmts: &[Stmt],
     classes: &[ClassInfo],
     source: &str,
@@ -25,9 +27,11 @@ pub(super) fn collect_final_violations(
             let Expr::Name(n) = ann.target.as_ref() else {
                 return None;
             };
-            let range = ann.annotation.range();
-            let ann_text = source_slice_range(source, range)?;
-            ann_text_is_final(ann_text).then(|| n.id.as_str())
+            // `Final` is decided by resolving the annotation NODE through the
+            // module's bindings — `Final as F`, `typing.Final`, and a locally
+            // shadowed `Final` all answer correctly, and no source text is read.
+            // Implements [RESOLV-CANONICAL-BINDING].
+            annotation_is_final(bindings, &ann.annotation).then(|| n.id.as_str())
         })
         .collect();
 

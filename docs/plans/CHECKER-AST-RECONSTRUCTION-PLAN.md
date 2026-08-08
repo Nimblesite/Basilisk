@@ -1,7 +1,11 @@
 # Rebuild the checker on the AST {#ASTREBUILD}
 
 > **Status (2026-08-08):** the deletion phase is complete and the rebuild has
-> not started. Basilisk's former 100% `python/typing` claim is withdrawn, the
+> begun: [Phase 0a](#ASTREBUILD-PHASE-COMPILE-CANONICAL) and
+> [0b](#ASTREBUILD-PHASE-COMPILE-OVERLOAD) are done, so the build now reaches
+> `basilisk-resolver` and stops there —
+> [0d](#ASTREBUILD-PHASE-COMPILE-MEASURE) has the measured breakdown.
+> Basilisk's former 100% `python/typing` claim is withdrawn, the
 > project is not listed in the [official results](https://github.com/python/typing/blob/main/conformance/results/results.html),
 > and the current conformance level is **unknown**. Nothing in this plan
 > licenses publishing a number; [ASTREBUILD-PHASE-EVIDENCE](#ASTREBUILD-PHASE-EVIDENCE)
@@ -24,10 +28,10 @@ Recognition is a question about **definitions**, answered from the AST plus
 binding resolution. It is never a question about the characters at the use site.
 
 A rebuilt rule asks *what does this expression refer to?* and receives a
-[`TypingForm`](../../crates/basilisk-resolver/src/canonical/form.rs) — Basilisk's
+[`TypingForm`](../../crates/basilisk-canonical/src/form.rs) — Basilisk's
 own enum, whose variants are the **answer** the resolver produces, never the
 question a rule asks. The Python spellings that identify each definition site
-live in `crates/basilisk-resolver/resources/typing_symbols.toml` as data, and
+live in `crates/basilisk-canonical/resources/typing_symbols.toml` as data, and
 appear in no Rust file.
 
 Banned in every crate, in every form — see the symbol-naming ban in
@@ -60,22 +64,26 @@ commands given.
 
 ### Compile blockers {#ASTREBUILD-INVENTORY-BUILD}
 
-The workspace does not build. `cargo check --workspace` stops in
-`basilisk-stubs` before reaching the checker, so the true downstream error count
-is unknown until the first item is fixed.
+The workspace does not build. As first measured, `cargo check --workspace`
+stopped in `basilisk-stubs`; [Phase 0a/0b](#ASTREBUILD-PHASE-COMPILE) fixed
+that, and the build now stops in `basilisk-resolver` —
+[0d](#ASTREBUILD-PHASE-COMPILE-MEASURE) classifies its 32 errors. The checker
+and LSP have still never been reached, so their error counts remain unknown.
 
-| Site | Break |
-|---|---|
-| `crates/basilisk-stubs/src/pyi_parser.rs:476,491`, `pyi_parser/syntax.rs:27` | `StubFunction::is_overload` is read and matched but never populated — the decorator recognition that set it was deleted. |
-| `crates/basilisk-checker/src/rules/missing_parameter_annotation.rs:191,195` | Calls `shared::decorator_spelled`, which no longer exists. |
-| `crates/basilisk-checker/src/rules/calls_argument_count/method_binding.rs:135` | Same. |
+| Site | Break | Status |
+|---|---|---|
+| `basilisk-stubs` `pyi_parser` | `StubFunction::is_overload` was read and matched but never populated — the decorator recognition that set it was deleted. | Fixed in [0b](#ASTREBUILD-PHASE-COMPILE-OVERLOAD) |
+| `crates/basilisk-checker/src/rules/missing_parameter_annotation.rs:191,195` | Calls `shared::decorator_spelled`, which no longer exists. | Open — [0c](#ASTREBUILD-PHASE-COMPILE-DECORATORS) |
+| `crates/basilisk-checker/src/rules/calls_argument_count/method_binding.rs:135` | Same. | Open — [0c](#ASTREBUILD-PHASE-COMPILE-DECORATORS) |
 
 ### Resolver {#ASTREBUILD-INVENTORY-RESOLVER}
 
-- [`BindingTable`](../../crates/basilisk-resolver/src/canonical/binding.rs) is
-  built and exported but **reaches no consumer**. `ResolvedModule` has no
+- [`BindingTable`](../../crates/basilisk-canonical/src/binding.rs) is
+  built and exported but **reaches no rule**. `ResolvedModule` has no
   `bindings` field, so no rule can ask a lawful question today. This is the
-  keystone.
+  keystone. (The stub parser now builds its own table per `.pyi` module —
+  [0b](#ASTREBUILD-PHASE-COMPILE-OVERLOAD) — which is correct: stubs are
+  separate modules with separate imports.)
 - `crates/basilisk-resolver/tests/canonical_registry.rs` does not exist. The 92
   registry entries in `resources/typing_symbols.toml` are unvalidated against
   bundled typeshed.
@@ -213,6 +221,25 @@ semantics that took real work to encode:
       the typing specification as [Phase 4](#ASTREBUILD-PHASE-RULES) requires.
       They are a checklist of edge cases, never a source to copy.
 
+### Rebuild from, do not restore: the resolver collectors {#ASTREBUILD-SALVAGE-COLLECTORS}
+
+The 17 collectors `visitor/mod.rs` still calls were vetted individually against
+their last living version (`01956fbb^`, `7ca57287^`). Sixteen decide from
+spellings — `collect_typeddict_calls`, `collect_newtype_calls`,
+`extract_generic_params`, `parse_dataclass_transform_decorator`,
+`collect_protocol_self_violations` and the rest each compare rendered names or
+match hardcoded symbol text. None returns.
+
+One's **traversal** is clean — and only the traversal. `collect_typevar_calls`
+has a statement walk (assignments, recursion into class bodies) worth keeping.
+Everything around that loop that decides what a callee or a name *means* — the
+spelling recognizer, the string `callee` parameter it threads through, the
+uppercase-letter name guess — is the banned mechanism and stays dead.
+
+- [ ] Rebuild it keeping the walk and the argument-shape reading; resolve the
+      callee through `form_of`; carry the resolved form rather than a string;
+      treat a name as a type variable only when its declaration was collected.
+
 ### Rebuild from, do not restore: the type-expression evaluator {#ASTREBUILD-SALVAGE-FORMS}
 
 `crates/basilisk-checker/src/annotation/forms.rs` lost 142 lines in `31ef02d8`
@@ -228,8 +255,7 @@ name** (`"literal"`, `"callable"`, `"concatenate"`), which the older cheat
 inventory classed as legitimate because the string came from the import
 cascade rather than the use site. [ASTREBUILD-LAW](#ASTREBUILD-LAW) is stricter
 and supersedes it: the answer must be a `TypingForm`, and a Python spelling may
-not appear in a `.rs` file at all. The restored ratchet fails on the old file by
-construction.
+not appear in a `.rs` file at all.
 
 - [ ] Rebuild the evaluator in [Phase 5](#ASTREBUILD-PHASE-TYPEEXPR) with the
       argument-walking structure intact and the dispatch re-keyed from
@@ -326,38 +352,54 @@ completes. Three breaks, and one crate move they depend on.
 
 #### 0a — put the canonical layer where every crate can reach it {#ASTREBUILD-PHASE-COMPILE-CANONICAL}
 
-Recognition has to be available to `basilisk-stubs`, which parses `.pyi` files
-with the same Ruff parser and must answer the same questions. It cannot reach
-`canonical/` where that module lives today, because `basilisk-resolver` already
-depends on `basilisk-stubs`.
+**Done.** Recognition has to be available to `basilisk-stubs`, which parses
+`.pyi` files with the same Ruff parser and must answer the same questions. It
+could not reach `canonical/` inside the resolver, because `basilisk-resolver`
+already depends on `basilisk-stubs`.
 
-`canonical/` is self-contained — 586 LOC across `form.rs`, `binding.rs`, and
-`mod.rs`, importing only `ruff_python_ast`, `serde`, and `std`, with no
-`crate::` reference to the rest of the resolver — so it moves without edits.
-
-- [ ] Create `crates/basilisk-canonical` from
+- [x] `crates/basilisk-canonical` created by `git mv` from
       `crates/basilisk-resolver/src/canonical/`, carrying
-      `resources/typing_symbols.toml` with it.
-- [ ] Re-export `BindingTable`, `TypingForm`, and `CanonicalSymbol` from
-      `basilisk-resolver` so no existing consumer's import path changes.
-- [ ] Depend on it from `basilisk-stubs` and `basilisk-resolver`. One registry
+      `resources/typing_symbols.toml` with it. Dependencies: `ruff_python_ast`,
+      `serde`, `toml` — nothing else.
+- [x] `BindingTable`, `TypingForm`, and `CanonicalSymbol` re-exported from
+      `basilisk-resolver` (`src/lib.rs`) so no existing consumer's import path
+      changes.
+- [x] `basilisk-stubs` and `basilisk-resolver` both depend on it. One registry
       answers for the whole workspace; a second copy of the vocabulary anywhere
       is the defect returning.
 
+The move surfaced that the module had never compiled under workspace lints
+(the build always died in `basilisk-stubs` first): 89 undocumented `TypingForm`
+variants and 7 `unused_results` violations, all fixed in place.
+
 #### 0b — populate `StubFunction::is_overload` {#ASTREBUILD-PHASE-COMPILE-OVERLOAD}
 
-`pyi_parser.rs:491` routes a function into `self.overloads` on this flag, and
-`pyi_parser/syntax.rs:27` no longer sets it.
+`pyi_parser.rs` routed functions into `self.overloads` on a flag nothing set —
+the decorator recognition that set it was deleted.
 
-- [ ] Build a `BindingTable` for each `.pyi` module and set `is_overload` from
-      `form_of(decorator)  == Some(TypingForm::Overload)`. A stub that writes
-      `from typing import overload as _ov` must group identically.
-- [ ] Re-key the receiver decision at `pyi_parser/syntax.rs:20`, which reads
-      `decorator.ends_with("staticmethod")` on a rendered string. The builtin
-      name is permitted; reconstructing it from rendered text is not.
-- [ ] `StubFunction::decorators` is a `Vec<String>` of rendered names — the
-      shape that made both defects possible. Carry resolved forms alongside it,
-      and stop new decisions being made from the strings.
+- [x] `StubExtractor` builds one `BindingTable` per `.pyi` module
+      (`Arc`-shared into `if`-branch clones) and sets `is_overload` from
+      `has_decorator_form(bindings, decorators, TypingForm::Overload)`. A stub
+      that writes `from typing import overload as _ov` groups identically; a
+      stub that defines its own `overload` does not resolve at all.
+- [x] The receiver decision, which read `decorator.ends_with("staticmethod")`
+      on a rendered string, is re-keyed to `has_staticmethod_decorator`: a bare
+      `Name` decorator node carrying the builtin identifier, rejected whenever
+      the module binds that name itself (`BindingTable::binds_name`). The
+      builtin is **fixed inside the function** — an API taking the name as a
+      parameter would be the third banned row of
+      [the law](#ASTREBUILD-LAW) behind a helper.
+- [ ] `StubFunction::decorators` is still a `Vec<String>` of rendered names —
+      the shape that made both defects possible. 0b added a lawful path for the
+      stub parser's own decisions; it did **not** retire the strings. Live
+      downstream consumers that still decide from them:
+      `shared::overload_decorated(resolver, &f.decorators)` in the six
+      `overloads_*` rules, and
+      `overloads_consistency_3.rs::is_type_only_decorator`, which `rsplit`s the
+      rendered name on `.` and matches
+      `"staticmethod" | "classmethod" | "property"` — the banned match-arm
+      form. Carry resolved forms on `StubFunction`, migrate those consumers,
+      then delete the string field.
 
 #### 0c — replace the `decorator_spelled` call sites {#ASTREBUILD-PHASE-COMPILE-DECORATORS}
 
@@ -369,12 +411,54 @@ Three callers reference a helper that no longer exists:
       **node**. Both are true builtins needing no import, so recognising them is
       permitted — matching them against sliced source text is not.
 
-#### 0d — measure what Phase 0 uncovered {#ASTREBUILD-PHASE-COMPILE-MEASURE}
+#### 0d — measured: what Phase 0 uncovered {#ASTREBUILD-PHASE-COMPILE-MEASURE}
 
-- [ ] Record the full downstream error list once the workspace compiles. The
-      inventory above was taken through a build that stops in `basilisk-stubs`,
-      so the real count is unknown and may be larger.
+Done. `basilisk-canonical` and `basilisk-stubs` compile, so the build now
+reaches `basilisk-resolver` and stops there with **32 errors**. Nothing
+downstream of the resolver has been compiled yet, so the checker and LSP counts
+remain unknown.
+
+**Phase 0 cannot finish inside Phase 0.** The resolver does not fail on
+diagnostics it can no longer emit; it fails to *compile*, because the deleted
+collectors are load-bearing for `visitor::collect`. Restoring the build
+therefore requires the front half of Phase 1 and most of Phase 2:
+
+| Cause | Count | Phase that owns it |
+|---|---|---|
+| Deleted collectors and helpers still referenced (`E0425`/`E0432`) | 17 | [Phase 2](#ASTREBUILD-PHASE-RESOLVER) |
+| Callers not passing `&BindingTable` to already-migrated predicates | 7 | [Phase 1](#ASTREBUILD-PHASE-BINDING) |
+| Signature drift in `typeddict`/`core`/`final_readonly` helpers | 6 | [Phase 2](#ASTREBUILD-PHASE-RESOLVER) |
+| `ClassInfo` initializer missing 13 declared-nature fields | 1 | [Phase 3](#ASTREBUILD-PHASE-CLASSINFO) |
+| Unused import left behind by the deletions | 1 | [Phase 2](#ASTREBUILD-PHASE-RESOLVER) |
+
+**Phase 1 is already part-built**, which the inventory did not record: 13 leaf
+predicates across `visitor/{annotations,class_info,dataclass,final_readonly}.rs`
+already take `&BindingTable` and decide through `form_of`. They are correct and
+they are unreachable — nothing constructs a table or passes one. Threading it is
+what makes them live, and it is the cheapest way to shrink the error count.
+
+- [ ] Thread `&BindingTable` from `visitor::collect` to the 13 migrated
+      predicates, closing the 7 arity errors.
+- [ ] Rebuild the 17 collectors ([Phase 2](#ASTREBUILD-PHASE-RESOLVER)); only
+      `collect_typevar_calls` is recoverable from history, and only its
+      traversal — see [ASTREBUILD-SALVAGE-COLLECTORS](#ASTREBUILD-SALVAGE-COLLECTORS).
 - [ ] `make lint` and `make fmt` clean.
+
+#### 0e — a spelling heuristic found and deleted {#ASTREBUILD-PHASE-COMPILE-DELETION}
+
+`visitor/typevar.rs::is_typevar_like_name` decided a name was a type parameter
+because it was **a single uppercase letter**, and its own doc comment conceded
+the guess: "almost universally `TypeVars`". `bound_refs_outer_typeparam` used it
+to treat any such name as an outer type parameter, so a module-level
+`class T:` was read as a type parameter and a genuine type parameter named `Key`
+was invisible.
+
+Deleted under the [CLAUDE.md](../../CLAUDE.md) protocol, with two failing tests
+left behind in `tests/resolver/test_pep695.rs` pinning both directions. The
+explicit `outer_typeparams` membership test remains and is lawful.
+
+- [ ] Make those two tests pass by resolving the bound expression through the
+      module's bindings, not by restoring a name-shape guess.
 
 ### Phase 1 — deliver binding resolution to consumers {#ASTREBUILD-PHASE-BINDING}
 

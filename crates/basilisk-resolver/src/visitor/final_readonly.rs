@@ -9,7 +9,7 @@ use crate::scope::{ClassInfo, ReadOnlyViolationInfo, ReadOnlyViolationKind};
 use crate::canonical::BindingTable;
 
 use super::annotations::annotation_is_final;
-use super::core::{source_slice_range, text_range_to_span};
+use super::core::text_range_to_span;
 
 pub(super) fn collect_final_string_constants<'a>(
     bindings: &BindingTable,
@@ -219,7 +219,7 @@ pub(super) fn collect_imported_final_names(
         let Ok(sibling) = basilisk_parser::parse_file(sibling_path_str) else {
             continue;
         };
-        let sibling_finals = collect_file_final_names(&sibling.ast.body, &sibling.source);
+        let sibling_finals = collect_file_final_names(&sibling.ast.body);
         let is_star = import_from.names.iter().any(|a| a.name.as_str() == "*");
         if is_star {
             out.extend(sibling_finals);
@@ -234,4 +234,3 @@ pub(super) fn collect_imported_final_names(
     }
     out
 }
-

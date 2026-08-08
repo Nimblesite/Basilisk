@@ -313,4 +313,3 @@ fn check_class_attributes(
         }
     }
 }
-

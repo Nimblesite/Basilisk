@@ -4,6 +4,7 @@
 use ruff_python_ast::{ElifElseClause, ExceptHandler, Expr, Stmt};
 use ruff_text_size::TextRange;
 
+use crate::canonical::BindingTable;
 use crate::scope::{
     ClassInfo, FunctionInfo, ImportInfo, MatchStmtInfo, RhsKind, Span, TypedDictKeyViolation,
     TypedDictKeyViolationKind, VariableInfo,
@@ -22,6 +23,7 @@ use super::typeddict::{
 use super::typeddict_ext::{td_check_ann_assign, td_check_expr_reads, td_check_regular_assign};
 
 pub(super) fn collect_from_body(
+    bindings: &BindingTable,
     stmts: &[Stmt],
     functions: &mut Vec<FunctionInfo>,
     classes: &mut Vec<ClassInfo>,
@@ -32,6 +34,7 @@ pub(super) fn collect_from_body(
 ) {
     for stmt in stmts {
         collect_from_stmt(
+            bindings,
             stmt,
             functions,
             classes,
@@ -48,6 +51,7 @@ pub(super) fn collect_from_body(
     reason = "AST visitor covers many statement types"
 )]
 pub(super) fn collect_from_stmt(
+    bindings: &BindingTable,
     stmt: &Stmt,
     functions: &mut Vec<FunctionInfo>,
     classes: &mut Vec<ClassInfo>,
@@ -60,6 +64,7 @@ pub(super) fn collect_from_stmt(
         Stmt::FunctionDef(func) => {
             functions.push(function_info_from(func, None));
             collect_from_body(
+                bindings,
                 &func.body,
                 functions,
                 &mut Vec::new(),
@@ -70,11 +75,12 @@ pub(super) fn collect_from_stmt(
             );
         }
         Stmt::ClassDef(class) => {
-            let class_info = class_info_from(class, functions, match_stmts);
+            let class_info = class_info_from(bindings, class, functions, match_stmts);
             classes.push(class_info);
         }
         Stmt::If(node) => {
             collect_from_body(
+                bindings,
                 &node.body,
                 functions,
                 classes,
@@ -84,6 +90,7 @@ pub(super) fn collect_from_stmt(
                 is_module_level,
             );
             collect_from_elif_else(
+                bindings,
                 &node.elif_else_clauses,
                 functions,
                 classes,
@@ -95,6 +102,7 @@ pub(super) fn collect_from_stmt(
         }
         Stmt::For(node) => {
             collect_from_body(
+                bindings,
                 &node.body,
                 functions,
                 classes,
@@ -104,6 +112,7 @@ pub(super) fn collect_from_stmt(
                 is_module_level,
             );
             collect_from_body(
+                bindings,
                 &node.orelse,
                 functions,
                 classes,
@@ -115,6 +124,7 @@ pub(super) fn collect_from_stmt(
         }
         Stmt::While(node) => {
             collect_from_body(
+                bindings,
                 &node.body,
                 functions,
                 classes,
@@ -124,6 +134,7 @@ pub(super) fn collect_from_stmt(
                 is_module_level,
             );
             collect_from_body(
+                bindings,
                 &node.orelse,
                 functions,
                 classes,
@@ -135,6 +146,7 @@ pub(super) fn collect_from_stmt(
         }
         Stmt::With(node) => {
             collect_from_body(
+                bindings,
                 &node.body,
                 functions,
                 classes,
@@ -146,6 +158,7 @@ pub(super) fn collect_from_stmt(
         }
         Stmt::Try(node) => {
             collect_from_body(
+                bindings,
                 &node.body,
                 functions,
                 classes,
@@ -155,6 +168,7 @@ pub(super) fn collect_from_stmt(
                 is_module_level,
             );
             collect_from_handlers(
+                bindings,
                 &node.handlers,
                 functions,
                 classes,
@@ -164,6 +178,7 @@ pub(super) fn collect_from_stmt(
                 is_module_level,
             );
             collect_from_body(
+                bindings,
                 &node.orelse,
                 functions,
                 classes,
@@ -173,6 +188,7 @@ pub(super) fn collect_from_stmt(
                 is_module_level,
             );
             collect_from_body(
+                bindings,
                 &node.finalbody,
                 functions,
                 classes,
@@ -200,6 +216,7 @@ pub(super) fn collect_from_stmt(
             match_stmts.push(match_stmt_info_from(node));
             for case in &node.cases {
                 collect_from_body(
+                    bindings,
                     &case.body,
                     functions,
                     classes,
@@ -215,6 +232,7 @@ pub(super) fn collect_from_stmt(
 }
 
 pub(super) fn collect_from_elif_else(
+    bindings: &BindingTable,
     clauses: &[ElifElseClause],
     functions: &mut Vec<FunctionInfo>,
     class_defs: &mut Vec<ClassInfo>,
@@ -225,6 +243,7 @@ pub(super) fn collect_from_elif_else(
 ) {
     for clause in clauses {
         collect_from_body(
+            bindings,
             &clause.body,
             functions,
             class_defs,
@@ -237,6 +256,7 @@ pub(super) fn collect_from_elif_else(
 }
 
 pub(super) fn collect_from_handlers(
+    bindings: &BindingTable,
     handlers: &[ExceptHandler],
     functions: &mut Vec<FunctionInfo>,
     classes: &mut Vec<ClassInfo>,
@@ -248,6 +268,7 @@ pub(super) fn collect_from_handlers(
     for handler in handlers {
         let ExceptHandler::ExceptHandler(h) = handler;
         collect_from_body(
+            bindings,
             &h.body,
             functions,
             classes,
@@ -402,7 +423,6 @@ pub(super) fn types_match(actual: &str, expected: &str) -> bool {
 pub(super) fn check_td_stmts(
     fields: &TdFieldMap<'_>,
     var_type: &std::collections::HashMap<String, String>,
-    final_consts: &std::collections::HashMap<String, String>,
     stmts: &[Stmt],
     out: &mut Vec<TypedDictKeyViolation>,
 ) {
@@ -412,12 +432,12 @@ pub(super) fn check_td_stmts(
             Stmt::Assign(node) => {
                 td_check_subscript_assign(node, var_type, fields, out);
                 td_check_regular_assign(node, var_type, fields, out);
-                td_check_expr_reads(&node.value, var_type, fields, final_consts, out);
+                td_check_expr_reads(&node.value, var_type, fields, out);
             }
             Stmt::AnnAssign(node) => {
                 td_check_ann_assign(node, fields, out);
                 if let Some(val) = &node.value {
-                    td_check_expr_reads(val, var_type, fields, final_consts, out);
+                    td_check_expr_reads(val, var_type, fields, out);
                 }
             }
             Stmt::Expr(expr_stmt) => {
@@ -449,7 +469,7 @@ pub(super) fn check_td_stmts(
                         }
                     }
                 }
-                td_check_expr_reads(&expr_stmt.value, var_type, fields, final_consts, out);
+                td_check_expr_reads(&expr_stmt.value, var_type, fields, out);
             }
             Stmt::Delete(del) => {
                 // `del td[k]` is only an error when `k` is a literal naming a
@@ -502,7 +522,7 @@ pub(super) fn check_td_stmts(
                         }
                     }
                 }
-                check_td_stmts(fields, &local_vars, final_consts, &func.body, out);
+                check_td_stmts(fields, &local_vars, &func.body, out);
             }
             _ => {}
         }
