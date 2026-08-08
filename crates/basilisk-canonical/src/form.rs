@@ -221,6 +221,37 @@ pub enum TypingForm {
     OrderedDict,
     /// `defaultdict` — a mapping with a default factory.
     DefaultDict,
+    // Builtin classes
+    /// `int` — the builtin integer class.
+    IntClass,
+    /// `float` — the builtin floating-point class.
+    FloatClass,
+    /// `complex` — the builtin complex-number class.
+    ComplexClass,
+    /// `bool` — the builtin boolean class, a subclass of `int`.
+    BoolClass,
+    /// `str` — the builtin string class.
+    StrClass,
+    /// `bytes` — the builtin bytes class.
+    BytesClass,
+    /// `bytearray` — the builtin mutable bytes class.
+    BytearrayClass,
+    /// `object` — the universal base class.
+    ObjectClass,
+    /// `list` — the builtin list class.
+    ListClass,
+    /// `dict` — the builtin dictionary class.
+    DictClass,
+    /// `set` — the builtin set class.
+    SetClass,
+    /// `frozenset` — the builtin frozen-set class.
+    FrozensetClass,
+    /// `tuple` — the builtin tuple class.
+    TupleClass,
+    /// `type` — the builtin metaclass.
+    TypeClass,
+    /// `types.NoneType` — the type of `None`.
+    NoneTypeClass,
     // Enumerations
     /// `enum.Enum` — the enumeration base class.
     EnumBase,

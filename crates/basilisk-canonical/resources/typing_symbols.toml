@@ -542,3 +542,81 @@ form = "enum-nonmember"
 modules = ["enum"]
 name = "auto"
 form = "enum-auto"
+
+# ---------------------------------------------------------------------------
+# Builtin classes
+# ---------------------------------------------------------------------------
+[[symbol]]
+modules = ["builtins"]
+name = "int"
+form = "int-class"
+
+[[symbol]]
+modules = ["builtins"]
+name = "float"
+form = "float-class"
+
+[[symbol]]
+modules = ["builtins"]
+name = "complex"
+form = "complex-class"
+
+[[symbol]]
+modules = ["builtins"]
+name = "bool"
+form = "bool-class"
+
+[[symbol]]
+modules = ["builtins"]
+name = "str"
+form = "str-class"
+
+[[symbol]]
+modules = ["builtins"]
+name = "bytes"
+form = "bytes-class"
+
+[[symbol]]
+modules = ["builtins"]
+name = "bytearray"
+form = "bytearray-class"
+
+[[symbol]]
+modules = ["builtins"]
+name = "object"
+form = "object-class"
+
+[[symbol]]
+modules = ["builtins"]
+name = "list"
+form = "list-class"
+
+[[symbol]]
+modules = ["builtins"]
+name = "dict"
+form = "dict-class"
+
+[[symbol]]
+modules = ["builtins"]
+name = "set"
+form = "set-class"
+
+[[symbol]]
+modules = ["builtins"]
+name = "frozenset"
+form = "frozenset-class"
+
+[[symbol]]
+modules = ["builtins"]
+name = "tuple"
+form = "tuple-class"
+
+[[symbol]]
+modules = ["builtins"]
+name = "type"
+form = "type-class"
+
+[[symbol]]
+modules = ["types"]
+name = "NoneType"
+form = "none-type-class"

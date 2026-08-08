@@ -192,6 +192,52 @@ class Circle:
     );
 }
 
+/// A same-spelled binding inside a function belongs to that function's local
+/// scope and cannot suppress the module's builtin fallback.
+#[test]
+fn function_local_shadow_does_not_change_staticmethod() {
+    let stub = parse_stub(
+        "
+def helper():
+    def staticmethod(func): ...
+
+class Circle:
+    @staticmethod
+    def make(radius: float) -> float: ...
+",
+    );
+    let make = method(&stub, "Circle", "make");
+    assert_eq!(make.receiver, None);
+    assert_eq!(make.params.len(), 1);
+    assert_eq!(
+        make.params.first().map(|param| param.name.as_str()),
+        Some("radius")
+    );
+}
+
+/// `staticmethod` remains effective when another valid decorator is stacked
+/// above it; recognition must inspect all resolved decorator expressions.
+#[test]
+fn stacked_decorators_still_strip_staticmethod_receiver() {
+    let stub = parse_stub(
+        "
+from typing import final
+
+class Circle:
+    @final
+    @staticmethod
+    def make(radius: float) -> float: ...
+",
+    );
+    let make = method(&stub, "Circle", "make");
+    assert_eq!(make.receiver, None);
+    assert_eq!(make.params.len(), 1);
+    assert_eq!(
+        make.params.first().map(|param| param.name.as_str()),
+        Some("radius")
+    );
+}
+
 /// An undecorated method always binds its first parameter as the receiver.
 #[test]
 fn undecorated_method_binds_receiver() {
