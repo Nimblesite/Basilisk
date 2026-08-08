@@ -27,7 +27,6 @@ use basilisk_resolver::{
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
-use super::shared::annotation_is_classvar;
 use super::Rule;
 
 mod method_binding;
@@ -309,11 +308,7 @@ fn body_delegates_construction(call_fn: &FunctionInfo) -> bool {
 /// Collects the positional (non-kw_only, non-init_false, non-ClassVar) fields of a
 /// dataclass in declaration order. These are the fields that correspond positionally
 /// to constructor arguments when no keyword arguments are used.
-fn positional_dataclass_fields<'a>(
-    class_info: &'a ClassInfo,
-    resolver: &crate::annotation::AnnotationResolver<'_>,
-    source: &str,
-) -> Vec<&'a AttributeInfo> {
+fn positional_dataclass_fields(class_info: &ClassInfo) -> Vec<&AttributeInfo> {
     class_info
         .attributes
         .iter()
@@ -322,18 +317,14 @@ fn positional_dataclass_fields<'a>(
                 && !a.is_init_false
                 && !a.is_kw_only
                 && !a.is_init_var
-                && !annotation_is_classvar(resolver, source, a.annotation_span)
+                && !a.is_class_var
         })
         .collect()
 }
 
 /// Counts the required (no-default) positional dataclass fields.
-fn required_dataclass_field_count(
-    class_info: &ClassInfo,
-    resolver: &crate::annotation::AnnotationResolver<'_>,
-    source: &str,
-) -> usize {
-    positional_dataclass_fields(class_info, resolver, source)
+fn required_dataclass_field_count(class_info: &ClassInfo) -> usize {
+    positional_dataclass_fields(class_info)
         .into_iter()
         .filter(|a| !a.has_value)
         .count()
@@ -381,7 +372,6 @@ fn is_clearly_incompatible(arg_type: &str, param_ann: &str) -> bool {
 fn check_dataclass_arg_types(
     class_info: &ClassInfo,
     call: &basilisk_resolver::CallSite,
-    resolver: &crate::annotation::AnnotationResolver<'_>,
     source: &str,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
@@ -393,7 +383,7 @@ fn check_dataclass_arg_types(
         return;
     }
 
-    let fields = positional_dataclass_fields(class_info, resolver, source);
+    let fields = positional_dataclass_fields(class_info);
 
     for (idx, (arg_kind, arg_span)) in call.args.iter().enumerate() {
         let Some(field) = fields.get(idx) else {
@@ -433,9 +423,10 @@ fn check_dataclass_arg_types(
 /// class's `__new__` or `__init__` method, but only if the metaclass `__call__`
 /// passes arguments through (uses `*args, **kwargs`).
 fn check_constructor_calls(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-    let Some(resolver) = crate::annotation::AnnotationResolver::for_module(module) else {
+    // Bail on parse errors — those are reported separately as BSK-0000.
+    if crate::annotation::AnnotationResolver::for_module(module).is_none() {
         return;
-    };
+    }
     // Build a map of class names for quick lookup.
     let class_map = super::shared::class_name_map(&module.classes);
 
@@ -505,7 +496,6 @@ fn check_constructor_calls(module: &ResolvedModule, diagnostics: &mut Vec<Diagno
             check_dataclass_no_explicit_constructor(
                 class_info,
                 call,
-                &resolver,
                 &module.source,
                 &module.path,
                 diagnostics,
@@ -527,7 +517,6 @@ fn check_constructor_calls(module: &ResolvedModule, diagnostics: &mut Vec<Diagno
 fn check_dataclass_no_explicit_constructor(
     class_info: &ClassInfo,
     call: &basilisk_resolver::CallSite,
-    resolver: &crate::annotation::AnnotationResolver<'_>,
     source: &str,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
@@ -557,7 +546,7 @@ fn check_dataclass_no_explicit_constructor(
     }
 
     // Normal synthesised __init__: check required field count.
-    let required_count = required_dataclass_field_count(class_info, resolver, source);
+    let required_count = required_dataclass_field_count(class_info);
 
     if provided_count < required_count {
         let missing = required_count - provided_count;
@@ -578,7 +567,7 @@ fn check_dataclass_no_explicit_constructor(
 
     // Also check argument types for literal arguments.
     if provided_count > 0 {
-        check_dataclass_arg_types(class_info, call, resolver, source, path, diagnostics);
+        check_dataclass_arg_types(class_info, call, source, path, diagnostics);
     }
 }
 

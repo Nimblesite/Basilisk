@@ -23,7 +23,6 @@ use crate::span_util::slice_span;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
-use crate::annotation::AnnotationResolver;
 
 const CODE: ErrorCode = ErrorCode {
     code: "overloads_consistency_3",

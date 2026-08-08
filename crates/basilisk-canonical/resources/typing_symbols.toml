@@ -411,8 +411,11 @@ modules = ["typing", "typing_extensions", "collections.abc"]
 name = "Sized"
 form = "sized"
 
+# `typing.Set` / `typing_extensions.Set` are the deprecated aliases of
+# builtins.set — they are the `set-alias` entry below, NOT this abstract form.
+# The abstract set at those modules is spelled `AbstractSet`.
 [[symbol]]
-modules = ["typing", "typing_extensions", "collections.abc"]
+modules = ["collections.abc"]
 name = "Set"
 form = "abstract-set"
 
@@ -454,8 +457,11 @@ modules = ["typing", "typing_extensions"]
 name = "Type"
 form = "type-alias-builtin"
 
+# `collections` defines lowercase `deque` — the real class, not this deprecated
+# typing alias — so it must not appear here. If a rule ever needs to recognise
+# the class itself, register `collections.deque` under a non-alias form.
 [[symbol]]
-modules = ["typing", "typing_extensions", "collections"]
+modules = ["typing", "typing_extensions"]
 name = "Deque"
 form = "deque-alias"
 

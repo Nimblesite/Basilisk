@@ -80,7 +80,7 @@ impl KeyLambdaCollector<'_> {
         for func in enclosing {
             for var in func.local_vars.iter().chain(&func.local_unannotated_vars) {
                 if var.name == name {
-                    return self.variable_tuple_len(var);
+                    return variable_tuple_len(var);
                 }
             }
             for param in &func.parameters {
@@ -92,17 +92,17 @@ impl KeyLambdaCollector<'_> {
         self.module_vars
             .iter()
             .find(|v| v.name == name)
-            .and_then(|var| self.variable_tuple_len(var))
+            .and_then(variable_tuple_len)
     }
+}
 
-    /// Tuple length for a variable: its annotation when present, else the
-    /// uniform tuple length of its literal right-hand side.
-    fn variable_tuple_len(&self, var: &VariableInfo) -> Option<usize> {
-        if var.annotation_span.is_some() {
-            return None;
-        }
-        uniform_tuple_len_from_rhs(&var.rhs_kind)
+/// Tuple length for a variable: its annotation when present, else the
+/// uniform tuple length of its literal right-hand side.
+fn variable_tuple_len(var: &VariableInfo) -> Option<usize> {
+    if var.annotation_span.is_some() {
+        return None;
     }
+    uniform_tuple_len_from_rhs(&var.rhs_kind)
 }
 
 /// Match a call carrying a `key=<lambda>` whose element source is a simple

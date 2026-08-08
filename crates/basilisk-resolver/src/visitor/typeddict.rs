@@ -7,27 +7,6 @@ use crate::scope::{ClassInfo, TypedDictKeyViolation, TypedDictKeyViolationKind};
 
 use super::class_info_ext::expr_simple_name;
 use super::core::{check_td_stmts, text_range_to_span};
-/// Split `s` at every top-level comma, respecting `[](){}` nesting.
-///
-/// Returns trimmed slices into the original string.
-pub(super) fn split_top_level_args(inner: &str) -> Vec<&str> {
-    let mut parts = Vec::new();
-    let mut depth: usize = 0;
-    let mut start = 0;
-    for (idx, ch) in inner.char_indices() {
-        match ch {
-            '[' | '(' | '{' => depth += 1,
-            ']' | ')' | '}' => depth = depth.saturating_sub(1),
-            ',' if depth == 0 => {
-                parts.push(inner[start..idx].trim());
-                start = idx + 1;
-            }
-            _ => {}
-        }
-    }
-    parts.push(inner[start..].trim());
-    parts
-}
 
 /// Collect `TypedDict` key/value violations from module-level statements and function bodies.
 ///

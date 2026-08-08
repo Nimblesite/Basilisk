@@ -11,7 +11,6 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{FunctionInfo, ResolvedModule, Span};
 
-use crate::annotation::AnnotationResolver;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;

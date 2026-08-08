@@ -20,7 +20,6 @@ use basilisk_resolver::{AttributeInfo, ClassInfo, ResolvedModule};
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
-use super::shared::annotation_is_classvar;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
@@ -38,14 +37,15 @@ impl Rule for DataclassFieldOrder {
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        let Some(resolver) = crate::annotation::AnnotationResolver::for_module(module) else {
+        // Bail on parse errors — those are reported separately as BSK-0000.
+        if crate::annotation::AnnotationResolver::for_module(module).is_none() {
             return;
-        };
+        }
         for class in &module.classes {
             // Inheritance reorders fields through the MRO; only check standalone
             // dataclasses, mirroring the conservatism of E0041.
             if class.is_dataclass && class.bases.is_empty() {
-                check_class(class, &resolver, &module.source, &module.path, diagnostics);
+                check_class(class, &module.path, diagnostics);
             }
         }
     }
@@ -54,27 +54,17 @@ impl Rule for DataclassFieldOrder {
 /// Returns `true` when `attr` is a positional `__init__` field (so it
 /// participates in default-ordering). `InitVar` fields are included — they DO
 /// become `__init__` parameters.
-fn is_positional_init_field(
-    attr: &AttributeInfo,
-    resolver: &crate::annotation::AnnotationResolver<'_>,
-    source: &str,
-) -> bool {
+fn is_positional_init_field(attr: &AttributeInfo) -> bool {
     attr.has_annotation
         && !attr.is_init_false
         && !attr.is_kw_only
-        && !annotation_is_classvar(resolver, source, attr.annotation_span)
+        && !attr.is_class_var
 }
 
-fn check_class(
-    class: &ClassInfo,
-    resolver: &crate::annotation::AnnotationResolver<'_>,
-    source: &str,
-    path: &str,
-    out: &mut Vec<Diagnostic>,
-) {
+fn check_class(class: &ClassInfo, path: &str, out: &mut Vec<Diagnostic>) {
     let mut seen_default = false;
     for attr in &class.attributes {
-        if !is_positional_init_field(attr, resolver, source) {
+        if !is_positional_init_field(attr) {
             continue;
         }
         if attr.has_value {

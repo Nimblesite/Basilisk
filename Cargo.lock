@@ -220,8 +220,12 @@ name = "basilisk-canonical"
 version = "0.0.0-PLACEHOLDER"
 dependencies = [
  "ruff_python_ast",
+ "ruff_python_parser",
+ "ruff_text_size",
  "serde",
+ "thiserror",
  "toml",
+ "tracing",
 ]
 
 [[package]]

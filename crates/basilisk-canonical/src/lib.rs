@@ -10,6 +10,7 @@
 
 mod binding;
 mod form;
+mod registry;
 
 pub use binding::BindingTable;
 pub use form::{

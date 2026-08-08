@@ -3,11 +3,12 @@
 //! The registry-load contract: every `[[symbol]]` entry in
 //! `resources/typing_symbols.toml` must resolve through [`form_at`].
 //!
-//! `form.rs` degrades a malformed registry to an EMPTY index rather than
-//! panicking, and its doc comment names this test as the guard that makes that
-//! degradation safe. Without this test a single bad `form` string fails the
-//! whole typed parse and every canonical lookup in the workspace silently
-//! returns `None` — recognition dies while the build stays green.
+//! `src/registry.rs` degrades a bad registry (parse failure OR duplicated
+//! definition site) to an EMPTY index rather than panicking, and its doc
+//! comment names this test as the guard that makes that degradation safe.
+//! Without this test a single bad entry fails the whole load and every
+//! canonical lookup in the workspace returns `None` — recognition dies while
+//! the build stays green.
 
 use std::collections::BTreeMap;
 

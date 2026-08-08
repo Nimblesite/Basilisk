@@ -11,10 +11,9 @@
 //! each definition site live in `resources/typing_symbols.toml`, as data, and
 //! appear in no Rust file.
 
-use std::collections::HashMap;
-use std::sync::OnceLock;
-
 use serde::Deserialize;
+
+use crate::registry::registry;
 
 /// A fully-qualified definition site: the module a symbol is defined in, and
 /// the name it is defined under there.
@@ -296,50 +295,6 @@ impl TypingForm {
                 | Self::ReprEnum
         )
     }
-}
-
-/// One registry entry as it appears in the data file.
-#[derive(Debug, Deserialize)]
-struct RegistryEntry {
-    modules: Vec<String>,
-    name: String,
-    form: TypingForm,
-}
-
-/// The registry data file's top-level shape.
-#[derive(Debug, Deserialize)]
-struct RegistryFile {
-    symbol: Vec<RegistryEntry>,
-}
-
-/// The specification registry, as data. No Rust file contains these spellings.
-const REGISTRY_SOURCE: &str = include_str!("../resources/typing_symbols.toml");
-
-/// Module → name → form, built once from the registry data file.
-type RegistryIndex = HashMap<String, HashMap<String, TypingForm>>;
-
-/// The parsed registry, or an empty index if the data file is malformed.
-///
-/// A malformed registry is a build-time defect caught by
-/// `tests/canonical_registry.rs`; degrading to an empty index here keeps the
-/// resolver total rather than panicking in a library.
-fn registry() -> &'static RegistryIndex {
-    static REGISTRY: OnceLock<RegistryIndex> = OnceLock::new();
-    REGISTRY.get_or_init(|| {
-        let mut index: RegistryIndex = HashMap::new();
-        let Ok(parsed) = toml::from_str::<RegistryFile>(REGISTRY_SOURCE) else {
-            return index;
-        };
-        for entry in parsed.symbol {
-            for module in entry.modules {
-                let _ = index
-                    .entry(module)
-                    .or_default()
-                    .insert(entry.name.clone(), entry.form);
-            }
-        }
-        index
-    })
 }
 
 /// The specification form defined at `symbol`'s definition site, if any.
