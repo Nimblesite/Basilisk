@@ -4,6 +4,7 @@
 Code here must comfortably pass review at a top-tier engineering org. Fix shortcomings as you find them.
 
 AIM: IMPLEMENT THE PYTHON TYPING SPEC AND THE SPIRIT OF THE SPEC (https://docs.python.org/3/library/typing.html)
+
 NON-AIMS: PASSING THE PEP TESTS JUST FOR THE SAKE OF SCORING HIGHER
 
 # Accuracy Is the Prime Directive

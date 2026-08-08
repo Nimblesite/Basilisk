@@ -17,8 +17,7 @@ use super::class_info_ext::{
     match_stmt_info_from,
 };
 use super::function_info::function_info_from;
-use super::typeddict::{
-    canonicalize_type_str, td_check_subscript_assign, td_var_type_from_stmts, TdFieldMap,
+use super::typeddict::{td_check_subscript_assign, td_var_type_from_stmts, TdFieldMap,
 };
 use super::typeddict_ext::{td_check_ann_assign, td_check_expr_reads, td_check_regular_assign};
 
@@ -379,45 +378,6 @@ pub(super) fn source_slice_span(source: &str, span: Span) -> Option<&str> {
     let start = usize::try_from(span.start).ok()?;
     let end = usize::try_from(span.end).ok()?;
     source.get(start..end)
-}
-
-// ---------------------------------------------------------------------------
-// PEP 695 type parameter bound violation detection (for BSK-0087)
-// ---------------------------------------------------------------------------
-
-/// Walk all statements and collect PEP 695 type parameter bound violations.
-///
-/// Detects invalid `TypeVar` bound/constraint forms in PEP 695 `class Foo[T: ...]` syntax:
-/// - List literal as bound: `class Foo[T: [str, int]]`
-/// - Empty constraint tuple: `class Foo[T: ()]`
-/// - Single-element constraint tuple: `class Foo[T: (str,)]`
-/// - Non-literal (variable) constraint: `class Foo[T: t1]` where `t1 = (str, bytes)`
-/// - Invalid constraint element: `class Foo[T: (3, bytes)]` (integer literal in tuple)
-pub(super) fn types_match(actual: &str, expected: &str) -> bool {
-    let actual = actual.trim();
-    let expected = expected.trim();
-
-    if actual == expected {
-        return true;
-    }
-
-    // Handle quoted forward references: `"ClassA"` == `ClassA`
-    let actual_unquoted = if (actual.starts_with('"') && actual.ends_with('"'))
-        || (actual.starts_with('\'') && actual.ends_with('\''))
-    {
-        &actual[1..actual.len() - 1]
-    } else {
-        actual
-    };
-    if actual_unquoted != actual && actual_unquoted == expected {
-        return true;
-    }
-
-    // Equivalent-spelling fallback: `Union[a, b]` == `a | b`, and fixed unpacked
-    // tuples flatten (`tuple[int, *tuple[bool, bool], str]` == `tuple[int, bool, bool, str]`).
-    // Order is preserved, so genuinely different types (e.g. `int` vs `int | str`)
-    // stay distinct. See [directives_assert_type_2].
-    canonicalize_type_str(actual) == canonicalize_type_str(expected)
 }
 
 pub(super) fn check_td_stmts(

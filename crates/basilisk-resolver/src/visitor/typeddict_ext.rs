@@ -323,17 +323,23 @@ pub(super) fn expr_literal_type_name(expr: &Expr) -> Option<&'static str> {
 }
 
 /// Return `true` if an actual literal type is compatible with an expected `TypedDict` field type.
+///
+/// Qualifier-wrapped spellings (`Required[int]`, `ReadOnly[int]`) are never
+/// unwrapped here — the text stripper that did so was deleted as spelling
+/// logic, so such fields simply do not match and produce no diagnostic until
+/// the type-expression layer replaces this comparison
+/// ([ASTREBUILD-PHASE-TYPEEXPR]).
 pub(super) fn typeddict_field_type_compatible(actual: &str, expected: &str) -> bool {
-    let stripped = crate::scope::strip_typeddict_qualifiers(expected);
+    let expected = expected.trim();
     // A union field accepts a value matching any member (`year: int | None`).
-    if stripped.contains('|') {
-        return stripped
+    if expected.contains('|') {
+        return expected
             .split('|')
-            .any(|member| typeddict_field_type_compatible(actual, member.trim()));
+            .any(|member| typeddict_field_type_compatible(actual, member));
     }
-    actual == stripped
-        || (actual == "bool" && stripped == "int")
-        || (actual == "int" && stripped == "float")
+    actual == expected
+        || (actual == "bool" && expected == "int")
+        || (actual == "int" && expected == "float")
 }
 
 /// Collect `isinstance`/`issubclass`-on-`TypedDict` violations from

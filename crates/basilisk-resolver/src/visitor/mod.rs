@@ -5,7 +5,6 @@ mod annotated_tuple_index;
 mod annotations;
 mod assert_narrow;
 mod assigns;
-mod call_return;
 mod calls_and_reveal;
 mod class_info;
 mod class_info_ext;
