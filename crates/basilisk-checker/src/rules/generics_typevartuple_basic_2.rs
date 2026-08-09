@@ -83,8 +83,11 @@ impl Rule for TypeVarTupleUnpackRequired {
             }
         }
 
-        // ILLEGAL TO RESTORE: this rule previously sliced and parsed rendered
-        // annotation text to find bare `TypeVarTuple` uses. Any replacement
-        // must inspect resolved annotation AST nodes and canonical symbols.
+        // The former implementation parsed rendered annotation text. That was
+        // illegal and has been deleted. This panic is mandatory until this path
+        // is rebuilt from resolved annotation AST nodes and canonical symbols.
+        panic!(
+            "generics_typevartuple_basic_2: annotation validation has no legal AST implementation"
+        );
     }
 }

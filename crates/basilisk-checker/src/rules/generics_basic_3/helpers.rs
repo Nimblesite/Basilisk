@@ -53,35 +53,33 @@ impl ConstrainedTypeVar {
     }
 }
 
-/// Returns `true` when `subtype` is a well-known subtype of `supertype`,
-/// or when class inheritance shows `subtype` inherits from `supertype`.
-///
-/// Deliberately narrower than the shared tower (`bool <: int` only): widening
-/// it would accept spec-invalid constraint matches this rule must flag. The
-/// current accepted/rejected cases are pinned by `helper_parity_tests`; the
-/// nominal walk merges into `crate::subtyping::SubtypingContext` at the
-/// Integration stage ([NARROWPLAN-SUBTYPING], [NARROWPLAN-INTEGRATION]).
-pub(super) fn is_subtype_of(
-    subtype: &str,
-    supertype: &str,
-    class_bases: &HashMap<String, Vec<String>>,
-) -> bool {
-    // Built-in subtype relationships.
-    if matches!((subtype, supertype), ("bool", "int")) {
-        return true;
-    }
-    // Check class inheritance chain.
-    if let Some(bases) = class_bases.get(subtype) {
-        if bases.iter().any(|b| b == supertype) {
-            return true;
-        }
-        // Recursive: check if any base is a subtype of supertype.
-        return bases
-            .iter()
-            .any(|b| is_subtype_of(b, supertype, class_bases));
-    }
-    false
-}
+// ##########################################################################
+// # DELETED — `is_subtype_of`. DO NOT RESTORE IT. DO NOT REINTRODUCE IT    #
+// # HERE OR ANYWHERE ELSE UNDER ANOTHER NAME.                              #
+// #                                                                        #
+// # This was a VENDORED COPY of the string-keyed subtyping layer deleted   #
+// # from `crate::subtyping`. Its own doc comment admitted the plan to      #
+// # merge it into `SubtypingContext` — the module that no longer exists    #
+// # precisely because it was structurally incorrect. A second copy of a    #
+// # deleted defect is the defect coming back.                              #
+// #                                                                        #
+// # Every input was a SPELLING:                                            #
+// #   fn is_subtype_of(subtype: &str, supertype: &str,                     #
+// #                    class_bases: &HashMap<String, Vec<String>>)         #
+// #   matches!((subtype, supertype), ("bool", "int"))                      #
+// #   bases.iter().any(|b| b == supertype)                                 #
+// #                                                                        #
+// # So `bool <: int` held only for those two literal spellings — never for #
+// # `from builtins import int as Whole` — and the inheritance walk         #
+// # compared base-class NAME TEXT, so a base reached under an alias was    #
+// # invisible and two unrelated classes sharing a name were conflated.     #
+// #                                                                        #
+// # The replacement resolves each base through the binding table to a      #
+// # canonical symbol and walks RESOLVED identities. The call site above is #
+// # LEFT BROKEN ON PURPOSE — it is the map of what must be rebuilt.        #
+// #                                                                        #
+// # Pinned by: tests/nominal_spelling_surgery_pin_tests.rs                 #
+// ##########################################################################
 
 /// A function signature with constrained `TypeVar` parameters.
 #[derive(Debug, Clone)]

@@ -79,7 +79,11 @@ impl Rule for MultipleTypeVarTuplesInGeneric {
 /// Scan module-level type alias definitions for `tuple[..., *X, ..., *Y, ...]`
 /// patterns that contain multiple unpack operators.
 fn check_tuple_type_multiple_unpacks(_module: &ResolvedModule, _diagnostics: &mut Vec<Diagnostic>) {
-    // ILLEGAL TO RESTORE: this function previously searched source slices for
-    // hard-coded `tuple[` text and counted stars by splitting characters. Only
-    // resolved subscript and starred-expression AST nodes may implement this.
+    // The former implementation searched source slices for hard-coded `tuple[`
+    // text and counted stars by splitting characters. That was illegal and has
+    // been deleted. This panic is mandatory until resolved subscript and
+    // starred-expression AST nodes implement the rule.
+    panic!(
+        "generics_typevartuple_specialization: tuple-unpack validation has no legal AST implementation"
+    );
 }

@@ -44,8 +44,12 @@ impl Rule for TypeVarTupleUnpackViolation {
         _ctx: &super::CheckContext,
         _diagnostics: &mut Vec<Diagnostic>,
     ) {
-        // ILLEGAL TO RESTORE: this rule previously parsed annotation strings
-        // with `contains`, `find`, `trim`, and comma splitting. Rebuild it only
-        // from resolved generic arguments, starred AST nodes, and type identity.
+        // The former implementation parsed annotation strings with `contains`,
+        // `find`, `trim`, and comma splitting. That was illegal and has been
+        // deleted. This panic is mandatory until resolved generic arguments,
+        // starred AST nodes, and type identity implement the rule.
+        panic!(
+            "generics_typevartuple_unpack: variadic-argument validation has no legal AST implementation"
+        );
     }
 }

@@ -37,7 +37,7 @@ Basilisk was **removed from the python/typing conformance results** on 2026-08-0
 In this order — **do not fix it in place, do not leave a TODO**:
 
 1. **Write a test that fails** because of the incorrect code — pin the real defect: an aliased import, a reformatted source, a shape the conformance suite never contains.
-2. **Delete the offending code.** Delete the text-matching function body, not its call site: the call sites are the map of what has to be rebuilt.
+2. **Delete the offending code.** Delete the text-matching function body, not its call site: the call sites are the map of what has to be rebuilt. The deleted body **MUST** be replaced with a loud `panic!` and nothing else — never a default, `None`, `false`, or empty result — with a comment stating plainly that it panics because the real implementation does not exist yet.
 3. **Report what you deleted, why, and which tests now fail.**
 4. **STOP**
 
@@ -76,7 +76,9 @@ A regression indicator to read and report. Nothing else.
 - **Never parse with strings or regex** — `ruff_python_parser`, `basilisk-resolver`, and the `basilisk-canonical` binding table only.
 - [Pyrefly](https://pyrefly.org/en/docs/) and [Pyright](https://microsoft.github.io/pyright/#/) are references to compare against — NEVER copy their code.
 - Use your judgment — do NOT stop to ask questions. Reporting a deletion isn't a question: report and continue.
-- No `unsafe`, no `unwrap()`, no `panic!`/`todo!`/`unimplemented!` — `Result`/`Option` with `?` and real error types.
+- **Panicking because illegal code was deleted is MANDATORY** — any code path left missing by a deletion MUST `panic!` loudly, commented to say it fires because the replacement is not implemented.
+- No `unsafe`, no `unwrap()`.
+- **Panicking as control flow or error handling is ILLEGAL** — no `panic!`/`todo!`/`unimplemented!` on any live path; `Result`/`Option` with `?` and real error types.
 - Build scripts live in the Makefile.
 - Don't use Git unless asked. Never push to `main`. Never list the agent as co-author.
 - NEVER kill a VS Code process — it disrupts active debugging and test sessions.
