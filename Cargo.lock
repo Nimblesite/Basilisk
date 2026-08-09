@@ -240,7 +240,7 @@ dependencies = [
  "ruff_python_ast",
  "ruff_python_parser",
  "ruff_text_size",
- "salsa 0.28.1",
+ "salsa 0.28.2",
  "serde",
  "serde_json",
  "tempfile",
@@ -309,7 +309,7 @@ version = "0.0.0-PLACEHOLDER"
 dependencies = [
  "basilisk-common",
  "basilisk-test-utils",
- "salsa 0.28.1",
+ "salsa 0.28.2",
  "serde",
  "serde_json",
 ]
@@ -338,7 +338,7 @@ dependencies = [
  "ruff_python_parser",
  "ruff_python_stdlib",
  "ruff_text_size",
- "salsa 0.28.1",
+ "salsa 0.28.2",
  "serde",
  "serde_json",
  "sysinfo",
@@ -440,7 +440,7 @@ dependencies = [
  "basilisk-db",
  "basilisk-parser",
  "basilisk-resolver",
- "salsa 0.28.1",
+ "salsa 0.28.2",
  "serde_json",
 ]
 
@@ -2860,9 +2860,9 @@ dependencies = [
 
 [[package]]
 name = "salsa"
-version = "0.28.1"
+version = "0.28.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a14fdadbf856222e731756d7fdbdf193a7abf8fdab009bb45f48671a42719a84"
+checksum = "cf0e374215cd2db2b5c75d7b3a99cb0cc052c0595335dfdefc03d4eb08f4aa81"
 dependencies = [
  "boxcar",
  "crossbeam-queue",
@@ -2876,8 +2876,8 @@ dependencies = [
  "portable-atomic",
  "rayon",
  "rustc-hash 2.1.1",
- "salsa-macro-rules 0.28.1",
- "salsa-macros 0.28.1",
+ "salsa-macro-rules 0.28.2",
+ "salsa-macros 0.28.2",
  "smallvec",
  "thin-vec",
  "tracing",
@@ -2892,9 +2892,9 @@ checksum = "de6872462ac73d39969a836273c24163e6a26a4e08f5114fcd80e25af30ea9c6"
 
 [[package]]
 name = "salsa-macro-rules"
-version = "0.28.1"
+version = "0.28.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50d7dc08ba69b9aedfa61dfc4d65548ae42c0d8b90bbd62cd121776920841bcf"
+checksum = "85f4b7d4405540bbd6d4ffa52d4322d983f3781954d3073067ac1bdb028459b3"
 
 [[package]]
 name = "salsa-macros"
@@ -2910,13 +2910,13 @@ dependencies = [
 
 [[package]]
 name = "salsa-macros"
-version = "0.28.1"
+version = "0.28.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec5c48c5a4a53a6e2be9762f56566f1325d4394c011c00b3ea86ba2d13411e71"
+checksum = "445be2bfbb2f67cb663225ecd7bc5a25370c0250fca30f9d8cbad9a913650370"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.119",
+ "syn 3.0.3",
 ]
 
 [[package]]
@@ -3088,9 +3088,9 @@ dependencies = [
 
 [[package]]
 name = "shipwright"
-version = "0.10.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44e64d9067b1b69ed2ee282294d6671df7b0f3185e41ac28bc78a76576a4c1b8"
+checksum = "82265de413078da593ba2a67b0d1e2b340ba4af20fd82e2ba6aba311b8d82a25"
 dependencies = [
  "serde_json",
  "shipwright-manifest",
@@ -3099,9 +3099,9 @@ dependencies = [
 
 [[package]]
 name = "shipwright-manifest"
-version = "0.10.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e90748d7c705f11412d8f2f3ee18364eb4d71e51b358c1260ef29a014960245d"
+checksum = "b580e0278cd73ef2d4e35c02c2a4836d37bb35b59d527aeb6c0785782f384d58"
 dependencies = [
  "serde",
  "serde_json",
