@@ -1025,7 +1025,7 @@
     "screenshots:editor": "node scripts/capture-screenshots.mjs"
   },
   "dependencies": {
-    "@nimblesite/shipwright-vscode": "^0.10.0",
+    "@nimblesite/shipwright-vscode": "^0.11.0",
     "@preact/signals-core": "^1.14.4",
     "vscode-languageclient": "^10.1.0"
   },
@@ -1042,9 +1042,9 @@
     "ajv-formats": "^3.0.1",
     "eslint": "^10.8.0",
     "glob": "^13.0.6",
-    "mocha": "^11.7.6",
+    "mocha": "^11.8.0",
     "typescript": "^7.0.2",
-    "typescript-eslint": "^8.65.0"
+    "typescript-eslint": "^8.66.0"
   },
   "overrides": {
     "serialize-javascript": "^7.0.6"
