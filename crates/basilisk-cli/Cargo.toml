@@ -24,8 +24,8 @@ basilisk-stubs.workspace    = true
 basilisk-typeshed-fetch.workspace = true
 clap.workspace              = true
 # Shipwright `--version` / `--version --json` contract emitter.
-shipwright                  = "0.10.0"
-shipwright-manifest         = "0.10.0"
+shipwright                  = "0.11.0"
+shipwright-manifest         = "0.11.0"
 colored.workspace           = true
 tower-lsp                   = "0.20"
 walkdir.workspace           = true
