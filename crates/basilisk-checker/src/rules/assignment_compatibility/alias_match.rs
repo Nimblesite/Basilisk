@@ -397,9 +397,33 @@ fn positive_base_match(value: &InferredType, target: &InferredType) -> bool {
     }
 }
 
-/// Extract the alias-lookup base from a `Named` text: strip surrounding quotes
-/// and any `[...]` subscript, returning the bare name.
-fn alias_base(name: &str) -> &str {
-    let trimmed = name.trim_matches(|c| c == '"' || c == '\'');
-    trimmed.split('[').next().unwrap_or(trimmed).trim()
+// ##########################################################################
+// # DELETED BODY — `alias_base`. DO NOT RESTORE IT. DO NOT SUBSTITUTE A    #
+// # PLACEHOLDER THAT RETURNS THE INPUT UNCHANGED.                          #
+// #                                                                        #
+// # It read:                                                               #
+// #   let trimmed = name.trim_matches(|c| c == '"' || c == '\'');          #
+// #   trimmed.split('[').next().unwrap_or(trimmed).trim()                  #
+// #                                                                        #
+// # Three spelling operations in two lines: unquoting a FORWARD REFERENCE  #
+// # by stripping quote characters, taking a generic head by splitting at a #
+// # bracket, and trimming whitespace that a formatter controls. A quoted   #
+// # annotation is an `Expr::StringLiteral` whose contents parse as a type  #
+// # expression — the binding table already answers it via                  #
+// # `form_of_quoted_annotation`. None of it is a text problem.             #
+// #                                                                        #
+// # Pinned by: tests/no_type_spelling_surgery_tests.rs                     #
+// ##########################################################################
+
+/// DELETED — panics. The signature survives only so its callers stay visible
+/// as the rebuild map; see the banner above.
+fn alias_base(_name: &str) -> &str {
+    panic!(
+        "basilisk-checker: `alias_base` was DELETED because it found an alias's \
+         lookup key by stripping quote characters and splitting a RENDERED type at \
+         `[`. It panics because the real implementation — resolving the annotation \
+         expression (including quoted forward references) through the binding table \
+         — DOES NOT EXIST YET. Do not restore the string surgery and do not return \
+         the input unchanged in its place."
+    )
 }

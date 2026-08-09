@@ -214,10 +214,25 @@ impl<'m> AnnotationResolver<'m> {
     /// builtin type? An unresolved spelling (a `TypeVar`, an imported class
     /// this module cannot see into, a typo) is NOT grounded, and a judgment
     /// that needs to know what the name IS must abstain rather than guess.
+    ///
+    /// DELETED — panics. The body split a RENDERED type at `[` to get its base
+    /// and then looked that STRING up in a nominal table and a builtin-name
+    /// whitelist. Both halves were spelling tests: `list[int]` and
+    /// `list [int]` disagreed, a builtin rebound in the module was still
+    /// "grounded", and `from builtins import int as Whole` was not. Whether a
+    /// leaf is grounded is a question about its BINDING — answer it from the
+    /// binding table, or abstain.
     #[must_use]
-    pub fn is_grounded_name(&self, name: &str) -> bool {
-        let base = name.split('[').next().unwrap_or(name);
-        self.tables.nominal.contains(base) || builtins::is_builtin_type_name(base)
+    pub fn is_grounded_name(&self, _name: &str) -> bool {
+        panic!(
+            "basilisk-checker: `AnnotationResolver::is_grounded_name` was DELETED \
+             because it split a RENDERED type at `[` and matched the result against a \
+             table of builtin NAME SPELLINGS. It panics because the real \
+             implementation — asking the binding table what the leaf's name is bound \
+             to — DOES NOT EXIST YET. Do not restore the split and do not answer \
+             `true`/`false` in its place: `true` lets every judgment fire on \
+             unresolvable types, `false` silences every judgment entirely."
+        )
     }
 
     /// The cascade over one type expression.

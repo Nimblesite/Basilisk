@@ -257,6 +257,18 @@ pub(crate) fn collect_transform_classes(
 /// (directly or through a transitive base), so a synthesized `__init__`
 /// accepts field arguments. The decorator-function form is deliberately
 /// excluded — the caller handles decorator-built classes separately.
+///
+/// ORPHANED, NOT DELETED. Its only caller — `constructors_call_init`'s
+/// `check_no_init_with_args` — was deleted for deriving base-class identity
+/// from source text. This function does NOT have that defect: it reads the
+/// parsed AST through `transform_providers`. It is kept because the rebuilt
+/// rule needs exactly this question answered. Do not delete it to silence the
+/// dead-code lint, and do not repair its caller by restoring the text walk.
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; this AST-based helper is \
+              retained for the rebuild — see tests/no_type_spelling_surgery_tests.rs"
+)]
 pub(crate) fn inherits_dataclass_transform(module: &ResolvedModule, class_info: &ClassInfo) -> bool {
     let Some(parsed) = super::shared::parse_module(module) else {
         return false;

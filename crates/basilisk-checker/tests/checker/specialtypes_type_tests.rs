@@ -181,12 +181,141 @@ func5(Callable)
 }
 
 #[test]
-fn unknown_attr_on_type_object() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
-def func8(a: type[object]) -> None:
-    a.unknown
-";
-    let diags = run(source)?;
-    let _ = codes(&diags);
+fn pep_484_class_object_attributes_follow_the_resolved_class(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // PEP 484 defines `type[C]` as the class-object type for C and its
+    // subclasses. Attribute lookup must therefore use that resolved class,
+    // regardless of how builtin `type` or C is spelled.
+    // https://peps.python.org/pep-0484/#the-type-of-class-objects
+    let rejected = [
+        (
+            "canonical builtins",
+            r#"
+def inspect(candidate: type[object]) -> None:
+    candidate.not_a_class_attribute
+"#,
+        ),
+        (
+            "aliased builtins",
+            r#"
+from builtins import object as Root, type as ClassObject
+def inspect(candidate: ClassObject[Root]) -> None:
+    candidate.not_a_class_attribute
+"#,
+        ),
+        (
+            "qualified builtins",
+            r#"
+import builtins as runtime
+def inspect(candidate: runtime.type[runtime.object]) -> None:
+    candidate.not_a_class_attribute
+"#,
+        ),
+        (
+            "renamed user class",
+            r#"
+class Archive:
+    seal: int
+def inspect(candidate: type[Archive]) -> None:
+    candidate.missing_seal
+"#,
+        ),
+        (
+            "reformatted annotation",
+            r#"
+class Observatory:
+    aperture: int
+def inspect(
+    candidate:
+        type[
+            Observatory
+        ],
+) -> None:
+    candidate.missing_aperture
+"#,
+        ),
+    ];
+
+    for (mutation, source) in rejected {
+        let diagnostics = run(source)?;
+        assert_eq!(
+            diagnostics.len(),
+            1,
+            "{mutation}: one missing class-object attribute must produce one diagnostic: {diagnostics:#?}"
+        );
+        assert_eq!(
+            codes(&diagnostics),
+            vec!["specialtypes_type"],
+            "{mutation}: the class-object attribute rule itself must reject the access"
+        );
+        assert_eq!(
+            messages_for(&diagnostics, "specialtypes_type").len(),
+            1,
+            "{mutation}: an unrelated diagnostic cannot satisfy the PEP 484 obligation"
+        );
+    }
+
+    let accepted = [
+        (
+            "canonical metaclass attribute",
+            r#"
+def inspect(candidate: type[object]) -> str:
+    return candidate.__name__
+"#,
+        ),
+        (
+            "aliased metaclass attribute",
+            r#"
+from builtins import object as Root, type as ClassObject
+def inspect(candidate: ClassObject[Root]) -> tuple[type, ...]:
+    return candidate.__mro__
+"#,
+        ),
+        (
+            "qualified metaclass attribute",
+            r#"
+import builtins as runtime
+def inspect(candidate: runtime.type[runtime.object]) -> str:
+    return candidate.__qualname__
+"#,
+        ),
+        (
+            "declared user class attribute",
+            r#"
+class Archive:
+    seal: int
+def inspect(candidate: type[Archive]) -> int:
+    return candidate.seal
+"#,
+        ),
+        (
+            "reformatted declared attribute",
+            r#"
+class Observatory:
+    aperture: int
+def inspect(
+    candidate:
+        type[
+            Observatory
+        ],
+) -> int:
+    return candidate.aperture
+"#,
+        ),
+    ];
+
+    for (mutation, source) in accepted {
+        let diagnostics = run(source)?;
+        assert!(
+            diagnostics.is_empty(),
+            "{mutation}: a real class-object attribute must be accepted: {diagnostics:#?}"
+        );
+        assert_eq!(
+            codes(&diagnostics),
+            Vec::<&str>::new(),
+            "{mutation}: equivalent spellings must preserve acceptance"
+        );
+    }
+
     Ok(())
 }

@@ -362,11 +362,30 @@ impl BidirEngine {
         // (`Named` deliberately conflates class/instance at Stage 2 — the
         // display value is right and no rule enforces it yet.)
         if let Ty::Ground(InferredType::Named(name)) = callee {
-            // …except a `type`-typed value: calling SOME class constructs an
-            // instance of an unknowable class, never an instance of `type`.
-            if name == "type" || name.starts_with("type[") {
-                return Ty::unknown();
-            }
+            // ##############################################################
+            // # DELETED — the `type`-typed-callee test. DO NOT RESTORE IT  #
+            // # AND DO NOT REPLACE IT WITH A PLACEHOLDER BRANCH.           #
+            // #                                                            #
+            // # It read: `name == "type" || name.starts_with("type[")` —   #
+            // # deciding that a callee is a CLASS OBJECT from how its type #
+            // # happens to be rendered. `builtins.type` under an alias was #
+            // # missed; a user class named `type` was mistaken for it.     #
+            // #                                                            #
+            // # Class-object-ness is a question about the resolved symbol: #
+            // # `form_of_with_builtins` -> `TypingForm::TypeClass`.        #
+            // #                                                            #
+            // # Pinned by: tests/no_type_spelling_surgery_tests.rs         #
+            // ##############################################################
+            let _ = name;
+            panic!(
+                "basilisk-checker: recognising a `type`-typed callee was DELETED \
+                 because it tested the RENDERED spelling of the callee's type \
+                 (`== \"type\"`, `starts_with(\"type[\")`). It panics because the \
+                 real implementation — resolving the callee to \
+                 `TypingForm::TypeClass` through the binding table — DOES NOT EXIST \
+                 YET. Do not restore the spelling test and do not pick either branch \
+                 unconditionally in its place."
+            );
             return Ty::Ground(InferredType::Named(name.clone()));
         }
         match call.func.as_ref() {

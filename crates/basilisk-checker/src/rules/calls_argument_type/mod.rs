@@ -371,33 +371,12 @@ fn known_element_node(inferred: &InferredType) -> Option<TypeNode> {
     scalar_node(element)
 }
 
-/// The Python type name of a positively-known scalar type, consumed by the
-/// `builtin_methods` pass for its stub-declaration comparisons. This
-/// classifies the engine's resolved `InferredType` — never source text.
-pub(super) fn scalar_type_name(inferred: &InferredType) -> Option<&'static str> {
-    match inferred {
-        InferredType::Int => Some("int"),
-        InferredType::Float => Some("float"),
-        InferredType::Str | InferredType::LiteralString => Some("str"),
-        InferredType::Bool => Some("bool"),
-        InferredType::Bytes => Some("bytes"),
-        InferredType::Literal(value) => Some(match value {
-            LiteralValue::Int(_) => "int",
-            LiteralValue::Float(_) => "float",
-            LiteralValue::Str(_) => "str",
-            LiteralValue::Bool(_) => "bool",
-            LiteralValue::Bytes(_) => "bytes",
-        }),
-        InferredType::Union(members) => {
-            let first = scalar_type_name(members.first()?)?;
-            members
-                .iter()
-                .all(|member| scalar_type_name(member) == Some(first))
-                .then_some(first)
-        }
-        _ => None,
-    }
-}
+// `scalar_type_name` is GONE. It rendered a resolved `InferredType` back into a
+// builtin name SPELLING (`"int"`, `"str"`, …) so that `scalar_annotation_mismatch`
+// could compare it against a lower-cased slice of annotation text. Its only
+// consumer was that deleted comparison, so it has no call sites left and is not
+// a rebuild map. Turning a resolved type back into a string to compare it with
+// another string is the defect itself; do not reintroduce it here or elsewhere.
 
 /// The resolved node of a positively-known scalar type. `None` when the
 /// engine's synthesis is not a scalar this rule can relate.

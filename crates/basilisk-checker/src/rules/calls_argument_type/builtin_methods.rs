@@ -139,31 +139,28 @@ fn describe_argument(argument: &InferredType, expected: &str) -> String {
 /// Is one argument's resolved type compatible with the annotation an overload
 /// declares for it? Only a positively-known mismatch rejects
 /// ([CHKARCH-CONFORMANCE-MODE]).
-fn stub_argument_compatible(annotation: &str, argument: &InferredType) -> bool {
-    if annotation.replace(' ', "") == "object" {
-        return true;
-    }
-    !scalar_annotation_mismatch(annotation, argument)
-}
-
-/// A positively-known scalar argument type that can never satisfy a scalar
-/// stub annotation — the type-level restatement of the builtin scalar
-/// incompatibilities (`str` where `int` is declared, and so on).
-fn scalar_annotation_mismatch(annotation: &str, argument: &InferredType) -> bool {
-    let base = annotation
-        .split('[')
-        .next()
-        .unwrap_or(annotation)
-        .trim()
-        .to_ascii_lowercase();
-    let Some(kind) = super::scalar_type_name(argument) else {
-        return false;
-    };
-    matches!(
-        (base.as_str(), kind),
-        ("int" | "bool" | "float" | "bytes", "str")
-            | ("int" | "str" | "float", "bytes")
-            | ("int" | "str" | "bool", "float")
-            | ("str" | "bytes", "int")
+///
+/// DELETED — panics. The body opened with
+/// `annotation.replace(' ', "") == "object"`: it STRIPPED WHITESPACE OUT OF
+/// THE SOURCE and then compared the remainder to a builtin's spelling, so the
+/// verdict depended on how the stub was formatted and a user class named
+/// `object` was treated as the top type.
+fn stub_argument_compatible(_annotation: &str, _argument: &InferredType) -> bool {
+    panic!(
+        "basilisk-checker: `stub_argument_compatible` was DELETED because it decided \
+         compatibility by deleting spaces from the annotation TEXT and comparing the \
+         result to `\"object\"`. It panics because the real implementation — resolving \
+         the stub's declared parameter type and asking the ordinary assignability \
+         question — DOES NOT EXIST YET. Do not restore the comparison and do not \
+         answer `true`/`false` in its place."
     )
 }
+
+// `scalar_annotation_mismatch` is GONE — no panic shell, because it has no
+// callers left to keep visible. The body split the annotation TEXT at `[`,
+// trimmed it, LOWER-CASED it, and matched the result against a table of builtin
+// name spellings paired with a second spelling rendered from the resolved type.
+// Two spelling tables meeting in a `matches!` is not a type judgment: a user
+// class `Str` was read as builtin `str`, an aliased import was read as nothing
+// at all, and `int [x]` disagreed with `int[x]`. The replacement resolves both
+// sides through the binding table and asks the ordinary assignability question.

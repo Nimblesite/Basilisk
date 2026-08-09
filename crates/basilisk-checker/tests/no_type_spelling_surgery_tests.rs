@@ -56,6 +56,25 @@ const FORBIDDEN: &[(&str, &str)] = &[
         "settles subtyping between two NAME STRINGS; subtyping is a relation \
          between resolved types",
     ),
+    (
+        "!= \"object\"",
+        "the same top-type-by-spelling test as `== \"object\"`, negated",
+    ),
+    (
+        "strip_prefix(\"type[\")",
+        "decides class-object-ness, and extracts its argument, by string surgery \
+         on a rendered generic; `type[X]` is an `Expr::Subscript`",
+    ),
+    (
+        ".find('[')",
+        "locates a type argument list inside RENDERED text; a subscript's slice \
+         is an AST node, not a character offset",
+    ),
+    (
+        ".rfind(']')",
+        "locates the end of a type argument list inside RENDERED text; see \
+         `.find('[')`",
+    ),
 ];
 
 /// Files exempt for a stated reason — NOT a general escape hatch. A new entry
@@ -80,14 +99,17 @@ fn rust_sources(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
-/// Strip line comments so the DELETED banners — which quote the forbidden
-/// constructs in order to forbid them — do not count as violations.
-fn code_only(source: &str) -> String {
+/// Lines of real code paired with their TRUE 1-based line number. Comment
+/// lines are dropped so the DELETED banners — which quote the forbidden
+/// constructs in order to forbid them — do not count as violations, but the
+/// numbering still points at the file as it is on disk.
+fn code_lines(source: &str) -> Vec<(usize, &str)> {
     source
         .lines()
-        .filter(|line| !line.trim_start().starts_with("//"))
-        .collect::<Vec<_>>()
-        .join("\n")
+        .enumerate()
+        .map(|(index, line)| (index + 1, line))
+        .filter(|(_, line)| !line.trim_start().starts_with("//"))
+        .collect()
 }
 
 #[test]
@@ -102,14 +124,13 @@ fn no_verdict_is_derived_from_a_types_spelling() {
         let Ok(raw) = std::fs::read_to_string(file) else {
             continue;
         };
-        let source = code_only(&raw);
+        let lines = code_lines(&raw);
         for (pattern, why) in FORBIDDEN {
-            for (index, line) in source.lines().enumerate() {
+            for (number, line) in &lines {
                 if line.contains(pattern) {
                     let name = file.strip_prefix(&src).unwrap_or(file).display();
                     offences.push(format!(
-                        "  {name}:{}\n      found: {pattern}\n      why:   {why}",
-                        index + 1
+                        "  {name}:{number}\n      found: {pattern}\n      why:   {why}"
                     ));
                 }
             }

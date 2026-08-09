@@ -101,18 +101,23 @@ fn linearize(
 }
 
 /// Direct base heads of `class_name`, excluding `object`.
+///
+/// DELETED — panics. The body was `base_head(base)` (itself deleted for
+/// splitting SOURCE TEXT at `[`) piped into `.filter(|head| head != "object")`
+/// — the top type recognised by its builtin SPELLING. Both halves decided a
+/// class's identity from characters. Ask the binding table.
 fn resolvable_bases<S: BuildHasher>(
-    classes: &HashMap<String, StubClass, S>,
-    class_name: &str,
+    _classes: &HashMap<String, StubClass, S>,
+    _class_name: &str,
 ) -> Vec<String> {
-    classes.get(class_name).map_or_else(Vec::new, |class| {
-        class
-            .bases
-            .iter()
-            .map(|base| base_head(base).to_owned())
-            .filter(|head| head != "object")
-            .collect()
-    })
+    panic!(
+        "basilisk-checker: `resolvable_bases` was DELETED because it took base heads \
+         by splitting SOURCE TEXT at `[` and excluded the top type by comparing the \
+         result to the literal `\"object\"`. It panics because the real \
+         implementation — resolving each base expression through the binding table — \
+         DOES NOT EXIST YET. Do not restore either half and do not return an empty \
+         vector in its place."
+    )
 }
 
 /// Merge linearizations per the C3 rule: repeatedly take the head of the first
@@ -154,10 +159,34 @@ fn in_any_tail(sequences: &[Vec<String>], candidate: &str) -> bool {
         .any(|seq| seq.iter().skip(1).any(|name| name == candidate))
 }
 
-/// The head of a base expression: `Foo[int]` → `Foo`, `Generic[T]` → `Generic`.
+// ##########################################################################
+// # DELETED BODY — `base_head`. DO NOT RESTORE IT. DO NOT SUBSTITUTE A     #
+// # PLACEHOLDER THAT RETURNS THE INPUT UNCHANGED.                          #
+// #                                                                        #
+// # It read: `base.split('[').next().unwrap_or(base).trim()` — taking the  #
+// # generic head of a base class by SPLITTING ITS SOURCE TEXT at a         #
+// # bracket. A subscripted base written across lines, with a space before  #
+// # the bracket, or reached through an alias produced a different head,    #
+// # and any base whose name merely contained a bracket was truncated.      #
+// #                                                                        #
+// # A base class is an EXPRESSION. Its head is `Expr::Subscript.value`     #
+// # resolved through the binding table to the symbol it denotes — never    #
+// # the characters before a `[`.                                           #
+// #                                                                        #
+// # Pinned by: tests/no_type_spelling_surgery_tests.rs                     #
+// ##########################################################################
+
+/// DELETED — panics. The signature survives only so its callers stay visible
+/// as the rebuild map; see the banner above.
 #[must_use]
-pub fn base_head(base: &str) -> &str {
-    base.split('[').next().unwrap_or(base).trim()
+pub fn base_head(_base: &str) -> &str {
+    panic!(
+        "basilisk-checker: `base_head` was DELETED because it took a base class's \
+         generic head by splitting its SOURCE TEXT at `[`. It panics because the real \
+         implementation — resolving `Expr::Subscript.value` through the binding table \
+         — DOES NOT EXIST YET. Do not restore the split and do not return the input \
+         unchanged in its place."
+    )
 }
 
 /// Whether `class_name` directly declares a method named `method`.

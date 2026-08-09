@@ -231,37 +231,40 @@ fn classify_expr_type(expr: &ruff_python_ast::Expr) -> Option<&'static str> {
     }
 }
 
-/// Check if a Python type name is compatible with an annotation.
-/// This is a simplified check that handles common cases.
-fn type_matches_annotation(type_name: &str, annotation: &str) -> bool {
-    let ann = annotation.trim();
+// ##########################################################################
+// # DELETED BODY — `type_matches_annotation`. DO NOT RESTORE IT. DO NOT    #
+// # SUBSTITUTE A PLACEHOLDER THAT RETURNS `true` OR `false`.               #
+// #                                                                        #
+// # The ENTIRE function was string comparison. Every line:                 #
+// #                                                                        #
+// #   if ann == type_name           — type identity by rendered equality   #
+// #   if ann == "object"            — the top type by builtin spelling     #
+// #   if ann.contains('|') { ann.split('|') … }  — union decomposition by  #
+// #                                  splitting source text on a character  #
+// #   if ann == "int" && type_name == "bool"     — the numeric tower as    #
+// #   if ann == "float" && …                       two literal spellings   #
+// #                                                                        #
+// # Its own doc comment called it "a simplified check that handles common  #
+// # cases". It was not a simplified subtype check; it was no subtype check #
+// # at all. `A | B` written across two lines, `int` imported under an      #
+// # alias, or a user class named `object` each broke it, and a class       #
+// # merely spelled the same as another satisfied it.                       #
+// #                                                                        #
+// # Union decomposition, the numeric tower, and the top type are all       #
+// # properties of RESOLVED types. Ask the binding table.                   #
+// #                                                                        #
+// # Pinned by: tests/no_type_spelling_surgery_tests.rs                     #
+// ##########################################################################
 
-    // Direct match
-    if ann == type_name {
-        return true;
-    }
-
-    // `object` matches everything
-    if ann == "object" {
-        return true;
-    }
-
-    // Union types: `X | Y`
-    if ann.contains('|') {
-        return ann
-            .split('|')
-            .any(|part| type_matches_annotation(type_name, part.trim()));
-    }
-
-    // `bool` is a subtype of `int`
-    if ann == "int" && type_name == "bool" {
-        return true;
-    }
-
-    // `int` is a subtype of `float` (numeric tower)
-    if ann == "float" && (type_name == "int" || type_name == "bool") {
-        return true;
-    }
-
-    false
+/// DELETED — panics. The signature survives only so its callers stay visible
+/// as the rebuild map; see the banner above.
+fn type_matches_annotation(_type_name: &str, _annotation: &str) -> bool {
+    panic!(
+        "basilisk-checker: `type_matches_annotation` was DELETED because it compared \
+         TYPE SPELLINGS end to end — `ann == type_name`, `ann == \"object\"`, \
+         `ann.split('|')` for unions, and `\"int\"`/`\"float\"`/`\"bool\"` literals for \
+         the numeric tower. It panics because the real implementation — relating two \
+         resolved types — DOES NOT EXIST YET. Do not restore the comparisons and do \
+         not answer `true`/`false` in its place."
+    )
 }

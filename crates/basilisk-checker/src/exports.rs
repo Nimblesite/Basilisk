@@ -683,39 +683,38 @@ pub fn bound_method_signatures(class: &StubClass, method: &str) -> Vec<String> {
 /// named `From` imports, so lazy extraction and the benchmark stay unaffected.
 #[must_use]
 pub fn flattened_class_methods(
-    class_name: &str,
-    module_exports: &[(String, ExternalSymbol)],
+    _class_name: &str,
+    _module_exports: &[(String, ExternalSymbol)],
 ) -> Vec<ExternalMethod> {
-    let by_name: std::collections::HashMap<&str, &ExternalSymbol> = module_exports
-        .iter()
-        .map(|(name, symbol)| (name.as_str(), symbol))
-        .collect();
-    let mro = crate::stub_constructor::mro_over(class_name, &|name| {
-        by_name.get(name).map_or_else(Vec::new, |symbol| {
-            symbol
-                .bases
-                .iter()
-                .map(|base| crate::stub_constructor::base_head(base).to_owned())
-                .filter(|head| head != "object")
-                .collect()
-        })
-    });
-    let mut methods = Vec::new();
-    let mut claimed: HashSet<String> = HashSet::new();
-    for class in &mro {
-        let Some(symbol) = by_name.get(class.as_str()) else {
-            continue;
-        };
-        for method in &symbol.methods {
-            if !claimed.contains(&method.name) {
-                methods.push(method.clone());
-            }
-        }
-        for method in &symbol.methods {
-            let _ = claimed.insert(method.name.clone());
-        }
-    }
-    methods
+    // ######################################################################
+    // # DELETED BODY. DO NOT RESTORE IT AND DO NOT RETURN AN EMPTY VECTOR  #
+    // # IN ITS PLACE.                                                      #
+    // #                                                                    #
+    // # The MRO this walked was built from RENDERED base names:            #
+    // #                                                                    #
+    // #   .map(|base| stub_constructor::base_head(base).to_owned())        #
+    // #   .filter(|head| head != "object")                                 #
+    // #                                                                    #
+    // # `base_head` split a base's SOURCE TEXT at `[`, and the filter      #
+    // # dropped the top type by its builtin SPELLING. Every method this    #
+    // # function reports as inherited was inherited according to a string  #
+    // # comparison, so a base written with unusual spacing, reached under  #
+    // # an alias, or merely sharing a rendered name with another class     #
+    // # produced the wrong method set.                                     #
+    // #                                                                    #
+    // # An empty vector is NOT a safe default here: it silently reports    #
+    // # every class as having no inherited methods.                        #
+    // #                                                                    #
+    // # Pinned by: tests/no_type_spelling_surgery_tests.rs                 #
+    // ######################################################################
+    panic!(
+        "basilisk-checker: `flattened_class_methods` was DELETED because it \
+         linearized an MRO from base-class SOURCE TEXT — heads split at `[` and the \
+         top type dropped by comparing to the literal `\"object\"`. It panics because \
+         the real implementation — resolving each base to a class symbol through the \
+         binding table — DOES NOT EXIST YET. Do not restore the string walk and do \
+         not return an empty vector in its place."
+    )
 }
 
 /// Resolve the bound `__call__` overloads declared by an external class's

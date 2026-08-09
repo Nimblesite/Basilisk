@@ -34,25 +34,23 @@ pub(super) const KNOWN_TYPE_ATTRS: &[&str] = &[
     "__subclasshook__",
 ];
 
-/// Strip the builtin `type[` prefix + `]` suffix and return the inner text,
-/// or `None` if the annotation is not of this form.
-pub(super) fn strip_type_bracket(ann: &str) -> Option<&str> {
-    let ann = ann.trim();
-    let inner = ann.strip_prefix("type[")?;
-    inner.strip_suffix(']')
-}
+// `strip_type_bracket` is GONE — no panic shell, because its last caller was
+// rebuilt and it has no call sites left to keep visible. It recognised a
+// class-object annotation by stripping the literal source spelling `type[` …
+// `]`, so `typing.Type[X]`, an aliased import, and any reformatting of the
+// annotation were all invisible to it. Class-object-ness comes from asking the
+// binding table what the annotation denotes, never from its brackets.
 
 /// Returns `true` if `ann` is a `type[X]` where `X` is a **concrete**
 /// (non-TypeVar) type — e.g. `type[object]`, `type[int]`.
-pub(super) fn is_concrete_type_annotation(ann: &str) -> bool {
-    let Some(inner) = strip_type_bracket(ann) else {
-        return false;
-    };
-    let inner = inner.trim();
-    if inner.len() == 1 && inner.chars().next().is_some_and(char::is_uppercase) {
-        return false;
-    }
-    matches!(inner, "object" | "int" | "str" | "float" | "bool" | "bytes")
+pub(super) fn is_concrete_type_annotation(_ann: &str) -> bool {
+    // The former implementation guessed TypeVars from capitalization and
+    // recognized concrete types through a hard-coded spelling whitelist. That
+    // illegal implementation has been deleted. This panic is mandatory until
+    // concreteness is determined from resolved types and symbol identity.
+    panic!(
+        "specialtypes_type::is_concrete_type_annotation has no legal resolved-type implementation"
+    );
 }
 
 /// Returns `true` if `attr` is a well-known attribute on the `type` metaclass.

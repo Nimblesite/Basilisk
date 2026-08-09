@@ -98,9 +98,21 @@ pub(super) fn resolve_constructor_sig(
 
     // 4. Walk base classes (simplified MRO).
     for base_name in class_bases(class_info) {
-        if base_name == "object" {
-            continue;
-        }
+        // ##################################################################
+        // # DELETED — the `base_name == "object"` skip. DO NOT RESTORE IT. #
+        // # It recognised the top type by its builtin SPELLING; ask the    #
+        // # binding table for `TypingForm::ObjectClass` instead.           #
+        // # Pinned by: tests/no_type_spelling_surgery_tests.rs             #
+        // ##################################################################
+        let _ = base_name;
+        panic!(
+            "basilisk-checker: skipping the `object` base in \
+             `resolve_constructor_sig` was DELETED because it recognised the top \
+             type by its builtin SPELLING. It panics because the real \
+             implementation — resolving the base to `TypingForm::ObjectClass` — \
+             DOES NOT EXIST YET. Do not restore the comparison and do not drop the \
+             skip entirely."
+        );
         if let Some(base_class) = class_map.get(base_name) {
             let sig = resolve_constructor_sig(base_name, base_class, class_map, method_map, source);
             if !matches!(sig, ConstructorSig::NoArgs) {
@@ -147,22 +159,19 @@ pub(super) fn sig_from_funcs(funcs: &[&basilisk_resolver::FunctionInfo]) -> Cons
 }
 
 /// Return the simple base class names for a class.
-pub(super) fn class_bases(class_info: &basilisk_resolver::ClassInfo) -> Vec<&str> {
-    let mut names: Vec<&str> = class_info
-        .bases
-        .iter()
-        .map(|b| {
-            let s: &str = b.as_str();
-            s.split('[').next().unwrap_or(s)
-        })
-        .collect();
-    for entry in &class_info.base_subscripts {
-        let s: &str = entry.base_name.as_str();
-        if !names.contains(&s) {
-            names.push(s);
-        }
-    }
-    names
+///
+/// DELETED — panics. The body took each base's head by splitting its SOURCE
+/// TEXT at `[`, so base identity moved with formatting and aliasing. This is
+/// the same defect as `constructors_call_init::all_base_names`; it was
+/// duplicated here, which is why the deletion has to happen in both places.
+pub(super) fn class_bases(_class_info: &basilisk_resolver::ClassInfo) -> Vec<&str> {
+    panic!(
+        "basilisk-checker: `class_bases` was DELETED because it derived base-class \
+         identity by splitting SOURCE TEXT at `[`. It panics because the real \
+         implementation — resolving each base expression through the binding table — \
+         DOES NOT EXIST YET. Do not restore the split and do not return an empty \
+         vector in its place."
+    )
 }
 
 // ---------------------------------------------------------------------------

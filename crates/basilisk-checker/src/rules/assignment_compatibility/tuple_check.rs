@@ -219,39 +219,42 @@ fn split_type_list(inner: &str) -> Vec<&str> {
     parts
 }
 
-/// Returns `true` if a literal element (source text) is compatible with `expected_type`.
-pub(super) fn literal_elem_matches(elem: &str, expected: &str) -> bool {
-    let expected_lower = expected.to_ascii_lowercase();
-    let expected_base = expected_lower
-        .split('[')
-        .next()
-        .unwrap_or(expected_lower.as_str())
-        .trim();
+// ##########################################################################
+// # DELETED BODY — `literal_elem_matches`. DO NOT RESTORE IT. DO NOT       #
+// # SUBSTITUTE A PLACEHOLDER THAT RETURNS `true`.                          #
+// #                                                                        #
+// # This was the worst offender in the crate: a HAND-WRITTEN LEXER that    #
+// # classified a tuple element by re-reading its SOURCE CHARACTERS —       #
+// #                                                                        #
+// #   is_int_lit   = elem.chars().all(|c| c.is_ascii_digit() || …)         #
+// #   is_str_lit   = elem.starts_with('"') && elem.ends_with('"')          #
+// #   is_float_lit = elem.contains('.')                                    #
+// #   is_bytes_lit = elem.starts_with("b\"")                               #
+// #   is_bool_lit  = elem == "True" || elem == "False"                     #
+// #                                                                        #
+// # — and then matched it against the LOWER-CASED, bracket-split spelling  #
+// # of the expected type, with `expected_base == "object"` accepting       #
+// # anything. Every one of these is already an AST node the parser         #
+// # produced: `Expr::NumberLiteral`, `Expr::StringLiteral`,                #
+// # `Expr::BytesLiteral`, `Expr::BooleanLiteral`, `Expr::NoneLiteral`.     #
+// # Re-deriving them from characters means `0x1F` in one file and `0X1F`   #
+// # in another disagree, `1_000` is read as an int but `1e3` is not, and   #
+// # `"""x"""` is not a string at all.                                      #
+// #                                                                        #
+// # Pinned by: tests/no_type_spelling_surgery_tests.rs                     #
+// ##########################################################################
 
-    if expected_base == "object" {
-        return true;
-    }
-
-    let is_int_lit = elem
-        .chars()
-        .all(|c| c.is_ascii_digit() || c == '_' || c == 'x' || c == 'o' || c == 'b')
-        && elem.chars().next().is_some_and(|c| c.is_ascii_digit());
-    let is_str_lit = (elem.starts_with('"') && elem.ends_with('"'))
-        || (elem.starts_with('\'') && elem.ends_with('\''));
-    let is_float_lit =
-        elem.contains('.') && elem.chars().next().is_some_and(|c| c.is_ascii_digit());
-    let is_bytes_lit = (elem.starts_with("b\"") || elem.starts_with("b'"))
-        && (elem.ends_with('"') || elem.ends_with('\''));
-    let is_bool_lit = elem == "True" || elem == "False";
-    let is_none_lit = elem == "None";
-
-    match expected_base {
-        "int" => is_int_lit || is_bool_lit,
-        "float" | "complex" => is_float_lit || is_int_lit || is_bool_lit,
-        "str" => is_str_lit,
-        "bytes" => is_bytes_lit,
-        "bool" => is_bool_lit,
-        "none" => is_none_lit,
-        _ => true, // Unknown types: don't flag
-    }
+/// DELETED — panics. The signature survives only so its callers stay visible
+/// as the rebuild map; see the banner above.
+pub(super) fn literal_elem_matches(_elem: &str, _expected: &str) -> bool {
+    panic!(
+        "basilisk-checker: `literal_elem_matches` was DELETED because it RE-LEXED a \
+         tuple element from its source characters (digit scans, quote-prefix tests, \
+         `contains('.')`) and compared it against a lower-cased, bracket-split \
+         spelling of the expected type. It panics because the real implementation — \
+         reading the element's literal `Expr` node and asking the ordinary \
+         assignability question — DOES NOT EXIST YET. Do not restore the lexer and do \
+         not return `true` in its place: `true` accepts every mismatch while the rule \
+         still reports itself as implemented."
+    )
 }

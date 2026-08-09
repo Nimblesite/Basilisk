@@ -67,63 +67,38 @@ impl Rule for InitVarViolation {
     }
 }
 
-/// Validate `__post_init__` signatures against the class's `InitVar` fields.
-fn check_post_init_signatures(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-    let path = &module.path;
+// ##########################################################################
+// # DELETED BODY — `check_post_init_signatures`. DO NOT RESTORE IT AND DO  #
+// # NOT REPLACE IT WITH A PLACEHOLDER THAT RETURNS WITHOUT CHECKING.       #
+// #                                                                        #
+// # The rule's gate — "does a base class already declare `InitVar` fields, #
+// # so this subclass legitimately inherits them?" — was answered by        #
+// # looking the base up by its SOURCE TEXT:                                #
+// #                                                                        #
+// #   let base_name = base_expr.split('[').next().unwrap_or(base).trim();  #
+// #   class_map.get(base_name)                                             #
+// #                                                                        #
+// # A base written `Parent [T]`, reached under an alias, or merely sharing #
+// # a rendered name with an unrelated class produced the wrong answer, and #
+// # the wrong answer here decides whether the rule fires at all. That is   #
+// # not a detail inside a working rule; it IS the rule.                    #
+// #                                                                        #
+// # `InitVar` inheritance is a question about resolved base classes and    #
+// # the fields they declare. Ask the binding table.                        #
+// #                                                                        #
+// # Pinned by: tests/no_type_spelling_surgery_tests.rs                     #
+// ##########################################################################
 
-    let class_map: HashMap<&str, _> = module
-        .classes
-        .iter()
-        .map(|c| (c.name.as_str(), c))
-        .collect();
-
-    for cls in &module.classes {
-        if !cls.is_dataclass {
-            continue;
-        }
-
-        let initvar_fields: Vec<_> = cls.attributes.iter().filter(|a| a.is_init_var).collect();
-        if initvar_fields.is_empty() {
-            continue;
-        }
-
-        // Skip classes that inherit InitVar fields to avoid false positives.
-        let has_parent_with_initvar = cls.bases.iter().any(|base_expr| {
-            let base_name = base_expr.split('[').next().unwrap_or(base_expr).trim();
-            class_map
-                .get(base_name)
-                .is_some_and(|base_cls| base_cls.attributes.iter().any(|a| a.is_init_var))
-        });
-        if has_parent_with_initvar {
-            continue;
-        }
-
-        let post_init = module.functions.iter().find(|f| {
-            f.class_name.as_deref() == Some(cls.name.as_str()) && f.name == "__post_init__"
-        });
-
-        let Some(post_init_fn) = post_init else {
-            continue;
-        };
-
-        let params: Vec<_> = post_init_fn.parameters.iter().skip(1).collect();
-
-        if params.len() != initvar_fields.len() {
-            diagnostics.push(make_diagnostic(
-                format!(
-                    "`__post_init__` in `{}` has {} parameter{} after `self`, \
-                     but {} `InitVar` field{} declared",
-                    cls.name,
-                    params.len(),
-                    if params.len() == 1 { "" } else { "s" },
-                    initvar_fields.len(),
-                    if initvar_fields.len() == 1 { "" } else { "s" },
-                ),
-                post_init_fn.name_span,
-                path,
-            ));
-        }
-    }
+/// DELETED — panics. The signature survives only so its caller stays visible
+/// as the rebuild map; see the banner above.
+fn check_post_init_signatures(_module: &ResolvedModule, _diagnostics: &mut Vec<Diagnostic>) {
+    panic!(
+        "basilisk-checker: `check_post_init_signatures` was DELETED because its \
+         inherited-`InitVar` gate looked a base class up by splitting its SOURCE TEXT \
+         at `[`. It panics because the real implementation — resolving each base \
+         expression to a class symbol through the binding table — DOES NOT EXIST YET. \
+         Do not restore the split and do not return without checking in its place."
+    )
 }
 
 /// Check for access to `InitVar` fields as instance attributes at module level.

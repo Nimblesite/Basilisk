@@ -175,10 +175,21 @@ fn is_valid_string_typeform(
 /// object is not its instance), so a caller that needs `X` — here, because
 /// PEP 747 makes `type[T]` a subtype of `TypeForm[T]` — reads the subscript
 /// and evaluates THAT through the cascade.
-fn type_subscript_inner(annotation: &str) -> Option<&str> {
-    let trimmed = annotation.trim();
-    let inner = trimmed.strip_prefix("type[")?.strip_suffix(']')?;
-    (!inner.trim().is_empty()).then(|| inner.trim())
+/// DELETED — panics. The body recognised `type[X]` with
+/// `trimmed.strip_prefix("type[")?.strip_suffix(']')?` — class-object-ness and
+/// the subscript both taken from the annotation's CHARACTERS. `builtins.type`
+/// under an alias was invisible, a user class named `type` was mistaken for
+/// it, and `type [X]` with a space did not match at all. `type[X]` is an
+/// `Expr::Subscript` whose `value` resolves to `TypingForm::TypeClass` and
+/// whose `slice` IS the inner type expression.
+fn type_subscript_inner(_annotation: &str) -> Option<&str> {
+    panic!(
+        "basilisk-checker: `type_subscript_inner` was DELETED because it recognised \
+         `type[X]` by `strip_prefix(\"type[\")` on annotation TEXT. It panics because \
+         the real implementation — resolving an `Expr::Subscript` whose value denotes \
+         `TypingForm::TypeClass` and reading its slice — DOES NOT EXIST YET. Do not \
+         restore the prefix test and do not return `None` in its place."
+    )
 }
 
 /// Check whether a text parses as a valid Python type expression.
@@ -186,34 +197,40 @@ fn type_subscript_inner(annotation: &str) -> Option<&str> {
 /// A valid type expression contains only type names, `|`, `[]`, `.`,
 /// and recognised typing constructs.  Expressions like `type(1)` or
 /// `int + str` are NOT valid.
-fn is_parseable_type_expression(text: &str) -> bool {
-    let text = text.trim();
-    if text.is_empty() {
-        return false;
-    }
+// ##########################################################################
+// # DELETED BODY — `is_parseable_type_expression`. DO NOT RESTORE IT. DO   #
+// # NOT SUBSTITUTE A PLACEHOLDER THAT RETURNS `true` OR `false`.           #
+// #                                                                        #
+// # It decided whether text is a valid PEP 747 type expression by          #
+// # SCANNING FOR CHARACTERS:                                               #
+// #                                                                        #
+// #   text.contains(['+','-','*','/','%','(',')','!','~','^','&'])         #
+// #   for part in text.split('|') { … part.split('[').next() … }           #
+// #   if base.contains(' ') { return false }                               #
+// #                                                                        #
+// # So `Callable[[int], str]` was rejected for its parentheses-free but    #
+// # space-bearing spelling, `dict[str, int]` for the space after the       #
+// # comma, and `-1` inside a `Literal` for the minus sign — while          #
+// # `not a type` written without spaces would have passed. Validity moved  #
+// # with the FORMATTER.                                                    #
+// #                                                                        #
+// # `ruff_python_parser` already answers this: a type expression either    #
+// # parses and resolves through the cascade, or it does not.               #
+// #                                                                        #
+// # Pinned by: tests/no_type_spelling_surgery_tests.rs                     #
+// ##########################################################################
 
-    // Reject expressions containing operators that aren't `|` (union)
-    if text.contains(['+', '-', '*', '/', '%', '(', ')', '!', '~', '^', '&']) {
-        return false;
-    }
-
-    // Validate each `|`-separated component is a plausible type name.
-    // A type name consists of identifiers optionally separated by `.` and
-    // optionally followed by `[...]`.  Bare words with spaces (e.g.
-    // `"not a type"`) are not valid type expressions.
-    for part in text.split('|') {
-        let part = part.trim();
-        if part.is_empty() {
-            return false;
-        }
-        // Strip any trailing `[...]` subscript
-        let base = part.split('[').next().unwrap_or(part).trim();
-        if base.is_empty() || base.contains(' ') {
-            return false;
-        }
-    }
-
-    true
+/// DELETED — panics. The signature survives only so its callers stay visible
+/// as the rebuild map; see the banner above.
+fn is_parseable_type_expression(_text: &str) -> bool {
+    panic!(
+        "basilisk-checker: `is_parseable_type_expression` was DELETED because it \
+         judged type-expression validity by scanning source CHARACTERS for operators, \
+         splitting on `|` and `[`, and rejecting anything containing a space. It \
+         panics because the real implementation — parsing the expression and resolving \
+         it through the annotation cascade — DOES NOT EXIST YET. Do not restore the \
+         character scan and do not answer `true`/`false` in its place."
+    )
 }
 
 /// Check if a non-string, non-literal RHS is a valid type expression

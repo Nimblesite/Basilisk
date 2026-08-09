@@ -34,6 +34,8 @@
     missing_docs
 )]
 
+// `common` is compiled into every test binary; this one needs only `run`.
+#[allow(dead_code)]
 mod common;
 
 use common::run;

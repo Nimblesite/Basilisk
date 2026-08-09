@@ -14,27 +14,43 @@ use crate::span_util::slice_span;
 
 use super::CODE;
 
-/// Returns `Some(description)` when the annotation text and RHS kind are
-/// clearly incompatible; `None` when the pairing is acceptable or unknown.
-pub(super) fn annotation_rhs_mismatch_simple(
-    annotation: &str,
-    rhs: &RhsKind,
-) -> Option<&'static str> {
-    // Normalise: strip generic parameters and whitespace, lower-case.
-    let base = annotation
-        .split('[')
-        .next()
-        .unwrap_or(annotation)
-        .trim()
-        .to_ascii_lowercase();
+// ##########################################################################
+// # DELETED BODY — `annotation_rhs_mismatch_simple`. DO NOT RESTORE IT.    #
+// # DO NOT SUBSTITUTE A PLACEHOLDER THAT RETURNS `None`.                   #
+// #                                                                        #
+// # It took the annotation as TEXT, split it at `[`, trimmed it,           #
+// # LOWER-CASED it, and matched the result against the literal strings     #
+// # `"int"`, `"bool"`, `"float"`, `"bytes"`, `"str"`. Everything about     #
+// # that is spelling:                                                      #
+// #                                                                        #
+// #   * lower-casing means a user class `Int` was judged as builtin `int`; #
+// #   * the whitelist means `from builtins import int as Whole` was never  #
+// #     recognised, and a module that rebinds `int` still was;             #
+// #   * splitting at `[` means `dict [str, int]` and `dict[str, int]`      #
+// #     produced different bases.                                          #
+// #                                                                        #
+// # "Does this RHS fit this declared field type?" is the ordinary          #
+// # assignability question, asked of the RESOLVED annotation — not a       #
+// # lookup table of builtin name spellings.                                #
+// #                                                                        #
+// # Pinned by: tests/no_type_spelling_surgery_tests.rs                     #
+// ##########################################################################
 
-    match (base.as_str(), rhs) {
-        ("int" | "bool" | "float" | "bytes", RhsKind::StrLiteral) => Some("a `str` literal"),
-        ("int" | "str" | "float", RhsKind::BytesLiteral) => Some("a `bytes` literal"),
-        ("int" | "str" | "bool", RhsKind::FloatLiteral) => Some("a `float` literal"),
-        ("str" | "bytes", RhsKind::IntLiteral) => Some("an `int` literal"),
-        _ => None,
-    }
+/// DELETED — panics. The signature survives only so its caller stays visible
+/// as the rebuild map; see the banner above.
+pub(super) fn annotation_rhs_mismatch_simple(
+    _annotation: &str,
+    _rhs: &RhsKind,
+) -> Option<&'static str> {
+    panic!(
+        "basilisk-checker: `annotation_rhs_mismatch_simple` was DELETED because it \
+         lower-cased the annotation TEXT, split it at `[`, and matched the result \
+         against a whitelist of builtin name spellings. It panics because the real \
+         implementation — resolving the field's annotation through the binding table \
+         and asking the ordinary assignability question — DOES NOT EXIST YET. Do not \
+         restore the table and do not return `None` in its place: `None` reports the \
+         rule as implemented while it checks nothing."
+    )
 }
 
 /// Checks module-level attribute assignments (`instance.field = value`) against

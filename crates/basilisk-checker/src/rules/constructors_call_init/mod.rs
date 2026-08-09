@@ -17,7 +17,7 @@
 
 use std::collections::HashMap;
 
-use basilisk_resolver::{ResolvedModule, Span};
+use basilisk_resolver::ResolvedModule;
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic};
 
@@ -25,10 +25,7 @@ use super::Rule;
 
 mod helpers;
 
-use helpers::{
-    check_init_method_args, has_custom_init_in_bases, has_unresolved_base,
-    resolve_string_annotation, CODE,
-};
+use helpers::{check_init_method_args, CODE};
 
 /// Emits `constructors_call_init` for constructor call errors involving `__init__`.
 pub(crate) struct ConstructorCallError;
@@ -99,96 +96,46 @@ impl Rule for ConstructorCallError {
 /// Check 4: Detect class-scoped `TypeVar`s used in `self` annotation of `__init__`
 /// in a different order from the class's generic params.
 fn check_class_scoped_typevars_in_self(
-    module: &ResolvedModule,
-    source: &str,
+    _module: &ResolvedModule,
+    _source: &str,
     _class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
-    method_map: &HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>>,
-    typevar_names: &[&str],
-    diagnostics: &mut Vec<Diagnostic>,
+    _method_map: &HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>>,
+    _typevar_names: &[&str],
+    _diagnostics: &mut Vec<Diagnostic>,
 ) {
-    for class in &module.classes {
-        if class.generic_params.is_empty() {
-            continue;
-        }
-
-        let class_param_names: Vec<&str> = basilisk_resolver::collect_names(&class.generic_params);
-
-        let Some(init_funcs) = method_map.get(&(class.name.as_str(), "__init__")) else {
-            continue;
-        };
-
-        for init_func in init_funcs {
-            let Some(self_param) = init_func.parameters.first() else {
-                continue;
-            };
-
-            let Some(ann_span) = self_param.annotation_span else {
-                continue;
-            };
-
-            let Some(ann_text) = ann_span.slice_source(source) else {
-                continue;
-            };
-
-            let resolved = resolve_string_annotation(ann_text.trim());
-
-            // Extract type args from annotation like "Class8[T2, T1]"
-            let Some(bracket_start) = resolved.find('[') else {
-                continue;
-            };
-            let Some(bracket_end) = resolved.rfind(']') else {
-                continue;
-            };
-
-            let ann_class_name = resolved[..bracket_start].trim();
-            if ann_class_name != class.name {
-                continue;
-            }
-
-            let args_str = &resolved[bracket_start + 1..bracket_end];
-            let ann_args: Vec<&str> = args_str.split(',').map(str::trim).collect();
-
-            // Check if all annotation args are class-scoped TypeVars.
-            let all_class_scoped = ann_args
-                .iter()
-                .all(|arg| class_param_names.contains(arg) && typevar_names.contains(arg));
-
-            if !all_class_scoped {
-                continue;
-            }
-
-            // Check if the order differs from the class generic params.
-            if ann_args.len() == class_param_names.len()
-                && ann_args
-                    .iter()
-                    .zip(class_param_names.iter())
-                    .any(|(a, b)| a != b)
-            {
-                diagnostics.push(error_diagnostic_owned(
-                    CODE.clone(),
-                    format!(
-                        "Class-scoped type variables should not be used in the `self` \
-                         annotation of `__init__` in class `{}`",
-                        class.name
-                    ),
-                    init_func.def_span,
-                    &module.path,
-                    Some(
-                        "Use function-scoped type variables instead of class-scoped ones \
-                         in the `self` annotation"
-                            .to_owned(),
-                    ),
-                    Some(format!(
-                        "Class `{}` declares generic params `[{}]` but `self` annotation \
-                         uses `[{}]`",
-                        class.name,
-                        class_param_names.join(", "),
-                        ann_args.join(", ")
-                    )),
-                ));
-            }
-        }
-    }
+    // ######################################################################
+    // # DELETED BODY. DO NOT RESTORE IT AND DO NOT RETURN WITHOUT          #
+    // # CHECKING IN ITS PLACE.                                             #
+    // #                                                                    #
+    // # A second hand-written parser over the `self` annotation's text:    #
+    // #                                                                    #
+    // #   let resolved = resolve_string_annotation(ann_text.trim());       #
+    // #   let bracket_start = resolved.find('[')?;                         #
+    // #   let bracket_end   = resolved.rfind(']')?;                        #
+    // #   let ann_class_name = resolved[..bracket_start].trim();           #
+    // #   let ann_args = resolved[bracket_start+1..bracket_end]            #
+    // #                      .split(',').map(str::trim);                   #
+    // #                                                                    #
+    // # It then compared those STRINGS against the class's declared type   #
+    // # parameter names to decide whether the `self` annotation reorders   #
+    // # them. Both the parse and the comparison are spelling: a type       #
+    // # parameter reached under any other name, an annotation split across #
+    // # lines, or a nested subscript containing a comma each broke it.     #
+    // #                                                                    #
+    // # A `self` annotation is an `Expr`. Its type arguments are the       #
+    // # subscript's slice elements, and each resolves to a TypeVar symbol. #
+    // #                                                                    #
+    // # Pinned by: tests/no_type_spelling_surgery_tests.rs                 #
+    // ######################################################################
+    panic!(
+        "basilisk-checker: `check_class_scoped_typevars_in_self` was DELETED because \
+         it hand-parsed the `self` annotation from TEXT (`find('[')`, `rfind(']')`, \
+         `split(',')`) and compared the resulting STRINGS against type-parameter \
+         names. It panics because the real implementation — reading the annotation's \
+         `Expr::Subscript` and resolving each slice element to a TypeVar symbol — \
+         DOES NOT EXIST YET. Do not restore the parser and do not return without \
+         checking in its place."
+    )
 }
 
 /// Bundle of state threaded through all E0111 statement/expression walkers.
@@ -296,98 +243,55 @@ fn check_subscript_constructor(
 }
 
 /// Check 5: Classes without custom `__init__` that receive arguments.
+// ##########################################################################
+// # DELETED BODY — `check_no_init_with_args`. DO NOT RESTORE IT AND DO NOT #
+// # REPLACE IT WITH A PLACEHOLDER THAT RETURNS WITHOUT CHECKING.           #
+// #                                                                        #
+// # The rule fires when a class that inherits only from `object` is called #
+// # with arguments. Every gate that decided "inherits only from `object`"  #
+// # read SOURCE TEXT:                                                      #
+// #                                                                        #
+// #   let base_name = base.split('[').next().unwrap_or(base);              #
+// #   class_map.get(base_name)                    // dataclass base?       #
+// #   method_map.contains_key(&(base_name, "__init_subclass__"))           #
+// #                                                                        #
+// # plus `has_custom_init_in_bases` and `has_unresolved_base`, both of     #
+// # which were themselves built on the same split-at-a-bracket base names  #
+// # and on `base_name != "object"`.                                        #
+// #                                                                        #
+// # A subscripted base written with a space, a base reached under an       #
+// # alias, and two unrelated classes sharing a rendered name each produced #
+// # the wrong gate — and the gate is what decides whether a diagnostic is  #
+// # emitted at all. So this rule both fired on valid code and stayed       #
+// # silent on invalid code, depending only on how the source was spelled.  #
+// #                                                                        #
+// # "Which classes does this one inherit from, and do any of them define   #
+// # a constructor?" is a question about RESOLVED class symbols.            #
+// #                                                                        #
+// # Pinned by: tests/no_type_spelling_surgery_tests.rs                     #
+// ##########################################################################
+
+/// DELETED — panics. The signature survives only so its caller stays visible
+/// as the rebuild map; see the banner above.
 fn check_no_init_with_args(
-    call: &ruff_python_ast::ExprCall,
-    class_name: &str,
-    class_info: &basilisk_resolver::ClassInfo,
-    class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
-    method_map: &HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>>,
-    module: &ResolvedModule,
-    path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
+    _call: &ruff_python_ast::ExprCall,
+    _class_name: &str,
+    _class_info: &basilisk_resolver::ClassInfo,
+    _class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
+    _method_map: &HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>>,
+    _module: &ResolvedModule,
+    _path: &str,
+    _diagnostics: &mut Vec<Diagnostic>,
 ) {
-    use ruff_text_size::Ranged as _;
-
-    // If there are no positional arguments, nothing to check.
-    if call.arguments.args.is_empty() && call.arguments.keywords.is_empty() {
-        return;
-    }
-
-    // Dataclass-decorated classes have synthesized __init__.
-    if class_info.is_dataclass {
-        return;
-    }
-
-    // TypedDict classes have synthesized constructors.
-    if class_info.is_typed_dict {
-        return;
-    }
-
-    // Check if the class itself defines __init__ or __new__.
-    if method_map.contains_key(&(class_name, "__init__"))
-        || method_map.contains_key(&(class_name, "__new__"))
-    {
-        return;
-    }
-
-    // Check if any base class (other than object) defines __init__ or __new__.
-    if has_custom_init_in_bases(class_info, class_map, method_map) {
-        return;
-    }
-
-    // If any base class is a dataclass (including via @dataclass_transform),
-    // the subclass inherits the synthesized __init__.
-    for base in &class_info.bases {
-        let base_name = base.split('[').next().unwrap_or(base);
-        if let Some(base_info) = class_map.get(base_name) {
-            if base_info.is_dataclass || base_info.is_typed_dict {
-                return;
-            }
-        }
-    }
-
-    // Classes whose bases define __init_subclass__ often accept keyword
-    // arguments in their constructors; skip to avoid false positives.
-    for base in &class_info.bases {
-        let base_name = base.split('[').next().unwrap_or(base);
-        if method_map.contains_key(&(base_name, "__init_subclass__")) {
-            return;
-        }
-    }
-
-    // If the class inherits from a base we cannot resolve (an external import
-    // such as pydantic `BaseModel`, attrs, or msgspec), we cannot prove it lacks
-    // an argument-accepting constructor — the "inherits only from `object`"
-    // premise is false. Stay conservative and do not flag. (Issue #44)
-    if has_unresolved_base(class_info, class_map) {
-        return;
-    }
-
-    // Class-applied or metaclass-applied `@dataclass_transform` bases synthesize
-    // an `__init__` from the subclass's annotated fields (PEP 681).
-    if crate::rules::guards::inherits_dataclass_transform(module, class_info) {
-        return;
-    }
-
-    let range = call.range();
-    let span = Span {
-        start: range.start().to_u32(),
-        end: range.end().to_u32(),
-    };
-
-    diagnostics.push(error_diagnostic_owned(
-        CODE.clone(),
-        format!(
-            "Class `{class_name}` does not define `__init__` or `__new__` and inherits \
-             only from `object`; constructor does not accept arguments"
-        ),
-        span,
-        path,
-        Some(format!(
-            "Define an `__init__` method on `{class_name}` or one of its base classes"
-        )),
-        None,
-    ));
+    panic!(
+        "basilisk-checker: `check_no_init_with_args` was DELETED because every gate \
+         deciding whether a class inherits only from `object` read SOURCE TEXT — base \
+         heads split at `[`, class and method lookup keyed on the resulting strings, \
+         and the top type recognised as the literal `\"object\"`. It panics because \
+         the real implementation — resolving each base expression to a class symbol \
+         through the binding table — DOES NOT EXIST YET. Do not restore the splits and \
+         do not return without checking in its place."
+    )
 }
 
 /// Check 6: Detect unknown keyword arguments passed to dataclass/transform constructors.

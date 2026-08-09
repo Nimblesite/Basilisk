@@ -1,11 +1,7 @@
 //! Implements [`constructors_call_init`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! Helper functions for `constructors_call_init`: Constructor call errors.
 
-use std::collections::HashMap;
-
-use basilisk_resolver::ClassInfo;
-
-use basilisk_resolver::{assignable, ResolvedModule, Span, TypeNode};
+use basilisk_resolver::{assignable, ClassInfo, ResolvedModule, TypeNode};
 use ruff_python_ast::Expr;
 
 use crate::rules::shared::ExprIndex;
@@ -19,80 +15,27 @@ pub(super) const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/constructors_call_init",
 };
 
-/// Collect all base class names (simple and subscripted) for a class.
-pub(super) fn all_base_names(class_info: &ClassInfo) -> Vec<&str> {
-    let mut names: Vec<&str> = class_info
-        .bases
-        .iter()
-        .map(|b| b.split('[').next().unwrap_or(b.as_str()))
-        .collect();
-    for entry in &class_info.base_subscripts {
-        let name = entry.base_name.as_str();
-        if !names.contains(&name) {
-            names.push(name);
-        }
-    }
-    names
-}
-
-/// Recursively check if any base class defines `__init__` or `__new__`.
-pub(super) fn has_custom_init_in_bases(
-    class_info: &ClassInfo,
-    class_map: &HashMap<&str, &ClassInfo>,
-    method_map: &HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>>,
-) -> bool {
-    let mut visited = std::collections::HashSet::new();
-    let _ = visited.insert(class_info.name.as_str());
-    custom_init_walk(class_info, class_map, method_map, &mut visited)
-}
-
-/// Recursive body of [`has_custom_init_in_bases`]; `visited` breaks base-name
-/// cycles (GitHub #278).
-fn custom_init_walk<'a>(
-    class_info: &'a ClassInfo,
-    class_map: &HashMap<&str, &'a ClassInfo>,
-    method_map: &HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>>,
-    visited: &mut std::collections::HashSet<&'a str>,
-) -> bool {
-    for base_name in all_base_names(class_info) {
-        if base_name == "object" {
-            continue;
-        }
-
-        // Check if the base class itself defines __init__ or __new__.
-        if method_map.contains_key(&(base_name, "__init__"))
-            || method_map.contains_key(&(base_name, "__new__"))
-        {
-            return true;
-        }
-
-        // Recurse into the base's bases.
-        if visited.insert(base_name) {
-            if let Some(base_class) = class_map.get(base_name) {
-                if custom_init_walk(base_class, class_map, method_map, visited) {
-                    return true;
-                }
-            }
-        }
-    }
-    false
-}
-
-/// Returns `true` if the class has a base the checker cannot resolve to a known
-/// definition — i.e. a base that is not `object` and not a class defined in this
-/// module.
-///
-/// Such a base is an external import (e.g. pydantic `BaseModel`, attrs, msgspec)
-/// that may provide an argument-accepting constructor we cannot see. Callers
-/// must therefore not conclude the class "inherits only from `object`".
-pub(super) fn has_unresolved_base(
-    class_info: &ClassInfo,
-    class_map: &HashMap<&str, &ClassInfo>,
-) -> bool {
-    all_base_names(class_info)
-        .into_iter()
-        .any(|base_name| base_name != "object" && !class_map.contains_key(base_name))
-}
+// ##########################################################################
+// # DELETED AND GONE — `all_base_names`, `has_custom_init_in_bases`,       #
+// # `custom_init_walk`, `has_unresolved_base`. NO PANIC SHELLS: their only #
+// # caller (`check_no_init_with_args`) was deleted too, so there are no    #
+// # call sites left to keep visible. DO NOT RECREATE ANY OF THEM.          #
+// #                                                                        #
+// # All four derived a base class's identity from its SOURCE TEXT:         #
+// #                                                                        #
+// #   b.split('[').next().unwrap_or(b.as_str())   — base head by bracket   #
+// #   base_name == "object"                       — top type by spelling   #
+// #   base_name != "object" && !class_map.contains_key(base_name)          #
+// #   method_map.contains_key(&(base_name, "__init__"))                    #
+// #                                                                        #
+// # A base written `Base [T]`, reached under an alias, or sharing a        #
+// # rendered name with an unrelated class produced the wrong answer every  #
+// # time. Whether a class inherits a constructor is a question about       #
+// # RESOLVED class symbols — rebuild it on the binding table, in one       #
+// # place, not as a fourth copy of a base-name string walk.                #
+// #                                                                        #
+// # Pinned by: tests/no_type_spelling_surgery_tests.rs                     #
+// ##########################################################################
 
 /// Resolve a string annotation by stripping surrounding quotes.
 pub(super) fn resolve_string_annotation(annotation: &str) -> String {
@@ -252,79 +195,40 @@ fn substituted_annotation<'a>(
     reason = "all args needed for mismatch check"
 )]
 pub(super) fn check_self_param_init_mismatch(
-    self_annotation: &str,
-    class_name: &str,
-    type_args: &[String],
-    call: &ruff_python_ast::ExprCall,
-    path: &str,
-    class_info: &basilisk_resolver::ClassInfo,
-    typevar_names: &[&str],
-    diagnostics: &mut Vec<Diagnostic>,
+    _self_annotation: &str,
+    _class_name: &str,
+    _type_args: &[String],
+    _call: &ruff_python_ast::ExprCall,
+    _path: &str,
+    _class_info: &basilisk_resolver::ClassInfo,
+    _typevar_names: &[&str],
+    _diagnostics: &mut Vec<Diagnostic>,
 ) {
-    use ruff_text_size::Ranged as _;
-
-    // Looking for annotations like "Class4[int]"
-    let Some(bracket_start) = self_annotation.find('[') else {
-        return;
-    };
-    let Some(bracket_end) = self_annotation.rfind(']') else {
-        return;
-    };
-
-    let ann_class_name = self_annotation[..bracket_start].trim();
-    if ann_class_name != class_name {
-        return;
-    }
-
-    let args_str = &self_annotation[bracket_start + 1..bracket_end];
-    let ann_type_args: Vec<&str> = args_str.split(',').map(str::trim).collect();
-
-    // Check if annotation args contain class-scoped or function-scoped type vars.
-    let generic_param_names: Vec<&str> =
-        basilisk_resolver::collect_names(&class_info.generic_params);
-
-    // If all annotation args are fixed (not type variables), check for mismatch.
-    let all_fixed = ann_type_args
-        .iter()
-        .all(|arg| !generic_param_names.contains(arg) && !typevar_names.contains(arg));
-
-    if !all_fixed {
-        return;
-    }
-
-    // The annotation has fixed type args (e.g. `Class4[int]`).
-    if type_args.len() != ann_type_args.len() {
-        return;
-    }
-
-    let all_match = type_args
-        .iter()
-        .zip(ann_type_args.iter())
-        .all(|(provided, expected)| provided.as_str() == *expected);
-
-    if !all_match {
-        let range = call.range();
-        let span = Span {
-            start: range.start().to_u32(),
-            end: range.end().to_u32(),
-        };
-        diagnostics.push(error_diagnostic_owned(
-            CODE.clone(),
-            format!(
-                "`{class_name}[{}]()` is incompatible: `__init__` expects \
-                 `self: {self_annotation}` but received `{class_name}[{}]`",
-                type_args.join(", "),
-                type_args.join(", ")
-            ),
-            span,
-            path,
-            Some(format!(
-                "Use `{class_name}[{}]()` to match the expected `self` parameter type",
-                ann_type_args.join(", ")
-            )),
-            Some(format!(
-                "The `__init__` method constrains `self` to `{self_annotation}`"
-            )),
-        ));
-    }
+    // ######################################################################
+    // # DELETED BODY. DO NOT RESTORE IT AND DO NOT RETURN WITHOUT          #
+    // # CHECKING IN ITS PLACE.                                             #
+    // #                                                                    #
+    // # It was a HAND-WRITTEN PARSER over the `self` annotation's text:    #
+    // #                                                                    #
+    // #   let bracket_start = self_annotation.find('[')?;                  #
+    // #   let bracket_end   = self_annotation.rfind(']')?;                 #
+    // #   let ann_class_name = self_annotation[..bracket_start].trim();    #
+    // #   let args = self_annotation[bracket_start+1..bracket_end]         #
+    // #                  .split(',').map(str::trim);                       #
+    // #                                                                    #
+    // # Character offsets, a bare `split(',')` that cannot see nesting (so #
+    // # `Class[dict[str, int]]` was read as two arguments), and class      #
+    // # identity by rendered equality. `ruff_python_parser` already        #
+    // # produces this: an `Expr::Subscript` with a `value` and a `slice`.  #
+    // #                                                                    #
+    // # Pinned by: tests/no_type_spelling_surgery_tests.rs                 #
+    // ######################################################################
+    panic!(
+        "basilisk-checker: `check_self_param_init_mismatch` was DELETED because it \
+         hand-parsed the `self` annotation from TEXT — `find('[')`, `rfind(']')`, \
+         slicing by character offset, and a nesting-blind `split(',')`. It panics \
+         because the real implementation — reading the annotation's `Expr::Subscript` \
+         and resolving its slice through the binding table — DOES NOT EXIST YET. Do \
+         not restore the parser and do not return without checking in its place."
+    )
 }
