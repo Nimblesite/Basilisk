@@ -75,6 +75,46 @@ const FORBIDDEN: &[(&str, &str)] = &[
         "locates the end of a type argument list inside RENDERED text; see \
          `.find('[')`",
     ),
+    // ---------------------------------------------------------------------
+    // Resolver fields that carry a RENDERED SPELLING rather than a reference.
+    // Reading any of them to decide something is the string-keyed hierarchy
+    // again: the resolver records "simple names only; complex expressions
+    // ignored", so an aliased or dotted form is already lost by the time a
+    // rule sees it. They may appear ONLY in diagnostic message text.
+    // ---------------------------------------------------------------------
+    (
+        "base_expression_names",
+        "matches TypeVar/base identity against RENDERED names harvested from \
+         base-class expressions; resolve the base expression instead",
+    ),
+    (
+        "metaclass_name",
+        "identifies a metaclass by the RENDERED TEXT of its `metaclass=` value, \
+         so an imported or dotted metaclass never resolves",
+    ),
+    (
+        "constraint_type_names",
+        "compares PEP 696 constraints as STRINGS; constraint membership is type \
+         equivalence, a `TypeNode` relation",
+    ),
+    (
+        "bound_type_name",
+        "compares a PEP 696 bound as a STRING, and is recorded only when the \
+         bound `is a simple name` — `bound=list[int]` never arrives at all",
+    ),
+    (
+        "default_type_name",
+        "compares a PEP 696 default as a STRING; see `bound_type_name`",
+    ),
+    (
+        "class_name_map",
+        "the DELETED name-keyed class hierarchy; do not reintroduce it or vendor \
+         a copy under another name",
+    ),
+    (
+        "is_transitive_typeddict",
+        "the DELETED name-keyed TypedDict base walk (basilisk-resolver)",
+    ),
 ];
 
 /// Files exempt for a stated reason — NOT a general escape hatch. A new entry
@@ -99,17 +139,71 @@ fn rust_sources(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
-/// Lines of real code paired with their TRUE 1-based line number. Comment
-/// lines are dropped so the DELETED banners — which quote the forbidden
-/// constructs in order to forbid them — do not count as violations, but the
-/// numbering still points at the file as it is on disk.
+/// Lines of real code paired with their TRUE 1-based line number.
+///
+/// Two kinds of line are dropped, because both exist to NAME the forbidden
+/// constructs rather than to use them, and neither can produce a verdict:
+///
+/// * comment lines — the DELETED banners quote what they forbid;
+/// * the body of a `panic!(…)` — a deletion's panic message must say which
+///   construct it replaced, and that message is the only remaining record of
+///   it.
+///
+/// Numbering still points at the file as it is on disk.
 fn code_lines(source: &str) -> Vec<(usize, &str)> {
-    source
-        .lines()
-        .enumerate()
-        .map(|(index, line)| (index + 1, line))
-        .filter(|(_, line)| !line.trim_start().starts_with("//"))
-        .collect()
+    let mut out = Vec::new();
+    let mut in_panic = false;
+    for (index, line) in source.lines().enumerate() {
+        let trimmed = line.trim();
+        if in_panic {
+            // A `panic!` message is a multi-line string literal, so counting
+            // parens across it is wrong — prose and escapes inside the string
+            // unbalance the count, and a single unbalanced message would
+            // silently exempt the whole rest of the file. Terminate on the
+            // closing line instead, which is how every one of these is
+            // formatted.
+            if trimmed == ")" || trimmed == ");" || trimmed == ")," {
+                in_panic = false;
+            }
+            continue;
+        }
+        if trimmed.starts_with("//") {
+            continue;
+        }
+        // A single-line `panic!("…")` closes on its own line and is skipped
+        // outright; a multi-line one opens the skip above.
+        if trimmed.starts_with("panic!(") {
+            if !trimmed.ends_with(")") && !trimmed.ends_with(");") {
+                in_panic = true;
+            }
+            continue;
+        }
+        out.push((index + 1, line));
+    }
+    out
+}
+
+/// The skip above must never run past the end of one `panic!`. A message that
+/// failed to terminate would exempt every line after it — coverage that isn't.
+#[test]
+fn panic_skipping_does_not_swallow_following_code() {
+    let source = "\
+fn shell() {
+    panic!(
+        \"was DELETED because it read metaclass_name (and other things)\"
+    )
+}
+
+fn live() {
+    let x = thing.metaclass_name;
+}
+";
+    let kept: Vec<usize> = code_lines(source).into_iter().map(|(n, _)| n).collect();
+    assert!(
+        kept.contains(&9),
+        "line 9 (`thing.metaclass_name`) is live code AFTER a panic block and must \
+         still be scanned; kept lines were {kept:?}"
+    );
 }
 
 #[test]

@@ -107,9 +107,7 @@ fn collect_class_bases<'a>(
 
 /// The positional parameters of every module-level function: name and
 /// optional annotation expression, in call order.
-fn collect_function_params(
-    stmts: &[Stmt],
-) -> HashMap<&str, Vec<(&str, Option<&Expr>)>> {
+fn collect_function_params(stmts: &[Stmt]) -> HashMap<&str, Vec<(&str, Option<&Expr>)>> {
     let mut map = HashMap::new();
     for stmt in stmts {
         let Stmt::FunctionDef(func) = stmt else {
@@ -256,13 +254,12 @@ fn check_body_stmt(
 /// `true` when both nodes are parameterisations of the same builtin class.
 fn same_builtin_base(a: &TypeNode, b: &TypeNode) -> bool {
     match (a, b) {
-        (
-            TypeNode::Subscript { base: base_a, .. },
-            TypeNode::Subscript { base: base_b, .. },
-        ) => match (base_a.as_ref(), base_b.as_ref()) {
-            (TypeNode::Builtin(class_a), TypeNode::Builtin(class_b)) => class_a == class_b,
-            _ => false,
-        },
+        (TypeNode::Subscript { base: base_a, .. }, TypeNode::Subscript { base: base_b, .. }) => {
+            match (base_a.as_ref(), base_b.as_ref()) {
+                (TypeNode::Builtin(class_a), TypeNode::Builtin(class_b)) => class_a == class_b,
+                _ => false,
+            }
+        }
         _ => false,
     }
 }

@@ -61,24 +61,43 @@ pub(super) fn check_default_specializations(
     }
 }
 
-/// Map from `TypeVar` name to its resolved `default=` type (PEP 696) plus
-/// the default's recorded name (used only in diagnostic text), for typevars
-/// that declare a simple default (e.g. `TypeVar("DefaultStrT", default=str)`).
+// ##########################################################################
+// # DELETED BODY — `typevar_defaults`. DO NOT RESTORE IT.
+// #
+// #   let display = tv.default_type_name.as_deref()?;
+// #
+// # `?` on a RENDERED-NAME field made it a FILTER, not just a message string:
+// # `default_type_name` is recorded only when the default "is a simple name",
+// # so `default=list[int]` was dropped from the map entirely and never
+// # checked — even though `default_node` beside it lowers the real
+// # expression to a `TypeNode` perfectly well. The rule silently covered only
+// # defaults that happen to be bare words.
+// #
+// # The replacement keys on the lowered node and takes message text from the
+// # default's own expression span.
+// #
+// # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
+// ##########################################################################
 fn typevar_defaults<'m>(
-    module: &'m ResolvedModule,
-    index: &ExprIndex<'_>,
+    _module: &'m ResolvedModule,
+    _index: &ExprIndex<'_>,
 ) -> HashMap<&'m str, (TypeNode, &'m str)> {
-    module
-        .typevar_calls
-        .iter()
-        .filter_map(|tv| {
-            let display = tv.default_type_name.as_deref()?;
-            let node = default_node(tv, index, module)?;
-            Some((tv.name.as_str(), (node, display)))
-        })
-        .collect()
+    panic!(
+        "basilisk-checker: `typevar_defaults` was DELETED because it gated each TypeVar \
+         on `default_type_name`, a RENDERED-NAME field the resolver fills only for bare \
+         words, so every non-trivial `default=` was silently dropped from the check. It \
+         panics because the real implementation — keying on the lowered default \
+         expression — DOES NOT EXIST YET. Do not restore the gate and do not return an \
+         empty map in its place."
+    )
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; this helper lowers the default \
+              expression through the binding table and is retained for the rebuild — \
+              see tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 /// The lowered `default=` argument of a recorded `TypeVar(...)` call.  The
 /// expression is found on the call NODE and lowered through the module's
 /// bindings — never read back from source text ([ASTREBUILD-LAW]).

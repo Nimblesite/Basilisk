@@ -229,7 +229,8 @@ spindle  :  int
 #[test]
 fn class_symbol_cannot_be_rebound_to_int() -> Result<(), Box<dyn std::error::Error>> {
     SpecObligation {
-        spec_reason: "the name of a class is declared `type[Trestle]`; `int` is not assignable to it",
+        spec_reason:
+            "the name of a class is declared `type[Trestle]`; `int` is not assignable to it",
         rejected: r#"
 class Trestle:
     ...

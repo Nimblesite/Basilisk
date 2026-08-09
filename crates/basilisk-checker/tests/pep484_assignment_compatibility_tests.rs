@@ -8,8 +8,7 @@ use common::{assert_rule_count, run};
 const RULE: &str = "assignment_compatibility";
 
 #[test]
-fn incompatible_annotated_assignment_is_reported_once(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn incompatible_annotated_assignment_is_reported_once() -> Result<(), Box<dyn std::error::Error>> {
     for source in [
         "ore: int = \"granite\"\n",
         "ore : int = (\n    \"granite\"\n)\n",
@@ -28,12 +27,10 @@ fn incompatible_annotated_assignment_is_reported_once(
 #[test]
 fn compatible_assignment_and_bare_declaration_are_not_reported(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let diagnostics = run(
-        r#"
+    let diagnostics = run(r#"
 declared: int
 assigned: int = 42
-"#,
-    )?;
+"#)?;
     assert_rule_count(
         &diagnostics,
         RULE,
@@ -44,15 +41,13 @@ assigned: int = 42
 }
 
 #[test]
-fn parameter_types_flow_into_annotated_local_assignments(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let diagnostics = run(
-        r#"
+fn parameter_types_flow_into_annotated_local_assignments() -> Result<(), Box<dyn std::error::Error>>
+{
+    let diagnostics = run(r#"
 def assay(count: int, label: str) -> None:
     wrong_label: str = count
     wrong_count: int = label
-"#,
-    )?;
+"#)?;
     assert_rule_count(
         &diagnostics,
         RULE,
@@ -63,8 +58,8 @@ def assay(count: int, label: str) -> None:
 }
 
 #[test]
-fn type_alias_declaration_is_not_a_value_assignment_check(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn type_alias_declaration_is_not_a_value_assignment_check() -> Result<(), Box<dyn std::error::Error>>
+{
     for source in [
         r#"
 from typing import TypeAlias as AliasMarker

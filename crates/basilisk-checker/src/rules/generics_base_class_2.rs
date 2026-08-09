@@ -157,7 +157,14 @@ fn check_class(
         }
 
         // If this base is a class defined in this module, propagate through its bases.
-        propagate_ancestors(&base.name, &base.type_args, tables, idx, &mut ancestor_args, 0);
+        propagate_ancestors(
+            &base.name,
+            &base.type_args,
+            tables,
+            idx,
+            &mut ancestor_args,
+            0,
+        );
     }
 
     // Check for conflicts: same ancestor reached with different type arg orderings.
@@ -211,10 +218,9 @@ fn propagate_ancestors(
     if depth > 10 {
         return;
     }
-    let (Some(parent_info), Some(parent_def)) = (
-        tables.info.get(parent_name),
-        tables.defs.get(parent_name),
-    ) else {
+    let (Some(parent_info), Some(parent_def)) =
+        (tables.info.get(parent_name), tables.defs.get(parent_name))
+    else {
         return;
     };
 

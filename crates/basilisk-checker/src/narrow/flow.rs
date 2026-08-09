@@ -639,7 +639,19 @@ fn element_type(iterable: &InferredType) -> InferredType {
         | InferredType::Literal(crate::types::LiteralValue::Str(_)) => InferredType::Str,
         InferredType::Generator(yield_type, _, _) => (**yield_type).clone(),
         InferredType::Tuple(elems) => tuple_element(elems),
-        InferredType::Named(name) if name == "range" => InferredType::Int,
+        // ##############################################################
+        // # DELETED — the `name == "range"` arm. DO NOT RESTORE IT.     #
+        // #                                                            #
+        // # It typed the element of an iterable as `int` when the       #
+        // # iterable's type RENDERED as the five characters "range".   #
+        // # `from builtins import range as r`, a user `class range`,   #
+        // # or any class a module names `range` all got the builtin's  #
+        // # element type. `range` resolves through the binding table    #
+        // # like every other name (CLAUDE.md: builtins are not an       #
+        // # exception).                                                 #
+        // #                                                            #
+        // # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs #
+        // ##############################################################
         _ => InferredType::Unknown,
     }
 }

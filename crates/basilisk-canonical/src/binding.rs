@@ -239,7 +239,11 @@ impl BindingTable {
     }
 
     /// `case {…, **rest}:` — value sub-patterns and the rest capture.
-    fn bind_match_mapping(&mut self, offset: TextSize, node: &ruff_python_ast::PatternMatchMapping) {
+    fn bind_match_mapping(
+        &mut self,
+        offset: TextSize,
+        node: &ruff_python_ast::PatternMatchMapping,
+    ) {
         self.bind_patterns(offset, &node.patterns);
         if let Some(rest) = &node.rest {
             self.push_local(offset, rest.as_str());
@@ -388,12 +392,10 @@ impl BindingTable {
     #[must_use]
     pub fn canonical_of(&self, expr: &Expr) -> Option<CanonicalSymbol> {
         match expr {
-            Expr::Name(name) => {
-                match self.binding_at(name.id.as_str(), name.range().start())? {
-                    BindingKind::Symbol(symbol) => Some(symbol.clone()),
-                    BindingKind::Module(_) | BindingKind::LocalDefinition => None,
-                }
-            }
+            Expr::Name(name) => match self.binding_at(name.id.as_str(), name.range().start())? {
+                BindingKind::Symbol(symbol) => Some(symbol.clone()),
+                BindingKind::Module(_) | BindingKind::LocalDefinition => None,
+            },
             Expr::Attribute(attribute) => {
                 let module = self.module_path_of(&attribute.value)?;
                 Some(CanonicalSymbol::new(module, attribute.attr.as_str()))
@@ -410,12 +412,10 @@ impl BindingTable {
     /// resolves to the submodule so `collections.abc.Callable` resolves.
     fn module_path_of(&self, expr: &Expr) -> Option<String> {
         match expr {
-            Expr::Name(name) => {
-                match self.binding_at(name.id.as_str(), name.range().start())? {
-                    BindingKind::Module(module) => Some(module.clone()),
-                    BindingKind::Symbol(_) | BindingKind::LocalDefinition => None,
-                }
-            }
+            Expr::Name(name) => match self.binding_at(name.id.as_str(), name.range().start())? {
+                BindingKind::Module(module) => Some(module.clone()),
+                BindingKind::Symbol(_) | BindingKind::LocalDefinition => None,
+            },
             Expr::Attribute(attribute) => {
                 let base = self.module_path_of(&attribute.value)?;
                 Some(format!("{base}.{}", attribute.attr))

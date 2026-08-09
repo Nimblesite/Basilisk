@@ -254,8 +254,8 @@ impl<'a> ScopeContext<'a> {
                     let _ = local_mappings.insert(param.parameter.name.to_string(), info);
                 }
                 if let Some(type_name) = expr_name(ann) {
-                    let _ = local_types
-                        .insert(param.parameter.name.to_string(), type_name.to_owned());
+                    let _ =
+                        local_types.insert(param.parameter.name.to_string(), type_name.to_owned());
                 }
             }
         }

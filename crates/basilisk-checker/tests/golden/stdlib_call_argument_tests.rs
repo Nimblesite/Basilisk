@@ -329,7 +329,8 @@ accumulate(1, 2, 3, 4, 5)
 #[test]
 fn variadic_keyword_value_type_is_enforced() -> Result<(), Box<dyn std::error::Error>> {
     SpecObligation {
-        spec_reason: "`**tallies: int` declares every keyword argument's value `int`; `str` is not \
+        spec_reason:
+            "`**tallies: int` declares every keyword argument's value `int`; `str` is not \
                       assignable",
         rejected: r#"
 def collate(**tallies: int) -> int:

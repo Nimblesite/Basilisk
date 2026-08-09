@@ -100,7 +100,16 @@ fn check_local_function_calls(
         let Some(func) = resolve_overload_for_call(funcs) else {
             continue;
         };
-        check_call_arguments(module, &index, call, func, resolver, judge, &typevars, diagnostics);
+        check_call_arguments(
+            module,
+            &index,
+            call,
+            func,
+            resolver,
+            judge,
+            &typevars,
+            diagnostics,
+        );
     }
 }
 
@@ -186,7 +195,9 @@ fn argument_mismatch(
     typevars: &HashMap<&str, &TypeVarCallInfo>,
 ) -> Option<String> {
     let inferred = judge.inferred(Some(arg_span));
-    if let Some(description) = container_mismatch(module, index, ann_span, ann_text, &inferred, typevars) {
+    if let Some(description) =
+        container_mismatch(module, index, ann_span, ann_text, &inferred, typevars)
+    {
         return Some(description);
     }
     if matches!(inferred, InferredType::Unknown | InferredType::Any) {

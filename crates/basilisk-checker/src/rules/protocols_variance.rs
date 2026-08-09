@@ -27,12 +27,9 @@ const CODE: ErrorCode = ErrorCode {
 /// Methods exempt from variance inference per the typing spec.
 const EXEMPT_METHODS: &[&str] = &["__init__", "__new__"];
 
-/// Builtin covariant containers -- a `TypeVar` inside one of these in a return
-/// annotation is still purely in output position. Only builtins are listed:
-/// they need no import, so matching their name is not import resolution. The
-/// `typing` and `collections.abc` counterparts must be resolved through the
-/// annotation cascade ([TYPEINF-ANNOTATION-RESOLUTION]), never by spelling.
-const COVARIANT_CONTAINERS: &[&str] = &["type", "tuple", "frozenset"];
+// DELETED — `COVARIANT_CONTAINERS`, a table of builtin SPELLINGS used to build
+// `format!("{container}[")` prefixes and match them against annotation text.
+// Its only reader panics; see the banner below. DO NOT RECREATE IT.
 
 /// The variance of a `TypeVar`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -88,29 +85,34 @@ fn span_text(source: &str, span: basilisk_resolver::Span) -> Option<&str> {
     slice_span(source, span)
 }
 
-/// Check whether a `TypeVar` appears inside a generic container that is NOT
-/// covariant (i.e. invariant or contravariant), meaning the `TypeVar` is
-/// effectively used in both input and output positions.
-fn typevar_in_invariant_container(text: &str, tv_name: &str) -> bool {
-    if !contains_typevar(text, tv_name) {
-        return false;
-    }
-    let trimmed = text.trim();
-    if trimmed == tv_name {
-        return false;
-    }
-    // No generic brackets means a simple union like `T1 | T2`.
-    if !trimmed.contains('[') {
-        return false;
-    }
-    // Check if the container is a known covariant type.
-    for container in COVARIANT_CONTAINERS {
-        let prefix = format!("{container}[");
-        if trimmed.starts_with(&prefix) {
-            return false;
-        }
-    }
-    true
+// ##########################################################################
+// # DELETED BODY — `typevar_in_invariant_container`. DO NOT RESTORE IT.
+// #
+// # Variance was decided by STRING SURGERY on annotation source text:
+// #
+// #   if !trimmed.contains('[') { return false; }
+// #   for container in COVARIANT_CONTAINERS {          // "type","tuple","frozenset"
+// #       let prefix = format!("{container}[");
+// #       if trimmed.starts_with(&prefix) { return false; }
+// #   }
+// #
+// # It tested whether rendered text BEGINS WITH a builtin's spelling followed
+// # by a bracket. `tuple [T]` (space), `Tuple[T]`, an aliased import, or a
+// # user class named `tuple` all got the wrong answer, and a generic written
+// # without brackets was declared non-generic. Whether a container is
+// # covariant is a property of the RESOLVED class, not of its rendering.
+// #
+// # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
+// ##########################################################################
+fn typevar_in_invariant_container(_text: &str, _tv_name: &str) -> bool {
+    panic!(
+        "basilisk-checker: `typevar_in_invariant_container` was DELETED because it \
+         decided variance by testing whether annotation TEXT starts with a builtin \
+         container's spelling followed by `[`. It panics because the real \
+         implementation — the resolved class's declared variance, read from the binding \
+         table — DOES NOT EXIST YET. Do not restore the prefix test and do not \
+         substitute a default answer."
+    )
 }
 
 /// Collect `TypeVar` names appearing in annotation text, distinguishing

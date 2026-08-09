@@ -12,13 +12,13 @@
 //! Identifiers come from a cooperage/waterworks vocabulary disjoint from the
 //! 913 names the suite defines.
 
-use super::harness::{aliased, import_form, reformatted, renamed, SpecObligation};
 #[allow(
     clippy::wildcard_imports,
     unused_imports,
     reason = "shared golden fixtures: each sibling uses the subset it references"
 )]
 use super::contextmanagers::*;
+use super::harness::{aliased, import_form, reformatted, renamed, SpecObligation};
 
 #[test]
 fn exit_returning_bool_defeats_the_narrowing() -> Result<(), Box<dyn std::error::Error>> {

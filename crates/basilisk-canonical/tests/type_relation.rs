@@ -291,8 +291,14 @@ fn invariant_containers_reject_different_parameters() {
 
 #[test]
 fn any_parameter_is_consistent_with_every_parameter() {
-    assert_assignable("from typing import Any\nx: list[Any]\ny: list[int]\n", Some(true));
-    assert_assignable("from typing import Any\nx: list[int]\ny: list[Any]\n", Some(true));
+    assert_assignable(
+        "from typing import Any\nx: list[Any]\ny: list[int]\n",
+        Some(true),
+    );
+    assert_assignable(
+        "from typing import Any\nx: list[int]\ny: list[Any]\n",
+        Some(true),
+    );
 }
 
 #[test]

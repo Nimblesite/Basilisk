@@ -352,12 +352,9 @@ fn fn_signature(
     };
     let star = |param: Option<&ruff_python_ast::Parameter>| match param {
         None => StarSlot::Absent,
-        Some(p) => p
-            .annotation
-            .as_deref()
-            .map_or(StarSlot::Untyped, |ann| {
-                StarSlot::Typed(AnnInfo::lower(bindings, source, ann))
-            }),
+        Some(p) => p.annotation.as_deref().map_or(StarSlot::Untyped, |ann| {
+            StarSlot::Typed(AnnInfo::lower(bindings, source, ann))
+        }),
     };
     FnSignature {
         posonly: params.posonlyargs.iter().map(&pair).collect(),

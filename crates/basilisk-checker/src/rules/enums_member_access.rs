@@ -20,7 +20,9 @@
 
 use std::collections::{HashMap, HashSet};
 
-use basilisk_resolver::{evaluate, parse_static_condition, BindingTable, BranchTruth, ResolvedModule};
+use basilisk_resolver::{
+    evaluate, parse_static_condition, BindingTable, BranchTruth, ResolvedModule,
+};
 use ruff_python_ast::{Expr, Stmt};
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};

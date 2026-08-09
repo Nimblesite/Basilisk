@@ -133,7 +133,9 @@ fn receiver_params_consumed(
     if wrapper == Some(DescriptorKind::StaticMethod) || func.is_staticmethod {
         return 0;
     }
-    usize::from(wrapper == Some(DescriptorKind::ClassMethod) || func.is_classmethod || instance_access)
+    usize::from(
+        wrapper == Some(DescriptorKind::ClassMethod) || func.is_classmethod || instance_access,
+    )
 }
 
 /// The positional arguments a signature requires once `consumed` leading

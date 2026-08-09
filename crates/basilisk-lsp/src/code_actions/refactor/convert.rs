@@ -16,7 +16,11 @@ use tower_lsp::lsp_types::{CodeAction, Range, Url};
 
 /// `Union[X, Y]` ⇄ `X | Y` conversion actions at the cursor. Inert pending
 /// the AST rebuild; never offers an action.
-pub(in crate::code_actions) fn convert_union_syntax(_uri: &Url, _source: &str, _range: &Range) -> Vec<CodeAction> {
+pub(in crate::code_actions) fn convert_union_syntax(
+    _uri: &Url,
+    _source: &str,
+    _range: &Range,
+) -> Vec<CodeAction> {
     Vec::new()
 }
 

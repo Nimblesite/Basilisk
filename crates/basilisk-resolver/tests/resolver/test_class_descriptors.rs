@@ -30,7 +30,10 @@ fn descriptor_binding(
         .iter()
         .find(|a| a.name == attr)
         .ok_or_else(|| format!("no attribute `{attr}` on `{class_name}`"))?;
-    Ok((attribute.rhs_descriptor.is_some(), attribute.rhs_name.clone()))
+    Ok((
+        attribute.rhs_descriptor.is_some(),
+        attribute.rhs_name.clone(),
+    ))
 }
 
 /// An aliased import of the builtin descriptor is the SAME descriptor: the

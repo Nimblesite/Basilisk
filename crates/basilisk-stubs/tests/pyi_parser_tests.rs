@@ -374,7 +374,10 @@ if typing.TYPE_CHECKING:\n    fake_common: int\n    fake_only: int\nelse:\n    f
         assert!(stub.variables.contains_key(name), "missing `{name}`");
     }
     for name in ["bare_only", "bare_else", "fake_only", "fake_else"] {
-        assert!(!stub.variables.contains_key(name), "undecidable guard decided `{name}`");
+        assert!(
+            !stub.variables.contains_key(name),
+            "undecidable guard decided `{name}`"
+        );
     }
 
     let shadowed = parse_stub(
@@ -383,7 +386,10 @@ TYPE_CHECKING = False\n\
 if TYPE_CHECKING:\n    shadow_only: int\nelse:\n    shadow_else: int\n",
     );
     for name in ["shadow_only", "shadow_else"] {
-        assert!(!shadowed.variables.contains_key(name), "rebound flag decided `{name}`");
+        assert!(
+            !shadowed.variables.contains_key(name),
+            "rebound flag decided `{name}`"
+        );
     }
 }
 
@@ -427,8 +433,16 @@ if sys.platform == \"linux\":\n    platform_common: int\n    platform_only: int\
     for name in ["version_common", "platform_common"] {
         assert!(stub.variables.contains_key(name), "missing `{name}`");
     }
-    for name in ["version_only", "version_else", "platform_only", "platform_else"] {
-        assert!(!stub.variables.contains_key(name), "fake `sys` decided `{name}`");
+    for name in [
+        "version_only",
+        "version_else",
+        "platform_only",
+        "platform_else",
+    ] {
+        assert!(
+            !stub.variables.contains_key(name),
+            "fake `sys` decided `{name}`"
+        );
     }
 }
 

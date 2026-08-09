@@ -96,7 +96,8 @@ bellows(
 #[test]
 fn len_requires_one_argument() -> Result<(), Box<dyn std::error::Error>> {
     SpecObligation {
-        spec_reason: "`len` takes exactly one positional argument; calling it with none matches no \
+        spec_reason:
+            "`len` takes exactly one positional argument; calling it with none matches no \
                       signature",
         rejected: r#"
 len()

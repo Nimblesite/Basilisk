@@ -75,7 +75,11 @@ pub(super) fn feasible_branches<'a>(
     branches
 }
 
-fn evaluate_guard(bindings: &BindingTable, expr: &Expr, target: Option<&StubTarget>) -> PossibleTruth {
+fn evaluate_guard(
+    bindings: &BindingTable,
+    expr: &Expr,
+    target: Option<&StubTarget>,
+) -> PossibleTruth {
     match expr {
         Expr::BooleanLiteral(literal) => PossibleTruth::from_bool(literal.value),
         Expr::UnaryOp(unary) if matches!(unary.op, UnaryOp::Not) => {

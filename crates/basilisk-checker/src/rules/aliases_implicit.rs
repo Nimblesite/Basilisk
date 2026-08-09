@@ -164,11 +164,7 @@ fn ordered_name_refs(expr: &Expr) -> Vec<&str> {
 /// The alias's type parameters: every distinct declared `TypeVar` /
 /// `ParamSpec` / `TypeVarTuple` referenced in the RHS, in first-appearance
 /// order, each carrying its declared bound as a resolved node.
-fn alias_type_params(
-    module: &ResolvedModule,
-    index: &ExprIndex<'_>,
-    rhs: &Expr,
-) -> Vec<TypeParam> {
+fn alias_type_params(module: &ResolvedModule, index: &ExprIndex<'_>, rhs: &Expr) -> Vec<TypeParam> {
     let declared: HashMap<&str, &basilisk_resolver::TypeVarCallInfo> = module
         .typevar_calls
         .iter()

@@ -55,10 +55,7 @@ impl Rule for DataclassFieldOrder {
 /// participates in default-ordering). `InitVar` fields are included — they DO
 /// become `__init__` parameters.
 fn is_positional_init_field(attr: &AttributeInfo) -> bool {
-    attr.has_annotation
-        && !attr.is_init_false
-        && !attr.is_kw_only
-        && !attr.is_class_var
+    attr.has_annotation && !attr.is_init_false && !attr.is_kw_only && !attr.is_class_var
 }
 
 fn check_class(class: &ClassInfo, path: &str, out: &mut Vec<Diagnostic>) {

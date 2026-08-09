@@ -105,8 +105,8 @@ async def count_staves() -> AsyncStream[int]:
 ";
 
 #[test]
-fn async_generator_return_annotation_must_be_async_iterable()
--> Result<(), Box<dyn std::error::Error>> {
+fn async_generator_return_annotation_must_be_async_iterable(
+) -> Result<(), Box<dyn std::error::Error>> {
     SpecObligation {
         spec_reason: "an async generator function returns an async iterator, never its yield type",
         rejected: DECL_REJECTED,

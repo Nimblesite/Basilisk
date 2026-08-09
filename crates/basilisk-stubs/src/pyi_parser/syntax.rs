@@ -50,13 +50,12 @@ pub(super) fn stub_method(
     let mut params = extract_params(&function.parameters);
     // A static method has no receiver to strip; every other method binds its
     // first parameter as one.
-    let receiver = if has_staticmethod_decorator(bindings, &function.decorator_list)
-        || params.is_empty()
-    {
-        None
-    } else {
-        Some(params.remove(0))
-    };
+    let receiver =
+        if has_staticmethod_decorator(bindings, &function.decorator_list) || params.is_empty() {
+            None
+        } else {
+            Some(params.remove(0))
+        };
     StubFunction {
         name: function.name.to_string(),
         receiver,

@@ -30,138 +30,65 @@
 //! `ruff_python_ast` nodes (via [`basilisk_resolver::Pep695Scoping`]), never
 //! from raw line scanning.
 
-use std::collections::HashSet;
-
 use basilisk_resolver::{Pep695Scoping, ResolvedModule};
 
-use crate::diagnostic::{error_diagnostic_owned, Diagnostic};
-
-use super::CODE;
+use crate::diagnostic::Diagnostic;
 
 // ---------------------------------------------------------------------------
 // Violation 7: misuse of a PEP 695 type alias
 // ---------------------------------------------------------------------------
 
-/// Aliases cannot be called, subclassed, used in `isinstance`/`issubclass`, or
-/// have attributes accessed (except `__value__` / `__type_params__`).
+// ##########################################################################
+// # DELETED BODY — `check_type_alias_misuse`. DO NOT RESTORE IT.
+// #
+// # Three separate spelling dependencies, all emitting LIVE diagnostics:
+// #
+// #   alias_names.contains(call.callee.as_str())   — alias identity by name
+// #   call.callee != "isinstance"                  — BUILTIN BY SPELLING
+// #   let arg_text = slice_span(source, *arg_span);
+// #   alias_names.contains(arg_text.trim())        — RAW SOURCE TEXT
+// #
+// # The second argument of `isinstance(x, Alias)` was read back out of the
+// # SOURCE, trimmed, and matched against a set of alias names. So
+// # `isinstance(x, (Alias,))`, a line-broken argument, or an alias reached
+// # under a second name each changed the verdict, and `isinstance` itself was
+// # recognised by its five-character spelling rather than by resolution —
+// # `from builtins import isinstance as check` was invisible, and a user
+// # function named `isinstance` was treated as the builtin.
+// #
+// # `check_alias_attribute_access` carried the same defect
+// # (`alias_names.contains(access.base.as_str())`) and is deleted with it.
+// #
+// # Whether a callee IS `builtins.isinstance`, and whether an argument IS a
+// # `type` alias, are both questions about resolved bindings.
+// #
+// # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
+// ##########################################################################
 pub(super) fn check_type_alias_misuse(
-    module: &ResolvedModule,
-    scoping: &Pep695Scoping,
-    diagnostics: &mut Vec<Diagnostic>,
+    _module: &ResolvedModule,
+    _scoping: &Pep695Scoping,
+    _diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let source = &module.source;
-    let path = &module.path;
-
-    let alias_names: HashSet<&str> = module
-        .type_statements
-        .iter()
-        .map(|ts| ts.name.as_str())
-        .collect();
-    if alias_names.is_empty() {
-        return;
-    }
-
-    for call in &module.calls {
-        if alias_names.contains(call.callee.as_str())
-            && call.callee != "isinstance"
-            && call.callee != "issubclass"
-        {
-            diagnostics.push(error_diagnostic_owned(
-                CODE.clone(),
-                format!(
-                    "Cannot call type alias `{}`: type aliases are not callable",
-                    call.callee
-                ),
-                call.span,
-                path,
-                Some("Type aliases created with `type` cannot be instantiated".to_owned()),
-                None,
-            ));
-        }
-
-        if (call.callee == "isinstance" || call.callee == "issubclass") && call.args.len() >= 2 {
-            if let Some((_, arg_span)) = call.args.get(1) {
-                if let Some(arg_text) = crate::span_util::slice_span(source, *arg_span) {
-                    let arg_trimmed = arg_text.trim();
-                    if alias_names.contains(arg_trimmed) {
-                        diagnostics.push(error_diagnostic_owned(
-                            CODE.clone(),
-                            format!("Cannot use type alias `{arg_trimmed}` in `{}`", call.callee),
-                            *arg_span,
-                            path,
-                            Some(format!(
-                                "Type aliases created with `type` cannot be used with `{}`",
-                                call.callee
-                            )),
-                            None,
-                        ));
-                    }
-                }
-            }
-        }
-    }
-
-    for class in &module.classes {
-        for base in &class.bases {
-            // ##############################################################
-            // # DELETED — the base-name extraction. DO NOT RESTORE IT.     #
-            // #                                                            #
-            // # `base.split('[').next().unwrap_or(base).trim()` took a     #
-            // # base class's identity from its SOURCE TEXT, then tested    #
-            // # membership of that STRING in the alias-name set. So        #
-            // # `type Alias = int` subclassed as `Alias [int]` was missed, #
-            // # an alias reached under a second name was missed, and a     #
-            // # user class sharing an alias's rendered name was falsely    #
-            // # reported. Whether a base IS a `type` alias is a question   #
-            // # about the binding it resolves to.                          #
-            // #                                                            #
-            // # Pinned by: tests/no_type_spelling_surgery_tests.rs         #
-            // ##############################################################
-            let _ = (base, &alias_names, class, path, &mut *diagnostics);
-            panic!(
-                "basilisk-checker: `alias_misuse`'s type-alias-as-base-class check was \
-                 DELETED because it split a base's SOURCE TEXT at `[` and tested the \
-                 resulting STRING for membership in the alias-name set. It panics \
-                 because the real implementation — resolving the base expression to \
-                 its binding and asking whether that binding is a `type` alias — DOES \
-                 NOT EXIST YET. Do not restore the split and do not skip the check in \
-                 its place."
-            );
-        }
-    }
-
-    check_alias_attribute_access(&alias_names, scoping, path, diagnostics);
+    panic!(
+        "basilisk-checker: `check_type_alias_misuse` was DELETED because it recognised \
+         `isinstance`/`issubclass` by their SPELLINGS, matched type aliases by rendered \
+         name, and read the second argument back out of RAW SOURCE TEXT to compare it. \
+         It panics because the real implementation — callee and argument resolved \
+         through the binding table — DOES NOT EXIST YET. Do not restore the text read \
+         and do not skip the check in its place."
+    )
 }
 
-/// Only `__value__` and `__type_params__` may be accessed on a type alias.
-fn check_alias_attribute_access(
-    alias_names: &HashSet<&str>,
-    scoping: &Pep695Scoping,
-    path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    for access in &scoping.attr_accesses {
-        if !alias_names.contains(access.base.as_str()) {
-            continue;
-        }
-        if access.attr == "__value__" || access.attr == "__type_params__" {
-            continue;
-        }
-        diagnostics.push(error_diagnostic_owned(
-            CODE.clone(),
-            format!(
-                "Cannot access attribute `{}` on type alias `{}`",
-                access.attr, access.base
-            ),
-            access.span,
-            path,
-            Some(
-                "Type aliases only support `__value__` and `__type_params__` attributes".to_owned(),
-            ),
-            None,
-        ));
-    }
-}
+// ##########################################################################
+// # DELETED AND GONE — `check_alias_attribute_access`. NO PANIC SHELL: its
+// # only caller (`check_type_alias_misuse`) was deleted too, so there is no
+// # call site left to keep visible. DO NOT RECREATE IT.
+// #
+// # `alias_names.contains(access.base.as_str())` decided whether an attribute
+// # access targeted a `type` alias by matching the base's RENDERED NAME.
+// #
+// # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
+// ##########################################################################
 
 // ---------------------------------------------------------------------------
 // Violation 8: a type argument violates a type parameter's bound

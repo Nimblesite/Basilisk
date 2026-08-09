@@ -12,8 +12,7 @@ use super::harness::{aliased, import_form, reformatted, renamed, SpecObligation}
 // ── a `Never`-returning function must not return ─────────────────────────
 
 #[test]
-fn a_never_returning_function_must_not_return_normally()
--> Result<(), Box<dyn std::error::Error>> {
+fn a_never_returning_function_must_not_return_normally() -> Result<(), Box<dyn std::error::Error>> {
     SpecObligation {
         spec_reason: "`Never` is the empty type: a function annotated `-> Never` has no possible \
                       return value, so a body that can fall off its end is ill-typed",
@@ -407,8 +406,8 @@ crank(1)
 }
 
 #[test]
-fn float_promotes_to_complex_but_complex_does_not_demote()
--> Result<(), Box<dyn std::error::Error>> {
+fn float_promotes_to_complex_but_complex_does_not_demote() -> Result<(), Box<dyn std::error::Error>>
+{
     SpecObligation {
         spec_reason: "the tower extends one more step: `float` is acceptable where `complex` is \
                       expected, and `complex` is acceptable nowhere below it",

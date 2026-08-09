@@ -151,7 +151,12 @@ fn has_dominator(candidates: &[&str], map: &HashMap<&str, &ClassInfo>) -> bool {
 // #
 // # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
 // ##########################################################################
-fn is_subclass(_child: &str, _ancestor: &str, _map: &HashMap<&str, &ClassInfo>, _depth: u32) -> bool {
+fn is_subclass(
+    _child: &str,
+    _ancestor: &str,
+    _map: &HashMap<&str, &ClassInfo>,
+    _depth: u32,
+) -> bool {
     panic!(
         "basilisk-checker: `directives_disjoint_base::is_subclass` was DELETED because it identified base classes by \
          their RENDERED NAMES, so an aliased base missed and a dotted base collided with \

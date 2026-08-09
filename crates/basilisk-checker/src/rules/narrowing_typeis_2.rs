@@ -265,8 +265,7 @@ impl Rule for TypeIsInconsistentNarrowing {
             // KIND (a method that is not a staticmethod), never a parameter's
             // name: `def is_wide(self: object) -> TypeIs[int]` at module
             // scope has no receiver, whatever its parameter is called.
-            let receiver_count =
-                usize::from(func.class_name.is_some() && !func.is_staticmethod);
+            let receiver_count = usize::from(func.class_name.is_some() && !func.is_staticmethod);
             let Some(param) = func
                 .parameters
                 .get(..func.positional_count)

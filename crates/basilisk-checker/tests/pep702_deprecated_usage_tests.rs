@@ -8,7 +8,10 @@ use common::{assert_rule_count, run};
 
 const RULE: &str = "directives_deprecated";
 
-fn assert_one_deprecation(source: &str, obligation: &str) -> Result<(), Box<dyn std::error::Error>> {
+fn assert_one_deprecation(
+    source: &str,
+    obligation: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     let diagnostics = run(source)?;
     assert_rule_count(&diagnostics, RULE, 1, obligation);
     Ok(())
@@ -92,14 +95,12 @@ Ledger().audit()
 
 #[test]
 fn nondeprecated_use_is_not_reported() -> Result<(), Box<dyn std::error::Error>> {
-    let diagnostics = run(
-        r#"
+    let diagnostics = run(r#"
 def quarry() -> int:
     return 1
 
 value = quarry()
-"#,
-    )?;
+"#)?;
     assert_rule_count(
         &diagnostics,
         RULE,

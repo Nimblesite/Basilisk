@@ -23,10 +23,7 @@ use common::{assert_rule_count, run};
 /// Diagnostic codes emitted for `source`.
 fn codes(source: &str) -> Vec<String> {
     let diagnostics = run(source).expect("checker ran");
-    let mut out: Vec<String> = diagnostics
-        .iter()
-        .map(|d| d.code.code.to_owned())
-        .collect();
+    let mut out: Vec<String> = diagnostics.iter().map(|d| d.code.code.to_owned()).collect();
     out.sort();
     out.dedup();
     out
@@ -36,9 +33,7 @@ fn codes(source: &str) -> Vec<String> {
 /// cannot change any typing verdict. Assert they produce the same diagnostics.
 fn assert_rename_invariant(control_class: &str, probe_class: &str, value: &str) {
     let program = |class_name: &str| {
-        format!(
-            "class {class_name}:\n    pass\n\n\nAlias = {class_name}\nq: Alias = {value}\n"
-        )
+        format!("class {class_name}:\n    pass\n\n\nAlias = {class_name}\nq: Alias = {value}\n")
     };
     let control = codes(&program(control_class));
     let probe = codes(&program(probe_class));

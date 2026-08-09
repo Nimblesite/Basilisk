@@ -54,317 +54,75 @@
 //! Invalid2 = TypeVar("Invalid2", bool, complex, default=Y1)  # E — {bool, complex} is not a superset of {int, str}
 //! ```
 
-use std::collections::{HashMap, HashSet};
-
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
+use crate::diagnostic::{Diagnostic, ErrorCode};
 
 use super::Rule;
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; this error code is retained for the rebuild — \
+              see tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 const CODE: ErrorCode = ErrorCode {
     code: "generics_defaults_referential",
     docs_url: "https://www.basilisk-python.dev/errors/generics_defaults_referential",
 };
 
-/// Check if constraints `c1` are a subset of constraints `c2`.
-fn is_constraint_subset(c1: &[String], c2: &[String]) -> bool {
-    // All constraints in c1 must be in c2
-    c1.iter().all(|constraint| c2.contains(constraint))
-}
-
 /// Emits `generics_defaults_referential` for `TypeVar` default referential violations.
 pub(crate) struct TypeVarDefaultReferential;
 
-/// Format a list of constraint names as backtick-quoted, comma-separated string.
-fn format_constraints(constraints: &[String]) -> String {
-    constraints
-        .iter()
-        .map(|c| format!("`{c}`"))
-        .collect::<Vec<_>>()
-        .join(", ")
-}
-
-/// Check ordering: default `TypeVar` must appear before this `TypeVar`.
-fn check_ordering(
-    tv: &basilisk_resolver::TypeVarCallInfo,
-    default_name: &str,
-    order_index: &HashMap<&str, usize>,
-    path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    if let (Some(&default_pos), Some(&tv_pos)) = (
-        order_index.get(default_name),
-        order_index.get(tv.name.as_str()),
-    ) {
-        if default_pos >= tv_pos {
-            diagnostics.push(error_diagnostic_owned(
-                CODE.clone(),
-                format!(
-                    "`TypeVar` `{}` has `default={default_name}` but `{default_name}` \
-                     must appear before `{}` in the parameter list",
-                    tv.name, tv.name
-                ),
-                tv.span,
-                path,
-                Some(format!(
-                    "Reorder the type parameters so that `{default_name}` comes before `{}`",
-                    tv.name
-                )),
-                Some(
-                    "When a TypeVar's default references another TypeVar, \
-                     the referenced TypeVar must appear earlier in the parameter list"
-                        .to_owned(),
-                ),
-            ));
-        }
-    }
-}
-
-/// Check bound compatibility: default's bound must be a subtype of this `TypeVar`'s bound.
-fn check_bound_compatibility(
-    subtyping: &crate::subtyping::SubtypingContext,
-    tv: &basilisk_resolver::TypeVarCallInfo,
-    default_tv: &basilisk_resolver::TypeVarCallInfo,
-    default_name: &str,
-    path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    if !tv.has_bound || !default_tv.has_bound {
-        return;
-    }
-    if let (Some(ref tv_bound), Some(ref default_bound)) =
-        (&tv.bound_type_name, &default_tv.bound_type_name)
-    {
-        if !subtyping.is_subtype(default_bound, tv_bound) {
-            diagnostics.push(error_diagnostic_owned(
-                CODE.clone(),
-                format!(
-                    "`TypeVar` `{}` has `default={default_name}` but \
-                     `{default_name}`'s bound `{default_bound}` is not a subtype \
-                     of `{}`'s bound `{tv_bound}`",
-                    tv.name, tv.name
-                ),
-                tv.span,
-                path,
-                Some(format!(
-                    "The default TypeVar's bound must be a subtype of this TypeVar's bound; \
-                     `{default_bound}` is not a subtype of `{tv_bound}`"
-                )),
-                Some(
-                    "When T2 has default=T1, T1's bound must be a subtype of T2's bound".to_owned(),
-                ),
-            ));
-        }
-    }
-}
-
-/// Check constraint compatibility between `TypeVar`s with defaults.
-fn check_constraint_compatibility(
-    subtyping: &crate::subtyping::SubtypingContext,
-    tv: &basilisk_resolver::TypeVarCallInfo,
-    default_tv: &basilisk_resolver::TypeVarCallInfo,
-    default_name: &str,
-    path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    // Case 3a: Both have constraints - default's constraints must be a subset
-    if !tv.constraint_type_names.is_empty()
-        && !default_tv.constraint_type_names.is_empty()
-        && !is_constraint_subset(&default_tv.constraint_type_names, &tv.constraint_type_names)
-    {
-        let default_constraints = format_constraints(&default_tv.constraint_type_names);
-        let tv_constraints = format_constraints(&tv.constraint_type_names);
-        diagnostics.push(error_diagnostic_owned(
-            CODE.clone(),
-            format!(
-                "`TypeVar` `{}` has `default={default_name}` but \
-                 `{default_name}`'s constraints {{{default_constraints}}} are not a \
-                 subset of `{}`'s constraints {{{tv_constraints}}}",
-                tv.name, tv.name
-            ),
-            tv.span,
-            path,
-            Some(
-                "The default TypeVar's constraints must be a subset of this TypeVar's constraints"
-                    .to_owned(),
-            ),
-            Some(
-                "When T2 has default=T1 and T2 has constraints, \
-                 T1's constraints must be a subset of T2's constraints"
-                    .to_owned(),
-            ),
-        ));
-    }
-
-    // Case 3b: Default has bound, this TypeVar has constraints
-    if !tv.constraint_type_names.is_empty() && default_tv.has_bound {
-        check_default_bound_vs_constraints(
-            subtyping,
-            tv,
-            default_tv,
-            default_name,
-            path,
-            diagnostics,
-        );
-    }
-
-    // Case 3c: Default has constraints, this TypeVar has bound
-    if tv.has_bound && !default_tv.constraint_type_names.is_empty() {
-        check_default_constraints_vs_bound(
-            subtyping,
-            tv,
-            default_tv,
-            default_name,
-            path,
-            diagnostics,
-        );
-    }
-}
-
-/// Case 3b: Default has bound, this `TypeVar` has constraints.
-fn check_default_bound_vs_constraints(
-    subtyping: &crate::subtyping::SubtypingContext,
-    tv: &basilisk_resolver::TypeVarCallInfo,
-    default_tv: &basilisk_resolver::TypeVarCallInfo,
-    default_name: &str,
-    path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    let Some(ref default_bound) = default_tv.bound_type_name else {
-        return;
-    };
-    let is_compatible = tv
-        .constraint_type_names
-        .iter()
-        .any(|constraint| subtyping.is_subtype(default_bound, constraint));
-
-    if !is_compatible {
-        let tv_constraints = format_constraints(&tv.constraint_type_names);
-        diagnostics.push(error_diagnostic_owned(
-            CODE.clone(),
-            format!(
-                "`TypeVar` `{}` has `default={default_name}` but \
-                 `{default_name}`'s bound `{default_bound}` is incompatible with \
-                 `{}`'s constraints {{{tv_constraints}}}",
-                tv.name, tv.name
-            ),
-            tv.span,
-            path,
-            Some(
-                "The default TypeVar's bound must be compatible with at least one of this TypeVar's constraints"
-                    .to_owned(),
-            ),
-            Some(
-                "When T2 has default=T1 and T2 has constraints, \
-                 T1's bound must be compatible with at least one constraint of T2"
-                    .to_owned(),
-            ),
-        ));
-    }
-}
-
-/// Case 3c: Default has constraints, this ```TypeVar``` has bound.
-fn check_default_constraints_vs_bound(
-    subtyping: &crate::subtyping::SubtypingContext,
-    tv: &basilisk_resolver::TypeVarCallInfo,
-    default_tv: &basilisk_resolver::TypeVarCallInfo,
-    default_name: &str,
-    path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    let Some(ref tv_bound) = tv.bound_type_name else {
-        return;
-    };
-    let all_compatible = default_tv
-        .constraint_type_names
-        .iter()
-        .all(|constraint| subtyping.is_subtype(constraint, tv_bound));
-
-    if !all_compatible {
-        let default_constraints = format_constraints(&default_tv.constraint_type_names);
-        diagnostics.push(error_diagnostic_owned(
-            CODE.clone(),
-            format!(
-                "`TypeVar` `{}` has `default={default_name}` but \
-                 `{default_name}`'s constraints {{{default_constraints}}} are not all \
-                 subtypes of `{}`'s bound `{tv_bound}`",
-                tv.name, tv.name
-            ),
-            tv.span,
-            path,
-            Some(
-                "All of the default TypeVar's constraints must be subtypes of this TypeVar's bound"
-                    .to_owned(),
-            ),
-            Some(
-                "When T2 has default=T1 and T2 has a bound, \
-                 all of T1's constraints must be subtypes of T2's bound"
-                    .to_owned(),
-            ),
-        ));
-    }
-}
-
 impl Rule for TypeVarDefaultReferential {
+    // ##########################################################################
+    // # DELETED AND GONE — `is_constraint_subset`, `format_constraints`,
+    // # `check_ordering`, `check_bound_compatibility`,
+    // # `check_constraint_compatibility`, `check_default_bound_vs_constraints`,
+    // # `check_default_constraints_vs_bound`.
+    // #
+    // # NO PANIC SHELLS: their only caller (`check`, below) was deleted too, so
+    // # there are no call sites left to keep visible — and each of them WAS the
+    // # string comparison, so keeping them under `#[expect(dead_code)]` would
+    // # leave the defect sitting in the tree waiting to be re-wired.
+    // # DO NOT RECREATE ANY OF THEM.
+    // ##########################################################################
+
+    // ##########################################################################
+    // # DELETED BODY. DO NOT RESTORE IT AND DO NOT RETURN A DEFAULT.
+    // #
+    // # The whole PEP 696 referential-default rule ran on RENDERED TYPE NAMES:
+    // # `bound_type_name`, `default_type_name` and `constraint_type_names` are
+    // # recorded by the resolver only when the value "is a simple name", so
+    // # `bound=list[int]` or `default=Foo[int]` never reached the rule at all,
+    // # and what did reach it was compared with `==` and set membership.
+    // #
+    // # Its four helpers (`check_ordering`, `check_bound_compatibility`,
+    // # `check_constraint_compatibility`, `check_default_bound_vs_constraints`,
+    // # `check_default_constraints_vs_bound`) all settled their verdicts that way,
+    // # several of them through the DELETED string-keyed
+    // # `SubtypingContext::is_subtype`.
+    // #
+    // # A default fitting a bound is ASSIGNABILITY; a default matching a
+    // # constraint is EQUIVALENCE; a constraint set fitting another is a SUBSET
+    // # relation over types. All three are `TypeNode` relations, and the
+    // # `default=`/`bound=` argument EXPRESSIONS are in the AST.
+    // #
+    // # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
+    // ##########################################################################
     fn check(
         &self,
-        module: &ResolvedModule,
+        _module: &ResolvedModule,
         _ctx: &super::CheckContext,
-        diagnostics: &mut Vec<Diagnostic>,
+        _diagnostics: &mut Vec<Diagnostic>,
     ) {
-        let typevar_by_name: HashMap<&str, &basilisk_resolver::TypeVarCallInfo> = module
-            .typevar_calls
-            .iter()
-            .filter(|tv| !tv.is_typevartuple && !tv.is_paramspec)
-            .map(|tv| (tv.name.as_str(), tv))
-            .collect();
-
-        let typevar_names: HashSet<&str> = typevar_by_name.keys().copied().collect();
-
-        // One subtyping implementation ([NARROWPLAN-SUBTYPING]): referential
-        // bound verdicts route through the module-seeded context.
-        let subtyping = crate::subtyping::module_context(module);
-
-        let order_index: HashMap<&str, usize> = module
-            .typevar_calls
-            .iter()
-            .filter(|tv| !tv.is_typevartuple && !tv.is_paramspec)
-            .enumerate()
-            .map(|(i, tv)| (tv.name.as_str(), i))
-            .collect();
-
-        for tv in &module.typevar_calls {
-            if tv.is_typevartuple || tv.is_paramspec || !tv.has_default {
-                continue;
-            }
-            let Some(ref default_name) = tv.default_type_name else {
-                continue;
-            };
-            if !typevar_names.contains(default_name.as_str()) {
-                continue;
-            }
-            let Some(default_tv) = typevar_by_name.get(default_name.as_str()) else {
-                continue;
-            };
-
-            check_ordering(tv, default_name, &order_index, &module.path, diagnostics);
-            check_bound_compatibility(
-                &subtyping,
-                tv,
-                default_tv,
-                default_name,
-                &module.path,
-                diagnostics,
-            );
-            check_constraint_compatibility(
-                &subtyping,
-                tv,
-                default_tv,
-                default_name,
-                &module.path,
-                diagnostics,
-            );
-        }
+        panic!(
+            "basilisk-checker: `generics_defaults_referential::check` was DELETED because \
+         every PEP 696 verdict it produced came from comparing RENDERED TYPE NAMES, on \
+         resolver fields that silently drop any bound or default that is not a bare \
+         name. It panics because the real implementation — the `bound=`/`default=` \
+         expressions lowered to `TypeNode` and related with `assignable`/`equivalent` — \
+         DOES NOT EXIST YET. Do not restore the string comparisons and do not skip the \
+         check in its place."
+        )
     }
 }

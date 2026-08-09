@@ -32,8 +32,11 @@ pub(crate) fn annotation_is_type_alias(
     index: &ExprIndex<'_>,
     span: Option<Span>,
 ) -> bool {
-    span.and_then(|span| index.expr(span))
-        .is_some_and(|expr| module.bindings.is_form(expr, TypingForm::TypeAliasQualifier))
+    span.and_then(|span| index.expr(span)).is_some_and(|expr| {
+        module
+            .bindings
+            .is_form(expr, TypingForm::TypeAliasQualifier)
+    })
 }
 
 /// How string literals inside the judged expression are treated.

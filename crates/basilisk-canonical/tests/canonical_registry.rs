@@ -34,9 +34,9 @@ fn declared_pairs(root: &toml::Value) -> Vec<(String, String)> {
                 .and_then(toml::Value::as_array)
                 .map(Vec::as_slice)
                 .unwrap_or_default();
-            modules.iter().filter_map(move |module| {
-                Some((module.as_str()?.to_owned(), name?.to_owned()))
-            })
+            modules
+                .iter()
+                .filter_map(move |module| Some((module.as_str()?.to_owned(), name?.to_owned())))
         })
         .collect()
 }
@@ -91,8 +91,7 @@ struct DeclaredRegistry {
 /// win silently, so an earlier declaration resolves to the wrong form while
 /// every `is_some()` check stays green.
 #[test]
-fn every_entry_resolves_to_exactly_its_declared_form(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn every_entry_resolves_to_exactly_its_declared_form() -> Result<(), Box<dyn std::error::Error>> {
     let declared: DeclaredRegistry = toml::from_str(REGISTRY_SOURCE)?;
     let mut mismatches: Vec<String> = Vec::new();
     for entry in &declared.symbol {

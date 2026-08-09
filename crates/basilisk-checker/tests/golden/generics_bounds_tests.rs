@@ -105,8 +105,7 @@ slake(Quernstone())
 ";
 
 #[test]
-fn upper_bound_rejects_a_type_missing_the_bound_member(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn upper_bound_rejects_a_type_missing_the_bound_member() -> Result<(), Box<dyn std::error::Error>> {
     SpecObligation {
         spec_reason: "a type argument for a bounded parameter must be assignable to the bound, \
                       and `__round__` does not satisfy `SupportsAbs[int]`",

@@ -40,15 +40,13 @@ value = Vessel()
 #[test]
 fn ordinary_class_with_the_same_members_can_be_instantiated(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let diagnostics = run(
-        r#"
+    let diagnostics = run(r#"
 class Vessel:
     def volume(self) -> int:
         return 1
 
 value = Vessel()
-"#,
-    )?;
+"#)?;
     assert_rule_count(
         &diagnostics,
         "protocols_explicit",
@@ -59,10 +57,8 @@ value = Vessel()
 }
 
 #[test]
-fn protocol_instance_attribute_must_be_declared(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let diagnostics = run(
-        r#"
+fn protocol_instance_attribute_must_be_declared() -> Result<(), Box<dyn std::error::Error>> {
+    let diagnostics = run(r#"
 from typing import Protocol as Shape
 
 class Vessel(Shape):
@@ -71,8 +67,7 @@ class Vessel(Shape):
     def prepare(self) -> None:
         self.name = "registered"
         self.secret = 1
-"#,
-    )?;
+"#)?;
     assert_rule_count(
         &diagnostics,
         "protocols_definition",
@@ -84,8 +79,7 @@ class Vessel(Shape):
 
 #[test]
 fn non_runtime_protocol_rejects_isinstance() -> Result<(), Box<dyn std::error::Error>> {
-    let diagnostics = run(
-        r#"
+    let diagnostics = run(r#"
 from typing import Protocol as Shape
 
 class Vessel(Shape):
@@ -93,8 +87,7 @@ class Vessel(Shape):
 
 value: object = object()
 isinstance(value, Vessel)
-"#,
-    )?;
+"#)?;
     assert_rule_count(
         &diagnostics,
         "protocols_runtime_checkable",
@@ -105,10 +98,8 @@ isinstance(value, Vessel)
 }
 
 #[test]
-fn runtime_checkable_method_protocol_allows_isinstance(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let diagnostics = run(
-        r#"
+fn runtime_checkable_method_protocol_allows_isinstance() -> Result<(), Box<dyn std::error::Error>> {
+    let diagnostics = run(r#"
 from typing import Protocol as Shape, runtime_checkable as runtime_shape
 
 @runtime_shape
@@ -117,8 +108,7 @@ class Vessel(Shape):
 
 value: object = object()
 isinstance(value, Vessel)
-"#,
-    )?;
+"#)?;
     assert_rule_count(
         &diagnostics,
         "protocols_runtime_checkable",
@@ -131,8 +121,7 @@ isinstance(value, Vessel)
 #[test]
 fn data_protocol_rejects_issubclass_even_when_runtime_checkable(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let diagnostics = run(
-        r#"
+    let diagnostics = run(r#"
 from typing import Protocol as Shape, runtime_checkable as runtime_shape
 
 @runtime_shape
@@ -140,8 +129,7 @@ class Vessel(Shape):
     name: str
 
 issubclass(object, Vessel)
-"#,
-    )?;
+"#)?;
     assert_rule_count(
         &diagnostics,
         "protocols_runtime_checkable",

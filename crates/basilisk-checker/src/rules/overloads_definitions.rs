@@ -14,7 +14,6 @@ use basilisk_resolver::{FunctionInfo, ResolvedModule};
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
-
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {

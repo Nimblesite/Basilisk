@@ -16,8 +16,7 @@ fn target(version: Option<&str>, platform: Option<&str>) -> basilisk_config::Bas
 }
 
 #[test]
-fn configured_version_makes_the_impossible_branch_dead(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn configured_version_makes_the_impossible_branch_dead() -> Result<(), Box<dyn std::error::Error>> {
     for source in [
         r#"
 import sys
@@ -48,8 +47,8 @@ print(obsolete)
 }
 
 #[test]
-fn configured_platform_makes_the_impossible_branch_dead(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn configured_platform_makes_the_impossible_branch_dead() -> Result<(), Box<dyn std::error::Error>>
+{
     let diagnostics = run_with_config(
         r#"
 import sys
@@ -73,8 +72,7 @@ print(windows_only)
 #[test]
 fn absent_target_evidence_does_not_make_either_branch_dead(
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let diagnostics = run(
-        r#"
+    let diagnostics = run(r#"
 import sys
 
 if sys.version_info < (3, 8):
@@ -83,8 +81,7 @@ else:
     new = 1
 
 print(old, new)
-"#,
-    )?;
+"#)?;
     assert_rule_count(
         &diagnostics,
         RULE,

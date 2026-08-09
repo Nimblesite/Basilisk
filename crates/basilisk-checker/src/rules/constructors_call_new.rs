@@ -112,8 +112,25 @@ fn check_specialized_constructor_call(
         .map(|expr| TypeNode::lower(&module.bindings, expr))
         .collect();
     for new_def in new_methods(ast, class_name) {
-        check_cls_annotation(new_def, call, class_name, class_info, &type_args, module, diagnostics);
-        check_value_args(new_def, call, class_name, class_info, &type_args, &arg_nodes, module, diagnostics);
+        check_cls_annotation(
+            new_def,
+            call,
+            class_name,
+            class_info,
+            &type_args,
+            module,
+            diagnostics,
+        );
+        check_value_args(
+            new_def,
+            call,
+            class_name,
+            class_info,
+            &type_args,
+            &arg_nodes,
+            module,
+            diagnostics,
+        );
     }
 }
 
@@ -289,11 +306,14 @@ fn check_cls_annotation(
     if names_own_param || ann_args.len() != type_args.len() {
         return;
     }
-    let mismatch = type_args.iter().zip(ann_args.iter()).any(|(provided, expected)| {
-        let provided_node = TypeNode::lower(&module.bindings, provided);
-        let expected_node = TypeNode::lower(&module.bindings, expected);
-        equivalent(&provided_node, &expected_node) == Some(false)
-    });
+    let mismatch = type_args
+        .iter()
+        .zip(ann_args.iter())
+        .any(|(provided, expected)| {
+            let provided_node = TypeNode::lower(&module.bindings, provided);
+            let expected_node = TypeNode::lower(&module.bindings, expected);
+            equivalent(&provided_node, &expected_node) == Some(false)
+        });
     if mismatch {
         push_cls_diagnostic(call, class_name, type_args, &ann_args, module, diagnostics);
     }
@@ -371,7 +391,9 @@ fn push_cls_diagnostic(
 /// The source text of an expression, for diagnostic MESSAGES only — never a
 /// verdict.
 fn expr_text<'a>(source: &'a str, expr: &impl Ranged) -> &'a str {
-    slice_span(source, expr_span(expr)).unwrap_or("<expression>").trim()
+    slice_span(source, expr_span(expr))
+        .unwrap_or("<expression>")
+        .trim()
 }
 
 /// The diagnostic span of an expression.

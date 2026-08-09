@@ -9,10 +9,8 @@ use common::{assert_rule_count, run};
 const RULE: &str = "generics_scoping";
 
 #[test]
-fn unbound_typevar_in_function_body_is_reported(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let diagnostics = run(
-        r#"
+fn unbound_typevar_in_function_body_is_reported() -> Result<(), Box<dyn std::error::Error>> {
+    let diagnostics = run(r#"
 from typing import TypeVar as Variable
 
 Bound = Variable("Bound")
@@ -21,8 +19,7 @@ Unbound = Variable("Unbound")
 def assay(value: Bound) -> Bound:
     leaked: list[Unbound] = []
     return value
-"#,
-    )?;
+"#)?;
     assert_rule_count(
         &diagnostics,
         RULE,
@@ -33,10 +30,8 @@ def assay(value: Bound) -> Bound:
 }
 
 #[test]
-fn unbound_typevar_in_generic_class_body_is_reported(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let diagnostics = run(
-        r#"
+fn unbound_typevar_in_generic_class_body_is_reported() -> Result<(), Box<dyn std::error::Error>> {
+    let diagnostics = run(r#"
 import typing
 
 Bound = typing.TypeVar("Bound")
@@ -44,8 +39,7 @@ Unbound = typing.TypeVar("Unbound")
 
 class Ledger(typing.Generic[Bound]):
     invalid: list[Unbound]
-"#,
-    )?;
+"#)?;
     assert_rule_count(
         &diagnostics,
         RULE,
@@ -57,16 +51,14 @@ class Ledger(typing.Generic[Bound]):
 
 #[test]
 fn class_typevar_is_bound_in_the_class_body() -> Result<(), Box<dyn std::error::Error>> {
-    let diagnostics = run(
-        r#"
+    let diagnostics = run(r#"
 from typing import Generic as Template, TypeVar as Variable
 
 Entry = Variable("Entry")
 
 class Ledger(Template[Entry]):
     rows: list[Entry]
-"#,
-    )?;
+"#)?;
     assert_rule_count(
         &diagnostics,
         RULE,
@@ -77,10 +69,8 @@ class Ledger(Template[Entry]):
 }
 
 #[test]
-fn nested_generic_class_cannot_reuse_outer_typevar(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let diagnostics = run(
-        r#"
+fn nested_generic_class_cannot_reuse_outer_typevar() -> Result<(), Box<dyn std::error::Error>> {
+    let diagnostics = run(r#"
 from typing import Generic as Template, TypeVar as Variable
 
 Entry = Variable("Entry")
@@ -88,8 +78,7 @@ Entry = Variable("Entry")
 class Outer(Template[Entry]):
     class Inner(Template[Entry]):
         pass
-"#,
-    )?;
+"#)?;
     assert_rule_count(
         &diagnostics,
         RULE,

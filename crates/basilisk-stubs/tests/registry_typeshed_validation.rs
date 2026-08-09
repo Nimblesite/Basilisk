@@ -24,7 +24,11 @@ fn stub_source<'s>(snapshot: &'s Snapshot, module: &str) -> Option<&'s str> {
     snapshot
         .vfs
         .read_str(&format!("stdlib/{path}.pyi"))
-        .or_else(|| snapshot.vfs.read_str(&format!("stdlib/{path}/__init__.pyi")))
+        .or_else(|| {
+            snapshot
+                .vfs
+                .read_str(&format!("stdlib/{path}/__init__.pyi"))
+        })
 }
 
 /// The name an import alias binds in the importing module.
@@ -41,7 +45,10 @@ fn stmt_binds(stmt: &Stmt, name: &str) -> bool {
     match stmt {
         Stmt::ClassDef(class) => class.name.as_str() == name,
         Stmt::FunctionDef(func) => func.name.as_str() == name,
-        Stmt::Assign(assign) => assign.targets.iter().any(|target| expr_is_name(target, name)),
+        Stmt::Assign(assign) => assign
+            .targets
+            .iter()
+            .any(|target| expr_is_name(target, name)),
         Stmt::AnnAssign(assign) => expr_is_name(&assign.target, name),
         Stmt::TypeAlias(alias) => expr_is_name(&alias.name, name),
         Stmt::ImportFrom(import) => import.names.iter().any(|alias| alias_binds(alias, name)),

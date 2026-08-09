@@ -17,26 +17,9 @@ use basilisk_resolver::{FunctionInfo, ResolvedModule, VariableInfo};
 
 use super::CODE;
 
-/// Builtin type constructors — calling these creates an instance, not a type form.
-const BUILTIN_TYPE_CONSTRUCTORS: &[&str] = &[
-    "tuple",
-    "list",
-    "dict",
-    "set",
-    "frozenset",
-    "int",
-    "str",
-    "float",
-    "bool",
-    "bytes",
-    "complex",
-    "bytearray",
-    "memoryview",
-    "object",
-    "range",
-    "slice",
-    "type",
-];
+// DELETED — `BUILTIN_TYPE_CONSTRUCTORS`, a table of builtin SPELLINGS matched
+// against a lowercased callee. Its only reader panics; see the banner below.
+// DO NOT RECREATE IT.
 
 /// Check whether a RHS expression is a valid type form assignable to `inner`.
 ///
@@ -82,37 +65,41 @@ pub(super) fn is_valid_typeform_assignment(
     is_valid_rhs_type_expression(rhs_text, inner, resolver)
 }
 
-/// Check whether a function call result is a valid `TypeForm` assignment.
-///
-/// Builtin type constructors (`tuple()`, `list()`) create instances, not type
-/// forms. User-defined functions are checked by looking up their return
-/// annotation — if it returns `TypeForm[S]` or `type[S]`, we verify `S` is
-/// assignable to the inner type.
+// ##########################################################################
+// # DELETED BODY — `is_valid_call_typeform`. DO NOT RESTORE IT AND DO NOT RETURN A DEFAULT.
+// #
+// # It split the RHS SOURCE TEXT at `(` to get a callee, LOWERCASED it, and tested membership in `BUILTIN_TYPE_CONSTRUCTORS` — so `List(...)` and `list(...)` were the same callee and a user class named `int` was a builtin constructor.
+// #
+// # CLAUDE.md: "a whitelist of `int`/`str`/`isinstance` names. Builtins are
+// # not an exception — Python lets any name be shadowed, rebound, or
+// # aliased, so builtin uses resolve through the binding table like
+// # everything else." The replacement is `BindingTable::form_of_with_builtins`,
+// # which already models builtin scope AND rebinding.
+// #
+// # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
+// ##########################################################################
 fn is_valid_call_typeform(
-    rhs_text: &str,
-    inner: &InferredType,
-    functions: &[FunctionInfo],
-    source: &str,
-    resolver: &AnnotationResolver<'_>,
+    _rhs_text: &str,
+    _inner: &InferredType,
+    _functions: &[FunctionInfo],
+    _source: &str,
+    _resolver: &AnnotationResolver<'_>,
 ) -> bool {
-    // Extract the callee name (before `(`)
-    let callee = rhs_text.split('(').next().unwrap_or("").trim();
-    let callee_lower = callee.to_ascii_lowercase();
-
-    // Builtin type constructors create instances, not type forms
-    if BUILTIN_TYPE_CONSTRUCTORS.contains(&callee_lower.as_str()) {
-        return false;
-    }
-
-    // Look up user-defined function return types; anything the cascade
-    // cannot answer falls through to the conservative acceptance below.
-    functions
-        .iter()
-        .find(|func| func.name == callee)
-        .and_then(|func| callee_return_typeform(func, inner, source, resolver))
-        .unwrap_or(true)
+    panic!(
+        "basilisk-checker: `is_valid_call_typeform` was DELETED because it recognised builtin types by \
+         matching their SPELLINGS against a hard-coded table, so a shadowed or \
+         aliased builtin was misjudged and any user symbol spelled like a builtin \
+         inherited the table's verdict. It panics because the real implementation \
+         — resolution through the binding table — DOES NOT EXIST YET. Do not \
+         restore the table and do not substitute a default answer."
+    )
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 /// Whether `func`'s declared return type makes it a valid `TypeForm[inner]`
 /// producer. `None` when the annotation is missing or the cascade cannot
 /// resolve it — the caller then accepts conservatively.
@@ -169,6 +156,11 @@ fn is_valid_string_typeform(
         .is_some_and(|represented| represented.is_assignable_to(inner))
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 /// The argument text of a `type[...]` annotation, if that is its form.
 ///
 /// The cascade collapses `type[X]` to the nominal `type` leaf (a class

@@ -105,19 +105,19 @@ impl Rule for IncompatibleVariableOverride {
     }
 }
 
-    // ##################################################################
-    // # DELETED BODY. DO NOT RESTORE IT AND DO NOT RETURN A DEFAULT.
-    // #
-    // # `class_names.contains(&base_name.as_str())` and `attr_map.get(&(base_name.as_str(), ...))` keyed both the base class AND the inherited attribute on rendered names.
-    // #
-    // # `ClassInfo::bases` holds RENDERED SIMPLE NAMES ("complex
-    // # expressions ignored") and the lookup map is keyed on
-    // # `ClassInfo::name`, so an aliased base MISSED, a dotted base
-    // # collided with any local class sharing its trailing word, and two
-    // # classes with one rendered name were a single entry.
-    // #
-    // # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
-    // ##################################################################
+// ##################################################################
+// # DELETED BODY. DO NOT RESTORE IT AND DO NOT RETURN A DEFAULT.
+// #
+// # `class_names.contains(&base_name.as_str())` and `attr_map.get(&(base_name.as_str(), ...))` keyed both the base class AND the inherited attribute on rendered names.
+// #
+// # `ClassInfo::bases` holds RENDERED SIMPLE NAMES ("complex
+// # expressions ignored") and the lookup map is keyed on
+// # `ClassInfo::name`, so an aliased base MISSED, a dotted base
+// # collided with any local class sharing its trailing word, and two
+// # classes with one rendered name were a single entry.
+// #
+// # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
+// ##################################################################
 fn check_class(
     _child: &ClassInfo,
     _attr_map: &HashMap<(&str, &str), &AttributeInfo>,

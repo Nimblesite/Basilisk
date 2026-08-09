@@ -61,127 +61,41 @@ struct TypeArity {
     max: Option<usize>,
 }
 
-/// Computes arity bounds for every class and `TypeAlias` in `module`.
-fn compute_arities<'a>(module: &'a ResolvedModule) -> HashMap<&'a str, TypeArity> {
-    let tv_defaults: HashMap<&str, bool> = module
-        .typevar_calls
-        .iter()
-        .map(|tv| (tv.name.as_str(), tv.has_default))
-        .collect();
-
-    let all_typevar_names: HashSet<&str> =
-        basilisk_resolver::collect_name_set(&module.typevar_calls);
-
-    let paramspec_names: HashSet<&str> =
-        basilisk_resolver::collect_name_set_where(&module.typevar_calls, |tv| tv.is_paramspec);
-
-    let tvt_names = super::shared::typevar_tuple_names(&module.typevar_calls);
-
-    let mut arities: HashMap<&'a str, TypeArity> = HashMap::new();
-
-    // Class arities.
-    for cls in &module.classes {
-        if !cls.generic_params.is_empty() {
-            if is_single_paramspec_generic(cls, &paramspec_names) {
-                // A class generic over exactly one `ParamSpec` accepts any
-                // number of type arguments: `ClassC[int, str]` means
-                // `ClassC[[int, str]]` (PEP 612 unparenthesized shorthand).
-                let _ = arities.insert(
-                    cls.name.as_str(),
-                    TypeArity {
-                        min: None,
-                        max: None,
-                    },
-                );
-                continue;
-            }
-            let has_tvt = cls.generic_params.iter().any(|p| p.is_typevartuple);
-            let required = cls
-                .generic_params
-                .iter()
-                .filter(|p| {
-                    !p.is_typevartuple
-                        && !tv_defaults.get(p.name.as_str()).copied().unwrap_or(false)
-                })
-                .count();
-            let total = cls.generic_params.len();
-            let _ = arities.insert(
-                cls.name.as_str(),
-                TypeArity {
-                    min: (required > 0).then_some(required),
-                    max: (!has_tvt).then_some(total),
-                },
-            );
-        } else if !cls.base_expression_names.is_empty() {
-            let has_tvt = cls
-                .base_expression_names
-                .iter()
-                .any(|n| tvt_names.contains(n.as_str()));
-            if !has_tvt {
-                let implicit_arity = cls
-                    .base_expression_names
-                    .iter()
-                    .filter(|n| all_typevar_names.contains(n.as_str()))
-                    .collect::<HashSet<_>>()
-                    .len();
-                if implicit_arity > 0 {
-                    let _ = arities.insert(
-                        cls.name.as_str(),
-                        TypeArity {
-                            min: None,
-                            max: Some(implicit_arity),
-                        },
-                    );
-                } else if cls.has_subscript_base && !cls.has_pep695_type_params {
-                    // All TypeVars in this class's bases are fully specialised with
-                    // concrete types. The class itself has no free TypeVar parameters
-                    // and must not be further subscripted.
-                    // Exclude PEP 695 classes (`class Foo[T]`) because their type
-                    // params don't appear in `base_expression_names`.
-                    let _ = arities.insert(
-                        cls.name.as_str(),
-                        TypeArity {
-                            min: None,
-                            max: Some(0),
-                        },
-                    );
-                }
-            }
-        }
-    }
-
-    // TypeAlias arities.
-    for alias in &module.type_alias_defs {
-        let has_tvt = alias
-            .rhs_names
-            .iter()
-            .any(|n| tvt_names.contains(n.as_str()));
-        if has_tvt {
-            continue;
-        }
-        let free_tvs: HashSet<&str> = alias
-            .rhs_names
-            .iter()
-            .filter(|n| all_typevar_names.contains(n.as_str()))
-            .map(String::as_str)
-            .collect();
-        let total = free_tvs.len();
-        let required = free_tvs
-            .iter()
-            .filter(|&&n| !tv_defaults.get(n).copied().unwrap_or(false))
-            .count();
-        let _ = arities.insert(
-            alias.name.as_str(),
-            TypeArity {
-                min: (required > 0 && required < total).then_some(required),
-                max: Some(total),
-            },
-        );
-    }
-
-    arities
+// ##########################################################################
+// # DELETED BODY. DO NOT RESTORE IT AND DO NOT RETURN A DEFAULT.
+// #
+// # `ClassInfo::base_expression_names` is a `Vec<String>` of RENDERED simple
+// # names harvested from base-class expressions. This code matched those
+// # strings against a set of TypeVar names collected the same way, so:
+// #
+// #   T = TypeVar("T")
+// #   Alias = T
+// #   class Foo(Generic[Alias]): ...      # TypeVar NOT recognised
+// #
+// #   class T: ...                        # unrelated class
+// #   class Foo(Base[T]): ...             # treated as a TypeVar use
+// #
+// # Whether a base-expression name denotes a TypeVar is a question about the
+// # binding it resolves to, not about the characters written.
+// #
+// # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
+// ##########################################################################
+fn compute_arities<'a>(_module: &'a ResolvedModule) -> HashMap<&'a str, TypeArity> {
+    panic!(
+        "basilisk-checker: `compute_arities` was DELETED because it matched TypeVar identity by \
+         RENDERED NAME against `base_expression_names`, so an aliased TypeVar was \
+         invisible and any unrelated symbol spelled like one matched. It panics \
+         because the real implementation — base expressions resolved through the \
+         binding table — DOES NOT EXIST YET. Do not restore the name matching and \
+         do not substitute a default answer."
+    )
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 /// `true` when the class's only generic parameter is a `ParamSpec`.
 fn is_single_paramspec_generic(
     cls: &basilisk_resolver::ClassInfo,

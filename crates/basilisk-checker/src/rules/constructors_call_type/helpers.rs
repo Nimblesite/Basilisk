@@ -118,20 +118,34 @@ pub(super) fn resolve_constructor_sig(
     ConstructorSig::NoArgs
 }
 
-/// Extract the metaclass name and check its `__call__` method.
+// ##########################################################################
+// # DELETED BODY — `check_metaclass_call`. DO NOT RESTORE IT.
+// #
+// #   let meta_name = class_info.metaclass_name.as_deref()?;
+// #   class_map.get(meta_name);
+// #   method_map.get(&(meta_name, "__call__"))
+// #
+// # `metaclass_name` is the RENDERED text of a `metaclass=` value. The
+// # metaclass, and the owner of its `__call__`, were both identified by that
+// # string. `metaclass=mod.Meta`, an aliased import, or a local class sharing
+// # the rendered name each produced the wrong constructor signature — and the
+// # constructor signature is what every argument check is measured against.
+// #
+// # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
+// ##########################################################################
 fn check_metaclass_call(
-    class_info: &basilisk_resolver::ClassInfo,
-    class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
-    method_map: &HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>>,
+    _class_info: &basilisk_resolver::ClassInfo,
+    _class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
+    _method_map: &HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>>,
     _source: &str,
 ) -> Option<ConstructorSig> {
-    let meta_name = class_info.metaclass_name.as_deref()?;
-    // Resolve metaclass through class_map (it may be defined in the same file).
-    let _ = class_map.get(meta_name); // just check existence
-    if let Some(call_funcs) = method_map.get(&(meta_name, "__call__")) {
-        return Some(sig_from_funcs(call_funcs));
-    }
-    None
+    panic!(
+        "basilisk-checker: `check_metaclass_call` was DELETED because it identified a \
+         metaclass, and the owner of its `__call__`, by the RENDERED TEXT of the \
+         `metaclass=` value. It panics because the real implementation — the metaclass \
+         expression resolved through the binding table — DOES NOT EXIST YET. Do not \
+         restore the name lookup and do not return `None` in its place."
+    )
 }
 
 /// Derive a `ConstructorSig` from one or more `FunctionInfo` entries.

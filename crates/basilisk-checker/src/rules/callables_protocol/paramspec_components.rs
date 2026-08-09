@@ -442,7 +442,9 @@ fn check_direct_forwarding_calls(stmts: &[Stmt], ctx: &Ctx<'_>, diagnostics: &mu
             let first_is_pbind = all_named_params(func)
                 .next()
                 .and_then(|pwd| pwd.parameter.annotation.as_deref())
-                .and_then(|ann| parse_callable_pbind(ctx.bindings, ctx.source, ann, &ctx.paramspecs))
+                .and_then(|ann| {
+                    parse_callable_pbind(ctx.bindings, ctx.source, ann, &ctx.paramspecs)
+                })
                 .is_some_and(|(prefix, _)| prefix.is_empty());
             first_is_pbind && forwarding_names(func, ctx).is_some()
         })

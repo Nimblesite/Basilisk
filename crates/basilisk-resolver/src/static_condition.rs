@@ -71,9 +71,9 @@ pub enum StaticCondition {
 pub fn parse_static_condition(bindings: &BindingTable, test: &Expr) -> StaticCondition {
     match test {
         Expr::BooleanLiteral(lit) => StaticCondition::Bool(lit.value),
-        Expr::UnaryOp(unary) if matches!(unary.op, UnaryOp::Not) => StaticCondition::Not(
-            Box::new(parse_static_condition(bindings, &unary.operand)),
-        ),
+        Expr::UnaryOp(unary) if matches!(unary.op, UnaryOp::Not) => {
+            StaticCondition::Not(Box::new(parse_static_condition(bindings, &unary.operand)))
+        }
         Expr::BoolOp(bool_op) => boolean_composition(bindings, bool_op),
         Expr::Compare(compare) => version_comparison(bindings, compare),
         Expr::Name(_) | Expr::Attribute(_)
@@ -412,7 +412,9 @@ if (3, 11, 7) <= sys.version_info:
             expected,
         );
         assert_eq!(
-            parse_if_test("from sys import version_info\nif version_info >= (3, 12):\n    x = 1\n")?,
+            parse_if_test(
+                "from sys import version_info\nif version_info >= (3, 12):\n    x = 1\n"
+            )?,
             expected,
         );
 

@@ -13,8 +13,8 @@ use super::harness::{aliased, import_form, reformatted, renamed, SpecObligation}
 // ── a Literal parameter admits only its own members ──────────────────────
 
 #[test]
-fn a_literal_parameter_admits_only_its_declared_members()
--> Result<(), Box<dyn std::error::Error>> {
+fn a_literal_parameter_admits_only_its_declared_members() -> Result<(), Box<dyn std::error::Error>>
+{
     SpecObligation {
         spec_reason: "`Literal[\"warp\", \"weft\"]` is the type whose only values are those two \
                       strings; any other string is not a member",
@@ -120,8 +120,8 @@ thread( 'weft' )
 // ── an alias holding a Literal behaves like the Literal ──────────────────
 
 #[test]
-fn a_literal_reached_through_an_alias_keeps_its_members()
--> Result<(), Box<dyn std::error::Error>> {
+fn a_literal_reached_through_an_alias_keeps_its_members() -> Result<(), Box<dyn std::error::Error>>
+{
     SpecObligation {
         spec_reason: "an alias is transparent, so `Bearing = Literal[\"warp\", \"weft\"]` admits \
                       exactly what the inline form admits — the call sites here are identical and \
@@ -442,8 +442,7 @@ draw(True)
 // ── LiteralString admits literals and their compositions ─────────────────
 
 #[test]
-fn literalstring_rejects_a_runtime_constructed_string()
--> Result<(), Box<dyn std::error::Error>> {
+fn literalstring_rejects_a_runtime_constructed_string() -> Result<(), Box<dyn std::error::Error>> {
     SpecObligation {
         spec_reason: "`LiteralString` admits string literals and values built only from string \
                       literals; a string derived from arbitrary runtime input is a plain `str` \

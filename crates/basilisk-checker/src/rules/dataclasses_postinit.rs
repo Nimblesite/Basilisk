@@ -145,7 +145,10 @@ fn check_initvar_attribute_access(module: &ResolvedModule, diagnostics: &mut Vec
             let ruff_python_ast::Expr::Name(callee) = call.func.as_ref() else {
                 return None;
             };
-            if !module.bindings.refers_to_local_definition(call.func.as_ref()) {
+            if !module
+                .bindings
+                .refers_to_local_definition(call.func.as_ref())
+            {
                 return None;
             }
             let class_name = callee.id.as_str();

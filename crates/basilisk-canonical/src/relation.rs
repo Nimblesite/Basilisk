@@ -104,8 +104,10 @@ fn class_assignable(source: BuiltinClass, target: BuiltinClass) -> bool {
         (
             BuiltinClass::Bool,
             BuiltinClass::Int | BuiltinClass::Float | BuiltinClass::Complex
-        ) | (BuiltinClass::Int, BuiltinClass::Float | BuiltinClass::Complex)
-            | (BuiltinClass::Float, BuiltinClass::Complex)
+        ) | (
+            BuiltinClass::Int,
+            BuiltinClass::Float | BuiltinClass::Complex
+        ) | (BuiltinClass::Float, BuiltinClass::Complex)
     )
 }
 
@@ -156,26 +158,34 @@ fn builtin_assignable(class: BuiltinClass, target: &TypeNode) -> Option<bool> {
 fn subscript_assignable(base: &TypeNode, args: &[TypeNode], target: &TypeNode) -> Option<bool> {
     match (base, target) {
         (TypeNode::Builtin(class), TypeNode::Builtin(other)) => Some(class == other),
-        (TypeNode::Builtin(class), TypeNode::Subscript { base: tbase, args: targs }) => {
-            match tbase.as_ref() {
-                TypeNode::Builtin(tclass) if class == tclass => {
-                    parameter_args_assignable(*class, args, targs)
-                }
-                TypeNode::Builtin(_) => Some(false),
-                _ => None,
+        (
+            TypeNode::Builtin(class),
+            TypeNode::Subscript {
+                base: tbase,
+                args: targs,
+            },
+        ) => match tbase.as_ref() {
+            TypeNode::Builtin(tclass) if class == tclass => {
+                parameter_args_assignable(*class, args, targs)
             }
-        }
-        (TypeNode::Form(form), TypeNode::Subscript { base: tbase, args: targs }) => {
-            match tbase.as_ref() {
-                TypeNode::Form(tform) if form == tform => {
-                    match all3(pairwise(args, targs, equivalent)?.into_iter()) {
-                        Some(true) => Some(true),
-                        _ => None,
-                    }
+            TypeNode::Builtin(_) => Some(false),
+            _ => None,
+        },
+        (
+            TypeNode::Form(form),
+            TypeNode::Subscript {
+                base: tbase,
+                args: targs,
+            },
+        ) => match tbase.as_ref() {
+            TypeNode::Form(tform) if form == tform => {
+                match all3(pairwise(args, targs, equivalent)?.into_iter()) {
+                    Some(true) => Some(true),
+                    _ => None,
                 }
-                _ => None,
             }
-        }
+            _ => None,
+        },
         (TypeNode::Builtin(_), TypeNode::Literal(_) | TypeNode::LiteralString) => Some(false),
         _ => None,
     }
@@ -194,8 +204,8 @@ fn parameter_args_assignable(
             equivalent(s, t)
         }
     }) else {
-        let variadic = source_args.contains(&TypeNode::Ellipsis)
-            || target_args.contains(&TypeNode::Ellipsis);
+        let variadic =
+            source_args.contains(&TypeNode::Ellipsis) || target_args.contains(&TypeNode::Ellipsis);
         return if variadic { None } else { Some(false) };
     };
     all3(pairs.into_iter())

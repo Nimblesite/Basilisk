@@ -142,8 +142,8 @@ fn upstream_cyclical_cases_as_type_statements_still_fire() -> Result<(), Box<dyn
 /// Basilisk may offer a separately named opt-in policy for non-regular
 /// expansion, but the default PEP scoping rule must not invent that error.
 #[test]
-fn non_regular_recursive_alias_is_not_a_pep_scoping_error(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn non_regular_recursive_alias_is_not_a_pep_scoping_error() -> Result<(), Box<dyn std::error::Error>>
+{
     let source = "type R[T] = set[R[T | R[T]]]\n";
     let diagnostics = run(source)?;
     assert_rule_count(

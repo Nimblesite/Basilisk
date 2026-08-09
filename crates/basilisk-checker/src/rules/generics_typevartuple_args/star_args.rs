@@ -29,6 +29,11 @@ struct Slot {
     text: String,
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 /// The shape of an unpacked-tuple `*args` annotation.
 enum StarShape {
     /// `*tuple[int, str]` — exactly these argument types.
@@ -55,6 +60,11 @@ struct StarArgsFunction {
     shape: StarShape,
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 /// Entry point: validate calls to functions with unpacked-tuple `*args`.
 pub(super) fn check_star_args_calls(
     stmts: &[Stmt],
@@ -77,7 +87,9 @@ pub(super) fn check_star_args_calls(
             Some(Expr::Starred(starred)) => parse_star_shape(bindings, source, &starred.value),
             // `*args: tuple[*Ts]` — the annotation is a (non-starred) `tuple`
             // subscript whose sole element unpacks a `TypeVarTuple`.
-            Some(other) => shared_tvt_name(bindings, other, tvt_names).map(|_| StarShape::SharedTvt),
+            Some(other) => {
+                shared_tvt_name(bindings, other, tvt_names).map(|_| StarShape::SharedTvt)
+            }
             None => None,
         };
         let Some(shape) = shape else {
@@ -92,6 +104,11 @@ pub(super) fn check_star_args_calls(
     scan_stmts(stmts, &functions, source, path, diagnostics);
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 /// Does the expression's subscript base resolve to the builtin `tuple`
 /// constructor (or its `typing.Tuple` alias)?
 fn is_tuple_form(bindings: &BindingTable, expr: &Expr) -> bool {
@@ -101,6 +118,11 @@ fn is_tuple_form(bindings: &BindingTable, expr: &Expr) -> bool {
     )
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 /// The `TypeVarTuple` name a `tuple[*Ts]` annotation binds, when the base
 /// resolves to the tuple form and the slice is exactly one starred reference
 /// to a declared `TypeVarTuple`. `None` for any other annotation.
@@ -132,6 +154,11 @@ pub(super) fn shared_tvt_name<'e>(
     }
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 /// An expected-type slot: the lowered node plus the annotation's source text
 /// (messages only).
 fn slot(bindings: &BindingTable, source: &str, expr: &Expr) -> Slot {
@@ -144,6 +171,11 @@ fn slot(bindings: &BindingTable, source: &str, expr: &Expr) -> Slot {
     }
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 /// Parse `tuple[...]` into a [`StarShape`].
 fn parse_star_shape(bindings: &BindingTable, source: &str, expr: &Expr) -> Option<StarShape> {
     let Expr::Subscript(sub) = expr else {
@@ -189,6 +221,11 @@ fn parse_star_shape(bindings: &BindingTable, source: &str, expr: &Expr) -> Optio
     ))
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 /// Walk statements scanning expressions for calls.
 fn scan_stmts(
     stmts: &[Stmt],
@@ -214,6 +251,11 @@ fn scan_stmts(
     });
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 /// Recursively check call expressions (including nested call arguments).
 fn scan_expr(
     expr: &Expr,
@@ -236,6 +278,11 @@ fn scan_expr(
     }
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 /// Validate one call's variadic arguments against the function's [`StarShape`].
 fn validate_star_call(
     call: &ruff_python_ast::ExprCall,
@@ -273,6 +320,11 @@ fn validate_star_call(
     ));
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 /// Exact arity and element types.
 fn validate_fixed(args: &[Expr], slots: &[Slot], source: &str) -> Option<String> {
     if args.len() != slots.len() {
@@ -288,11 +340,21 @@ fn validate_fixed(args: &[Expr], slots: &[Slot], source: &str) -> Option<String>
         .find_map(|(arg, expected)| incompatible(arg, expected, source))
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 /// Every argument must match the homogeneous element type.
 fn validate_each(args: &[Expr], elem: &Slot, source: &str) -> Option<String> {
     args.iter().find_map(|arg| incompatible(arg, elem, source))
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 /// Prefix/middle/suffix validation for mixed shapes.
 fn validate_mixed(
     args: &[Expr],
@@ -326,6 +388,11 @@ fn validate_mixed(
         })
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 /// Every tuple-literal argument binds the shared `TypeVarTuple` to its arity, so
 /// all such arguments must have the same length. Element types are joined by the
 /// solver and never conflict, so only length is checked. Non-tuple-literal
@@ -344,6 +411,11 @@ fn validate_shared_tvt(args: &[Expr]) -> Option<String> {
     })
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 /// A human-readable problem when `arg` is provably incompatible with
 /// `expected`; `None` when compatible or not analyzable.
 ///

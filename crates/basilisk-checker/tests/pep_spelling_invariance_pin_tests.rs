@@ -24,10 +24,7 @@ use common::{assert_rule_count, run};
 /// Diagnostic codes emitted for `source`, sorted and de-duplicated.
 fn codes(source: &str) -> Vec<String> {
     let diagnostics = run(source).expect("checker ran");
-    let mut out: Vec<String> = diagnostics
-        .iter()
-        .map(|d| d.code.code.to_owned())
-        .collect();
+    let mut out: Vec<String> = diagnostics.iter().map(|d| d.code.code.to_owned()).collect();
     out.sort();
     out.dedup();
     out

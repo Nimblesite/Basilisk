@@ -81,22 +81,37 @@ pub const RULE_STATUS: &[(&str, RuleStatus)] = &[
     ("BSK-0063", RuleStatus::Unproven),
     ("BSK-0152", RuleStatus::Unproven),
     ("aliases_implicit", RuleStatus::Unproven),
-    ("aliases_newtype", RuleStatus::Invalid(InvalidReason::StarvedInput("newtype_calls"))),
+    (
+        "aliases_newtype",
+        RuleStatus::Invalid(InvalidReason::StarvedInput("newtype_calls")),
+    ),
     ("aliases_recursive", RuleStatus::Unproven),
     ("aliases_type_statement", RuleStatus::Unproven),
-    ("aliases_typealiastype", RuleStatus::Invalid(InvalidReason::StarvedInput("type_alias_type_violations"))),
+    (
+        "aliases_typealiastype",
+        RuleStatus::Invalid(InvalidReason::StarvedInput("type_alias_type_violations")),
+    ),
     ("annotations_forward_refs", RuleStatus::Unproven),
     ("annotations_generators", RuleStatus::Unproven),
-    ("annotations_generators_2", RuleStatus::Invalid(InvalidReason::NoVerdictPath)),
+    (
+        "annotations_generators_2",
+        RuleStatus::Invalid(InvalidReason::NoVerdictPath),
+    ),
     ("annotations_typeexpr", RuleStatus::Unproven),
     ("assignment_compatibility", RuleStatus::Unproven),
     ("callables_protocol", RuleStatus::Unproven),
     ("callables_protocol_2", RuleStatus::Unproven),
     ("calls_argument_count", RuleStatus::Unproven),
     ("calls_argument_type", RuleStatus::Unproven),
-    ("classes_override", RuleStatus::Invalid(InvalidReason::NoVerdictPath)),
+    (
+        "classes_override",
+        RuleStatus::Invalid(InvalidReason::NoVerdictPath),
+    ),
     ("classes_override_2", RuleStatus::Unproven),
-    ("classes_override_3", RuleStatus::Invalid(InvalidReason::NoVerdictPath)),
+    (
+        "classes_override_3",
+        RuleStatus::Invalid(InvalidReason::NoVerdictPath),
+    ),
     ("constructors_call_init", RuleStatus::Unproven),
     ("constructors_call_new", RuleStatus::Unproven),
     ("constructors_call_type", RuleStatus::Unproven),
@@ -107,21 +122,36 @@ pub const RULE_STATUS: &[(&str, RuleStatus)] = &[
     ("dataclasses_match_args", RuleStatus::Unproven),
     ("dataclasses_postinit", RuleStatus::Unproven),
     ("dataclasses_slots", RuleStatus::Unproven),
-    ("dataclasses_transform_meta", RuleStatus::Invalid(InvalidReason::NoVerdictPath)),
+    (
+        "dataclasses_transform_meta",
+        RuleStatus::Invalid(InvalidReason::NoVerdictPath),
+    ),
     ("dataclasses_usage", RuleStatus::Unproven),
     ("dict_key_hashable", RuleStatus::Unproven),
     ("directives_assert_type", RuleStatus::Unproven),
     ("directives_assert_type_2", RuleStatus::Unproven),
-    ("directives_cast", RuleStatus::Invalid(InvalidReason::StarvedInput("cast_calls"))),
+    (
+        "directives_cast",
+        RuleStatus::Invalid(InvalidReason::StarvedInput("cast_calls")),
+    ),
     ("directives_deprecated", RuleStatus::Unproven),
     ("directives_disjoint_base", RuleStatus::Unproven),
     ("directives_reveal_type", RuleStatus::Unproven),
     ("enums_behaviors", RuleStatus::Unproven),
     ("enums_definition", RuleStatus::Unproven),
-    ("enums_expansion", RuleStatus::Invalid(InvalidReason::NoVerdictPath)),
-    ("enums_member_values", RuleStatus::Invalid(InvalidReason::StarvedInput("enum_value_type_violations"))),
+    (
+        "enums_expansion",
+        RuleStatus::Invalid(InvalidReason::NoVerdictPath),
+    ),
+    (
+        "enums_member_values",
+        RuleStatus::Invalid(InvalidReason::StarvedInput("enum_value_type_violations")),
+    ),
     ("enums_members", RuleStatus::Unproven),
-    ("enums_members_2", RuleStatus::Invalid(InvalidReason::NoVerdictPath)),
+    (
+        "enums_members_2",
+        RuleStatus::Invalid(InvalidReason::NoVerdictPath),
+    ),
     ("generics_base_class", RuleStatus::Unproven),
     ("generics_base_class_2", RuleStatus::Unproven),
     ("generics_base_class_3", RuleStatus::Unproven),
@@ -132,10 +162,19 @@ pub const RULE_STATUS: &[(&str, RuleStatus)] = &[
     ("generics_defaults_2", RuleStatus::Unproven),
     ("generics_defaults_referential", RuleStatus::Unproven),
     ("generics_defaults_specialization", RuleStatus::Unproven),
-    ("generics_self_attributes", RuleStatus::Invalid(InvalidReason::NoVerdictPath)),
-    ("generics_self_basic", RuleStatus::Invalid(InvalidReason::NoVerdictPath)),
+    (
+        "generics_self_attributes",
+        RuleStatus::Invalid(InvalidReason::NoVerdictPath),
+    ),
+    (
+        "generics_self_basic",
+        RuleStatus::Invalid(InvalidReason::NoVerdictPath),
+    ),
     ("generics_self_protocols", RuleStatus::Unproven),
-    ("generics_self_usage", RuleStatus::Invalid(InvalidReason::NoVerdictPath)),
+    (
+        "generics_self_usage",
+        RuleStatus::Invalid(InvalidReason::NoVerdictPath),
+    ),
     ("generics_syntax_compatibility", RuleStatus::Unproven),
     ("generics_syntax_declarations", RuleStatus::Unproven),
     ("generics_syntax_declarations_2", RuleStatus::Unproven),
@@ -145,22 +184,53 @@ pub const RULE_STATUS: &[(&str, RuleStatus)] = &[
     ("generics_typevartuple_basic", RuleStatus::Unproven),
     ("generics_typevartuple_basic_2", RuleStatus::Unproven),
     ("generics_typevartuple_specialization", RuleStatus::Unproven),
-    ("generics_typevartuple_specialization_2", RuleStatus::Unproven),
+    (
+        "generics_typevartuple_specialization_2",
+        RuleStatus::Unproven,
+    ),
     ("generics_typevartuple_unpack", RuleStatus::Unproven),
-    ("generics_upper_bound_2", RuleStatus::Invalid(InvalidReason::NoVerdictPath)),
+    (
+        "generics_upper_bound_2",
+        RuleStatus::Invalid(InvalidReason::NoVerdictPath),
+    ),
     ("generics_variance", RuleStatus::Unproven),
     ("historical_positional", RuleStatus::Unproven),
-    ("imports_missing_name", RuleStatus::Invalid(InvalidReason::StarvedInput("imported_symbols"))),
+    (
+        "imports_missing_name",
+        RuleStatus::Invalid(InvalidReason::StarvedInput("imported_symbols")),
+    ),
     ("imports_module_attribute", RuleStatus::Unproven),
     ("imports_unresolved", RuleStatus::Unproven),
-    ("literals_parameterizations", RuleStatus::Invalid(InvalidReason::NoVerdictPath)),
-    ("literals_parameterizations_2", RuleStatus::Invalid(InvalidReason::StarvedInput("literal_string_enum_mismatches"))),
-    ("literals_semantics", RuleStatus::Invalid(InvalidReason::StarvedInput("literal_augmented_assign_violations"))),
+    (
+        "literals_parameterizations",
+        RuleStatus::Invalid(InvalidReason::NoVerdictPath),
+    ),
+    (
+        "literals_parameterizations_2",
+        RuleStatus::Invalid(InvalidReason::StarvedInput(
+            "literal_string_enum_mismatches",
+        )),
+    ),
+    (
+        "literals_semantics",
+        RuleStatus::Invalid(InvalidReason::StarvedInput(
+            "literal_augmented_assign_violations",
+        )),
+    ),
     ("match_exhaustiveness", RuleStatus::Unproven),
-    ("namedtuples_define_class", RuleStatus::Invalid(InvalidReason::NoVerdictPath)),
+    (
+        "namedtuples_define_class",
+        RuleStatus::Invalid(InvalidReason::NoVerdictPath),
+    ),
     ("namedtuples_define_functional", RuleStatus::Unproven),
-    ("namedtuples_type_compat", RuleStatus::Invalid(InvalidReason::NoVerdictPath)),
-    ("namedtuples_usage", RuleStatus::Invalid(InvalidReason::NoVerdictPath)),
+    (
+        "namedtuples_type_compat",
+        RuleStatus::Invalid(InvalidReason::NoVerdictPath),
+    ),
+    (
+        "namedtuples_usage",
+        RuleStatus::Invalid(InvalidReason::NoVerdictPath),
+    ),
     ("names_unbound", RuleStatus::Unproven),
     ("names_undefined", RuleStatus::Unproven),
     ("narrowing_typeguard", RuleStatus::Unproven),
@@ -168,33 +238,70 @@ pub const RULE_STATUS: &[(&str, RuleStatus)] = &[
     ("overloads_basic", RuleStatus::Unproven),
     ("overloads_consistency", RuleStatus::Unproven),
     ("overloads_consistency_2", RuleStatus::Unproven),
-    ("overloads_consistency_3", RuleStatus::Invalid(InvalidReason::NoVerdictPath)),
+    (
+        "overloads_consistency_3",
+        RuleStatus::Invalid(InvalidReason::NoVerdictPath),
+    ),
     ("overloads_definitions", RuleStatus::Unproven),
     ("overloads_evaluation", RuleStatus::Unproven),
-    ("protocols_class_objects", RuleStatus::Invalid(InvalidReason::StarvedInput("protocol_class_object_violations"))),
-    ("protocols_definition_2", RuleStatus::Invalid(InvalidReason::NoVerdictPath)),
-    ("protocols_explicit", RuleStatus::Invalid(InvalidReason::StarvedInput("protocol_instantiation_violations"))),
-    ("protocols_generic", RuleStatus::Invalid(InvalidReason::NoVerdictPath)),
+    (
+        "protocols_class_objects",
+        RuleStatus::Invalid(InvalidReason::StarvedInput(
+            "protocol_class_object_violations",
+        )),
+    ),
+    (
+        "protocols_definition_2",
+        RuleStatus::Invalid(InvalidReason::NoVerdictPath),
+    ),
+    (
+        "protocols_explicit",
+        RuleStatus::Invalid(InvalidReason::StarvedInput(
+            "protocol_instantiation_violations",
+        )),
+    ),
+    (
+        "protocols_generic",
+        RuleStatus::Invalid(InvalidReason::NoVerdictPath),
+    ),
     ("protocols_runtime_checkable", RuleStatus::Unproven),
     ("protocols_variance", RuleStatus::Unproven),
-    ("qualifiers_annotated_2", RuleStatus::Invalid(InvalidReason::NoVerdictPath)),
+    (
+        "qualifiers_annotated_2",
+        RuleStatus::Invalid(InvalidReason::NoVerdictPath),
+    ),
     ("qualifiers_final_annotation_2", RuleStatus::Unproven),
     ("qualifiers_final_decorator", RuleStatus::Unproven),
     ("returns_compatibility", RuleStatus::Unproven),
     ("returns_compatibility_2", RuleStatus::Unproven),
-    ("specialtypes_never", RuleStatus::Invalid(InvalidReason::NoVerdictPath)),
-    ("specialtypes_promotions", RuleStatus::Invalid(InvalidReason::StarvedInput("float_param_int_attr_accesses"))),
+    (
+        "specialtypes_never",
+        RuleStatus::Invalid(InvalidReason::NoVerdictPath),
+    ),
+    (
+        "specialtypes_promotions",
+        RuleStatus::Invalid(InvalidReason::StarvedInput("float_param_int_attr_accesses")),
+    ),
     ("specialtypes_type", RuleStatus::Unproven),
-    ("tuples_index", RuleStatus::Invalid(InvalidReason::StarvedInput("tuple_index_violations"))),
+    (
+        "tuples_index",
+        RuleStatus::Invalid(InvalidReason::StarvedInput("tuple_index_violations")),
+    ),
     ("tuples_type_form", RuleStatus::Unproven),
     ("tuples_type_form_2", RuleStatus::Unproven),
-    ("typeddicts_alt_syntax", RuleStatus::Invalid(InvalidReason::StarvedInput("typeddict_calls"))),
+    (
+        "typeddicts_alt_syntax",
+        RuleStatus::Invalid(InvalidReason::StarvedInput("typeddict_calls")),
+    ),
     ("typeddicts_class_syntax", RuleStatus::Unproven),
     ("typeddicts_class_syntax_2", RuleStatus::Unproven),
     ("typeddicts_inheritance", RuleStatus::Unproven),
     ("typeddicts_operations", RuleStatus::Unproven),
     ("typeddicts_readonly", RuleStatus::Unproven),
-    ("typeddicts_required", RuleStatus::Invalid(InvalidReason::NoVerdictPath)),
+    (
+        "typeddicts_required",
+        RuleStatus::Invalid(InvalidReason::NoVerdictPath),
+    ),
     ("typeddicts_usage", RuleStatus::Unproven),
     ("version_target_syntax", RuleStatus::Unproven),
 ];
@@ -207,7 +314,6 @@ pub fn status_of(code: &str) -> Option<RuleStatus> {
         .find(|(candidate, _)| *candidate == code)
         .map(|(_, status)| *status)
 }
-
 
 #[cfg(test)]
 #[expect(
@@ -282,8 +388,10 @@ mod tests {
                 rest.get(..end).map(str::to_owned)
             })
             .collect();
-        let classified: HashSet<String> =
-            RULE_STATUS.iter().map(|(code, _)| (*code).to_owned()).collect();
+        let classified: HashSet<String> = RULE_STATUS
+            .iter()
+            .map(|(code, _)| (*code).to_owned())
+            .collect();
         let missing: Vec<&String> = declared.difference(&classified).collect();
         assert!(
             missing.is_empty(),
@@ -352,8 +460,8 @@ mod tests {
     /// really does hardcode empty. If the collector is rebuilt, this fails.
     #[test]
     fn starved_inputs_are_really_empty_in_the_resolver() {
-        let visitor = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../basilisk-resolver/src/visitor/mod.rs");
+        let visitor =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../basilisk-resolver/src/visitor/mod.rs");
         let source = std::fs::read_to_string(&visitor).expect("resolver visitor must be readable");
         for (code, status) in RULE_STATUS {
             let RuleStatus::Invalid(InvalidReason::StarvedInput(field)) = status else {
@@ -380,10 +488,14 @@ mod tests {
         for marker in ["assert_by(", "assert_rejected_by("] {
             for (index, _) in sources.match_indices(marker) {
                 let start = index + marker.len();
-                let window = sources.get(start..(start + 400).min(sources.len())).unwrap_or("");
+                let window = sources
+                    .get(start..(start + 400).min(sources.len()))
+                    .unwrap_or("");
                 let mut rest = window;
                 while let Some(open) = rest.find('"') {
-                    let Some(tail) = rest.get(open + 1..) else { break };
+                    let Some(tail) = rest.get(open + 1..) else {
+                        break;
+                    };
                     let Some(close) = tail.find('"') else { break };
                     if let Some(literal) = tail.get(..close) {
                         let _ = codes.insert(literal.to_owned());

@@ -20,7 +20,8 @@ use super::harness::{aliased, import_form, reformatted, renamed, SpecObligation}
 #[test]
 fn subscripting_an_unknown_key_is_an_error() -> Result<(), Box<dyn std::error::Error>> {
     SpecObligation {
-        spec_reason: "the spec requires the use of a key that is not known to exist to be reported \
+        spec_reason:
+            "the spec requires the use of a key that is not known to exist to be reported \
                       as an error, even where it would not raise at runtime",
         rejected: r#"
 import typing
@@ -134,8 +135,8 @@ def scan(sheet: Plat) -> int:
 // ── non-literal subscript vs the get/in permission ───────────────────────
 
 #[test]
-fn a_non_literal_key_is_rejected_under_subscript_but_allowed_by_get_and_in()
--> Result<(), Box<dyn std::error::Error>> {
+fn a_non_literal_key_is_rejected_under_subscript_but_allowed_by_get_and_in(
+) -> Result<(), Box<dyn std::error::Error>> {
     SpecObligation {
         spec_reason: "the spec rejects a non-literal key because its value is unknown during type \
                       checking, yet explicitly allows `d.get(e)` and `e in d` for an arbitrary \
@@ -263,8 +264,8 @@ def scan(sheet: Plat, caption: str) -> None:
 // ── Required and NotRequired cannot both qualify one item ────────────────
 
 #[test]
-fn required_and_notrequired_cannot_qualify_the_same_item()
--> Result<(), Box<dyn std::error::Error>> {
+fn required_and_notrequired_cannot_qualify_the_same_item() -> Result<(), Box<dyn std::error::Error>>
+{
     SpecObligation {
         spec_reason: "the spec states it is an error to use both `Required` and `NotRequired` in \
                       the same item definition; either alone is well-formed",
@@ -352,8 +353,7 @@ class Plat(typing.TypedDict):
 // ── an explicit qualifier outranks total= ────────────────────────────────
 
 #[test]
-fn an_explicit_qualifier_outranks_the_total_argument()
--> Result<(), Box<dyn std::error::Error>> {
+fn an_explicit_qualifier_outranks_the_total_argument() -> Result<(), Box<dyn std::error::Error>> {
     SpecObligation {
         spec_reason: "the spec's procedure checks the qualifier first: `Required` wins over \
                       `total=False`, so the item stays required and omitting it from a literal is \

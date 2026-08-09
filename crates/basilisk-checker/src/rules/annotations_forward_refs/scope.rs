@@ -12,24 +12,42 @@ use basilisk_resolver::{ImportKind, ResolvedModule};
 // Circular annotation detection
 // ---------------------------------------------------------------------------
 
-/// Returns `true` when the annotation is a string literal that circularly references
-/// its own attribute name, and that name is not otherwise defined.
+// ##########################################################################
+// # DELETED BODY — `is_circular_string_annotation`. DO NOT RESTORE IT.
+// #
+// # It STRIPPED QUOTES OFF SOURCE TEXT by character index and compared what
+// # was left to a name:
+// #
+// #   let content = &ann[1..ann.len() - 1];       // hand-written unquoting
+// #   content == attr_name
+// #       && !module_scope_names.contains(content)
+// #       && !builtin_names.contains(content)
+// #
+// # A PEP 484 forward reference is a type EXPRESSION, not a bare word:
+// # `"list[Foo]"`, `"Foo | None"`, and `" Foo "` all failed the equality
+// # test, and the builtin arm was a spelling whitelist
+// # (`PYTHON_BUILTIN_TYPE_NAMES`, itself DELETED). `BindingTable::
+// # form_of_quoted_annotation` already PARSES a quoted annotation with
+// # `ruff_python_parser` and resolves it against the module's final
+// # namespace — never inspecting it as text.
+// #
+// # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
+// ##########################################################################
 pub(super) fn is_circular_string_annotation(
-    ann: &str,
-    attr_name: &str,
-    module_scope_names: &HashSet<&str>,
-    builtin_names: &HashSet<&str>,
+    _ann: &str,
+    _attr_name: &str,
+    _module_scope_names: &HashSet<&str>,
+    _builtin_names: &HashSet<&str>,
 ) -> bool {
-    let content = if (ann.starts_with('"') && ann.ends_with('"') && ann.len() >= 2)
-        || (ann.starts_with('\'') && ann.ends_with('\'') && ann.len() >= 2)
-    {
-        &ann[1..ann.len() - 1]
-    } else {
-        return false;
-    };
-    content == attr_name
-        && !module_scope_names.contains(content)
-        && !builtin_names.contains(content)
+    panic!(
+        "basilisk-checker: `is_circular_string_annotation` was DELETED because it \
+         unquoted a forward reference by CHARACTER INDEX and compared the remaining \
+         TEXT to a name, with a builtin-spelling whitelist as its escape hatch. It \
+         panics because the real implementation — parsing the quoted annotation and \
+         resolving it through the binding table, which \
+         `BindingTable::form_of_quoted_annotation` already does — DOES NOT EXIST YET. \
+         Do not restore the character slicing and do not return `false` in its place."
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -67,59 +85,17 @@ pub(super) fn build_module_scope_names<'a>(module: &'a ResolvedModule) -> HashSe
 // Python built-in type names
 // ---------------------------------------------------------------------------
 
-/// Python built-in type names that are always valid as forward references in annotations.
-pub(super) const PYTHON_BUILTIN_TYPE_NAMES: &[&str] = &[
-    "int",
-    "str",
-    "float",
-    "bool",
-    "bytes",
-    "complex",
-    "bytearray",
-    "memoryview",
-    "object",
-    "type",
-    "None",
-    "list",
-    "dict",
-    "set",
-    "frozenset",
-    "tuple",
-    "range",
-    "slice",
-    "super",
-    "classmethod",
-    "staticmethod",
-    "property",
-    "Exception",
-    "BaseException",
-    "ValueError",
-    "TypeError",
-    "AttributeError",
-    "KeyError",
-    "IndexError",
-    "RuntimeError",
-    "StopIteration",
-    "NotImplementedError",
-    "OSError",
-    "IOError",
-    "FileNotFoundError",
-    "PermissionError",
-    "TimeoutError",
-    "ConnectionError",
-    "ArithmeticError",
-    "OverflowError",
-    "ZeroDivisionError",
-    "ImportError",
-    "ModuleNotFoundError",
-    "NameError",
-    "UnboundLocalError",
-    "LookupError",
-    "SyntaxError",
-    "SystemExit",
-    "KeyboardInterrupt",
-    "GeneratorExit",
-    "UnicodeError",
-    "UnicodeDecodeError",
-    "UnicodeEncodeError",
-];
+// ##########################################################################
+// # DELETED AND GONE — `PYTHON_BUILTIN_TYPE_NAMES`, a whitelist of builtin
+// # type SPELLINGS. NO SHELL: a `&[&str]` table cannot panic, and there is
+// # nothing to keep visible but its readers. DO NOT RECREATE IT.
+// #
+// # It answered "is this annotation naming a builtin type?" by string
+// # membership, so `from builtins import int as Int` was not a builtin and a
+// # module-level `class int: ...` still was. CLAUDE.md: builtins are not an
+// # exception. `BindingTable::form_of_with_builtins` already resolves a bare
+// # name to its `builtins` definition ONLY while the module has not rebound
+// # it — the exact question this table got wrong in both directions.
+// #
+// # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
+// ##########################################################################

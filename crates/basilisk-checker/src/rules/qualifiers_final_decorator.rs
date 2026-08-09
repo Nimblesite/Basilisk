@@ -9,8 +9,6 @@
 //! 2. **Overriding a `@final` method** — a method decorated with `@final`
 //!    in a base class cannot be overridden in a subclass.
 
-
-
 use basilisk_resolver::ResolvedModule;
 
 use crate::diagnostic::{Diagnostic, ErrorCode};
@@ -50,11 +48,11 @@ impl Rule for FinalViolation {
         _ctx: &super::CheckContext,
         _diagnostics: &mut Vec<Diagnostic>,
     ) {
-    panic!(
+        panic!(
         "basilisk-checker: `qualifiers_final_decorator::check` was DELETED because it identified base classes by \
          their RENDERED NAMES. It panics because the real implementation — base \
          expressions resolved through the binding table — DOES NOT EXIST YET. Do not \
          restore the name lookup and do not substitute a default answer."
     )
-}
+    }
 }

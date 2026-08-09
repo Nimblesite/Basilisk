@@ -237,35 +237,34 @@ fn check_plain_function_calls(module: &ResolvedModule, diagnostics: &mut Vec<Dia
     }
 }
 
-/// Returns `true` when the metaclass `__call__` method passes through arguments
-/// to the underlying `__new__`/`__init__` (i.e. its `__call__` uses `*args, **kwargs`
-/// and does not have a fixed return type that overrides the constructor).
-///
-/// When the metaclass `__call__` has a concrete, non-generic return type that is
-/// NOT the class being constructed (e.g. `-> NoReturn`, `-> int | Meta`), the
-/// metaclass fully controls the constructor call and we should NOT validate
-/// arguments against `__new__`/`__init__`.
-fn metaclass_passes_through(metaclass_name: &str, module: &ResolvedModule) -> bool {
-    // First check that the metaclass class exists
-    if !module.classes.iter().any(|c| c.name == metaclass_name) {
-        return false;
-    }
-
-    // Find the metaclass __call__ method
-    let call_method = module
-        .functions
-        .iter()
-        .find(|f| f.class_name.as_deref() == Some(metaclass_name) && f.name == "__call__");
-
-    let Some(call_fn) = call_method else {
-        // No __call__ method on metaclass — default type.__call__ passes through
-        return true;
-    };
-
-    // The metaclass __call__ must use *args and **kwargs to pass through
-    call_fn.vararg.is_some() && call_fn.kwarg.is_some() && constructs_an_instance(call_fn, module)
+// ##########################################################################
+// # DELETED BODY — `metaclass_passes_through`. DO NOT RESTORE IT.
+// #
+// #   module.classes.iter().any(|c| c.name == metaclass_name)
+// #   f.class_name.as_deref() == Some(metaclass_name)
+// #
+// # `ClassInfo::metaclass_name` is the RENDERED text of a `metaclass=` value,
+// # matched against class names and method owners by string. An imported
+// # metaclass, one reached through an alias, or `metaclass=mod.Meta` all
+// # failed to resolve, and a local class sharing the rendered name matched.
+// #
+// # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
+// ##########################################################################
+fn metaclass_passes_through(_metaclass_name: &str, _module: &ResolvedModule) -> bool {
+    panic!(
+        "basilisk-checker: `metaclass_passes_through` was DELETED because it matched a \
+         metaclass by the RENDERED TEXT of its `metaclass=` value against class names \
+         and method owners. It panics because the real implementation — the metaclass \
+         expression resolved through the binding table — DOES NOT EXIST YET. Do not \
+         restore the name matching and do not substitute a default answer."
+    )
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 /// Does this metaclass `__call__` still yield an instance of the class being
 /// constructed, so `__new__`/`__init__` are evaluated as usual?
 ///
@@ -293,6 +292,11 @@ fn constructs_an_instance(call_fn: &FunctionInfo, module: &ResolvedModule) -> bo
         .any(|typevar| typevar.name == returned)
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 /// Does an unannotated metaclass `__call__` hand construction back to the
 /// normal machinery?
 ///

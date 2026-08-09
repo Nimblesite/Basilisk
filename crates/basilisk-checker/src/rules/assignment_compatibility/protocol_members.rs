@@ -25,19 +25,19 @@ type MemberSurface<'a> = (HashMap<&'a str, &'a Vec<Sig>>, HashSet<&'a str>);
 ///
 /// Methods earlier in the MRO win.  With `strict`, an unresolvable base makes
 /// the member set unknown (`None`); otherwise unknown bases contribute nothing.
-    // ##################################################################
-    // # DELETED BODY. DO NOT RESTORE IT AND DO NOT RETURN A DEFAULT.
-    // #
-    // # `index.classes.get(base)` walked a class's member surface through a map keyed on rendered base names.
-    // #
-    // # `ClassInfo::bases` holds RENDERED SIMPLE NAMES ("complex
-    // # expressions ignored") and the lookup map is keyed on
-    // # `ClassInfo::name`, so an aliased base MISSED, a dotted base
-    // # collided with any local class sharing its trailing word, and two
-    // # classes with one rendered name were a single entry.
-    // #
-    // # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
-    // ##################################################################
+// ##################################################################
+// # DELETED BODY. DO NOT RESTORE IT AND DO NOT RETURN A DEFAULT.
+// #
+// # `index.classes.get(base)` walked a class's member surface through a map keyed on rendered base names.
+// #
+// # `ClassInfo::bases` holds RENDERED SIMPLE NAMES ("complex
+// # expressions ignored") and the lookup map is keyed on
+// # `ClassInfo::name`, so an aliased base MISSED, a dotted base
+// # collided with any local class sharing its trailing word, and two
+// # classes with one rendered name were a single entry.
+// #
+// # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
+// ##################################################################
 fn collect_members<'a>(
     _entry: &'a ClassEntry,
     _index: &'a CallIndex,

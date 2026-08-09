@@ -105,11 +105,11 @@ impl Rule for EnumWithMembersFinal {
         _ctx: &super::CheckContext,
         _diagnostics: &mut Vec<Diagnostic>,
     ) {
-    panic!(
+        panic!(
         "basilisk-checker: `enums_behaviors::check` was DELETED because it identified base classes by \
          their RENDERED NAMES. It panics because the real implementation — base \
          expressions resolved through the binding table — DOES NOT EXIST YET. Do not \
          restore the name lookup and do not substitute a default answer."
     )
-}
+    }
 }

@@ -141,19 +141,31 @@ pub(super) fn class_entry(
     }
 }
 
-/// The identifier a base-class expression names: `Base` or `Base[...]`.
-/// Anything else — an attribute path, a call — yields an empty string, which
-/// never names an indexed class ([ASTREBUILD-LAW]: identifiers come from the
-/// AST node, never from sliced source text).
-fn base_name(base: &Expr) -> String {
-    let target = match base {
-        Expr::Subscript(sub) => sub.value.as_ref(),
-        other => other,
-    };
-    match target {
-        Expr::Name(name) => name.id.to_string(),
-        _ => String::new(),
-    }
+// ##########################################################################
+// # DELETED BODY — `base_name`. DO NOT RESTORE IT.
+// #
+// # It reduced a base-class EXPRESSION to a `String` identifier, and that
+// # string became `ClassEntry::bases` — the key every protocol/member walk
+// # then looked classes up by. Reading the identifier off the AST node is
+// # lawful; THROWING AWAY THE RESOLUTION and keeping only the rendered word
+// # is not. Its own doc comment conceded that an attribute path or a call
+// # "yields an empty string, which never names an indexed class" — i.e. every
+// # dotted base silently disappeared from the hierarchy.
+// #
+// # The replacement keeps the base `Expr` (or its resolved identity) so the
+// # walk asks the binding table what the base denotes.
+// #
+// # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
+// ##########################################################################
+fn base_name(_base: &Expr) -> String {
+    panic!(
+        "basilisk-checker: `base_name` was DELETED because it reduced a base-class \
+         expression to a RENDERED identifier that then keyed the class hierarchy, \
+         silently dropping every dotted or computed base. It panics because the real \
+         implementation — carrying the base expression through to binding-table \
+         resolution — DOES NOT EXIST YET. Do not restore the reduction and do not \
+         return an empty string in its place."
+    )
 }
 
 /// The signatures of every definition of a method.

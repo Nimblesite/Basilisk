@@ -17,8 +17,8 @@
 
 use std::path::Path;
 
-use basilisk_stubs::typeshed::bundle::bundled_snapshot;
 use basilisk_stubs::types::{StubTarget, StubTargetPlatform};
+use basilisk_stubs::typeshed::bundle::bundled_snapshot;
 use basilisk_stubs::{StubSource, StubTier};
 
 fn bundled_typing_source() -> (String, String) {

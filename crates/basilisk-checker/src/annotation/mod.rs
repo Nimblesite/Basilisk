@@ -158,9 +158,9 @@ impl<'m> AnnotationResolver<'m> {
             InferredType::Dict(key, value) => {
                 self.is_structural_target(key) || self.is_structural_target(value)
             }
-            InferredType::Tuple(elements) => {
-                elements.iter().any(|element| self.is_structural_target(element))
-            }
+            InferredType::Tuple(elements) => elements
+                .iter()
+                .any(|element| self.is_structural_target(element)),
             _ => false,
         }
     }

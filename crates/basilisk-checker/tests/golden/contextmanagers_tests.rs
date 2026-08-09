@@ -167,7 +167,8 @@ def bleed_line() -> None:
 #[test]
 fn as_target_takes_the_enter_return_type() -> Result<(), Box<dyn std::error::Error>> {
     SpecObligation {
-        spec_reason: "the `as` target is typed by `__enter__`'s return, and `Sluice` has no `spill`",
+        spec_reason:
+            "the `as` target is typed by `__enter__`'s return, and `Sluice` has no `spill`",
         rejected: AS_TARGET_REJECTED,
         accepted: AS_TARGET_ACCEPTED,
         rejected_variants: &[renamed(AS_TARGET_REJECTED_RENAMED)],
@@ -271,8 +272,8 @@ def shuttered_kiln() -> str:
 "#;
 
 #[test]
-fn contextmanager_requires_an_iterator_returning_callable(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn contextmanager_requires_an_iterator_returning_callable() -> Result<(), Box<dyn std::error::Error>>
+{
     SpecObligation {
         spec_reason: "`contextmanager` takes `Callable[..., Iterator[T]]`, and a `-> str` \
                       function is not assignable to it",

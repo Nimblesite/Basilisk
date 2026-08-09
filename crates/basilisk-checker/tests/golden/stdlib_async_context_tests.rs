@@ -182,8 +182,8 @@ def metre() -> typing.Generator[None, None, None]:
 // ── `with` requires `__enter__` and `__exit__` ───────────────────────────
 
 #[test]
-fn with_statement_requires_the_context_manager_protocol()
--> Result<(), Box<dyn std::error::Error>> {
+fn with_statement_requires_the_context_manager_protocol() -> Result<(), Box<dyn std::error::Error>>
+{
     SpecObligation {
         spec_reason: "`with x` calls `type(x).__enter__` and `type(x).__exit__`; a bare class \
                       declares neither",

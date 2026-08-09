@@ -140,7 +140,11 @@ fn collect_paramspec_attr_callables(module: &ResolvedModule, stmts: &[Stmt]) -> 
 /// Name of an attribute whose `Callable[P, R]` annotation binds `ParamSpec`
 /// `P`, if any. The `Callable` head is recognised by what it RESOLVES to
 /// ([ASTREBUILD-LAW]), never by its spelling.
-fn paramspec_callable_attr(module: &ResolvedModule, stmt: &Stmt, paramspec: &str) -> Option<String> {
+fn paramspec_callable_attr(
+    module: &ResolvedModule,
+    stmt: &Stmt,
+    paramspec: &str,
+) -> Option<String> {
     let Stmt::AnnAssign(ann) = stmt else {
         return None;
     };
@@ -384,10 +388,7 @@ fn check_arg_types(
         let actual = TypeNode::of_literal_expr(arg_expr);
         if assignable(&actual, expected_node) == Some(false) {
             let span = Span::from(arg_expr.range());
-            let expected_display = cp
-                .arg_display
-                .get(idx)
-                .map_or("<type>", String::as_str);
+            let expected_display = cp.arg_display.get(idx).map_or("<type>", String::as_str);
             diag.push(error_diagnostic_owned(
                 CODE.clone(),
                 format!(

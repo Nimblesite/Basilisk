@@ -5,7 +5,6 @@ use ruff_python_ast::{Expr, ExprCall};
 
 use crate::canonical::{BindingTable, TypingForm};
 
-
 // ---------------------------------------------------------------------------
 // Dataclass field specifiers
 //

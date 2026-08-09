@@ -13,10 +13,11 @@ use super::harness::{aliased, import_form, reformatted, renamed, SpecObligation}
 // ── `async with` requires `__aenter__` and `__aexit__` ───────────────────
 
 #[test]
-fn async_with_requires_the_async_context_manager_protocol()
--> Result<(), Box<dyn std::error::Error>> {
+fn async_with_requires_the_async_context_manager_protocol() -> Result<(), Box<dyn std::error::Error>>
+{
     SpecObligation {
-        spec_reason: "`async with x` calls `__aenter__`/`__aexit__`; the synchronous pair does not \
+        spec_reason:
+            "`async with x` calls `__aenter__`/`__aexit__`; the synchronous pair does not \
                       satisfy it",
         rejected: r#"
 class Airlock:
@@ -156,10 +157,10 @@ async def cycle() -> None:
 // ── A declared return type obliges a returned value ──────────────────────
 
 #[test]
-fn declared_return_type_obliges_a_value_on_every_path()
--> Result<(), Box<dyn std::error::Error>> {
+fn declared_return_type_obliges_a_value_on_every_path() -> Result<(), Box<dyn std::error::Error>> {
     SpecObligation {
-        spec_reason: "a function annotated `-> int` must return an `int` on every path; falling off \
+        spec_reason:
+            "a function annotated `-> int` must return an `int` on every path; falling off \
                       the end returns `None`",
         rejected: r#"
 def tally() -> int:

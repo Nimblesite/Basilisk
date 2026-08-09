@@ -585,7 +585,19 @@ fn iteration_element(iterable: &Ty) -> Ty {
         Ty::Ground(InferredType::Str | InferredType::LiteralString) => {
             Ty::Ground(InferredType::Str)
         }
-        Ty::Ground(InferredType::Named(name)) if name == "range" => Ty::Ground(InferredType::Int),
+        // ##############################################################
+        // # DELETED — the `name == "range"` arm. DO NOT RESTORE IT.     #
+        // #                                                            #
+        // # It typed the element of an iterable as `int` when the       #
+        // # iterable's type RENDERED as the five characters "range".   #
+        // # `from builtins import range as r`, a user `class range`,   #
+        // # or any class a module names `range` all got the builtin's  #
+        // # element type. `range` resolves through the binding table    #
+        // # like every other name (CLAUDE.md: builtins are not an       #
+        // # exception).                                                 #
+        // #                                                            #
+        // # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs #
+        // ##############################################################
         _ => Ty::unknown(),
     }
 }

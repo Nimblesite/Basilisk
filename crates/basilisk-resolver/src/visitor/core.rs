@@ -17,8 +17,7 @@ use super::class_info_ext::{
     match_stmt_info_from,
 };
 use super::function_info::function_info_from;
-use super::typeddict::{td_check_subscript_assign, td_var_type_from_stmts, TdFieldMap,
-};
+use super::typeddict::{td_check_subscript_assign, td_var_type_from_stmts, TdFieldMap};
 use super::typeddict_ext::{td_check_ann_assign, td_check_expr_reads, td_check_regular_assign};
 
 /// The record vectors a collection walk appends into, grouped so every walk
@@ -72,7 +71,9 @@ pub(super) fn collect_from_stmt(
 ) {
     match stmt {
         Stmt::FunctionDef(func) => {
-            sinks.functions.push(function_info_from(bindings, func, None));
+            sinks
+                .functions
+                .push(function_info_from(bindings, func, None));
             collect_function_scope(bindings, &func.body, sinks.functions, sinks.match_stmts);
         }
         Stmt::ClassDef(class) => {

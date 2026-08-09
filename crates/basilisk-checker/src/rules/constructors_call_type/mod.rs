@@ -286,7 +286,15 @@ fn check_type_call(
         cctx.source,
     );
 
-    check_constructor_call(call, class_name, &constructor_sig, total_args, span, cctx, diagnostics);
+    check_constructor_call(
+        call,
+        class_name,
+        &constructor_sig,
+        total_args,
+        span,
+        cctx,
+        diagnostics,
+    );
 }
 
 /// Emit diagnostic for calling an unbound `TypeVar` constructor with arguments.

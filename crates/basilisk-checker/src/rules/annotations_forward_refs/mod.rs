@@ -45,7 +45,7 @@ use crate::span_util::slice_span;
 
 use super::Rule;
 
-use scope::{build_module_scope_names, is_circular_string_annotation, PYTHON_BUILTIN_TYPE_NAMES};
+use scope::{build_module_scope_names, is_circular_string_annotation};
 use type_checks::{
     collect_non_type_names, is_invalid_type_annotation, is_paramspec_invalid_annotation,
 };
@@ -95,7 +95,10 @@ fn check_invalid_type_annotations(
 ) {
     let non_type_names = collect_non_type_names(module);
     let module_scope_names = build_module_scope_names(module);
-    let builtin_type_names: HashSet<&str> = PYTHON_BUILTIN_TYPE_NAMES.iter().copied().collect();
+    // `PYTHON_BUILTIN_TYPE_NAMES` was DELETED (a builtin-spelling whitelist).
+    // The set is empty only so the deleted call site below stays visible as the
+    // rebuild map; its consumer panics before reading it.
+    let builtin_type_names: HashSet<&str> = HashSet::new();
     let paramspec_names: HashSet<&str> =
         basilisk_resolver::collect_name_set_where(&module.typevar_calls, |tv| tv.is_paramspec);
     let paramspec_generic_bases = collect_paramspec_generic_bases(module, &paramspec_names);

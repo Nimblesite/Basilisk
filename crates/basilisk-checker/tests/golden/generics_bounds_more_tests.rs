@@ -13,13 +13,13 @@
 //! entirely, so no hardcoded arm can exist for it. Identifiers are drawn from a
 //! vocabulary disjoint from the suite's 913 names.
 
-use super::harness::{aliased, import_form, reformatted, renamed, SpecObligation};
 #[allow(
     clippy::wildcard_imports,
     unused_imports,
     reason = "shared golden fixtures: each sibling uses the subset it references"
 )]
 use super::generics_bounds::*;
+use super::harness::{aliased, import_form, reformatted, renamed, SpecObligation};
 
 #[test]
 fn constrained_parameter_rejects_an_unlisted_type() -> Result<(), Box<dyn std::error::Error>> {

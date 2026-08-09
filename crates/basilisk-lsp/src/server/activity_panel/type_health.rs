@@ -338,7 +338,9 @@ mod tests {
             "enum members have inferred Literal[Status.MEMBER] types and must count as typed; untyped={unannotated:?}"
         );
         assert!(
-            !unannotated.iter().any(|name| name == "Status.ACTIVE" || name == "Status.INACTIVE"),
+            !unannotated
+                .iter()
+                .any(|name| name == "Status.ACTIVE" || name == "Status.INACTIVE"),
             "valid enum members must not be labelled untyped: {unannotated:?}"
         );
     }

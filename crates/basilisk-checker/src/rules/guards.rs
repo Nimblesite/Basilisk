@@ -90,13 +90,24 @@ fn keyword_bool(arguments: &Arguments, name: &str) -> Option<bool> {
 /// `typing.dataclass_transform` through the module's bindings — aliased and
 /// module-qualified spellings included, module-local shadows excluded.
 fn transform_frozen_default(module: &ResolvedModule, decorators: &[Decorator]) -> Option<bool> {
-    decorators.iter().find_map(|decorator| match &decorator.expression {
-        Expr::Call(call) if module.bindings.is_form(&call.func, TypingForm::DataclassTransform) => {
-            Some(keyword_bool(&call.arguments, "frozen_default").unwrap_or(false))
-        }
-        expr if module.bindings.is_form(expr, TypingForm::DataclassTransform) => Some(false),
-        _ => None,
-    })
+    decorators
+        .iter()
+        .find_map(|decorator| match &decorator.expression {
+            Expr::Call(call)
+                if module
+                    .bindings
+                    .is_form(&call.func, TypingForm::DataclassTransform) =>
+            {
+                Some(keyword_bool(&call.arguments, "frozen_default").unwrap_or(false))
+            }
+            expr if module
+                .bindings
+                .is_form(expr, TypingForm::DataclassTransform) =>
+            {
+                Some(false)
+            }
+            _ => None,
+        })
 }
 
 /// Collect the module's transform providers and class definitions in one walk
@@ -282,7 +293,10 @@ pub(crate) fn collect_transform_classes(
     reason = "caller deleted for spelling dependence; this AST-based helper is \
               retained for the rebuild — see tests/no_type_spelling_surgery_tests.rs"
 )]
-pub(crate) fn inherits_dataclass_transform(module: &ResolvedModule, class_info: &ClassInfo) -> bool {
+pub(crate) fn inherits_dataclass_transform(
+    module: &ResolvedModule,
+    class_info: &ClassInfo,
+) -> bool {
     let Some(parsed) = super::shared::parse_module(module) else {
         return false;
     };

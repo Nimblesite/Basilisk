@@ -58,9 +58,7 @@ impl Rule for MissingAttributeAnnotation {
         module
             .classes
             .iter()
-            .filter(|class| {
-                !class.is_enum && !class.is_protocol && !class.is_namedtuple
-            })
+            .filter(|class| !class.is_enum && !class.is_protocol && !class.is_namedtuple)
             .for_each(|class| {
                 check_class(
                     class,

@@ -21,8 +21,8 @@ use super::harness::{aliased, import_form, reformatted, renamed, SpecObligation}
 use super::narrowing::*;
 
 #[test]
-fn isinstance_removes_the_matched_member_from_the_else_branch()
--> Result<(), Box<dyn std::error::Error>> {
+fn isinstance_removes_the_matched_member_from_the_else_branch(
+) -> Result<(), Box<dyn std::error::Error>> {
     SpecObligation {
         spec_reason: "the negative branch of `isinstance(x, OrderedDict)` over \
                       `OrderedDict[str, int] | Decimal` is `Decimal`, which has no `__len__`",
@@ -193,8 +193,7 @@ def emboss(consignment: FixedPoint | RankedMapping[str, int]) -> str:
 "#;
 
 #[test]
-fn match_wildcard_after_full_coverage_is_uninhabited()
--> Result<(), Box<dyn std::error::Error>> {
+fn match_wildcard_after_full_coverage_is_uninhabited() -> Result<(), Box<dyn std::error::Error>> {
     SpecObligation {
         spec_reason: "a `case _` reached only after every union member matched is \
                       uninhabited, so `assert_never` there is legal — and illegal as soon \
@@ -314,8 +313,8 @@ def dispatch(berth: Slipway) -> str:
 ";
 
 #[test]
-fn truthiness_leaves_a_bool_defining_instance_inhabited()
--> Result<(), Box<dyn std::error::Error>> {
+fn truthiness_leaves_a_bool_defining_instance_inhabited() -> Result<(), Box<dyn std::error::Error>>
+{
     SpecObligation {
         spec_reason: "a class defining `__bool__` may be falsy, so the negative branch of \
                       `if x:` is still that class — reachable, and without a `moor` member",

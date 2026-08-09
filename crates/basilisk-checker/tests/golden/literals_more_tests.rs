@@ -8,13 +8,15 @@
 //! is legal or illegal depending on where its interpolated value came from, so
 //! nothing about the expression's spelling can decide it.
 
-use super::harness::{assert_invariant, aliased, import_form, reformatted, renamed, SpecObligation};
+use super::harness::{
+    aliased, assert_invariant, import_form, reformatted, renamed, SpecObligation,
+};
 
 // ── f-strings propagate literal-ness from their interpolations ───────────
 
 #[test]
-fn an_f_string_is_literal_only_when_its_interpolations_are()
--> Result<(), Box<dyn std::error::Error>> {
+fn an_f_string_is_literal_only_when_its_interpolations_are(
+) -> Result<(), Box<dyn std::error::Error>> {
     SpecObligation {
         spec_reason: "the spec states an f-string has type `LiteralString` if and only if its \
                       constituent expressions are literal strings; interpolating a plain `str` \
@@ -135,8 +137,8 @@ def frame() -> None:
 // ── join propagates literal-ness from separator and elements ─────────────
 
 #[test]
-fn join_is_literal_only_when_separator_and_elements_are()
--> Result<(), Box<dyn std::error::Error>> {
+fn join_is_literal_only_when_separator_and_elements_are() -> Result<(), Box<dyn std::error::Error>>
+{
     SpecObligation {
         spec_reason: "the spec states `sep.join(xs)` is `LiteralString` if `sep` is assignable to \
                       `LiteralString` and `xs` to `Iterable[LiteralString]`; a list holding a \
@@ -260,8 +262,8 @@ def loom() -> None :
 // ── nested Literal forms flatten to the same type ────────────────────────
 
 #[test]
-fn nested_literal_forms_are_equivalent_to_their_flattening()
--> Result<(), Box<dyn std::error::Error>> {
+fn nested_literal_forms_are_equivalent_to_their_flattening(
+) -> Result<(), Box<dyn std::error::Error>> {
     // The spec states `Literal[Literal[Literal[1, 2, 3], "foo"], 5, None]` is
     // *exactly equivalent* to `Literal[1, 2, 3, "foo", 5, None]`, and to
     // `Literal[1, 2, 3, "foo", 5] | None`. Equivalent types must produce an
@@ -335,8 +337,7 @@ caliper(None)
 // ── a non-member is still rejected through the nested spelling ───────────
 
 #[test]
-fn the_nested_literal_spelling_rejects_a_non_member()
--> Result<(), Box<dyn std::error::Error>> {
+fn the_nested_literal_spelling_rejects_a_non_member() -> Result<(), Box<dyn std::error::Error>> {
     SpecObligation {
         spec_reason: "flattening is an equivalence, not a widening: a value outside the flattened \
                       member set is rejected whichever nesting spells the type",
