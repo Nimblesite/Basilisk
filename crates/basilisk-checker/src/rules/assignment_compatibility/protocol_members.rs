@@ -25,38 +25,30 @@ type MemberSurface<'a> = (HashMap<&'a str, &'a Vec<Sig>>, HashSet<&'a str>);
 ///
 /// Methods earlier in the MRO win.  With `strict`, an unresolvable base makes
 /// the member set unknown (`None`); otherwise unknown bases contribute nothing.
+    // ##################################################################
+    // # DELETED BODY. DO NOT RESTORE IT AND DO NOT RETURN A DEFAULT.
+    // #
+    // # `index.classes.get(base)` walked a class's member surface through a map keyed on rendered base names.
+    // #
+    // # `ClassInfo::bases` holds RENDERED SIMPLE NAMES ("complex
+    // # expressions ignored") and the lookup map is keyed on
+    // # `ClassInfo::name`, so an aliased base MISSED, a dotted base
+    // # collided with any local class sharing its trailing word, and two
+    // # classes with one rendered name were a single entry.
+    // #
+    // # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
+    // ##################################################################
 fn collect_members<'a>(
-    entry: &'a ClassEntry,
-    index: &'a CallIndex,
-    strict: bool,
+    _entry: &'a ClassEntry,
+    _index: &'a CallIndex,
+    _strict: bool,
 ) -> Option<MemberSurface<'a>> {
-    let mut methods: HashMap<&str, &Vec<Sig>> = HashMap::new();
-    let mut attrs: HashSet<&str> = HashSet::new();
-    let mut stack = vec![entry];
-    let mut visited = 0usize;
-
-    while let Some(current) = stack.pop() {
-        visited += 1;
-        if visited > 32 {
-            return None;
-        }
-        for (name, sigs) in &current.methods {
-            let _ = methods.entry(name.as_str()).or_insert(sigs);
-        }
-        attrs.extend(current.attrs.iter().map(String::as_str));
-        for base in &current.bases {
-            if let Some(base_entry) = index.classes.get(base) {
-                stack.push(base_entry);
-            } else {
-                let known = well_known_member_names(base);
-                if known.is_empty() && strict {
-                    return None;
-                }
-                attrs.extend(known);
-            }
-        }
-    }
-    Some((methods, attrs))
+    panic!(
+        "basilisk-checker: `protocol_members::collect_members` was DELETED because it identified base classes by \
+         their RENDERED NAMES. It panics because the real implementation — base \
+         expressions resolved through the binding table — DOES NOT EXIST YET. Do not \
+         restore the name lookup and do not substitute a default answer."
+    )
 }
 
 /// `true` when `source` (a class) structurally satisfies `target` (a protocol),

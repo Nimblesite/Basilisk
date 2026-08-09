@@ -1,89 +1,102 @@
-//! Implements [CHKARCH-ARCH-PIPELINE] and the transitive-recognition foundation
-//! of [CHKARCH-DIAG-TYPEDDICT-READONLY-INHERITANCE]. See
-//! docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPEDDICT-READONLY-INHERITANCE
-//! `TypedDict` membership primitives shared across the resolver and checker.
-//!
-//! [`ClassInfo::is_typed_dict`] is only `true` when a class names `TypedDict`
-//! *directly* among its bases. A subclass of another `TypedDict` is still a
-//! `TypedDict` but carries `is_typed_dict == false`. Rules that decide
-//! membership by that flag therefore overlook transitive subclasses. These
-//! helpers walk the full base chain so every consumer agrees on what is a
-//! `TypedDict`.
+// ############################################################################
+// # DELETED IMPLEMENTATION — PANIC-ONLY SHELL. DO NOT PUT LOGIC BACK HERE.   #
+// #                                                                          #
+// # Every body in this file walked a class hierarchy keyed on RENDERED CLASS #
+// # NAMES. `class_by_name` built `HashMap<&str, &ClassInfo>` from `c.name`;  #
+// # `walk_bases` pushed `class.bases` — a `Vec<String>` this crate fills     #
+// # with "simple names only; complex expressions ignored" — and looked each  #
+// # one up in that map by SPELLING.                                          #
+// #                                                                          #
+// # So `is_transitive_typeddict` answered "is this a TypedDict?" from how    #
+// # the base classes are written:                                            #
+// #                                                                          #
+// #   from typing import TypedDict as TD                                     #
+// #   class Movie(TD): ...          # `is_typed_dict` set at collection      #
+// #   Alias = Movie                                                          #
+// #   class Film(Alias): ...        # base recorded "Alias" -> MISSES        #
+// #                                                                          #
+// #   import other                                                           #
+// #   class Movie(other.Movie): ... # base recorded "Movie" -> the class     #
+// #                                 # becomes its own ancestor               #
+// #                                                                          #
+// # This is the same defect as the deleted `basilisk-checker::subtyping`,    #
+// # sitting one crate lower where the checker cannot see it. A resolver that #
+// # hands out a name-keyed hierarchy makes every consumer wrong for free.    #
+// #                                                                          #
+// # THE SIGNATURES SURVIVE ONLY AS A MAP. Each body panics because the real  #
+// # implementation DOES NOT EXIST YET:                                       #
+// #                                                                          #
+// #   * DO NOT return `false` — every TypedDict rule then stops firing while #
+// #     reporting full coverage.                                             #
+// #   * DO NOT return `true` — every class becomes a TypedDict.              #
+// #   * DO NOT return an empty set/map, and DO NOT rebuild the walk in a     #
+// #     consumer crate.                                                      #
+// #                                                                          #
+// # The replacement records each base's EXPRESSION SPAN on `ClassInfo` and   #
+// # resolves it through the `basilisk-canonical` binding table, keying the   #
+// # hierarchy on definition site rather than on a rendered name. Note that   #
+// # `ClassInfo::is_typed_dict` itself is already resolved correctly (see its #
+// # doc comment: "resolved through the module's bindings at collection time  #
+// # — never from the base's spelling"); it is only the TRANSITIVE walk that  #
+// # falls back to strings.                                                   #
+// #                                                                          #
+// # Pinned by:                                                               #
+// #   crates/basilisk-checker/tests/string_keyed_class_hierarchy_pin_tests.rs
+// ############################################################################
+
+//! The DELETED name-keyed `TypedDict` base walk, reduced to loudly panicking
+//! signatures so its call sites remain visible as the rebuild map.
 
 use std::collections::{HashMap, HashSet};
 use std::hash::BuildHasher;
 
 use super::class_types::ClassInfo;
 
-/// Build a `class name -> &ClassInfo` lookup over a module's classes.
-#[must_use]
-pub fn class_by_name(classes: &[ClassInfo]) -> HashMap<&str, &ClassInfo> {
-    classes.iter().map(|c| (c.name.as_str(), c)).collect()
+/// Panic message shared by every deleted body in this module.
+macro_rules! deleted {
+    ($what:literal) => {
+        panic!(concat!(
+            "basilisk-resolver: `",
+            $what,
+            "` was DELETED because it walked the class hierarchy by RENDERED \
+             CLASS NAME — `ClassInfo::bases` holds simple-name strings, looked \
+             up in a map keyed on `ClassInfo::name`, so a base reached through \
+             an alias missed and a dotted base made a class its own ancestor. \
+             It panics because the real implementation — base expressions \
+             resolved through the binding table, keyed on definition site — \
+             DOES NOT EXIST YET. Do not restore the walk and do not substitute \
+             a default answer: rebuild this caller on resolved class identity, \
+             or make it abstain."
+        ))
+    };
 }
 
-/// Returns `true` when `name` resolves to a `TypedDict` directly or through any
-/// transitive base class in `class_map`.
+/// DELETED — panics; see the banner at the head of this file.
+#[must_use]
+pub fn class_by_name(_classes: &[ClassInfo]) -> HashMap<&str, &ClassInfo> {
+    deleted!("class_by_name")
+}
+
+/// DELETED — panics; see the banner at the head of this file.
 #[must_use]
 pub fn is_transitive_typeddict<S: BuildHasher>(
-    name: &str,
-    class_map: &HashMap<&str, &ClassInfo, S>,
+    _name: &str,
+    _class_map: &HashMap<&str, &ClassInfo, S>,
 ) -> bool {
-    walk_bases(name, class_map, &|class| class.is_typed_dict)
+    deleted!("is_transitive_typeddict")
 }
 
-/// Returns `true` when this class — or any transitive `TypedDict` base — was
-/// declared with the `extra_items=` keyword (PEP 728). Inherited so a subclass
-/// of an `extra_items` `TypedDict` keeps accepting unknown keys.
+/// DELETED — panics; see the banner at the head of this file.
 #[must_use]
 pub fn has_extra_items_transitive<S: BuildHasher>(
-    name: &str,
-    class_map: &HashMap<&str, &ClassInfo, S>,
+    _name: &str,
+    _class_map: &HashMap<&str, &ClassInfo, S>,
 ) -> bool {
-    walk_bases(name, class_map, &|class| {
-        class.class_keywords.iter().any(|kw| kw == "extra_items")
-    })
+    deleted!("has_extra_items_transitive")
 }
 
-/// The set of class names in `classes` that are `TypedDict`s directly or
-/// transitively. Convenience wrapper that builds the lookup once; used by
-/// callers that only have the class slice (e.g. cross-crate consumers).
+/// DELETED — panics; see the banner at the head of this file.
 #[must_use]
-pub fn transitive_typeddict_names(classes: &[ClassInfo]) -> HashSet<&str> {
-    let class_map = class_by_name(classes);
-    classes
-        .iter()
-        .filter(|c| is_transitive_typeddict(c.name.as_str(), &class_map))
-        .map(|c| c.name.as_str())
-        .collect()
-}
-
-/// Walk `name` and its transitive bases, returning `true` as soon as
-/// `predicate` holds for any class in the chain.
-///
-/// Stack-overflow-proof by construction: the walk is iterative (explicit
-/// worklist, zero recursion), so no hierarchy — however deep — grows the call
-/// stack. The `visited` set bounds work to one visit per class, so cyclic or
-/// self-referential `bases` — illegal Python, but reachable input (GitHub
-/// #398: a class listing itself twice made the old depth-capped recursive
-/// walk exponential) — terminate in linear time.
-fn walk_bases<S: BuildHasher>(
-    name: &str,
-    class_map: &HashMap<&str, &ClassInfo, S>,
-    predicate: &dyn Fn(&ClassInfo) -> bool,
-) -> bool {
-    let mut visited: HashSet<&str> = HashSet::new();
-    let mut worklist: Vec<&str> = vec![name];
-    while let Some(current) = worklist.pop() {
-        if !visited.insert(current) {
-            continue;
-        }
-        let Some(class) = class_map.get(current) else {
-            continue;
-        };
-        if predicate(class) {
-            return true;
-        }
-        worklist.extend(class.bases.iter().map(String::as_str));
-    }
-    false
+pub fn transitive_typeddict_names(_classes: &[ClassInfo]) -> HashSet<&str> {
+    deleted!("transitive_typeddict_names")
 }

@@ -6,7 +6,7 @@
 //! semantics that legitimately omit annotations. Every verdict reads the
 //! resolver's binding-resolved flags — never a decorator's or base's spelling.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use basilisk_resolver::{ClassInfo, FunctionInfo, ResolvedModule, TypingForm};
 use ruff_python_ast::{Arguments, Decorator, Expr, Stmt, StmtClassDef};
@@ -129,6 +129,12 @@ fn transform_providers<'ast>(
     providers
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; these AST-based helpers read \
+              base/metaclass nodes and are retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 /// The simple name a base-class expression denotes: `Base` or `Base[...]`.
 fn base_name(expr: &Expr) -> Option<&str> {
     match expr {
@@ -138,6 +144,12 @@ fn base_name(expr: &Expr) -> Option<&str> {
     }
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; these AST-based helpers read \
+              base/metaclass nodes and are retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 /// The class's own `metaclass=` keyword when it (or a metaclass ancestor)
 /// is a transform provider.
 fn metaclass_transform_default(
@@ -166,30 +178,31 @@ fn metaclass_transform_default(
 /// same-module base chain, or a transform metaclass on the class or any
 /// transitive base. Iterative with a visited set (the same termination
 /// guards as `shared::class_walks`).
+// ##########################################################################
+// # DELETED BODY — `transform_via_bases_or_metaclass`. DO NOT RESTORE IT.
+// #
+// #   providers.classes.get(name)  /  providers.class_defs.get(name)
+// #
+// # PEP 681 `dataclass_transform` inheritance was walked through maps keyed on
+// # a base's RENDERED NAME (`visited` on name STRINGS too), so a transform
+// # base reached under an alias was not a transform base, and an unrelated
+// # class sharing a rendered name was.
+// #
+// # The replacement resolves each base expression through the binding table.
+// #
+// # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
+// ##########################################################################
 fn transform_via_bases_or_metaclass(
-    class: &StmtClassDef,
-    providers: &TransformProviders<'_>,
+    _class: &StmtClassDef,
+    _providers: &TransformProviders<'_>,
 ) -> Option<bool> {
-    let mut visited: HashSet<&str> = HashSet::new();
-    let _ = visited.insert(class.name.as_str());
-    let mut worklist: Vec<&StmtClassDef> = vec![class];
-    while let Some(current) = worklist.pop() {
-        if let Some(default) = metaclass_transform_default(current, providers) {
-            return Some(default);
-        }
-        for base in current.bases() {
-            let Some(name) = base_name(base) else {
-                continue;
-            };
-            if let Some(default) = providers.classes.get(name) {
-                return Some(*default);
-            }
-            if visited.insert(name) {
-                worklist.extend(providers.class_defs.get(name));
-            }
-        }
-    }
-    None
+    panic!(
+        "basilisk-checker: `transform_via_bases_or_metaclass` was DELETED because it \
+         resolved PEP 681 transform bases through maps keyed on RENDERED NAMES. It \
+         panics because the real implementation — base expressions resolved through the \
+         binding table — DOES NOT EXIST YET. Do not restore the name lookup and do not \
+         return `None` in its place."
+    )
 }
 
 /// The effective `frozen` when the class is decorated by a module-level

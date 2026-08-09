@@ -219,26 +219,36 @@ impl Rule for InvalidNewType {
 }
 
 /// Subclassing a `NewType` is not allowed (PEP 484).
+// ##########################################################################
+// # DELETED BODY — `check_newtype_subclassing`. DO NOT RESTORE IT AND DO NOT RETURN A DEFAULT.
+// #
+// # `newtype_names.contains(base.as_str())` tested whether a base is a NewType by matching its rendered SPELLING against a set of NewType variable names, so `Alias = MyNewType; class C(Alias)` missed and any unrelated class spelled like a NewType matched.
+// #
+// # `ClassInfo::bases` is a `Vec<String>` the resolver fills with "simple
+// # names only; complex expressions ignored", and the lookup map is keyed on
+// # `ClassInfo::name`. So a base reached through an alias MISSED, a dotted
+// # base collided with any local class sharing its trailing word, and two
+// # classes with one rendered name were a single entry.
+// #
+// # The replacement resolves each base EXPRESSION through the binding table
+// # and keys the hierarchy on definition site. That needs base SPANS on
+// # `ClassInfo`, which the resolver does not record yet.
+// #
+// # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
+// ##########################################################################
 fn check_newtype_subclassing(
-    module: &ResolvedModule,
-    newtype_names: &HashSet<&str>,
-    diagnostics: &mut Vec<Diagnostic>,
+    _module: &ResolvedModule,
+    _newtype_names: &HashSet<&str>,
+    _diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let path = &module.path;
-    for cls in &module.classes {
-        for base in &cls.bases {
-            if newtype_names.contains(base.as_str()) {
-                diagnostics.push(make_diagnostic(
-                    format!(
-                        "Class `{}` cannot subclass `{}` which is a `NewType`",
-                        cls.name, base
-                    ),
-                    cls.def_span,
-                    path,
-                ));
-            }
-        }
-    }
+    panic!(
+        "basilisk-checker: `check_newtype_subclassing` was DELETED because it identified base classes by \
+         their RENDERED NAMES, so an aliased base missed and a dotted base collided with \
+         any local class sharing its trailing word. It panics because the real \
+         implementation — base expressions resolved through the binding table — DOES NOT \
+         EXIST YET. Do not restore the name lookup and do not substitute a default \
+         answer in its place."
+    )
 }
 
 /// The `NewType` name subscripted by this annotation, if any: `UserId[int]`.

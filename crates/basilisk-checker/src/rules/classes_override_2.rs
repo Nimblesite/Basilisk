@@ -27,17 +27,35 @@ use super::Rule;
 /// `TypedDict` subclassing has entirely different rules from normal OOP attribute
 /// inheritance — subclasses can narrow `ReadOnly` items, change `Required`/`NotRequired`,
 /// etc.  Applying E0017 to `TypedDict` classes produces only false positives.
-fn is_typed_dict_hierarchy(child: &ClassInfo, class_map: &HashMap<&str, &ClassInfo>) -> bool {
-    if child.is_typed_dict {
-        return true;
-    }
-    child.bases.iter().any(|base| {
-        class_map
-            .get(base.as_str())
-            .is_some_and(|b| b.is_typed_dict)
-    })
+fn is_typed_dict_hierarchy(_child: &ClassInfo, _class_map: &HashMap<&str, &ClassInfo>) -> bool {
+    // ######################################################################
+    // # DELETED BODY. DO NOT RESTORE IT AND DO NOT RETURN A DEFAULT.       #
+    // #                                                                    #
+    // #   class_map.get(base.as_str()).is_some_and(|b| b.is_typed_dict)    #
+    // #                                                                    #
+    // # It took a base class's identity from its RENDERED NAME and looked  #
+    // # that string up in a name-keyed map. A base reached through an      #
+    // # alias missed; a base sharing a rendered name with an unrelated     #
+    // # local class matched. This gate decides whether the whole rule runs #
+    // # at all, so a wrong answer here silently disables E0017 or applies  #
+    // # it to a TypedDict where it produces only false positives.          #
+    // #                                                                    #
+    // # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs         #
+    // ######################################################################
+    panic!(
+        "basilisk-checker: `is_typed_dict_hierarchy` was DELETED because it identified \
+         a base class by its RENDERED NAME in a name-keyed map. It panics because the \
+         real implementation — resolving each base expression through the binding table \
+         — DOES NOT EXIST YET. Do not restore the lookup and do not return a default in \
+         its place."
+    )
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 const CODE: ErrorCode = ErrorCode {
     code: "classes_override_2",
     docs_url: "https://www.basilisk-python.dev/errors/classes_override_2",
@@ -87,58 +105,50 @@ impl Rule for IncompatibleVariableOverride {
     }
 }
 
+    // ##################################################################
+    // # DELETED BODY. DO NOT RESTORE IT AND DO NOT RETURN A DEFAULT.
+    // #
+    // # `class_names.contains(&base_name.as_str())` and `attr_map.get(&(base_name.as_str(), ...))` keyed both the base class AND the inherited attribute on rendered names.
+    // #
+    // # `ClassInfo::bases` holds RENDERED SIMPLE NAMES ("complex
+    // # expressions ignored") and the lookup map is keyed on
+    // # `ClassInfo::name`, so an aliased base MISSED, a dotted base
+    // # collided with any local class sharing its trailing word, and two
+    // # classes with one rendered name were a single entry.
+    // #
+    // # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
+    // ##################################################################
 fn check_class(
-    child: &ClassInfo,
-    attr_map: &HashMap<(&str, &str), &AttributeInfo>,
-    class_names: &[&str],
-    source: &str,
-    path: &str,
-    out: &mut Vec<Diagnostic>,
+    _child: &ClassInfo,
+    _attr_map: &HashMap<(&str, &str), &AttributeInfo>,
+    _class_names: &[&str],
+    _source: &str,
+    _path: &str,
+    _out: &mut Vec<Diagnostic>,
 ) {
-    for base_name in &child.bases {
-        if !class_names.contains(&base_name.as_str()) {
-            continue;
-        }
-
-        for child_attr in &child.attributes {
-            // Only check annotated attributes in child.
-            if !child_attr.has_annotation {
-                continue;
-            }
-
-            let Some(base_attr) = attr_map.get(&(base_name.as_str(), child_attr.name.as_str()))
-            else {
-                continue;
-            };
-
-            // Only compare if base also has an annotation.
-            if !base_attr.has_annotation {
-                continue;
-            }
-
-            let child_ann = annotation_text(source, child_attr.annotation_span);
-            let base_ann = annotation_text(source, base_attr.annotation_span);
-
-            if child_ann != base_ann {
-                out.push(make_diagnostic(
-                    child_attr,
-                    &child_attr.name,
-                    &child.name,
-                    base_name,
-                    child_ann,
-                    base_ann,
-                    path,
-                ));
-            }
-        }
-    }
+    panic!(
+        "basilisk-checker: `classes_override_2::check_class` was DELETED because it identified base classes by \
+         their RENDERED NAMES. It panics because the real implementation — base \
+         expressions resolved through the binding table — DOES NOT EXIST YET. Do not \
+         restore the name lookup and do not substitute a default answer."
+    )
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 /// Extract annotation text from source given an optional span.
 fn annotation_text(source: &str, span: Option<Span>) -> Option<&str> {
     slice_span(source, span?)
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 fn make_diagnostic(
     attr: &AttributeInfo,
     attr_name: &str,

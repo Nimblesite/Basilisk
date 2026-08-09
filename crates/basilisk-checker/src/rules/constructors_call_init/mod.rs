@@ -357,20 +357,37 @@ fn collect_dataclass_fields<'a>(
 
 /// Recursive body of [`collect_dataclass_fields`]; `visited` breaks base-name
 /// cycles (GitHub #278).
+// ##########################################################################
+// # DELETED BODY — `dataclass_fields_walk`. DO NOT RESTORE IT AND DO NOT RETURN A DEFAULT.
+// #
+// # `class_map.get(base_name.as_str())` walked inherited dataclass fields by rendered base name; `visited` on base-name STRINGS also merged distinct classes.
+// #
+// # A base class's identity came from its RENDERED NAME, looked up in a map
+// # keyed on `ClassInfo::name`. `ClassInfo::bases` is a `Vec<String>` the
+// # resolver fills with "simple names only; complex expressions ignored", so:
+// #   * a base reached through an alias  ->  MISSED
+// #   * a dotted base (`httpx.Client`)   ->  collides with any local class
+// #                                          sharing its trailing word
+// #   * two classes with one rendered name -> a single map entry
+// #
+// # The replacement resolves each base EXPRESSION through the binding table
+// # and keys the hierarchy on definition site. That needs base SPANS on
+// # `ClassInfo`, which the resolver does not record yet.
+// #
+// # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
+// ##########################################################################
 fn dataclass_fields_walk<'a>(
-    class_info: &'a basilisk_resolver::ClassInfo,
-    class_map: &HashMap<&str, &'a basilisk_resolver::ClassInfo>,
-    fields: &mut std::collections::HashSet<&'a str>,
-    visited: &mut std::collections::HashSet<&'a str>,
+    _class_info: &'a basilisk_resolver::ClassInfo,
+    _class_map: &HashMap<&str, &'a basilisk_resolver::ClassInfo>,
+    _fields: &mut std::collections::HashSet<&'a str>,
+    _visited: &mut std::collections::HashSet<&'a str>,
 ) {
-    for attr in &class_info.attributes {
-        let _ = fields.insert(attr.name.as_str());
-    }
-    for base_name in &class_info.bases {
-        if visited.insert(base_name.as_str()) {
-            if let Some(base_info) = class_map.get(base_name.as_str()) {
-                dataclass_fields_walk(base_info, class_map, fields, visited);
-            }
-        }
-    }
+    panic!(
+        "basilisk-checker: `dataclass_fields_walk` was DELETED because it identified base classes by \
+         their RENDERED NAMES in a name-keyed map, so an aliased base missed and a \
+         dotted base collided with any local class sharing its trailing word. It panics \
+         because the real implementation — base expressions resolved through the binding \
+         table — DOES NOT EXIST YET. Do not restore the name lookup and do not \
+         substitute a default answer in its place."
+    )
 }

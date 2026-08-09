@@ -18,26 +18,61 @@ use std::collections::HashMap;
 
 use basilisk_resolver::{ClassInfo, ResolvedModule};
 
-use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
+use crate::diagnostic::{Diagnostic, ErrorCode};
 
 use super::Rule;
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 const CODE: ErrorCode = ErrorCode {
     code: "enums_behaviors",
     docs_url: "https://www.basilisk-python.dev/errors/enums_behaviors",
 };
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 /// Returns `true` when this class is an enum class (directly or transitively).
-fn is_enum_class(name: &str, class_map: &HashMap<&str, &ClassInfo>) -> bool {
-    class_map.get(name).copied().is_some_and(|cls| {
-        super::shared::class_or_base_matches(
-            cls,
-            &|base| class_map.get(base).copied(),
-            &|candidate| candidate.is_enum,
-        )
-    })
+// ##########################################################################
+// # DELETED BODY — `is_enum_class`. DO NOT RESTORE IT AND DO NOT RETURN A DEFAULT.
+// #
+// # class_map.get(name) + class_or_base_matches over rendered base names.
+// #
+// # A base class's identity came from its RENDERED NAME, looked up in a map
+// # keyed on `ClassInfo::name`. `ClassInfo::bases` is a `Vec<String>` the
+// # resolver fills with "simple names only; complex expressions ignored", so:
+// #   * a base reached through an alias  ->  MISSED
+// #   * a dotted base (`httpx.Client`)   ->  collides with any local class
+// #                                          sharing its trailing word
+// #   * two classes with one rendered name -> a single map entry
+// #
+// # The replacement resolves each base EXPRESSION through the binding table
+// # and keys the hierarchy on definition site. That needs base SPANS on
+// # `ClassInfo`, which the resolver does not record yet.
+// #
+// # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
+// ##########################################################################
+fn is_enum_class(_name: &str, _class_map: &HashMap<&str, &ClassInfo>) -> bool {
+    panic!(
+        "basilisk-checker: `is_enum_class` was DELETED because it identified base classes by \
+         their RENDERED NAMES in a name-keyed map, so an aliased base missed and a \
+         dotted base collided with any local class sharing its trailing word. It panics \
+         because the real implementation — base expressions resolved through the binding \
+         table — DOES NOT EXIST YET. Do not restore the name lookup and do not \
+         substitute a default answer in its place."
+    )
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 /// Returns `true` when an enum class has any declared members (non-method attributes).
 fn has_enum_members(cls: &ClassInfo) -> bool {
     // Enum members are class-body assignments (attributes).
@@ -51,49 +86,30 @@ fn has_enum_members(cls: &ClassInfo) -> bool {
 pub(crate) struct EnumWithMembersFinal;
 
 impl Rule for EnumWithMembersFinal {
+    // ##################################################################
+    // # DELETED BODY. DO NOT RESTORE IT AND DO NOT RETURN A DEFAULT.
+    // #
+    // # `class_map.get(base_name.as_str())` decided PEP 435 enum-subclassing by rendered base name.
+    // #
+    // # `ClassInfo::bases` holds RENDERED SIMPLE NAMES ("complex
+    // # expressions ignored") and the lookup map is keyed on
+    // # `ClassInfo::name`, so an aliased base MISSED, a dotted base
+    // # collided with any local class sharing its trailing word, and two
+    // # classes with one rendered name were a single entry.
+    // #
+    // # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
+    // ##################################################################
     fn check(
         &self,
-        module: &ResolvedModule,
+        _module: &ResolvedModule,
         _ctx: &super::CheckContext,
-        diagnostics: &mut Vec<Diagnostic>,
+        _diagnostics: &mut Vec<Diagnostic>,
     ) {
-        let class_map = super::shared::class_name_map(&module.classes);
-
-        for child in &module.classes {
-            for base_name in &child.bases {
-                // Only care about bases defined in this module.
-                let Some(base_cls) = class_map.get(base_name.as_str()) else {
-                    continue;
-                };
-
-                // The base must be an enum class.
-                if !is_enum_class(base_name.as_str(), &class_map) {
-                    continue;
-                }
-
-                // The base must have members.
-                if !has_enum_members(base_cls) {
-                    continue;
-                }
-
-                diagnostics.push(error_diagnostic_owned(
-                    CODE.clone(),
-                    format!(
-                        "Cannot subclass `{base_name}` because it has members and is implicitly final"
-                    ),
-                    child.name_span,
-                    &module.path,
-                    Some(
-                        "Enum classes with members cannot be subclassed. \
-                         Only memberless Enum bases can be extended."
-                            .to_owned(),
-                    ),
-                    Some(
-                        "PEP 435: An Enum class with one or more members cannot be subclassed"
-                            .to_owned(),
-                    ),
-                ));
-            }
-        }
-    }
+    panic!(
+        "basilisk-checker: `enums_behaviors::check` was DELETED because it identified base classes by \
+         their RENDERED NAMES. It panics because the real implementation — base \
+         expressions resolved through the binding table — DOES NOT EXIST YET. Do not \
+         restore the name lookup and do not substitute a default answer."
+    )
+}
 }

@@ -108,60 +108,48 @@ fn is_protocol_transitively<'a>(
     })
 }
 
+// ##########################################################################
+// # DELETED BODY — `missing_override_decorator::check_class`. DO NOT RESTORE IT AND DO NOT RETURN A DEFAULT.
+// #
+// # `.filter(|base_name| base_name.as_str() != child.name)` — a SECOND string comparison papering over the first: it dropped any base sharing the child's rendered name to dodge the `class Client(httpx.Client)` self-ancestor bug (GitHub #278), which also drops legitimate inheritance from a same-named base.
+// #
+// # A base class's identity came from its RENDERED NAME, looked up in a map
+// # keyed on `ClassInfo::name`. `ClassInfo::bases` is a `Vec<String>` the
+// # resolver fills with "simple names only; complex expressions ignored", so:
+// #   * a base reached through an alias  ->  MISSED
+// #   * a dotted base (`httpx.Client`)   ->  collides with any local class
+// #                                          sharing its trailing word
+// #   * two classes with one rendered name -> a single map entry
+// #
+// # The replacement resolves each base EXPRESSION through the binding table
+// # and keys the hierarchy on definition site. That needs base SPANS on
+// # `ClassInfo`, which the resolver does not record yet.
+// #
+// # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
+// ##########################################################################
 fn check_class(
-    child: &ClassInfo,
-    class_map: &HashMap<&str, (&ClassInfo, bool)>,
-    func_map: &HashMap<(&str, &str), &FunctionInfo>,
-    path: &str,
-    out: &mut Vec<Diagnostic>,
+    _child: &ClassInfo,
+    _class_map: &HashMap<&str, (&ClassInfo, bool)>,
+    _func_map: &HashMap<(&str, &str), &FunctionInfo>,
+    _path: &str,
+    _out: &mut Vec<Diagnostic>,
 ) {
-    // Skip if this class itself is a Protocol.
-    if child.is_protocol {
-        return;
-    }
-
-    // Collect base method names, skipping Protocol bases (Protocol methods
-    // need implementation, not @override). A base name that resolves to the
-    // class itself is a name collision with an external base (`class
-    // Client(httpx.Client)`), not inheritance — a class never overrides its
-    // own methods (GitHub #278).
-    let base_methods: Vec<&str> = child
-        .bases
-        .iter()
-        .filter(|base_name| base_name.as_str() != child.name)
-        .filter_map(|base_name| class_map.get(base_name.as_str()))
-        .filter(|(_, is_proto)| !is_proto)
-        .flat_map(|(cls, _)| cls.method_names.iter().map(String::as_str))
-        .collect();
-
-    if base_methods.is_empty() {
-        return;
-    }
-
-    // Deduplicate method names: overloaded methods appear once per overload
-    // variant.  We want exactly one diagnostic per unique method name.
-    let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
-    for method_name in &child.method_names {
-        let name = method_name.as_str();
-        if !seen.insert(name) {
-            continue; // already processed this name
-        }
-        if !base_methods.contains(&name) {
-            continue;
-        }
-        // Dunder methods (__init__, __post_init__, __eq__, etc.) are part of
-        // Python's data model and are expected to be overridden without @override.
-        if name.starts_with("__") && name.ends_with("__") {
-            continue;
-        }
-        // Report at the method's own span; fall back to the class name span.
-        let span = func_map
-            .get(&(child.name.as_str(), name))
-            .map_or(child.name_span, |f| f.name_span);
-        out.push(make_diagnostic(child, name, span, path));
-    }
+    panic!(
+        "basilisk-checker: `missing_override_decorator::check_class` was DELETED because it identified base classes by \
+         their RENDERED NAMES in a name-keyed map, so an aliased base missed and a \
+         dotted base collided with any local class sharing its trailing word. It panics \
+         because the real implementation — base expressions resolved through the binding \
+         table — DOES NOT EXIST YET. Do not restore the name lookup and do not \
+         substitute a default answer in its place."
+    )
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; this diagnostic constructor is \
+              correct and is retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 fn make_diagnostic(
     class: &ClassInfo,
     method_name: &str,

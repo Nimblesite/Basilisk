@@ -52,6 +52,12 @@ impl Rule for DisjointBaseViolation {
     }
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; this AST-based helper reads \
+              `__slots__` from resolved attributes and is retained for the rebuild — \
+              see tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 /// A class is a disjoint base when it assigns a non-empty `__slots__` (an empty
 /// `__slots__ = ()` does not make the class a disjoint base).
 fn has_nonempty_slots(cls: &ClassInfo) -> bool {
@@ -60,6 +66,12 @@ fn has_nonempty_slots(cls: &ClassInfo) -> bool {
         .any(|attr| attr.name == "__slots__" && slots_value_nonempty(&attr.rhs_kind))
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; this AST-based helper reads \
+              `__slots__` from resolved attributes and is retained for the rebuild — \
+              see tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 fn slots_value_nonempty(rhs: &RhsKind) -> bool {
     match rhs {
         RhsKind::Tuple(items) | RhsKind::List(items) | RhsKind::Set(items) => !items.is_empty(),
@@ -73,38 +85,47 @@ fn slots_value_nonempty(rhs: &RhsKind) -> bool {
 /// The disjoint bases reachable through a class's bases: each base resolves to
 /// itself if it is a disjoint base, otherwise to its own inherited disjoint bases
 /// (external bases contribute nothing).
+// ##########################################################################
+// # DELETED BODY — `collect_candidates`. DO NOT RESTORE IT AND DO NOT RETURN A DEFAULT.
+// #
+// # `resolve_base(base.as_str(), map, ...)` walked PEP 800 disjoint bases through a name-keyed map.
+// #
+// # `ClassInfo::bases` is a `Vec<String>` the resolver fills with "simple
+// # names only; complex expressions ignored", and the lookup map is keyed on
+// # `ClassInfo::name`. So a base reached through an alias MISSED, a dotted
+// # base collided with any local class sharing its trailing word, and two
+// # classes with one rendered name were a single entry.
+// #
+// # The replacement resolves each base EXPRESSION through the binding table
+// # and keys the hierarchy on definition site. That needs base SPANS on
+// # `ClassInfo`, which the resolver does not record yet.
+// #
+// # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
+// ##########################################################################
 fn collect_candidates<'a>(
-    cls: &'a ClassInfo,
-    map: &HashMap<&'a str, &'a ClassInfo>,
+    _cls: &'a ClassInfo,
+    _map: &HashMap<&'a str, &'a ClassInfo>,
 ) -> HashSet<&'a str> {
-    let mut result = HashSet::new();
-    for base in &cls.bases {
-        let mut visited = HashSet::new();
-        resolve_base(base.as_str(), map, &mut visited, &mut result);
-    }
-    result
+    panic!(
+        "basilisk-checker: `collect_candidates` was DELETED because it identified base classes by \
+         their RENDERED NAMES, so an aliased base missed and a dotted base collided with \
+         any local class sharing its trailing word. It panics because the real \
+         implementation — base expressions resolved through the binding table — DOES NOT \
+         EXIST YET. Do not restore the name lookup and do not substitute a default \
+         answer in its place."
+    )
 }
 
-fn resolve_base<'a>(
-    name: &'a str,
-    map: &HashMap<&'a str, &'a ClassInfo>,
-    visited: &mut HashSet<&'a str>,
-    out: &mut HashSet<&'a str>,
-) {
-    if !visited.insert(name) {
-        return; // cycle guard
-    }
-    let Some(cls) = map.get(name) else {
-        return; // external base — contributes no disjoint base
-    };
-    if has_nonempty_slots(cls) {
-        let _ = out.insert(name);
-        return;
-    }
-    for base in &cls.bases {
-        resolve_base(base.as_str(), map, visited, out);
-    }
-}
+// ##########################################################################
+// # DELETED AND GONE — `resolve_base`. NO PANIC SHELL: its only caller
+// # (`collect_candidates`) was deleted too, so there is no call site left to
+// # keep visible. DO NOT RECREATE IT.
+// #
+// # It resolved a PEP 800 disjoint base by RENDERED NAME through a name-keyed
+// # map and recursed on `cls.bases` strings.
+// #
+// # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
+// ##########################################################################
 
 /// `true` when one candidate is a (transitive) subclass of every other candidate.
 fn has_dominator(candidates: &[&str], map: &HashMap<&str, &ClassInfo>) -> bool {
@@ -113,18 +134,32 @@ fn has_dominator(candidates: &[&str], map: &HashMap<&str, &ClassInfo>) -> bool {
         .any(|x| candidates.iter().all(|y| is_subclass(x, y, map, 0)))
 }
 
-fn is_subclass(child: &str, ancestor: &str, map: &HashMap<&str, &ClassInfo>, depth: u32) -> bool {
-    if child == ancestor {
-        return true;
-    }
-    if depth > 64 {
-        return false; // cycle / pathological-depth guard
-    }
-    map.get(child).is_some_and(|cls| {
-        cls.bases
-            .iter()
-            .any(|base| is_subclass(base, ancestor, map, depth + 1))
-    })
+// ##########################################################################
+// # DELETED BODY — `directives_disjoint_base::is_subclass`. DO NOT RESTORE IT AND DO NOT RETURN A DEFAULT.
+// #
+// # `map.get(child)` + `cls.bases.iter().any(|base| is_subclass(base, ...))` — a subclass relation computed entirely between NAME STRINGS.
+// #
+// # `ClassInfo::bases` is a `Vec<String>` the resolver fills with "simple
+// # names only; complex expressions ignored", and the lookup map is keyed on
+// # `ClassInfo::name`. So a base reached through an alias MISSED, a dotted
+// # base collided with any local class sharing its trailing word, and two
+// # classes with one rendered name were a single entry.
+// #
+// # The replacement resolves each base EXPRESSION through the binding table
+// # and keys the hierarchy on definition site. That needs base SPANS on
+// # `ClassInfo`, which the resolver does not record yet.
+// #
+// # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
+// ##########################################################################
+fn is_subclass(_child: &str, _ancestor: &str, _map: &HashMap<&str, &ClassInfo>, _depth: u32) -> bool {
+    panic!(
+        "basilisk-checker: `directives_disjoint_base::is_subclass` was DELETED because it identified base classes by \
+         their RENDERED NAMES, so an aliased base missed and a dotted base collided with \
+         any local class sharing its trailing word. It panics because the real \
+         implementation — base expressions resolved through the binding table — DOES NOT \
+         EXIST YET. Do not restore the name lookup and do not substitute a default \
+         answer in its place."
+    )
 }
 
 fn incompatible(span: Span, candidates: &[&str], path: &str) -> Diagnostic {

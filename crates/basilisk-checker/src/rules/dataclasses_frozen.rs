@@ -47,6 +47,9 @@ impl Rule for FrozenDataclassAssignment {
     ) {
         let transform_classes = super::guards::collect_transform_classes(module);
 
+        // This map is keyed on `ClassInfo::name` — a RENDERED SPELLING. It is
+        // built here only so the deleted `check_inheritance` call site stays
+        // visible as the rebuild map; the callee panics before reading it.
         let class_frozen: HashMap<&str, (bool, bool)> = module
             .classes
             .iter()
@@ -65,62 +68,36 @@ impl Rule for FrozenDataclassAssignment {
     }
 }
 
+// ##########################################################################
+// # DELETED BODY — `dataclasses_frozen::check_inheritance`. DO NOT RESTORE IT AND DO NOT RETURN A DEFAULT.
+// #
+// # `class_frozen.get(base_name.as_str())` decided frozen/non-frozen dataclass inheritance by rendered base name.
+// #
+// # `ClassInfo::bases` is a `Vec<String>` the resolver fills with "simple
+// # names only; complex expressions ignored", and the lookup map is keyed on
+// # `ClassInfo::name`. So a base reached through an alias MISSED, a dotted
+// # base collided with any local class sharing its trailing word, and two
+// # classes with one rendered name were a single entry.
+// #
+// # The replacement resolves each base EXPRESSION through the binding table
+// # and keys the hierarchy on definition site. That needs base SPANS on
+// # `ClassInfo`, which the resolver does not record yet.
+// #
+// # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
+// ##########################################################################
 fn check_inheritance(
-    class_frozen: &HashMap<&str, (bool, bool)>,
-    module: &ResolvedModule,
-    diagnostics: &mut Vec<Diagnostic>,
+    _class_frozen: &HashMap<&str, (bool, bool)>,
+    _module: &ResolvedModule,
+    _diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let path = &module.path;
-    for cls in &module.classes {
-        if !cls.is_dataclass {
-            continue;
-        }
-        for base_name in &cls.bases {
-            let Some(&(base_is_dc, base_is_frozen)) = class_frozen.get(base_name.as_str()) else {
-                continue;
-            };
-            if !base_is_dc {
-                continue;
-            }
-            if cls.is_dataclass_frozen && !base_is_frozen {
-                diagnostics.push(error_diagnostic_owned(
-                    CODE.clone(),
-                    format!(
-                        "Frozen dataclass `{}` cannot inherit from non-frozen dataclass `{}`",
-                        cls.name, base_name
-                    ),
-                    cls.def_span,
-                    path,
-                    Some(
-                        "A frozen dataclass can only inherit from other frozen dataclasses"
-                            .to_owned(),
-                    ),
-                    Some(
-                        "PEP 557: mixing frozen and non-frozen dataclasses is not allowed"
-                            .to_owned(),
-                    ),
-                ));
-            } else if !cls.is_dataclass_frozen && base_is_frozen {
-                diagnostics.push(error_diagnostic_owned(
-                    CODE.clone(),
-                    format!(
-                        "Non-frozen dataclass `{}` cannot inherit from frozen dataclass `{}`",
-                        cls.name, base_name
-                    ),
-                    cls.def_span,
-                    path,
-                    Some(
-                        "A non-frozen dataclass can only inherit from other non-frozen dataclasses"
-                            .to_owned(),
-                    ),
-                    Some(
-                        "PEP 557: mixing frozen and non-frozen dataclasses is not allowed"
-                            .to_owned(),
-                    ),
-                ));
-            }
-        }
-    }
+    panic!(
+        "basilisk-checker: `dataclasses_frozen::check_inheritance` was DELETED because it identified base classes by \
+         their RENDERED NAMES, so an aliased base missed and a dotted base collided with \
+         any local class sharing its trailing word. It panics because the real \
+         implementation — base expressions resolved through the binding table — DOES NOT \
+         EXIST YET. Do not restore the name lookup and do not substitute a default \
+         answer in its place."
+    )
 }
 
 fn check_frozen_instance_assigns(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {

@@ -27,11 +27,23 @@ use crate::diagnostic::{error_diagnostic, Diagnostic, ErrorCode};
 
 use super::Rule;
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; this diagnostic constructor is \
+              correct and is retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 const CODE: ErrorCode = ErrorCode {
     code: "typeddicts_inheritance",
     docs_url: "https://www.basilisk-python.dev/errors/typeddicts_inheritance",
 };
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; this diagnostic constructor is \
+              correct and is retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
     error_diagnostic(
         CODE.clone(),
@@ -43,36 +55,49 @@ fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
     )
 }
 
-/// Checks rule 1: `TypedDict` cannot mix `TypedDict` and non-TypedDict bases.
+// ##########################################################################
+// # DELETED BODY — `check_mixed_bases`. DO NOT RESTORE IT AND DO NOT       #
+// # REPLACE IT WITH A PLACEHOLDER THAT RETURNS WITHOUT CHECKING.           #
+// #                                                                        #
+// # Two spelling dependencies, either one fatal:                           #
+// #                                                                        #
+// #   const EXEMPT: &[&str] = &["object"];                                 #
+// #   if EXEMPT.contains(&base.as_str()) { continue; }                     #
+// #                                                                        #
+// # recognised the top type by its builtin SPELLING, so a module defining  #
+// # its own `class object: ...` had a genuine non-TypedDict base silently  #
+// # exempted, while `builtins.object` reached under any other name was not #
+// # exempted at all. And:                                                  #
+// #                                                                        #
+// #   is_transitive_typeddict(base.as_str(), class_map)                    #
+// #                                                                        #
+// # identified every base by RENDERED NAME through a name-keyed map (that  #
+// # helper is itself DELETED — see basilisk-resolver/src/scope/            #
+// # typeddict_meta.rs).                                                    #
+// #                                                                        #
+// # The replacement resolves each base EXPRESSION through the binding      #
+// # table: the top type is `TypingForm::ObjectClass`, and TypedDict-ness   #
+// # follows resolved base classes rather than spellings.                   #
+// #                                                                        #
+// # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs             #
+// ##########################################################################
+
+/// DELETED — panics. The signature survives only so its caller stays visible
+/// as the rebuild map; see the banner above.
 fn check_mixed_bases(
-    cls: &ClassInfo,
-    class_map: &HashMap<&str, &ClassInfo>,
-    path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
+    _cls: &ClassInfo,
+    _class_map: &HashMap<&str, &ClassInfo>,
+    _path: &str,
+    _diagnostics: &mut Vec<Diagnostic>,
 ) {
-    const EXEMPT: &[&str] = &["object"];
-    let has_typed_dict_base = cls
-        .bases
-        .iter()
-        .any(|b| basilisk_resolver::is_transitive_typeddict(b.as_str(), class_map));
-    if !has_typed_dict_base {
-        return;
-    }
-    for base in &cls.bases {
-        if EXEMPT.contains(&base.as_str()) {
-            continue;
-        }
-        if !basilisk_resolver::is_transitive_typeddict(base.as_str(), class_map) {
-            diagnostics.push(make_diagnostic(
-                format!(
-                    "TypedDict `{}` cannot inherit from non-TypedDict class `{}`",
-                    cls.name, base
-                ),
-                cls.name_span,
-                path,
-            ));
-        }
-    }
+    panic!(
+        "basilisk-checker: `typeddicts_inheritance::check_mixed_bases` was DELETED \
+         because it exempted the top type by matching the SPELLING \"object\" and \
+         identified TypedDict bases by rendered name. It panics because the real \
+         implementation — each base resolved through the binding table, with the top \
+         type recognised as `TypingForm::ObjectClass` — DOES NOT EXIST YET. Do not \
+         restore the spelling list and do not skip the check in its place."
+    )
 }
 
 /// Emits `typeddicts_inheritance` for invalid `TypedDict` inheritance.

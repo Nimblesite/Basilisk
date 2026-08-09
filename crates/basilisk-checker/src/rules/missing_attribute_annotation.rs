@@ -135,11 +135,26 @@ fn parent_has_annotated_attr(
     };
     // Only ancestors count — the class's own (unannotated) declaration is the
     // one under scrutiny, so the walk starts from each base.
-    class.bases.iter().any(|base_name| {
-        resolve(base_name).is_some_and(|candidate| {
-            super::shared::class_or_base_matches(candidate, &resolve, &declares_annotated)
-        })
-    })
+    // ######################################################################
+    // # DELETED — the base walk. DO NOT RESTORE IT.                        #
+    // #                                                                    #
+    // #   class.bases.iter().any(|base_name| resolve(base_name)…)          #
+    // #                                                                    #
+    // # `resolve` is a lookup keyed on a base's RENDERED NAME, so an       #
+    // # inherited annotation was found or missed according to how the base #
+    // # is spelled. Whether an ancestor annotates the attribute is a       #
+    // # question about resolved class identity.                            #
+    // #                                                                    #
+    // # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs         #
+    // ######################################################################
+    let _ = (class, &resolve, &declares_annotated);
+    panic!(
+        "basilisk-checker: `missing_attribute_annotation`'s ancestor walk was DELETED \
+         because it resolved each base by its RENDERED NAME. It panics because the real \
+         implementation — base expressions resolved through the binding table — DOES NOT \
+         EXIST YET. Do not restore the name lookup and do not return `false` in its \
+         place: that reports every inherited annotation as missing."
+    )
 }
 
 fn make_diagnostic(attr: &AttributeInfo, class_name: &str, path: &str) -> Diagnostic {

@@ -1,68 +1,91 @@
-//! Implements helpers for [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
-//! Class lookup maps and stack-safe transitive base-class walks (GitHub #278).
-//!
-//! Base names resolve to same-module classes by SIMPLE name, so `class
-//! Client(httpx.Client)` records the base as `Client` and the by-name lookup
-//! makes the class its own ancestor. These walks are iterative (explicit
-//! worklist, zero recursion) so no chain depth can overflow the stack, and
-//! `visited` bounds work to one visit per base name so cycles terminate.
-//! Every transitive base walk must use these helpers or carry the same two
-//! guards.
-//!
-//! `resolve` and `matches` receive each base name EXACTLY as recorded
-//! (subscripts included), so call sites keep their own normalisation and the
-//! helpers change nothing but termination.
+// ############################################################################
+// # DELETED IMPLEMENTATION — PANIC-ONLY SHELL. DO NOT PUT LOGIC BACK HERE.   #
+// #                                                                          #
+// # This file WAS `crate::subtyping` under another name: a class hierarchy   #
+// # keyed on RENDERED CLASS NAMES. `class_name_map` built                    #
+// # `HashMap<&str, &ClassInfo>` from `c.name`, and `class_or_base_matches`   #
+// # walked `ClassInfo::bases` — a `Vec<String>` the resolver fills with      #
+// # "simple names only; complex expressions ignored" — looking each base up  #
+// # in that map by SPELLING.                                                 #
+// #                                                                          #
+// # The old module comment stated the defect and shipped it anyway:          #
+// #                                                                          #
+// #   "Base names resolve to same-module classes by SIMPLE name, so `class   #
+// #    Client(httpx.Client)` records the base as `Client` and the by-name    #
+// #    lookup makes the class its own ancestor."                             #
+// #                                                                          #
+// # That is not a caveat on a working hierarchy. It IS the hierarchy: a      #
+// # base reached through an alias misses, a dotted base collides with any    #
+// # local class sharing its trailing word, and two distinct classes with the #
+// # same rendered name are one entry. Roughly twenty rules asked this file   #
+// # "does X inherit from Y?" and got an answer about spelling.               #
+// #                                                                          #
+// # `method_name_map` is the same defect for methods: it keys on             #
+// # `(class_name, method_name)` STRINGS, so a method's owning class is       #
+// # identified by how the class is written.                                  #
+// #                                                                          #
+// # THE SIGNATURES SURVIVE ONLY AS A MAP. Each body panics because the real  #
+// # implementation DOES NOT EXIST YET:                                       #
+// #                                                                          #
+// #   * DO NOT return an empty map — every base lookup then misses and       #
+// #     every inheritance rule silently stops firing.                        #
+// #   * DO NOT return `false` from the walk — that blesses every illegal     #
+// #     inheritance; `true` invents an ancestor for every class.             #
+// #   * DO NOT rebuild the map under a new name in a rule module.            #
+// #                                                                          #
+// # The replacement resolves each base EXPRESSION through the binding table  #
+// # to the class it denotes, and keys the hierarchy on definition site       #
+// # (module path + name span), never on a rendered name. That needs base     #
+// # SPANS on `ClassInfo`, which the resolver does not record yet.            #
+// #                                                                          #
+// # Pinned by:                                                               #
+// #   crates/basilisk-checker/tests/string_keyed_class_hierarchy_pin_tests.rs
+// ############################################################################
 
-use std::collections::{HashMap, HashSet};
+//! The DELETED string-keyed class hierarchy, reduced to loudly panicking
+//! signatures so its call sites remain visible as the rebuild map.
+
+use std::collections::HashMap;
 
 use basilisk_resolver::{ClassInfo, FunctionInfo};
 
-/// Build a `&str -> &ClassInfo` lookup map for every class in the module.
-///
-/// The returned map borrows from the slice; both must outlive the map.
-pub(crate) fn class_name_map(classes: &[ClassInfo]) -> HashMap<&str, &ClassInfo> {
-    classes.iter().map(|c| (c.name.as_str(), c)).collect()
+/// Panic message shared by every deleted body in this module.
+macro_rules! deleted {
+    ($what:literal) => {
+        panic!(concat!(
+            "basilisk-checker: `",
+            $what,
+            "` was DELETED because it keyed the class hierarchy on RENDERED \
+             CLASS NAMES — `ClassInfo::bases` is a `Vec<String>` of simple \
+             names, looked up in a map keyed on `ClassInfo::name`. A base \
+             reached through an alias missed, a dotted base collided with any \
+             local class sharing its trailing word, and two classes with the \
+             same rendered name were one entry. It panics because the real \
+             implementation — bases resolved through the binding table and \
+             keyed on definition site — DOES NOT EXIST YET. Do not restore the \
+             map and do not substitute an empty one: rebuild this caller on \
+             resolved class identity, or make it abstain."
+        ))
+    };
 }
 
-/// Returns `true` when `predicate` holds for `cls` or for any class in its
-/// transitive same-module base chain (bases resolve through `resolve`).
+/// DELETED — panics; see the banner at the head of this file.
+pub(crate) fn class_name_map(_classes: &[ClassInfo]) -> HashMap<&str, &ClassInfo> {
+    deleted!("class_name_map")
+}
+
+/// DELETED — panics; see the banner at the head of this file.
 pub(crate) fn class_or_base_matches<'a>(
-    cls: &'a ClassInfo,
-    resolve: &dyn Fn(&str) -> Option<&'a ClassInfo>,
-    predicate: &dyn Fn(&'a ClassInfo) -> bool,
+    _cls: &'a ClassInfo,
+    _resolve: &dyn Fn(&str) -> Option<&'a ClassInfo>,
+    _predicate: &dyn Fn(&'a ClassInfo) -> bool,
 ) -> bool {
-    let mut visited: HashSet<&str> = HashSet::new();
-    let _ = visited.insert(cls.name.as_str());
-    let mut worklist: Vec<&'a ClassInfo> = vec![cls];
-    while let Some(current) = worklist.pop() {
-        if predicate(current) {
-            return true;
-        }
-        for base in &current.bases {
-            if visited.insert(base.as_str()) {
-                worklist.extend(resolve(base));
-            }
-        }
-    }
-    false
+    deleted!("class_or_base_matches")
 }
 
-/// Build a `(class_name, method_name) -> Vec<&FunctionInfo>` lookup for every
-/// method in the module (functions carrying a `class_name`).
-///
-/// Multiple definitions sharing a key (e.g. `@overload` signatures plus the
-/// implementation) are preserved in declaration order. The returned map borrows
-/// from the slice; both must outlive the map.
+/// DELETED — panics; see the banner at the head of this file.
 pub(crate) fn method_name_map(
-    functions: &[FunctionInfo],
+    _functions: &[FunctionInfo],
 ) -> HashMap<(&str, &str), Vec<&FunctionInfo>> {
-    let mut map: HashMap<(&str, &str), Vec<&FunctionInfo>> = HashMap::new();
-    for func in functions {
-        if let Some(ref class_name) = func.class_name {
-            map.entry((class_name.as_str(), func.name.as_str()))
-                .or_default()
-                .push(func);
-        }
-    }
-    map
+    deleted!("method_name_map")
 }
