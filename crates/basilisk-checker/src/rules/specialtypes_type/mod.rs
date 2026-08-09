@@ -22,10 +22,7 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
-use helpers::{
-    expr_simple_name, expr_to_str, is_concrete_type_annotation, is_known_type_attr,
-    strip_type_bracket,
-};
+use helpers::{expr_simple_name, expr_to_str, is_concrete_type_annotation, is_known_type_attr};
 
 const CODE: ErrorCode = ErrorCode {
     code: "specialtypes_type",
@@ -112,13 +109,12 @@ impl ModuleCtx {
     }
 
     /// Return the union members if the annotation is `type[A | B | ...]`.
-    fn type_union_members(ann: &str) -> Option<Vec<&str>> {
-        let inner = strip_type_bracket(ann)?;
-        if inner.contains(" | ") {
-            Some(inner.split(" | ").map(str::trim).collect())
-        } else {
-            None
-        }
+    fn type_union_members(_ann: &str) -> Option<Vec<&str>> {
+        // The former implementation rendered an annotation to text, required
+        // the literal spelling `type[...]`, and split unions on textual ` | `.
+        // That illegal implementation has been deleted. This panic is
+        // mandatory until the verdict uses resolved types and symbol identity.
+        panic!("specialtypes_type::type_union_members has no legal resolved-type implementation");
     }
 }
 

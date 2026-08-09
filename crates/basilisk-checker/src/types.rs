@@ -466,6 +466,14 @@ impl InferredType {
             // #                                                            #
             // # Pinned by: tests/nominal_spelling_surgery_pin_tests.rs     #
             // ##############################################################
+            (InferredType::Named(_), InferredType::Named(_)) => panic!(
+                "basilisk-checker: comparing two `InferredType::Named` values was \
+                 DELETED because it split both RENDERED names at `[` and compared \
+                 the text before the bracket. It panics because the real \
+                 implementation — comparing resolved class identity on canonical \
+                 `TypeNode`s — DOES NOT EXIST YET. Do not restore the string \
+                 surgery and do not answer `true`/`false` in its place."
+            ),
             // Ellipsis (`...`) parsed as Named is compatible when it appears
             // inside Callable parameter lists (e.g. `Callable[..., T]`).
             // For tuple annotations, `...` has special semantics that need
@@ -548,6 +556,22 @@ fn callable_params_assignable(source: &[InferredType], target: &[InferredType]) 
 // #                                                                        #
 // # Pinned by: tests/nominal_spelling_surgery_pin_tests.rs                 #
 // ##########################################################################
+
+/// DELETED — panics. The signature survives only so its call site in
+/// [`InferredType::is_assignable_to`] stays visible as the rebuild map; see
+/// the banner above.
+fn special_named_assignable(_source: &InferredType, _target: &InferredType) -> bool {
+    panic!(
+        "basilisk-checker: `special_named_assignable` was DELETED because it decided \
+         assignability from the SPELLING of a rendered type name (`== \"object\"`, \
+         `== \"type\"`, `starts_with(\"type[\")`). It panics because the real \
+         implementation — asking the binding table which symbol the annotation \
+         denotes — DOES NOT EXIST YET. Do not restore it and do not answer \
+         `true`/`false` in its place: `true` blesses every mismatch, `false` invents \
+         a diagnostic for every legal assignment, and both ship a verdict nobody \
+         computed."
+    )
+}
 
 /// Generator yield/return positions are covariant; the value sent back into
 /// the suspended generator is contravariant.

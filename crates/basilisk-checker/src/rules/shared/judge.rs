@@ -212,3 +212,22 @@ impl<'m, 'a> TypeJudge<'m, 'a> {
 // #                                                                        #
 // # Pinned by: tests/nominal_spelling_surgery_pin_tests.rs                 #
 // ##########################################################################
+
+/// DELETED — panics. The signature survives only so its call sites (here and
+/// in `assignment_compatibility`) stay visible as the rebuild map; see the
+/// banner above.
+pub(crate) fn nominal_subclass_assignable(
+    _inferred: &InferredType,
+    _declared: &InferredType,
+    _subtyping: &SubtypingContext,
+) -> bool {
+    panic!(
+        "basilisk-checker: `nominal_subclass_assignable` was DELETED because it \
+         rendered both types back into strings via a spelling table and then \
+         compared the text — settling ENUM MEMBERSHIP with \
+         `sub.strip_prefix(sup).is_some_and(|rest| rest.starts_with('.'))`. It \
+         panics because the real implementation — a subclass walk over resolved \
+         class symbols from the resolver's class/enum tables — DOES NOT EXIST YET. \
+         Do not restore it and do not answer `true`/`false` in its place."
+    )
+}

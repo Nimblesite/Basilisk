@@ -39,7 +39,7 @@
 use basilisk_resolver::ResolvedModule;
 
 use crate::annotation::AnnotationResolver;
-use crate::subtyping::{module_context, SubtypingContext};
+use crate::subtyping::SubtypingContext;
 
 use super::oracle::ModuleOracle;
 
@@ -94,7 +94,22 @@ impl<'m> ModuleTypes<'m> {
     // # relations; a class hierarchy is built from RESOLVED base symbols,  #
     // # never from base-class source text.                                 #
     // #                                                                    #
-    // # Every caller of `types.subtyping()` is LEFT BROKEN ON PURPOSE.     #
-    // # Those call sites are the map of what must be rebuilt.              #
+    // # Every caller of `types.subtyping()` is LEFT AS A PANICKING CALL    #
+    // # ON PURPOSE. Those call sites are the map of what must be rebuilt.  #
     // ######################################################################
+
+    /// DELETED — panics. The accessor's signature survives only so its eight
+    /// call sites stay visible as the rebuild map; see the banner above.
+    pub(crate) fn subtyping(&self) -> &SubtypingContext {
+        panic!(
+            "basilisk-checker: `ModuleTypes::subtyping` was DELETED because the context \
+             it handed out keyed its entire class hierarchy on STRINGS harvested from \
+             rendered annotation text, so every rule that took it inherited a verdict \
+             derived from spelling however careful the rule's own logic was. It panics \
+             because the real implementation — a hierarchy built from resolved base \
+             symbols on the binding table — DOES NOT EXIST YET. Do not restore the \
+             field and do not hand out a placeholder context that answers every query \
+             the same way to make this compile."
+        )
+    }
 }

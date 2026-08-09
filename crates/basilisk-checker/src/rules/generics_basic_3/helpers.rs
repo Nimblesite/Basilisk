@@ -76,10 +76,29 @@ impl ConstrainedTypeVar {
 // #                                                                        #
 // # The replacement resolves each base through the binding table to a      #
 // # canonical symbol and walks RESOLVED identities. The call site above is #
-// # LEFT BROKEN ON PURPOSE — it is the map of what must be rebuilt.        #
+// # LEFT AS A PANICKING CALL ON PURPOSE — it is the map of what must be    #
+// # rebuilt.                                                               #
 // #                                                                        #
 // # Pinned by: tests/nominal_spelling_surgery_pin_tests.rs                 #
 // ##########################################################################
+
+/// DELETED — panics. The signature survives only so its call site in
+/// `group_of` stays visible as the rebuild map; see the banner above.
+pub(super) fn is_subtype_of(
+    _subtype: &str,
+    _supertype: &str,
+    _class_bases: &HashMap<String, Vec<String>>,
+) -> bool {
+    panic!(
+        "basilisk-checker: `generics_basic_3::is_subtype_of` was DELETED because it was \
+         a VENDORED COPY of the string-keyed subtyping layer — a numeric tower written \
+         as `matches!((subtype, supertype), (\"bool\", \"int\"))` and an inheritance \
+         walk comparing base-class NAME TEXT. It panics because the real \
+         implementation — walking resolved base symbols from the binding table — DOES \
+         NOT EXIST YET. Do not restore it, do not re-vendor it under another name, and \
+         do not answer `true`/`false` in its place."
+    )
+}
 
 /// A function signature with constrained `TypeVar` parameters.
 #[derive(Debug, Clone)]

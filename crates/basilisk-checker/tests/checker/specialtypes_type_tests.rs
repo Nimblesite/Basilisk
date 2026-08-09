@@ -3,6 +3,144 @@
 
 use super::common::*;
 
+/// PEP 484 requires `type[U]` arguments to be class objects whose represented
+/// classes are compatible with `U`. Import spelling and formatting do not
+/// change that relation.
+///
+/// <https://peps.python.org/pep-0484/#the-type-of-class-objects>
+#[test]
+fn pep_484_class_object_union_is_resolved_by_symbol_identity(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let rejected = [
+        (
+            "canonical builtin spelling",
+            r#"
+class Cedar: ...
+class Flint: ...
+class Kestrel: ...
+def admit(candidate: type[Cedar | Flint]) -> None: ...
+admit(Kestrel)
+"#,
+        ),
+        (
+            "aliased builtin import",
+            r#"
+from builtins import type as ClassObject
+class Cedar: ...
+class Flint: ...
+class Kestrel: ...
+def admit(candidate: ClassObject[Cedar | Flint]) -> None: ...
+admit(Kestrel)
+"#,
+        ),
+        (
+            "qualified builtin import",
+            r#"
+import builtins as runtime
+class Cedar: ...
+class Flint: ...
+class Kestrel: ...
+def admit(candidate: runtime.type[Cedar | Flint]) -> None: ...
+admit(Kestrel)
+"#,
+        ),
+        (
+            "reformatted union",
+            r#"
+class Cedar: ...
+class Flint: ...
+class Kestrel: ...
+def admit(
+    candidate: type[
+        Cedar
+        | Flint
+    ],
+) -> None: ...
+admit(Kestrel)
+"#,
+        ),
+    ];
+
+    for (mutation, source) in rejected {
+        let diagnostics = run(source)?;
+        assert_eq!(
+            diagnostics.len(),
+            1,
+            "{mutation}: the incompatible class object must produce one isolated diagnostic: {diagnostics:#?}"
+        );
+        assert_eq!(
+            codes(&diagnostics),
+            vec!["specialtypes_type"],
+            "{mutation}: the PEP 484 class-object rule itself must reject the argument"
+        );
+        assert_eq!(
+            messages_for(&diagnostics, "specialtypes_type").len(),
+            1,
+            "{mutation}: an unrelated diagnostic is not proof of this obligation"
+        );
+    }
+
+    let accepted = [
+        (
+            "canonical accepted member",
+            r#"
+class Cedar: ...
+class Flint: ...
+def admit(candidate: type[Cedar | Flint]) -> None: ...
+admit(Cedar)
+"#,
+        ),
+        (
+            "aliased accepted member",
+            r#"
+from builtins import type as ClassObject
+class Cedar: ...
+class Flint: ...
+def admit(candidate: ClassObject[Cedar | Flint]) -> None: ...
+admit(Flint)
+"#,
+        ),
+        (
+            "qualified accepted member",
+            r#"
+import builtins as runtime
+class Cedar: ...
+class Flint: ...
+def admit(candidate: runtime.type[Cedar | Flint]) -> None: ...
+admit(Cedar)
+"#,
+        ),
+        (
+            "reformatted accepted member",
+            r#"
+class Cedar: ...
+class Flint: ...
+def admit(
+    candidate: type[
+        Cedar | Flint
+    ],
+) -> None: ...
+admit(Flint)
+"#,
+        ),
+    ];
+
+    for (mutation, source) in accepted {
+        let diagnostics = run(source)?;
+        assert!(
+            diagnostics.is_empty(),
+            "{mutation}: a union member class object must be accepted: {diagnostics:#?}"
+        );
+        assert_eq!(
+            codes(&diagnostics),
+            Vec::<&str>::new(),
+            "{mutation}: equivalent spellings must not invent a diagnostic"
+        );
+    }
+
+    Ok(())
+}
+
 #[test]
 fn valid_type_usage() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"

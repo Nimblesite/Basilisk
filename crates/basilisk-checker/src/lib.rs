@@ -55,6 +55,11 @@ pub mod rule_tags;
 pub mod rules;
 pub mod span_util;
 pub mod stub_constructor;
+/// DELETED spelling-keyed subtyping layer, reduced to panicking signatures.
+///
+/// Every body here panics because the real implementation does not exist yet.
+/// Read the banner at the head of the file before touching any caller.
+pub mod subtyping;
 pub mod suppression;
 mod suppression_audit;
 /// Bounded type-level alias evaluation groundwork.
@@ -62,6 +67,10 @@ mod suppression_audit;
 /// Implements [TYPEINF-TARGET] and [TYPEINF-TARGET-TYPELEVEL].
 pub mod tyeval;
 pub mod types;
+/// DELETED text parser for annotations, reduced to a panicking signature.
+mod types_parsing;
+/// DELETED star-tuple text helpers, reduced to panicking signatures.
+mod types_star_tuples;
 
 pub use cached::CachedDiagnostic;
 pub use diagnostic::{Diagnostic, ErrorCode, Severity};
