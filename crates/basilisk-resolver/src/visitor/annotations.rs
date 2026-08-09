@@ -6,7 +6,13 @@ use ruff_text_size::Ranged;
 
 use crate::canonical::{BindingTable, TypingForm};
 use crate::scope::{
-    InvalidStringAnnotation, InvalidStringAnnotationKind, RhsKind, Span, VariableInfo,
+    // `InvalidStringAnnotationKind` was imported ONLY by the deleted body of
+    // `check_annotation_for_invalid_patterns`; it comes back when the real
+    // resolved-head implementation does.
+    InvalidStringAnnotation,
+    RhsKind,
+    Span,
+    VariableInfo,
 };
 
 use super::class_info_ext::expr_simple_name;
@@ -324,21 +330,36 @@ pub(super) fn collect_invalid_annotations(stmts: &[Stmt]) -> Vec<InvalidStringAn
     out
 }
 
-/// Check a single annotation expression for invalid patterns like `tuple[...]`.
+// ##########################################################################
+// # DELETED BODY — `check_annotation_for_invalid_patterns`. DO NOT RESTORE #
+// # IT AND DO NOT LEAVE THE BODY EMPTY.                                    #
+// #                                                                        #
+// #   let is_tuple = matches!(sub.value.as_ref(),                          #
+// #       Expr::Name(n) if n.id.as_str() == "tuple");                      #
+// #                                                                        #
+// # `tuple[...]` (a bare ellipsis as the only argument) is rejected by the #
+// # typing spec, and this recognised the subscripted head by its five      #
+// # characters. `builtins.tuple[...]` is the identical annotation and was  #
+// # accepted; `typing.Tuple[...]` likewise; `from builtins import tuple as #
+// # T` then `T[...]` likewise. A module defining `class tuple` had its own #
+// # perfectly legal `tuple[...]` rejected.                                 #
+// #                                                                        #
+// # This one sat in basilisk-resolver, BELOW the checker's spelling guard  #
+// # — the same place the name-keyed TypedDict walk was found.              #
+// #                                                                        #
+// # Pinned by: basilisk-checker/tests/source_text_verdict_pin_tests.rs     #
+// ##########################################################################
 pub(super) fn check_annotation_for_invalid_patterns(
-    expr: &Expr,
-    out: &mut Vec<InvalidStringAnnotation>,
+    _expr: &Expr,
+    _out: &mut Vec<InvalidStringAnnotation>,
 ) {
-    if let Expr::Subscript(sub) = expr {
-        // Check for `tuple[...]` — bare ellipsis as only argument
-        let is_tuple = matches!(sub.value.as_ref(), Expr::Name(n) if n.id.as_str() == "tuple");
-        if is_tuple {
-            if let Expr::EllipsisLiteral(_) = sub.slice.as_ref() {
-                out.push(InvalidStringAnnotation {
-                    kind: InvalidStringAnnotationKind::NonTypeExpression,
-                    span: text_range_to_span(sub.range()),
-                });
-            }
-        }
-    }
+    panic!(
+        "basilisk-resolver: `check_annotation_for_invalid_patterns` was DELETED \
+         because it recognised the subscripted `tuple` by its SPELLING, so \
+         `builtins.tuple[...]` and every aliased import of the same class escaped the \
+         check while a user-defined `class tuple` was wrongly caught by it. It panics \
+         because the real implementation — resolving the subscript head through the \
+         binding table — DOES NOT EXIST YET. Do not restore the name test and do not \
+         leave the body empty: an empty body reports every annotation as valid."
+    )
 }

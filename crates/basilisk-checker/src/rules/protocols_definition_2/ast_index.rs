@@ -115,11 +115,48 @@ impl<'a> AstIndex<'a> {
     }
 }
 
+// ##########################################################################
+// # DELETED BODY — the `@staticmethod` test, which stood twice in this     #
+// # file. DO NOT RESTORE IT AND DO NOT RETURN `false` IN ITS PLACE.        #
+// #                                                                        #
+// #   func.decorator_list.iter().any(|dec| matches!(                       #
+// #       &dec.expression,                                                 #
+// #       Expr::Name(name) if name.id.as_str() == "staticmethod"))         #
+// #                                                                        #
+// # `staticmethod` is an ordinary builtin bound to an ordinary name, and a #
+// # decorator is an arbitrary expression. This matched `Expr::Name` with   #
+// # one exact spelling, so:                                                #
+// #                                                                        #
+// #   @builtins.staticmethod        -> Expr::Attribute, never matched      #
+// #   from builtins import staticmethod as sm                              #
+// #   @sm                           -> the SAME object, never matched      #
+// #   staticmethod = my_decorator   -> rebound, still matched              #
+// #                                                                        #
+// # The consequence is not cosmetic: a false answer here makes the rule    #
+// # mistake the function's FIRST PARAMETER for a `self` receiver, so every #
+// # parameter of a qualified-decorator staticmethod shifts by one and the  #
+// # protocol comparison that follows is done against the wrong signature.  #
+// #                                                                        #
+// # Whether a decorator is `builtins.staticmethod` is a binding question.  #
+// #                                                                        #
+// # Pinned by: tests/source_text_verdict_pin_tests.rs                      #
+// ##########################################################################
+fn is_staticmethod_decorated(_func: &StmtFunctionDef) -> bool {
+    panic!(
+        "basilisk-checker: the `@staticmethod` test was DELETED because it matched one \
+         exact SPELLING on an `Expr::Name` decorator, so `@builtins.staticmethod` and \
+         any aliased import of the same object were not staticmethods while a rebound \
+         `staticmethod` name still was. It panics because the real implementation — \
+         resolving the decorator expression through the binding table — DOES NOT EXIST \
+         YET. Do not restore the spelling test and do not return `false` in its place: \
+         `false` makes the rule read the first parameter as a `self` receiver and \
+         compare every remaining parameter against the wrong position."
+    )
+}
+
 /// Build the [`MethodSignature`] for a function definition.
 fn signature_of(func: &StmtFunctionDef) -> MethodSignature<'_> {
-    let is_static = func.decorator_list.iter().any(
-        |dec| matches!(&dec.expression, Expr::Name(name) if name.id.as_str() == "staticmethod"),
-    );
+    let is_static = is_staticmethod_decorated(func);
 
     let mut params: Vec<(&str, ParamKind)> = func
         .parameters
@@ -175,9 +212,9 @@ fn self_assigned_attrs(class_def: &StmtClassDef) -> HashSet<String> {
         let Stmt::FunctionDef(func) = member else {
             continue;
         };
-        let is_static = func.decorator_list.iter().any(
-            |dec| matches!(&dec.expression, Expr::Name(name) if name.id.as_str() == "staticmethod"),
-        );
+        // Second call site of the DELETED `@staticmethod` test — see the banner
+        // on `is_staticmethod_decorated`.
+        let is_static = is_staticmethod_decorated(func);
         if is_static {
             continue;
         }

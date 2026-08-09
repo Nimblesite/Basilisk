@@ -334,35 +334,70 @@ fn required_dataclass_field_count(class_info: &ClassInfo) -> usize {
         .count()
 }
 
-/// Maps a [`RhsKind`] literal to its Python type name, or `None` for non-literals.
-fn rhs_kind_to_type_name(kind: &RhsKind) -> Option<&'static str> {
-    match kind {
-        RhsKind::IntLiteral => Some("int"),
-        RhsKind::FloatLiteral => Some("float"),
-        RhsKind::StrLiteral => Some("str"),
-        RhsKind::BoolLiteral => Some("bool"),
-        RhsKind::BytesLiteral => Some("bytes"),
-        _ => None,
-    }
+// ##########################################################################
+// # DELETED BODY — `rhs_kind_to_type_name`. DO NOT RESTORE IT.            #
+// #                                                                        #
+// #   RhsKind::IntLiteral => Some("int"), …                                #
+// #                                                                        #
+// # This is the BRIDGE that turned a fact the parser knew — the kind of    #
+// # literal node — back into a SPELLING, so that the comparison below      #
+// # could be done on characters. `RhsKind::IntLiteral` already says        #
+// # everything `"int"` says and cannot be confused with a user class of    #
+// # that name; rendering it discards exactly the identity that matters.    #
+// #                                                                        #
+// # Every deletion in this crate ends up here: some helper renders a       #
+// # resolved fact to text so that a `match` on string literals becomes     #
+// # possible. The rendering is the defect, not the `match`.                #
+// #                                                                        #
+// # Pinned by: tests/source_text_verdict_pin_tests.rs                      #
+// ##########################################################################
+fn rhs_kind_to_type_name(_kind: &RhsKind) -> Option<&'static str> {
+    panic!(
+        "basilisk-checker: `rhs_kind_to_type_name` was DELETED because it RENDERED a \
+         known literal kind back into a type SPELLING so the comparison downstream \
+         could be done on characters. It panics because the real implementation — \
+         carrying the literal's canonical `TypeNode` to the comparison instead of its \
+         name — DOES NOT EXIST YET. Do not restore the rendering and do not return \
+         `None` in its place."
+    )
 }
 
-/// Returns `true` when passing a value of `arg_type` to a parameter annotated
-/// `param_ann` is clearly a type mismatch.
-///
-/// Only flags clear incompatibilities between primitive literal types to avoid
-/// false positives on complex or unknown types.
-fn is_clearly_incompatible(arg_type: &str, param_ann: &str) -> bool {
-    let param = param_ann.trim();
-    // Remove optional suffix / union — only check the primary type name.
-    // e.g. "int | None" → still allow "int" args; "str" args would be wrong.
-    let primary = param.split('|').next().unwrap_or(param).trim();
-    match arg_type {
-        "str" => matches!(primary, "int" | "float" | "bool" | "bytes"),
-        "bytes" => matches!(primary, "int" | "float" | "bool" | "str"),
-        "int" => matches!(primary, "str" | "bytes"),
-        "float" => matches!(primary, "str" | "bytes"),
-        _ => false,
-    }
+// ##########################################################################
+// # DELETED BODY — `is_clearly_incompatible`. DO NOT RESTORE IT AND DO NOT #
+// # RETURN `false` IN ITS PLACE.                                           #
+// #                                                                        #
+// # `fn name_subtype` by another name — the exact construct the spelling   #
+// # guard forbids. It settled ASSIGNABILITY between two RENDERED           #
+// # SPELLINGS:                                                             #
+// #                                                                        #
+// #   let primary = param.split('|').next().unwrap_or(param).trim();       #
+// #   match arg_type {                                                     #
+// #       "str"   => matches!(primary, "int" | "float" | "bool" | "bytes"),#
+// #       "int"   => matches!(primary, "str" | "bytes"), …                 #
+// #   }                                                                    #
+// #                                                                        #
+// # Splitting on the `|` CHARACTER is not union decomposition: it cuts     #
+// # `Callable[[int | str], None]` at the wrong `|`, cuts inside a          #
+// # `Literal[\"a|b\"]`, and does not see `Optional[int]` or `Union[int,    #
+// # str]` as unions at all. The type names are builtin identity by         #
+// # spelling, so an aliased import was never incompatible and a module's   #
+// # own `class str` always was.                                            #
+// #                                                                        #
+// # Assignability is `assignable(&TypeNode, &TypeNode)`, which is          #
+// # three-valued and abstains with `None` instead of guessing.             #
+// #                                                                        #
+// # Pinned by: tests/source_text_verdict_pin_tests.rs                      #
+// ##########################################################################
+fn is_clearly_incompatible(_arg_type: &str, _param_ann: &str) -> bool {
+    panic!(
+        "basilisk-checker: `is_clearly_incompatible` was DELETED because it decided \
+         assignability by comparing two RENDERED TYPE SPELLINGS, splitting the \
+         annotation on the `|` character to approximate unions. It panics because the \
+         real implementation — `assignable(&TypeNode, &TypeNode)` on canonical types — \
+         DOES NOT EXIST YET at this call site. Do not restore the name match and do \
+         not return `false` in its place: `false` silences the rule while it still \
+         reports as implemented."
+    )
 }
 
 /// Check positional argument types against the dataclass field types.

@@ -95,8 +95,9 @@ pub(super) fn check_dataclass_attr_assignments(
         .filter_map(|var| {
             let rhs_span = var.rhs_span?;
             let rhs_text = slice_span(source, rhs_span)?;
-            let callee = rhs_text.split(['(', '[']).next()?.trim();
-            let callee = callee.rsplit('.').next().unwrap_or(callee);
+            // Call site of the DELETED trailing-word callee reduction — see the
+            // banner on `constructed_class_name` below.
+            let callee = constructed_class_name(rhs_text);
             if class_field_types.contains_key(callee) {
                 Some((var.name.as_str(), callee))
             } else {
@@ -150,58 +151,74 @@ pub(super) fn check_dataclass_attr_assignments(
 ///
 /// Given the target span of `obj.attr` in `obj.attr = value`, finds the `= value`
 /// portion and determines the literal kind.
-fn extract_rhs_kind_from_assign(source: &str, target_span: Span) -> Option<RhsKind> {
-    let target_end = target_span.end_usize();
-    let line_end = source
-        .get(target_end..)?
-        .find('\n')
-        .map_or(source.len(), |pos| target_end + pos);
-    let after_target = source.get(target_end..line_end)?;
-
-    // Find `=` after the target
-    let eq_pos = after_target.find('=')?;
-    let rhs = after_target.get(eq_pos + 1..)?.trim();
-
-    classify_literal(rhs)
+// ##########################################################################
+// # DELETED BODY — the constructed-class reduction. DO NOT RESTORE IT AND  #
+// # DO NOT RETURN `""` IN ITS PLACE.                                       #
+// #                                                                        #
+// #   let callee = rhs_text.split(['(', '[']).next()?.trim();              #
+// #   let callee = callee.rsplit('.').next().unwrap_or(callee);            #
+// #                                                                        #
+// # The same defect as in `dataclasses_frozen`, vendored here: the         #
+// # constructed class read out of RAW SOURCE by cutting at the first `(`   #
+// # or `[`, then reduced to its trailing word so that every same-named     #
+// # class in the program collapsed into one entry of a by-name map.        #
+// #                                                                        #
+// # Pinned by: tests/source_text_verdict_pin_tests.rs                      #
+// ##########################################################################
+fn constructed_class_name(_rhs_text: &str) -> &str {
+    panic!(
+        "basilisk-checker: the constructed-class reduction in `dataclass_check` was \
+         DELETED because it read the class out of RAW SOURCE by cutting at the first \
+         `(` or `[` and then discarded the module qualifier with `rsplit('.')`. It \
+         panics because the real implementation — resolving the callee through the \
+         binding table — DOES NOT EXIST YET. Do not restore the splitting and do not \
+         return `\"\"` in its place."
+    )
 }
 
-/// Classifies a simple literal token into a `RhsKind`.
-fn classify_literal(text: &str) -> Option<RhsKind> {
-    if text.is_empty() {
-        return None;
-    }
-
-    // Integer literal: starts with digit, no dot
-    if text.bytes().next()?.is_ascii_digit() {
-        if text.contains('.') {
-            return Some(RhsKind::FloatLiteral);
-        }
-        return Some(RhsKind::IntLiteral);
-    }
-
-    // String literal
-    if text.starts_with('"')
-        || text.starts_with('\'')
-        || text.starts_with("f\"")
-        || text.starts_with("f'")
-    {
-        return Some(RhsKind::StrLiteral);
-    }
-
-    // Bytes literal
-    if text.starts_with("b\"") || text.starts_with("b'") {
-        return Some(RhsKind::BytesLiteral);
-    }
-
-    // None
-    if text.starts_with("None") {
-        return Some(RhsKind::NoneValue);
-    }
-
-    // Negative numbers
-    if text.starts_with('-') {
-        return classify_literal(text.get(1..)?.trim_start());
-    }
-
-    None
+// ##########################################################################
+// # DELETED BODY — `extract_rhs_kind_from_assign`, AND `classify_literal`  #
+// # WITH IT. DO NOT RESTORE EITHER AND DO NOT RETURN `None`.               #
+// #                                                                        #
+// # `extract_rhs_kind_from_assign` located the assigned value by taking    #
+// # the rest of the target's LINE and cutting it at the first `=`:         #
+// #                                                                        #
+// #   let eq_pos = after_target.find('=')?;                                #
+// #   let rhs = after_target.get(eq_pos + 1..)?.trim();                    #
+// #                                                                        #
+// # so `obj.attr == other` (a comparison, not an assignment) yielded the   #
+// # "value" `= other`, every augmented assignment (`+=`, `//=`, `**=`)     #
+// # yielded a value one character short, and a value continued onto the    #
+// # next line yielded nothing.                                             #
+// #                                                                        #
+// # `classify_literal` then decided the KIND from leading characters:      #
+// #                                                                        #
+// #   if text.bytes().next()?.is_ascii_digit() {                           #
+// #       if text.contains('.') { FloatLiteral } else { IntLiteral }       #
+// #   }                                                                    #
+// #   if text.starts_with("b\"") … { BytesLiteral }                        #
+// #   if text.starts_with("None")  { NoneValue }                           #
+// #                                                                        #
+// # `1e3` and `1E3` are floats with no `.` in them and were called ints.   #
+// # `1.method()` — sorry, `x.attr = 1 .bit_length()` — contains a `.` and  #
+// # was called a float. `starts_with("None")` matched the NAME `NoneType`, #
+// # and any identifier beginning with those four letters. `r"x"`, `rb"x"`, #
+// # `u"x"`, and `"""x"""` matched nothing at all.                          #
+// #                                                                        #
+// # The resolver already reports `RhsKind` for ordinary assignments from   #
+// # the AST; the missing case is `AnnAssign`, and the fix is to record it  #
+// # there — not to re-read the file.                                       #
+// #                                                                        #
+// # Pinned by: tests/source_text_verdict_pin_tests.rs                      #
+// ##########################################################################
+fn extract_rhs_kind_from_assign(_source: &str, _target_span: Span) -> Option<RhsKind> {
+    panic!(
+        "basilisk-checker: `extract_rhs_kind_from_assign` and `classify_literal` were \
+         DELETED because they located an assigned value by cutting a SOURCE LINE at \
+         the first `=` and then classified it from its leading characters, calling \
+         `1e3` an int and the name `NoneType` a `None`. They panic because the real \
+         implementation — recording `RhsKind` for `AnnAssign` in the resolver, off the \
+         literal `Expr` node — DOES NOT EXIST YET. Do not restore the character tests \
+         and do not return `None` in their place."
+    )
 }

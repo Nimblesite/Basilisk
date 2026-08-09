@@ -387,16 +387,27 @@ impl BidirEngine {
             );
         }
         match call.func.as_ref() {
-            // `type(x)` yields x's CLASS — a class object, which is never a
-            // plain value like `None` ([TYPEINF-SPECIAL]); which class stays
-            // gradual. The two-plus-argument form creates a new class.
-            Expr::Name(name)
-                if name.id.as_str() == "type"
-                    && call.arguments.args.len() == 1
-                    && self.lookup("type").is_none() =>
-            {
-                Ty::Ground(InferredType::Named("type".to_owned()))
-            }
+            // ##############################################################
+            // # DELETED — the `type(x)` arm. DO NOT RESTORE IT.            #
+            // #                                                           #
+            // #   Expr::Name(name)                                        #
+            // #       if name.id.as_str() == "type"                       #
+            // #           && call.arguments.args.len() == 1               #
+            // #           && self.lookup("type").is_none() =>             #
+            // #                                                           #
+            // # Recognising `builtins.type` by its four characters. The    #
+            // # `self.lookup("type").is_none()` guard is the same defect   #
+            // # wearing a seatbelt: it asks whether the SPELLING `type` is #
+            // # bound in the local frame, so a module-level `class type`   #
+            // # still hijacked the call, and `builtins.type(x)` — the      #
+            // # identical object, written as an `Expr::Attribute` — never  #
+            // # reached the arm at all.                                    #
+            // #                                                           #
+            // # Which object a callee denotes is a binding question:       #
+            // # `form_of_with_builtins` -> `TypingForm::TypeClass`.        #
+            // #                                                           #
+            // # Pinned by: tests/source_text_verdict_pin_tests.rs          #
+            // ##############################################################
             Expr::Name(name) => super::builtins::builtin_call_return(name.id.as_str())
                 .map_or_else(Ty::unknown, Ty::Ground),
             Expr::Attribute(attribute) => {

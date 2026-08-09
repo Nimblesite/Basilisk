@@ -85,138 +85,101 @@ pub(super) fn check_tuple_reassignments(
     }
 }
 
-/// Returns `true` if the annotation is a simple tuple type (no starred components).
-///
-/// Skips complex types like `tuple[int, *tuple[str, ...]]` that require variadic analysis.
-pub(super) fn is_tuple_annotation(ann: &str) -> bool {
-    if !ann.starts_with("tuple[") || !ann.ends_with(']') {
-        return false;
-    }
-    // Skip annotations with starred components (TypeVarTuple unpacks)
-    match ann.get("tuple[".len()..ann.len().saturating_sub(1)) {
-        Some(inner) => !inner.contains('*'),
-        None => false,
-    }
+// ##########################################################################
+// # DELETED BODY — `is_tuple_annotation`. DO NOT RESTORE IT AND DO NOT     #
+// # RETURN `false` IN ITS PLACE.                                           #
+// #                                                                        #
+// # It recognised a tuple annotation by the six characters `tuple[`:       #
+// #                                                                        #
+// #   if !ann.starts_with("tuple[") || !ann.ends_with(']') { return false } #
+// #                                                                        #
+// # Python's grammar puts no constraint on whitespace before a subscript,  #
+// # so `tuple [int]` is the SAME annotation and failed the test; so did    #
+// # `builtins.tuple[int]`, `typing.Tuple[int]`, and the annotation reached #
+// # through `from builtins import tuple as T`. A module that defines its   #
+// # own `class tuple` passed it. Tuple-ness is a question about the        #
+// # resolved head of an `Expr::Subscript`, not about a prefix.             #
+// #                                                                        #
+// # Pinned by: tests/source_text_verdict_pin_tests.rs                      #
+// ##########################################################################
+pub(super) fn is_tuple_annotation(_ann: &str) -> bool {
+    panic!(
+        "basilisk-checker: `is_tuple_annotation` was DELETED because it recognised a \
+         tuple annotation by the PREFIX of its rendered text, so `tuple [int]` and \
+         `builtins.tuple[int]` were not tuples and a user-defined `class tuple` was. \
+         It panics because the real implementation — resolving the head of the \
+         `Expr::Subscript` through the binding table — DOES NOT EXIST YET. Do not \
+         restore the prefix test and do not return `false` in its place: `false` \
+         silently disables the whole rule while it still reports as implemented."
+    )
 }
 
-/// Returns `true` if the source text looks like a tuple literal `(...)`.
-fn is_tuple_literal(text: &str) -> bool {
-    text.starts_with('(') && text.ends_with(')')
+// ##########################################################################
+// # DELETED BODY — `is_tuple_literal`. DO NOT RESTORE IT.                  #
+// #                                                                        #
+// #   text.starts_with('(') && text.ends_with(')')                         #
+// #                                                                        #
+// # Parentheses neither make nor unmake a tuple. `(1)` is the integer 1,   #
+// # `(a for b in c)` is a generator, `(x)` is whatever `x` is — all three  #
+// # passed. `1, 2` is a tuple and failed. The parser already decided this: #
+// # the node is `Expr::Tuple` or it is not.                                #
+// #                                                                        #
+// # Pinned by: tests/source_text_verdict_pin_tests.rs                      #
+// ##########################################################################
+fn is_tuple_literal(_text: &str) -> bool {
+    panic!(
+        "basilisk-checker: `is_tuple_literal` was DELETED because it decided tuple-ness \
+         from the first and last CHARACTER of the source text, accepting `(1)` and \
+         rejecting `1, 2`. It panics because the real implementation — matching \
+         `Expr::Tuple` on the assigned expression — DOES NOT EXIST YET. Do not restore \
+         the punctuation test and do not return either answer unconditionally."
+    )
 }
 
-/// Returns `Some(description)` when the tuple literal is incompatible with the annotation.
-fn check_tuple_literal_mismatch(rhs: &str, ann: &str) -> Option<String> {
-    let inner_ann = ann.strip_prefix("tuple[")?.strip_suffix(']')?;
-
-    // Inner content of the tuple literal `(...)`.
-    let rhs_inner = rhs.strip_prefix('(')?.strip_suffix(')')?;
-    let rhs_elems = split_tuple_literal_elems(rhs_inner);
-
-    // Homogeneous variable-length tuple: `tuple[T, ...]`
-    if let Some(elem_type) = inner_ann.strip_suffix(", ...") {
-        let elem_type = elem_type.trim();
-        for elem in &rhs_elems {
-            let elem = elem.trim();
-            if !elem.is_empty() && !literal_elem_matches(elem, elem_type) {
-                return Some(format!(
-                    "a tuple containing `{elem}` (incompatible with `{elem_type}`)"
-                ));
-            }
-        }
-        return None;
-    }
-
-    // Empty tuple: `tuple[()]`
-    if inner_ann.trim() == "()" {
-        if !(rhs_elems.is_empty()
-            || rhs_elems.len() == 1 && rhs_elems.first().is_some_and(|elem| elem.trim().is_empty()))
-        {
-            return Some(format!(
-                "a tuple with {} element(s) (expected empty tuple)",
-                rhs_elems.len()
-            ));
-        }
-        return None;
-    }
-
-    // Fixed-length tuple: split annotation into element types.
-    let ann_elems = split_type_list(inner_ann);
-
-    // Count mismatch.
-    if rhs_elems.len() != ann_elems.len() {
-        return Some(format!(
-            "a {}-element tuple (expected {} element(s))",
-            rhs_elems.len(),
-            ann_elems.len()
-        ));
-    }
-
-    // Element type mismatches.
-    for (idx, (rhs_elem, ann_elem)) in rhs_elems.iter().zip(ann_elems.iter()).enumerate() {
-        let rhs_e = rhs_elem.trim();
-        let ann_e = ann_elem.trim();
-        if !rhs_e.is_empty() && !literal_elem_matches(rhs_e, ann_e) {
-            return Some(format!(
-                "a tuple with element {idx} `{rhs_e}` (expected type `{ann_e}`)"
-            ));
-        }
-    }
-
-    None
-}
-
-/// Split the inner content of a tuple literal by top-level commas.
-/// Handles trailing commas: `1,` → `["1"]`, `1, 2` → `["1", "2"]`.
-fn split_tuple_literal_elems(inner: &str) -> Vec<&str> {
-    let mut parts = Vec::new();
-    let mut depth = 0u32;
-    let mut start = 0;
-    for (idx, ch) in inner.char_indices() {
-        match ch {
-            '(' | '[' | '{' => depth = depth.saturating_add(1),
-            ')' | ']' | '}' => depth = depth.saturating_sub(1),
-            ',' if depth == 0 => {
-                if let Some(part) = inner.get(start..idx) {
-                    parts.push(part.trim());
-                }
-                start = idx + 1;
-            }
-            _ => {}
-        }
-    }
-    let remainder = inner.get(start..).unwrap_or_default().trim();
-    if !remainder.is_empty() {
-        parts.push(remainder);
-    }
-    parts
-}
-
-/// Split a comma-separated type list respecting bracket nesting.
-fn split_type_list(inner: &str) -> Vec<&str> {
-    let mut parts = Vec::new();
-    let mut depth = 0u32;
-    let mut start = 0;
-    for (idx, ch) in inner.char_indices() {
-        match ch {
-            '[' | '(' => depth = depth.saturating_add(1),
-            ']' | ')' => depth = depth.saturating_sub(1),
-            ',' if depth == 0 => {
-                if let Some(part) = inner.get(start..idx) {
-                    let part = part.trim();
-                    if !part.is_empty() {
-                        parts.push(part);
-                    }
-                }
-                start = idx + 1;
-            }
-            _ => {}
-        }
-    }
-    let remainder = inner.get(start..).unwrap_or_default().trim();
-    if !remainder.is_empty() {
-        parts.push(remainder);
-    }
-    parts
+// ##########################################################################
+// # DELETED BODY — `check_tuple_literal_mismatch`, AND THE TWO SPLITTERS   #
+// # IT RAN ON (`split_tuple_literal_elems`, `split_type_list`) ARE GONE    #
+// # ENTIRELY. DO NOT RESTORE ANY OF THEM.                                  #
+// #                                                                        #
+// # This was a SECOND PARSER for Python, written in string operations and  #
+// # run on the output of the first one:                                    #
+// #                                                                        #
+// #   let inner_ann = ann.strip_prefix("tuple[")?.strip_suffix(']')?;      #
+// #   let rhs_inner = rhs.strip_prefix('(')?.strip_suffix(')')?;           #
+// #   let rhs_elems = split_tuple_literal_elems(rhs_inner);  // scan chars #
+// #   if let Some(t) = inner_ann.strip_suffix(", ...") { … }               #
+// #   if inner_ann.trim() == "()" { … }                                    #
+// #   if rhs_elems.len() != ann_elems.len() { …emit a diagnostic… }        #
+// #                                                                        #
+// # The arity diagnostic came straight off a COMMA COUNT taken by walking  #
+// # characters and tracking bracket depth by hand — a live verdict derived #
+// # from punctuation. It agreed with Python only by coincidence:           #
+// #                                                                        #
+// #   * `tuple[T, ...]` was matched with `strip_suffix(", ...")`, so       #
+// #     `tuple[T,...]` (no space) was read as a TWO-element fixed tuple    #
+// #     whose second element type is the string `...`;                     #
+// #   * a comma inside a string literal — `("a,b",)` — split the element   #
+// #     list in two, reporting a 1-tuple as a 2-tuple, because the depth   #
+// #     counter tracks brackets and knows nothing about quoting;           #
+// #   * a trailing comma, a line continuation, or a comment anywhere in    #
+// #     the assignment moved the count.                                    #
+// #                                                                        #
+// # The element counts are `Expr::Tuple::elts.len()` and the annotation's  #
+// # arguments are the `Expr::Subscript::slice` — both already built.       #
+// #                                                                        #
+// # Pinned by: tests/source_text_verdict_pin_tests.rs                      #
+// ##########################################################################
+fn check_tuple_literal_mismatch(_rhs: &str, _ann: &str) -> Option<String> {
+    panic!(
+        "basilisk-checker: `check_tuple_literal_mismatch` was DELETED because it \
+         RE-PARSED both the annotation and the assigned value out of source text — \
+         stripping brackets by prefix, splitting elements on commas with a \
+         hand-tracked depth counter that does not know about string literals — and \
+         emitted an arity diagnostic from the resulting count. It panics because the \
+         real implementation — comparing `Expr::Tuple::elts` against the subscript's \
+         own argument nodes — DOES NOT EXIST YET. Do not restore the splitters and do \
+         not return `None` in its place: `None` reports every tuple as compatible."
+    )
 }
 
 // ##########################################################################
@@ -246,6 +209,12 @@ fn split_type_list(inner: &str) -> Vec<&str> {
 
 /// DELETED — panics. The signature survives only so its callers stay visible
 /// as the rebuild map; see the banner above.
+#[expect(
+    dead_code,
+    reason = "its only caller, `check_tuple_literal_mismatch`, was itself deleted for \
+              re-parsing source text; the shell and its banner are retained as the \
+              record of what the element comparison has to become"
+)]
 pub(super) fn literal_elem_matches(_elem: &str, _expected: &str) -> bool {
     panic!(
         "basilisk-checker: `literal_elem_matches` was DELETED because it RE-LEXED a \

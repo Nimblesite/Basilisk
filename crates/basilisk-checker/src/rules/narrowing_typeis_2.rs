@@ -65,29 +65,44 @@ enum Verdict {
     Unknown,
 }
 
-/// The leaf name a type compares nominally by, or `None` when the type is not
-/// a groundable leaf (so the judgment must abstain or recurse structurally).
-fn leaf_name(resolver: &AnnotationResolver<'_>, ty: &InferredType) -> Option<String> {
-    match ty {
-        InferredType::Int => Some("int".to_owned()),
-        InferredType::Str | InferredType::LiteralString => Some("str".to_owned()),
-        InferredType::Float => Some("float".to_owned()),
-        InferredType::Bool => Some("bool".to_owned()),
-        InferredType::Bytes => Some("bytes".to_owned()),
-        InferredType::None_ => Some("None".to_owned()),
-        InferredType::Literal(value) => Some(
-            match value {
-                crate::types::LiteralValue::Int(_) => "int",
-                crate::types::LiteralValue::Str(_) => "str",
-                crate::types::LiteralValue::Float(_) => "float",
-                crate::types::LiteralValue::Bool(_) => "bool",
-                crate::types::LiteralValue::Bytes(_) => "bytes",
-            }
-            .to_owned(),
-        ),
-        InferredType::Named(name) => resolver.is_grounded_name(name).then(|| name.clone()),
-        _ => None,
-    }
+// ##########################################################################
+// # DELETED BODY — `leaf_name`. DO NOT RESTORE IT AND DO NOT RETURN `None`.#
+// #                                                                        #
+// # This is `judge::nominal_leaf`, which the spelling guard's own header    #
+// # records as already deleted once, BACK UNDER A NEW NAME. It took a       #
+// # resolved `InferredType` and RENDERED IT TO A `String`:                  #
+// #                                                                        #
+// #   InferredType::Int   => Some("int".to_owned()),                        #
+// #   InferredType::Str | InferredType::LiteralString                       #
+// #                       => Some("str".to_owned()),                        #
+// #   InferredType::Named(name) => …then(|| name.clone()),                  #
+// #                                                                        #
+// # so that `leaf_consistency` could hand the two strings to               #
+// # `SubtypingContext::is_subtype` — the DELETED string-keyed hierarchy.    #
+// # Once both sides are text, `class int` in the module under analysis is   #
+// # indistinguishable from `builtins.int`, two same-named classes from      #
+// # different modules collapse into one, and a dotted or aliased name       #
+// # compares unequal to the class it denotes.                               #
+// #                                                                        #
+// # `InferredType::Int` is already the answer; turning it into `"int"` can  #
+// # only lose. Subtyping between two RESOLVED types is what `assignable`    #
+// # is for, and it abstains honestly instead of guessing.                   #
+// #                                                                        #
+// # `leaf_consistency` below is retained as the call site — the map of what #
+// # has to be rebuilt.                                                      #
+// #                                                                        #
+// # Pinned by: tests/no_type_spelling_surgery_tests.rs                      #
+// ##########################################################################
+fn leaf_name(_resolver: &AnnotationResolver<'_>, _ty: &InferredType) -> Option<String> {
+    panic!(
+        "basilisk-checker: `leaf_name` was DELETED because it RENDERED a resolved \
+         `InferredType` into a `String` so that nominal subtyping could be settled \
+         between two spellings — `judge::nominal_leaf` again, under a new name. It \
+         panics because the real implementation — deciding the relation on the \
+         resolved types themselves, via `assignable(&TypeNode, &TypeNode)` — DOES NOT \
+         EXIST YET. Do not restore the rendering and do not return `None` in its \
+         place."
+    )
 }
 
 /// Consistency of `narrowed` with `input` on RESOLVED types.

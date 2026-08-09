@@ -7,31 +7,56 @@
 
 use crate::types::InferredType;
 
-/// Return type of calling a builtin constructor or function by bare name.
-///
-/// Only names whose return type is fixed regardless of arguments are listed —
-/// argument-dependent builtins (`abs`, `max`, `next`, …) stay out rather than
-/// guessing ([TYPEINF-EXCEEDS-NOUNKNOWN]).
+// ##########################################################################
+// # DELETED BODY — `builtin_call_return`, a 30-entry table of BUILTIN      #
+// # SPELLINGS. DO NOT RESTORE IT AND DO NOT RETURN `None` IN ITS PLACE.    #
+// #                                                                        #
+// # It took a BARE CALLEE NAME and answered with a type:                   #
+// #                                                                        #
+// #   "int" | "len" | "ord" | "hash" | "id"      => Int                    #
+// #   "bool" | "isinstance" | "issubclass" | …   => Bool                   #
+// #   "list" | "sorted"                          => List(Unknown)          #
+// #   "range"                                    => Named("range")         #
+// #                                                                        #
+// # Not one of those names is reserved. Every one of them is an ordinary   #
+// # module-scope binding that Python lets you shadow, rebind, or import    #
+// # under another name, and the table consulted none of that:              #
+// #                                                                        #
+// #   def len(xs) -> str: ...                                              #
+// #   n = len([1])            # the USER's function — table says `int`     #
+// #                                                                        #
+// #   from builtins import len as size                                     #
+// #   n = size([1])           # `builtins.len` — table says nothing        #
+// #                                                                        #
+// # CLAUDE.md names this case exactly: "Builtins are not an exception —    #
+// # Python lets any name be shadowed, rebound, or aliased, so builtin uses #
+// # resolve through the binding table like everything else."               #
+// #                                                                        #
+// # The header above called this file "the single home the checklist       #
+// # demands instead of rule-local string tables". Centralising a string    #
+// # table does not stop it being a string table.                           #
+// #                                                                        #
+// # `"range" => Named("range")` is the same defect twice over, and is the  #
+// # source the two DELETED `name == "range" => Int` arms in `narrow/flow`  #
+// # and `bidir/engine` were reading.                                       #
+// #                                                                        #
+// # Pinned by: tests/source_text_verdict_pin_tests.rs                      #
+// ##########################################################################
+/// DELETED — panics. The signature survives only so its callers stay visible
+/// as the rebuild map; see the banner above.
 #[must_use]
-pub fn builtin_call_return(name: &str) -> Option<InferredType> {
-    Some(match name {
-        "int" | "len" | "ord" | "hash" | "id" => InferredType::Int,
-        "float" => InferredType::Float,
-        "str" | "repr" | "format" | "chr" | "hex" | "oct" | "bin" | "ascii" | "input" => {
-            InferredType::Str
-        }
-        "bool" | "isinstance" | "issubclass" | "callable" | "hasattr" => InferredType::Bool,
-        "bytes" | "bytearray" => InferredType::Bytes,
-        "list" | "sorted" => InferredType::List(Box::new(InferredType::Unknown)),
-        "dict" => InferredType::Dict(
-            Box::new(InferredType::Unknown),
-            Box::new(InferredType::Unknown),
-        ),
-        "set" | "frozenset" => InferredType::Set(Box::new(InferredType::Unknown)),
-        "range" => InferredType::Named("range".to_owned()),
-        "print" => InferredType::None_,
-        _ => return None,
-    })
+pub fn builtin_call_return(_name: &str) -> Option<InferredType> {
+    panic!(
+        "basilisk-checker: `builtin_call_return` was DELETED because it identified a \
+         builtin from the CHARACTERS OF THE CALLEE'S NAME, so a module that defines \
+         its own `len` still got `int` and `from builtins import len as size` got \
+         nothing. It panics because the real implementation — resolving the callee \
+         through the binding table to its `builtins` definition, which \
+         `form_of_with_builtins` already does for the shadowing question — DOES NOT \
+         EXIST YET. Do not restore the name table and do not return `None` in its \
+         place: `None` makes every builtin call `Unknown` while the module still \
+         advertises a builtin signature table."
+    )
 }
 
 /// Return type of calling a method on a receiver of a known builtin type.

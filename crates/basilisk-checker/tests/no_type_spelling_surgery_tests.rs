@@ -115,6 +115,60 @@ const FORBIDDEN: &[(&str, &str)] = &[
         "is_transitive_typeddict",
         "the DELETED name-keyed TypedDict base walk (basilisk-resolver)",
     ),
+    // ---------------------------------------------------------------------
+    // Re-parsing Python out of its own source text. `ruff_python_parser` has
+    // already produced the AST; every construct re-derived from characters
+    // disagrees with it somewhere, and the disagreement is always a
+    // respelling the tests do not contain.
+    // ---------------------------------------------------------------------
+    (
+        ".split('|')",
+        "decomposes a UNION by splitting rendered text on a character; `|` \
+         occurs inside `Literal[\"a|b\"]` and inside nested generics, and \
+         `Optional[X]` / `Union[X, Y]` contain no `|` at all",
+    ),
+    (
+        "starts_with(\"tuple[\")",
+        "recognises a tuple annotation by a six-character PREFIX, so \
+         `tuple [int]` and `builtins.tuple[int]` are not tuples",
+    ),
+    (
+        ".split('(')",
+        "reads a call's callee out of RAW SOURCE by cutting at a parenthesis; \
+         the callee is `ExprCall::func`, an AST node",
+    ),
+    (
+        "rsplit('.')",
+        "reduces a dotted expression to its TRAILING WORD, so `models.User` \
+         collides with every other `User` in the program; resolve the \
+         expression instead",
+    ),
+    (
+        "is_ascii_uppercase",
+        "decides that a callee is a CLASS from its capitalisation — a naming \
+         convention, not a Python rule",
+    ),
+    (
+        "fn leaf_name",
+        "renders a resolved type to a `String` so nominal subtyping can be \
+         settled between two spellings; this is `judge::nominal_leaf`, \
+         already deleted once",
+    ),
+    (
+        "fn classify_literal",
+        "decides a literal's TYPE from its leading characters; the parser \
+         already built `Expr::NumberLiteral` / `StringLiteral` / …",
+    ),
+    (
+        "builtin_call_return",
+        "the DELETED table mapping a BARE CALLEE NAME to a builtin's return \
+         type; builtins are not an exception to binding resolution",
+    ),
+    (
+        "== \"staticmethod\"",
+        "identifies the `staticmethod` builtin by its spelling on an \
+         `Expr::Name` decorator, so `@builtins.staticmethod` is not one",
+    ),
 ];
 
 /// Files exempt for a stated reason — NOT a general escape hatch. A new entry

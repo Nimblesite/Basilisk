@@ -138,21 +138,56 @@ impl Rule for NonHashableDataclassAssignment {
 /// `Hashable` requires an import, so matching the annotation's source text
 /// against its spellings is not import resolution. Deleted pending a
 /// cascade-based recogniser ([TYPEINF-ANNOTATION-RESOLUTION]).
+//
+// ##########################################################################
+// # DELETED BODY. THE PREVIOUS DELETION LEFT `false` HERE, WHICH CLAUDE.md #
+// # FORBIDS: a deleted body "MUST be replaced with a loud `panic!` and     #
+// # nothing else — never a default, `None`, `false`, or empty result".     #
+// # `false` reported EVERY annotation as unhashable, inventing a           #
+// # diagnostic for every legal program instead of failing loudly.          #
+// #                                                                        #
+// # Pinned by: tests/source_text_verdict_pin_tests.rs                      #
+// ##########################################################################
 fn is_hashable_annotation(_text: &str) -> bool {
-    false
+    panic!(
+        "basilisk-checker: `is_hashable_annotation` was DELETED because it decided \
+         hashability from the SOURCE SPELLING of an annotation. It panics because the \
+         real implementation — resolving the annotation and asking whether the type \
+         supplies `__hash__` — DOES NOT EXIST YET. It previously returned `false`, \
+         which is not a deletion: it claimed every annotated field was unhashable."
+    )
 }
 
-/// Extract the simple callee name from an RHS expression string.
-///
-/// For `DC1(0)` this returns `"DC1"`.
-/// For `module.DC1(0)` this returns `"DC1"`.
-/// For anything that is not a call, this returns `""`.
-fn rhs_callee(rhs: &str) -> &str {
-    let before_paren = rhs.split('(').next().unwrap_or("").trim();
-    if before_paren.is_empty() {
-        return "";
-    }
-    before_paren.rsplit('.').next().unwrap_or(before_paren)
+// ##########################################################################
+// # DELETED BODY — `rhs_callee`. DO NOT RESTORE IT AND DO NOT RETURN `""`. #
+// #                                                                        #
+// #   let before_paren = rhs.split('(').next().unwrap_or("").trim();       #
+// #   before_paren.rsplit('.').next().unwrap_or(before_paren)              #
+// #                                                                        #
+// # Two spelling defects stacked. First it found the callee by cutting     #
+// # SOURCE TEXT at the first `(` — so `f(g(x))` gives `f`, but `(F)(x)`,   #
+// # `d[\"k\"](x)`, and any call whose arguments start on the next line     #
+// # give something else or nothing. Then it THREW AWAY THE QUALIFIER with  #
+// # `rsplit('.')`, so `models.User(...)`, `other.User(...)` and a local    #
+// # `User(...)` all became the same class `User`, and a subsequent by-name #
+// # lookup happily matched whichever one the module happened to define.    #
+// #                                                                        #
+// # This is the `base_name` defect deleted from `sig_model` — reducing a   #
+// # dotted expression to its trailing word — reappearing on the value side.#
+// # The callee is `ExprCall::func`, an `Expr` that resolves to exactly one #
+// # binding.                                                               #
+// #                                                                        #
+// # Pinned by: tests/source_text_verdict_pin_tests.rs                      #
+// ##########################################################################
+fn rhs_callee(_rhs: &str) -> &str {
+    panic!(
+        "basilisk-checker: `rhs_callee` was DELETED because it found a call's callee by \
+         cutting SOURCE TEXT at the first `(` and then discarded the qualifier with \
+         `rsplit('.')`, collapsing `models.User(...)` and a local `User(...)` into one \
+         name. It panics because the real implementation — resolving `ExprCall::func` \
+         through the binding table — DOES NOT EXIST YET. Do not restore the splitting \
+         and do not return `\"\"` in its place."
+    )
 }
 
 fn make_diagnostic(

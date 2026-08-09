@@ -179,35 +179,39 @@ impl Rule for RedundantAnnotationWarning {
 /// Looks for `: <annotation>` on the same source line as the variable name,
 /// stopping at the `=` sign that introduces the RHS.  Returns `None` if no
 /// such pattern is found.
-fn extract_annotation(source: &str, name_span: basilisk_resolver::Span) -> Option<&str> {
-    // Find the byte offset of the start of the line containing the name.
-    let start = name_span.start_usize();
-    let line_start = source[..start].rfind('\n').map_or(0, |pos| pos + 1);
-    let line_end = source[start..]
-        .find('\n')
-        .map_or(source.len(), |pos| start + pos);
-
-    let line = source.get(line_start..line_end)?;
-
-    // Position of the name within the line.
-    let name_offset = start.checked_sub(line_start)?;
-
-    // Find `: ` after the name position on this line.
-    let colon_pos = line[name_offset..].find(": ")? + name_offset;
-    let after_colon = colon_pos + 2; // skip ': '
-
-    // Find `=` that ends the annotation (must be after the colon).
-    let annotation_end = line[after_colon..]
-        .find('=')
-        .map_or(line.len(), |p| after_colon + p);
-
-    let annotation = line.get(after_colon..annotation_end)?.trim();
-
-    if annotation.is_empty() {
-        None
-    } else {
-        Some(annotation)
-    }
+// ##########################################################################
+// # DELETED BODY — `extract_annotation`. DO NOT RESTORE IT AND DO NOT      #
+// # RETURN `None` IN ITS PLACE.                                            #
+// #                                                                        #
+// # It recovered the annotation by scanning ONE SOURCE LINE for two        #
+// # punctuation marks:                                                     #
+// #                                                                        #
+// #   let colon_pos = line[name_offset..].find(": ")? + name_offset;       #
+// #   let annotation_end = line[after_colon..].find('=')…                  #
+// #                                                                        #
+// # Neither is part of Python's grammar. The space after the colon is a    #
+// # PEP 8 preference, so `n:int = 1` produced no annotation at all; an     #
+// # `=` inside the annotation — `Literal["a=b"]`, an `Annotated` payload — #
+// # truncated it; an annotation split across lines (a parenthesised union, #
+// # a long `Callable`) was cut at the newline; and `: ` occurring earlier  #
+// # on the line, as in a dict display or a lambda default, was taken for   #
+// # the declaration's colon.                                               #
+// #                                                                        #
+// # `AnnAssign::annotation` is an `Expr` the parser already produced, with #
+// # its own span. There is nothing to find.                                #
+// #                                                                        #
+// # Pinned by: tests/source_text_verdict_pin_tests.rs                      #
+// ##########################################################################
+fn extract_annotation(_source: &str, _name_span: basilisk_resolver::Span) -> Option<&str> {
+    panic!(
+        "basilisk-checker: `extract_annotation` was DELETED because it recovered a \
+         declaration's annotation by searching ONE SOURCE LINE for the literal text \
+         `\": \"` and cutting at the first `=`, so `n:int = 1` had no annotation and a \
+         multi-line or `=`-containing one was truncated. It panics because the real \
+         implementation — reading `StmtAnnAssign::annotation` from the AST — DOES NOT \
+         EXIST YET. Do not restore the line scan and do not return `None` in its \
+         place: `None` disables the rule while it still reports as implemented."
+    )
 }
 
 /// Check if types match for BSK-0050 purposes (base scalar comparison).
@@ -240,46 +244,47 @@ fn types_match_for_w0050(inferred: &InferredType, declared: &InferredType) -> bo
 /// its type, so we return `Unknown`.  Claiming the annotation is redundant in
 /// that case would be a false positive (issue #83): the annotation supplies a
 /// type the inference engine does not have.
-fn infer_type_from_source(source: &str, name_span: basilisk_resolver::Span) -> InferredType {
-    // Extract the line containing the assignment
-    let start = name_span.start_usize();
-    let line_start = source[..start].rfind('\n').map_or(0, |pos| pos + 1);
-    let line_end = source[start..]
-        .find('\n')
-        .map_or(source.len(), |pos| start + pos);
-
-    let Some(line) = source.get(line_start..line_end) else {
-        return InferredType::Unknown;
-    };
-
-    // Find the value after the '=' sign
-    let Some(equals_pos) = line.find('=') else {
-        return InferredType::Unknown;
-    };
-
-    let value_text = line[equals_pos + 1..].trim();
-
-    // Simple literal detection
-    if value_text.parse::<i64>().is_ok() {
-        InferredType::Int
-    } else if value_text.parse::<f64>().is_ok() {
-        InferredType::Float
-    } else if (value_text.starts_with('"') && value_text.ends_with('"'))
-        || (value_text.starts_with('\'') && value_text.ends_with('\''))
-    {
-        InferredType::Str
-    } else if value_text == "True" || value_text == "False" {
-        InferredType::Bool
-    } else if value_text == "None" {
-        InferredType::None_
-    } else if value_text.starts_with("b\"") && value_text.ends_with('"') {
-        InferredType::Bytes
-    } else {
-        // RHS is not a recognisable literal (name reference, call, expression):
-        // Basilisk cannot infer its type, so the annotation is informative — not
-        // redundant.  Returning Unknown suppresses a false-positive BSK-0050 (#83).
-        InferredType::Unknown
-    }
+// ##########################################################################
+// # DELETED BODY — `infer_type_from_source`. DO NOT RESTORE IT AND DO NOT  #
+// # RETURN `InferredType::Unknown` IN ITS PLACE.                           #
+// #                                                                        #
+// # Its name says what it did: it INFERRED A TYPE FROM SOURCE TEXT. It cut #
+// # one line out of the file, split it at the first `=`, and classified    #
+// # the remaining characters with Rust's own number parser and a handful   #
+// # of quote tests:                                                        #
+// #                                                                        #
+// #   if value_text.parse::<i64>().is_ok()      { Int }                    #
+// #   else if value_text.parse::<f64>().is_ok() { Float }                  #
+// #   else if value_text.starts_with('"') && value_text.ends_with('"')     #
+// #                                            { Str }                     #
+// #   else if value_text == "True" || … == "False" { Bool }                #
+// #   else if value_text.starts_with("b\"") …  { Bytes }                   #
+// #                                                                        #
+// # Rust's literal grammar is not Python's. `1_000` parses in both but     #
+// # means the same only by luck; `0x1F` parses in NEITHER, so a hex        #
+// # integer was `Unknown`; `1e3` was matched by `parse::<f64>` — correct   #
+// # by accident — while `10j` (a complex literal) fell through. Python     #
+// # spellings the tests never see: `r"x"`, `rb"x"`, `"""x"""`, implicit    #
+// # adjacent-string concatenation, and any value wrapped in parentheses    #
+// # across lines. And the split at the FIRST `=` mis-reads `x: int = y ==  #
+// # z` and every augmented assignment.                                     #
+// #                                                                        #
+// # A literal's type is the kind of node the parser built for it:          #
+// # `Expr::NumberLiteral`, `Expr::StringLiteral`, `Expr::BytesLiteral`,    #
+// # `Expr::BooleanLiteral`, `Expr::NoneLiteral`.                           #
+// #                                                                        #
+// # Pinned by: tests/source_text_verdict_pin_tests.rs                      #
+// ##########################################################################
+fn infer_type_from_source(_source: &str, _name_span: basilisk_resolver::Span) -> InferredType {
+    panic!(
+        "basilisk-checker: `infer_type_from_source` was DELETED because it inferred a \
+         value's TYPE by cutting one source line at the first `=` and classifying the \
+         remaining characters with Rust's number parser and quote-prefix tests — a \
+         second, wrong lexer for Python. It panics because the real implementation — \
+         reading the literal `Expr` node the parser already built — DOES NOT EXIST \
+         YET. Do not restore the character classification and do not return `Unknown` \
+         in its place."
+    )
 }
 
 /// Create diagnostic for redundant annotation warning

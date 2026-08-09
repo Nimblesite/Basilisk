@@ -128,11 +128,12 @@ fn check_frozen_instance_assigns(module: &ResolvedModule, diagnostics: &mut Vec<
         let Some(rhs_text) = slice_span(source, rhs_span) else {
             continue;
         };
-        let callee = rhs_text.split(['(', '[']).next().unwrap_or("").trim();
+        // Call site of the DELETED trailing-word callee reduction — see the
+        // banner on `constructed_class_name` below.
+        let callee = constructed_class_name(rhs_text);
         if callee.is_empty() {
             continue;
         }
-        let callee = callee.rsplit('.').next().unwrap_or(callee);
         if frozen_classes.contains(callee) {
             let _ = instance_class.insert(var.name.as_str(), callee);
         }
@@ -154,4 +155,34 @@ fn check_frozen_instance_assigns(module: &ResolvedModule, diagnostics: &mut Vec<
             Some("PEP 557: `@dataclass(frozen=True)` prohibits attribute assignment".to_owned()),
         ));
     }
+}
+
+// ##########################################################################
+// # DELETED BODY — the constructed-class reduction. DO NOT RESTORE IT AND  #
+// # DO NOT RETURN `""` IN ITS PLACE.                                       #
+// #                                                                        #
+// #   let callee = rhs_text.split(['(', '[']).next().unwrap_or("").trim(); #
+// #   let callee = callee.rsplit('.').next().unwrap_or(callee);            #
+// #                                                                        #
+// # It read the constructed class out of RAW SOURCE by cutting at the      #
+// # first `(` or `[`, then discarded the qualifier. `models.Config()` and  #
+// # a local `Config()` became the same class, so a frozen `Config` defined #
+// # in this module made assignments to an INSTANCE OF A DIFFERENT CLASS    #
+// # an error — a diagnostic on correct code, produced by a name collision. #
+// #                                                                        #
+// # Which class a variable holds is the type of `ExprCall::func` resolved  #
+// # through the binding table.                                             #
+// #                                                                        #
+// # Pinned by: tests/source_text_verdict_pin_tests.rs                      #
+// ##########################################################################
+fn constructed_class_name(_rhs_text: &str) -> &str {
+    panic!(
+        "basilisk-checker: the constructed-class reduction in `dataclasses_frozen` was \
+         DELETED because it read the class out of RAW SOURCE by cutting at the first \
+         `(` or `[` and then discarded the module qualifier with `rsplit('.')`, so a \
+         local frozen class hijacked every same-named class from anywhere else. It \
+         panics because the real implementation — resolving the callee through the \
+         binding table — DOES NOT EXIST YET. Do not restore the splitting and do not \
+         return `\"\"` in its place."
+    )
 }

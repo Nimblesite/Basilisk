@@ -97,34 +97,64 @@ impl Rule for DataclassFieldDefaultFactoryMismatch {
 /// initializer.
 ///
 /// `field` requires an import from `dataclasses`, so recognising the call by
-/// its source spelling is not import resolution. Deleted pending a
-/// cascade-based recogniser ([TYPEINF-ANNOTATION-RESOLUTION]).
+/// its source spelling is not import resolution.
+//
+// ##########################################################################
+// # DELETED BODY. THE PREVIOUS DELETION LEFT `None` HERE, WHICH IS ITSELF  #
+// # A PROTOCOL VIOLATION — CLAUDE.md: a deleted body "MUST be replaced     #
+// # with a loud `panic!` and nothing else — never a default, `None`,       #
+// # `false`, or empty result". `None` made a rule that cannot analyse      #
+// # anything look like a rule that found nothing to report. Corrected to a #
+// # panic here.                                                            #
+// #                                                                        #
+// # Pinned by: tests/source_text_verdict_pin_tests.rs                      #
+// ##########################################################################
 fn extract_default_factory_type(_rhs_text: &str) -> Option<&str> {
-    None
+    panic!(
+        "basilisk-checker: `extract_default_factory_type` was DELETED because it \
+         recognised `dataclasses.field(default_factory=...)` from its SOURCE SPELLING. \
+         It panics because the real implementation — resolving the callee and the \
+         keyword's value through the binding table — DOES NOT EXIST YET. It previously \
+         returned `None`, which is not a deletion: it silently reported 'no factory \
+         found' for every dataclass in every file."
+    )
 }
 
-/// Returns `true` when calling `factory_type()` yields a value that is
-/// clearly incompatible with `field_ann`.
-///
-/// Only flags mismatches between well-known primitive types to avoid FPs.
-fn is_factory_incompatible_with_annotation(factory_type: &str, field_ann: &str) -> bool {
-    // Strip away Optional/Union wrappers — just look at the primary type name.
-    let primary = field_ann.split('|').next().unwrap_or(field_ann).trim();
-    // A factory that is not a known primitive → don't flag.
-    let known = ["str", "int", "float", "bool", "bytes"];
-    if !known.contains(&factory_type) {
-        return false;
-    }
-    if !known.contains(&primary) {
-        return false;
-    }
-    // str, bytes are their own types; int/bool/float share the numeric tower.
-    match factory_type {
-        "str" => primary != "str",
-        "bytes" => primary != "bytes",
-        "int" => matches!(primary, "str" | "bytes"),
-        "float" => matches!(primary, "str" | "bytes"),
-        "bool" => matches!(primary, "str" | "bytes"),
-        _ => false,
-    }
+// ##########################################################################
+// # DELETED BODY — `is_factory_incompatible_with_annotation`. DO NOT       #
+// # RESTORE IT AND DO NOT RETURN `false` IN ITS PLACE.                     #
+// #                                                                        #
+// # This is `name_subtype` — the construct the spelling guard forbids by   #
+// # name — wearing a dataclasses hat. It settled TYPE COMPATIBILITY        #
+// # between two RENDERED SPELLINGS:                                        #
+// #                                                                        #
+// #   let primary = field_ann.split('|').next()…      // union by chars    #
+// #   let known = ["str", "int", "float", "bool", "bytes"];                #
+// #   match factory_type {                                                 #
+// #       "str"   => primary != "str",                                     #
+// #       "int"   => matches!(primary, "str" | "bytes"),  …                #
+// #   }                                                                    #
+// #                                                                        #
+// # Splitting the annotation on the `|` CHARACTER is not union            #
+// # decomposition: it cuts `dict[str, int] | None` in the wrong place and  #
+// # cuts `Literal[\"a|b\"]` inside a string. The five-name whitelist is    #
+// # builtin identity by spelling, so `builtins.str` and any aliased import #
+// # were "not a known primitive" and silently exempt, while a module's own #
+// # `class int` was treated as the numeric tower.                          #
+// #                                                                        #
+// # Compatibility between two types is `assignable(&TypeNode, &TypeNode)`, #
+// # which already exists and already abstains honestly with `None`.        #
+// #                                                                        #
+// # Pinned by: tests/source_text_verdict_pin_tests.rs                      #
+// ##########################################################################
+fn is_factory_incompatible_with_annotation(_factory_type: &str, _field_ann: &str) -> bool {
+    panic!(
+        "basilisk-checker: `is_factory_incompatible_with_annotation` was DELETED \
+         because it decided type compatibility by comparing two RENDERED SPELLINGS \
+         against a five-entry builtin-name whitelist, after splitting the annotation \
+         on the `|` character to 'strip unions'. It panics because the real \
+         implementation — `assignable(&TypeNode, &TypeNode)` on canonical types — DOES \
+         NOT EXIST YET at this call site. Do not restore the name match and do not \
+         return `false` in its place."
+    )
 }

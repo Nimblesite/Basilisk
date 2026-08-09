@@ -70,17 +70,9 @@ impl Rule for NoMatchingOverload {
             .filter_map(|v| {
                 let rhs_span = v.rhs_span?;
                 let rhs_text = slice_span(source, rhs_span)?;
-                // Extract class name from "ClassName()" or "ClassName(args)"
-                let class_name = rhs_text.split('(').next()?;
-                let class_name = class_name.trim();
-                if class_name.is_empty() {
-                    return None;
-                }
-                // Verify it starts with uppercase (heuristic for class constructors)
-                if !class_name.starts_with(|c: char| c.is_ascii_uppercase()) {
-                    return None;
-                }
-                Some((v.name.as_str(), class_name))
+                // Call site of the DELETED capitalisation heuristic — see the
+                // banner on `constructed_class_name` below.
+                Some((v.name.as_str(), constructed_class_name(rhs_text)?))
             })
             .collect();
 
@@ -229,6 +221,43 @@ fn classify_expr_type(expr: &ruff_python_ast::Expr) -> Option<&'static str> {
         Expr::Slice(_) => Some("slice"),
         _ => None,
     }
+}
+
+// ##########################################################################
+// # DELETED BODY — the constructed-class extraction. DO NOT RESTORE IT AND #
+// # DO NOT RETURN `None` IN ITS PLACE.                                     #
+// #                                                                        #
+// #   let class_name = rhs_text.split('(').next()?;                        #
+// #   // Verify it starts with uppercase (heuristic for class constructors)#
+// #   if !class_name.starts_with(|c: char| c.is_ascii_uppercase()) {       #
+// #       return None;                                                     #
+// #   }                                                                    #
+// #                                                                        #
+// # This is the defect at its plainest, and the comment said so: the rule  #
+// # decided WHETHER A CALLEE IS A CLASS FROM ITS CAPITALISATION. Python    #
+// # has no such rule. `int`, `str`, `bool`, `list`, `dict`,                #
+// # `collections.OrderedDict` reached as `od`, and every class in a        #
+// # snake_case codebase are all classes and all failed the test; a call to #
+// # a FUNCTION named `Parse` passed it. And `is_ascii_uppercase` means a   #
+// # class named `Ünicode` is not a class.                                  #
+// #                                                                        #
+// # The callee was also cut out of RAW SOURCE at the first `(`.            #
+// #                                                                        #
+// # Whether the RHS constructs a class is a question about what            #
+// # `ExprCall::func` resolves to.                                          #
+// #                                                                        #
+// # Pinned by: tests/source_text_verdict_pin_tests.rs                      #
+// ##########################################################################
+fn constructed_class_name(_rhs_text: &str) -> Option<&str> {
+    panic!(
+        "basilisk-checker: the constructed-class extraction in `overloads_basic` was \
+         DELETED because it cut the callee out of RAW SOURCE at the first `(` and then \
+         decided the callee was a class BY ITS CAPITALISATION — an explicit heuristic \
+         on spelling, with no basis in Python. It panics because the real \
+         implementation — resolving `ExprCall::func` through the binding table — DOES \
+         NOT EXIST YET. Do not restore the heuristic and do not return `None` in its \
+         place."
+    )
 }
 
 // ##########################################################################

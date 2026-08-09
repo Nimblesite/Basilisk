@@ -34,10 +34,37 @@ const CODE: ErrorCode = ErrorCode {
 /// signature unchanged. Any *other* decorator may transform the effective
 /// signature (the spec applies such transforms before consistency checks), so a
 /// group carrying one cannot be compared by its declared annotations.
-fn is_type_only_decorator(decorator: &str) -> bool {
-    matches!(
-        decorator.rsplit('.').next().unwrap_or(decorator),
-        "staticmethod" | "classmethod" | "property"
+//
+// ##########################################################################
+// # DELETED BODY — `is_type_only_decorator`. DO NOT RESTORE IT AND DO NOT  #
+// # RETURN EITHER ANSWER UNCONDITIONALLY.                                  #
+// #                                                                        #
+// #   matches!(decorator.rsplit('.').next().unwrap_or(decorator),          #
+// #            "staticmethod" | "classmethod" | "property")                #
+// #                                                                        #
+// # `rsplit('.').next()` discards the qualifier, so ANY decorator whose    #
+// # last component happens to be one of those three words was treated as   #
+// # signature-preserving — `mylib.property`, `attrs.staticmethod`,         #
+// # `self.classmethod`, a `Protocol` member named `property`. In the other #
+// # direction, `functools.cached_property` is not `property` and neither   #
+// # is an aliased `from builtins import property as prop`.                 #
+// #                                                                        #
+// # This decides whether a whole overload group can be compared by its     #
+// # declared annotations at all, so a wrong answer here does not merely    #
+// # miss a diagnostic — it compares transformed signatures as if they were #
+// # untransformed and reports differences the spec does not have.          #
+// #                                                                        #
+// # Pinned by: tests/source_text_verdict_pin_tests.rs                      #
+// ##########################################################################
+fn is_type_only_decorator(_decorator: &str) -> bool {
+    panic!(
+        "basilisk-checker: `is_type_only_decorator` was DELETED because it recognised \
+         `staticmethod`/`classmethod`/`property` by the LAST DOTTED COMPONENT of the \
+         decorator's rendered text, so any unrelated decorator ending in one of those \
+         words qualified and every aliased import of the real ones did not. It panics \
+         because the real implementation — resolving the decorator expression through \
+         the binding table — DOES NOT EXIST YET. Do not restore the trailing-word test \
+         and do not pick a constant answer in its place."
     )
 }
 

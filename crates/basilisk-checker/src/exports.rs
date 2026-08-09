@@ -719,19 +719,45 @@ pub fn flattened_class_methods(
 
 /// Resolve the bound `__call__` overloads declared by an external class's
 /// metaclass, including an inherited definition over the metaclass C3 MRO.
+// ##########################################################################
+// # DELETED BODY — `flattened_metaclass_calls`. DO NOT RESTORE IT AND DO   #
+// # NOT RETURN AN EMPTY `Vec`.                                             #
+// #                                                                        #
+// #   let head = crate::stub_constructor::base_head(metaclass);            #
+// #   let simple_name = head.rsplit('.').next().unwrap_or(head);           #
+// #   flattened_class_methods(simple_name, module_exports)                 #
+// #                                                                        #
+// # `symbol.metaclass` is the RENDERED TEXT of a `metaclass=` argument —   #
+// # the `metaclass_name` field the spelling guard already forbids reading. #
+// # This took that text, stripped any subscript off it, THREW AWAY THE     #
+// # QUALIFIER, and looked the remainder up in a by-name export map.        #
+// #                                                                        #
+// # `class C(metaclass=abc.ABCMeta)` and `class C(metaclass=ABCMeta)` and  #
+// # a local `class ABCMeta` all reduced to the same key, so whichever      #
+// # entry the export map happened to hold supplied the metaclass           #
+// # `__call__` signature.                                                  #
+// #                                                                        #
+// # This is NOT display data: `metaclass_calls` is what the constructor    #
+// # call check consults for a class whose metaclass defines `__call__`, so #
+// # a wrong entry here changes the arity and types a call is checked       #
+// # against.                                                               #
+// #                                                                        #
+// # Pinned by: tests/source_text_verdict_pin_tests.rs                      #
+// ##########################################################################
 fn flattened_metaclass_calls(
-    symbol: &ExternalSymbol,
-    module_exports: &[(String, ExternalSymbol)],
+    _symbol: &ExternalSymbol,
+    _module_exports: &[(String, ExternalSymbol)],
 ) -> Vec<ExternalMethod> {
-    let Some(metaclass) = symbol.metaclass.as_deref() else {
-        return Vec::new();
-    };
-    let head = crate::stub_constructor::base_head(metaclass);
-    let simple_name = head.rsplit('.').next().unwrap_or(head);
-    flattened_class_methods(simple_name, module_exports)
-        .into_iter()
-        .filter(|method| method.name == "__call__")
-        .collect()
+    panic!(
+        "basilisk-checker: `flattened_metaclass_calls` was DELETED because it took the \
+         RENDERED TEXT of a `metaclass=` argument, discarded the qualifier with \
+         `rsplit('.')`, and looked the trailing word up in a by-name export map — so \
+         `abc.ABCMeta` and any local class of that name shared one entry. It panics \
+         because the real implementation — resolving the metaclass expression to a \
+         definition — DOES NOT EXIST YET. Do not restore the name lookup and do not \
+         return an empty `Vec` in its place: empty silently drops the metaclass \
+         `__call__` signature that constructor checking depends on."
+    )
 }
 
 /// Build a function signature string for hover display.
