@@ -32,8 +32,22 @@ pub struct ParameterInfo {
     pub name_span: Span,
     /// The source span of the annotation expression, if present.
     pub annotation_span: Option<Span>,
-    /// The raw annotation text (e.g. `"int"`, `"str | None"`), if annotated.
-    pub annotation_text: Option<String>,
+    // ####################################################################
+    // # `annotation_text` IS GONE. DO NOT REINSTATE IT.                  #
+    // #                                                                  #
+    // # It held the RENDERED source of a parameter's annotation. Its     #
+    // # serializer was deleted as text-matched logic and the field was   #
+    // # left in place, filled with `None` for every parameter — which    #
+    // # turned its only consumer, `overloads_consistency`, into a false  #
+    // # positive generator: two fully annotated overloads compared       #
+    // # `None == None`, "matched", and were reported as overlapping      #
+    // # whatever their types were.                                       #
+    // #                                                                  #
+    // # A placeholder that every comparison passes is worse than the     #
+    // # text it replaced. `annotation_span` is beside it; a consumer     #
+    // # that needs the type resolves that span through the annotation    #
+    // # cascade ([TYPEINF-ANNOTATION-RESOLUTION]).                        #
+    // ####################################################################
 }
 
 /// How a return annotation is classified.
@@ -143,7 +157,18 @@ pub struct FunctionInfo {
     /// The span of the return annotation expression, if present.
     pub return_annotation_span: Option<Span>,
     /// Name of the containing class, if this function is a method.
+    ///
+    /// A RENDERING, kept for diagnostic message text. Two classes declared
+    /// with the same name in one module share it — use [`Self::class_site`] to
+    /// tell them apart.
     pub class_name: Option<String>,
+    /// DEFINITION SITE of the containing class, if this function is a method.
+    ///
+    /// The span of the `class` statement's name token, which is unique per
+    /// definition within a module and is the lawful key for "which class owns
+    /// this method?". Matches `ClassInfo::name_span`, so a method index built
+    /// on it lines up with [`crate::ClassGraph`].
+    pub class_site: Option<Span>,
     /// `true` when this function is lexically nested inside a class body — e.g.
     /// a closure defined inside a method — even though it is not itself a method
     /// (`class_name` is `None`).  Used by `generics_self_usage` to know that `Self` still
@@ -201,6 +226,12 @@ pub struct FunctionInfo {
     /// `true` when a decorator is the builtin `classmethod` and the module does
     /// not rebind that name. Implements [RESOLV-CANONICAL-BINDING].
     pub is_classmethod: bool,
+    /// `true` when a decorator resolves to `typing.final` (PEP 591).
+    ///
+    /// Resolved through the module's bindings, so `@final`, `@typing.final`,
+    /// and `from typing import final as sealed; @sealed` all answer alike, and
+    /// a locally-defined `final` does not answer at all.
+    pub is_final: bool,
     /// `true` when a decorator resolves to `abc.abstractmethod`.
     ///
     /// Resolved through the module's bindings at collection time — an aliased

@@ -92,14 +92,6 @@ pub(super) struct ClassEntry {
         reason = "read only by the inert protocol_members scaffolding ([ASTREBUILD-PHASE-RESOLVER])"
     )]
     pub(super) attrs: HashSet<String>,
-    /// Base class identifiers (subscripts stripped). A base that is not a
-    /// plain name yields an empty string, which matches no indexed class and
-    /// is therefore treated as an unresolvable base by consumers.
-    #[expect(
-        dead_code,
-        reason = "read only by the inert protocol_members scaffolding ([ASTREBUILD-PHASE-RESOLVER])"
-    )]
-    pub(super) bases: Vec<String>,
     /// Generic parameter names.
     pub(super) generic_params: Vec<String>,
 }
@@ -131,42 +123,37 @@ pub(super) fn class_entry(
         .map(|(name, defs)| (name, overload_sigs(&defs, bindings)))
         .collect();
 
-    let bases = cls.bases().iter().map(base_name).collect();
-
     ClassEntry {
         methods: method_sigs,
         attrs,
-        bases,
         generic_params: crate::rules::shared::class_generic_param_names(cls),
     }
 }
 
 // ##########################################################################
-// # DELETED BODY — `base_name`. DO NOT RESTORE IT.
+// # `base_name` AND THE `ClassEntry::bases` FIELD IT FED ARE GONE.
 // #
-// # It reduced a base-class EXPRESSION to a `String` identifier, and that
-// # string became `ClassEntry::bases` — the key every protocol/member walk
-// # then looked classes up by. Reading the identifier off the AST node is
-// # lawful; THROWING AWAY THE RESOLUTION and keeping only the rendered word
-// # is not. Its own doc comment conceded that an attribute path or a call
-// # "yields an empty string, which never names an indexed class" — i.e. every
-// # dotted base silently disappeared from the hierarchy.
+// # `base_name` reduced a base-class EXPRESSION to a `String` identifier, and
+// # that string became `ClassEntry::bases` — the key every protocol/member
+// # walk then looked classes up by. Reading the identifier off the AST node
+// # is lawful; THROWING AWAY THE RESOLUTION and keeping only the rendered
+// # word is not. Its own doc comment conceded that an attribute path or a
+// # call "yields an empty string, which never names an indexed class" — i.e.
+// # every dotted base silently disappeared from the hierarchy.
 // #
-// # The replacement keeps the base `Expr` (or its resolved identity) so the
-// # walk asks the binding table what the base denotes.
+// # The field was `#[expect(dead_code)]`: NOTHING read it. It was reachable
+// # only as work done on the way to being discarded, so a loud boundary there
+// # guarded no verdict — it just killed every analysis of every module to
+// # populate an unread `Vec<String>`.
+// #
+// # The replacement for the hierarchy it was standing in for already exists
+// # and is definition-site keyed: `basilisk_resolver::ClassGraph`, built from
+// # `ClassInfo::resolved_bases`. A consumer that needs a class's bases takes
+// # them from there, where a dotted or aliased base resolves to the class it
+// # actually denotes instead of vanishing.
 // #
 // # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
 // ##########################################################################
-fn base_name(_base: &Expr) -> String {
-    panic!(
-        "basilisk-checker: `base_name` was DELETED because it reduced a base-class \
-         expression to a RENDERED identifier that then keyed the class hierarchy, \
-         silently dropping every dotted or computed base. It panics because the real \
-         implementation — carrying the base expression through to binding-table \
-         resolution — DOES NOT EXIST YET. Do not restore the reduction and do not \
-         return an empty string in its place."
-    )
-}
 
 /// The signatures of every definition of a method.
 fn overload_sigs(defs: &[&ruff_python_ast::StmtFunctionDef], bindings: &BindingTable) -> Vec<Sig> {

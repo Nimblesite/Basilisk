@@ -19,15 +19,23 @@
 //!     pass
 //! ```
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
-use crate::span_util::slice_span;
+use crate::diagnostic::{Diagnostic, ErrorCode};
 
 use super::Rule;
 
+/// ORPHANED BY A DELETION, NOT UNUSED. Both emitters — `check_inheritance`
+/// and `check_frozen_instance_assigns` — were deleted for deciding frozen
+/// dataclass identity by class SPELLING. The code and its docs URL are the
+/// rule's published identity and are what the rebuild emits under.
+#[expect(
+    dead_code,
+    reason = "both emitters were deleted for joining classes by spelling; the rule's \
+              published error code is retained for the identity-based rebuild"
+)]
 const CODE: ErrorCode = ErrorCode {
     code: "dataclasses_frozen",
     docs_url: "https://www.basilisk-python.dev/errors/dataclasses_frozen",
@@ -54,10 +62,10 @@ impl Rule for FrozenDataclassAssignment {
             .classes
             .iter()
             .map(|c| {
-                let is_dc = c.is_dataclass || transform_classes.contains_key(c.name.as_str());
+                let is_dc = c.is_dataclass || transform_classes.contains_key(&c.name_span);
                 let is_frozen = c.is_dataclass_frozen
                     || transform_classes
-                        .get(c.name.as_str())
+                        .get(&c.name_span)
                         .is_some_and(|info| info.frozen);
                 (c.name.as_str(), (is_dc, is_frozen))
             })
@@ -100,61 +108,51 @@ fn check_inheritance(
     )
 }
 
-fn check_frozen_instance_assigns(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-    let source = &module.source;
-    let path = &module.path;
+// ##########################################################################
+// # DELETED BODY — `check_frozen_instance_assigns`. DO NOT RESTORE IT AND   #
+// # DO NOT RETURN WITHOUT DIAGNOSING.                                       #
+// #                                                                         #
+// #   let mut frozen_classes: HashSet<&str> =                               #
+// #       collect_name_set_where(&module.classes, |c| c.is_dataclass_frozen)#
+// #   frozen_classes.insert(class.name.as_str());                           #
+// #   let callee = constructed_class_name(slice_span(source, rhs_span)?);   #
+// #   if frozen_classes.contains(callee) { .. }                             #
+// #   instance_class.get(assign.object_name.as_str())                       #
+// #                                                                         #
+// # THREE SPELLING JOINS IN A ROW, AND THE VERDICT COMES OUT THE END.       #
+// # `frozen_classes` is a set of CLASS NAMES. The variable's class is read  #
+// # out of RAW SOURCE. The two are matched by characters, and an attribute  #
+// # assignment is then reported as an error against that match. So:         #
+// #                                                                         #
+// #   * `import models; c = models.Config()` matched a LOCAL frozen         #
+// #     `Config` and reported correct code as an error;                     #
+// #   * `Alias = Config; c = Alias()` matched nothing and every mutation of #
+// #     a genuinely frozen instance went unreported;                        #
+// #   * `collect_transform_classes` resolves PEP 681 frozen-ness on         #
+// #     DEFINITION SITES, correctly — and the loop above threw that         #
+// #     identity away to insert `class.name.as_str()` into the spelling set.#
+// #                                                                         #
+// # Which class a variable holds is the resolved type of the call's `func`, #
+// # and which class an attribute assignment targets is the resolved type of #
+// # its object expression. Neither is a string. The rebuild takes both from #
+// # the binding table and compares `ClassInfo::name_span` to the frozen     #
+// # set, which becomes `HashSet<Span>`.                                     #
+// #                                                                         #
+// # Pinned by: tests/source_text_verdict_pin_tests.rs                       #
+// ##########################################################################
 
-    let transform_classes = super::guards::collect_transform_classes(module);
-
-    let mut frozen_classes: HashSet<&str> =
-        basilisk_resolver::collect_name_set_where(&module.classes, |c| c.is_dataclass_frozen);
-
-    // Also include dataclass_transform classes that are frozen
-    for (name, info) in &transform_classes {
-        if info.frozen {
-            let _ = frozen_classes.insert(name.as_str());
-        }
-    }
-
-    if frozen_classes.is_empty() {
-        return;
-    }
-
-    let mut instance_class: HashMap<&str, &str> = HashMap::new();
-    for var in &module.module_vars {
-        let Some(rhs_span) = var.rhs_span else {
-            continue;
-        };
-        let Some(rhs_text) = slice_span(source, rhs_span) else {
-            continue;
-        };
-        // Call site of the DELETED trailing-word callee reduction — see the
-        // banner on `constructed_class_name` below.
-        let callee = constructed_class_name(rhs_text);
-        if callee.is_empty() {
-            continue;
-        }
-        if frozen_classes.contains(callee) {
-            let _ = instance_class.insert(var.name.as_str(), callee);
-        }
-    }
-
-    for assign in &module.module_attr_assignments {
-        let Some(&class_name) = instance_class.get(assign.object_name.as_str()) else {
-            continue;
-        };
-        diagnostics.push(error_diagnostic_owned(
-            CODE.clone(),
-            format!(
-                "Cannot assign to attribute `{}` of frozen dataclass `{}` instance `{}`",
-                assign.attr_name, class_name, assign.object_name
-            ),
-            assign.target_span,
-            path,
-            Some("Frozen dataclass instances are immutable after construction".to_owned()),
-            Some("PEP 557: `@dataclass(frozen=True)` prohibits attribute assignment".to_owned()),
-        ));
-    }
+/// DELETED — panics; see the banner above.
+fn check_frozen_instance_assigns(_module: &ResolvedModule, _diagnostics: &mut Vec<Diagnostic>) {
+    panic!(
+        "basilisk-checker: `dataclasses_frozen::check_frozen_instance_assigns` was DELETED \
+         because it built a set of frozen CLASS NAMES, read each variable's constructed \
+         class out of RAW SOURCE, and matched the two by characters — so an imported \
+         `models.Config()` was reported against a local frozen `Config`, and an aliased \
+         construction of a genuinely frozen class was never reported at all. It panics \
+         because the real implementation — the call's `func` and the assignment's object \
+         resolved through the binding table to definition sites — DOES NOT EXIST YET. Do \
+         not restore the name set and do not return without diagnosing in its place."
+    )
 }
 
 // ##########################################################################
@@ -175,6 +173,11 @@ fn check_frozen_instance_assigns(module: &ResolvedModule, diagnostics: &mut Vec<
 // #                                                                        #
 // # Pinned by: tests/source_text_verdict_pin_tests.rs                      #
 // ##########################################################################
+#[expect(
+    dead_code,
+    reason = "its only caller was itself deleted for joining classes by spelling; this shell \
+              stays as the map of what the identity-based rebuild must replace"
+)]
 fn constructed_class_name(_rhs_text: &str) -> &str {
     panic!(
         "basilisk-checker: the constructed-class reduction in `dataclasses_frozen` was \

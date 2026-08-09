@@ -52,7 +52,7 @@ fn collect_typevar_calls_from_stmts(
                 let Some(name) = node.targets.first().and_then(expr_simple_name) else {
                     continue;
                 };
-                let info = typevar_call_info_from(name, form, call, out);
+                let info = typevar_call_info_from(bindings, name, form, call, out);
                 out.push(info);
             }
             Stmt::AnnAssign(node) => {
@@ -66,7 +66,7 @@ fn collect_typevar_calls_from_stmts(
                 let Some(name) = expr_simple_name(&node.target) else {
                     continue;
                 };
-                let info = typevar_call_info_from(name, form, call, out);
+                let info = typevar_call_info_from(bindings, name, form, call, out);
                 out.push(info);
             }
             // Type parameters are also declared as class attributes.
@@ -127,6 +127,7 @@ fn find_keyword<'a>(call: &'a ExprCall, name: &str) -> Option<&'a ruff_python_as
 ///
 /// `form` is the resolved [`TypingForm`] of the callee — never a spelling.
 fn typevar_call_info_from(
+    bindings: &BindingTable,
     name: String,
     form: TypingForm,
     call: &ExprCall,
@@ -147,9 +148,9 @@ fn typevar_call_info_from(
             .args
             .iter()
             .skip(1)
-            .any(|arg| expr_parameterized_by_typevar(arg, known_typevars)),
+            .any(|arg| expr_parameterized_by_typevar(bindings, arg, known_typevars)),
         has_parameterized_bound: bound
-            .is_some_and(|kw| expr_parameterized_by_typevar(&kw.value, known_typevars)),
+            .is_some_and(|kw| expr_parameterized_by_typevar(bindings, &kw.value, known_typevars)),
         is_covariant: kw_is_true("covariant"),
         is_contravariant: kw_is_true("contravariant"),
         has_infer_variance: kw_is_true("infer_variance"),
@@ -182,44 +183,65 @@ fn typevar_call_info_from(
 /// `dict[str, int]`; only type arguments referencing a type variable make the
 /// bound or constraint invalid. A name counts as a type variable only when
 /// this walk collected its declaration — never from the shape of the name.
-fn expr_parameterized_by_typevar(expr: &Expr, known_typevars: &[TypeVarCallInfo]) -> bool {
+fn expr_parameterized_by_typevar(
+    bindings: &BindingTable,
+    expr: &Expr,
+    known_typevars: &[TypeVarCallInfo],
+) -> bool {
     match expr {
         // A BARE type variable as the whole bound/constraint (`bound=T`) is
         // the simplest forbidden case (typing spec, generics: bounds must
         // not contain type variables).
-        Expr::Name(_) => expr_references_known_typevar(expr, known_typevars),
-        Expr::Subscript(sub) => expr_references_known_typevar(&sub.slice, known_typevars),
+        Expr::Name(_) => expr_references_known_typevar(bindings, expr, known_typevars),
+        Expr::Subscript(sub) => expr_references_known_typevar(bindings, &sub.slice, known_typevars),
         Expr::BinOp(bin) => {
-            expr_parameterized_by_typevar(&bin.left, known_typevars)
-                || expr_parameterized_by_typevar(&bin.right, known_typevars)
+            expr_parameterized_by_typevar(bindings, &bin.left, known_typevars)
+                || expr_parameterized_by_typevar(bindings, &bin.right, known_typevars)
         }
         Expr::Tuple(tup) => tup
             .elts
             .iter()
-            .any(|elt| expr_parameterized_by_typevar(elt, known_typevars)),
+            .any(|elt| expr_parameterized_by_typevar(bindings, elt, known_typevars)),
         _ => false,
     }
 }
 
 /// Whether a type-argument expression references a collected type variable.
-fn expr_references_known_typevar(expr: &Expr, known_typevars: &[TypeVarCallInfo]) -> bool {
+fn expr_references_known_typevar(
+    bindings: &BindingTable,
+    expr: &Expr,
+    known_typevars: &[TypeVarCallInfo],
+) -> bool {
     match expr {
-        Expr::Name(name) => known_typevars.iter().any(|tv| tv.name == name.id.as_str()),
-        Expr::Subscript(sub) => expr_references_known_typevar(&sub.slice, known_typevars),
-        Expr::Starred(starred) => expr_references_known_typevar(&starred.value, known_typevars),
+        // REBUILT from `tv.name == name.id.as_str()`. Comparing the AST name
+        // token against a `TypeVar`'s bound name is spelling identity: after
+        // `T = int` the name still "looked like" the TypeVar, while
+        // `Alias = T` — one more name for the same TypeVar object — did not.
+        // `local_value_binding` resolves the name at its own offset, follows
+        // assignment aliases, and yields the range of the EXPRESSION the
+        // assignment bound, which for `T = TypeVar("T")` is exactly
+        // `TypeVarCallInfo::span` ([RESOLV-CANONICAL-BINDING]).
+        Expr::Name(_) => bindings
+            .local_value_binding(expr)
+            .map(text_range_to_span)
+            .is_some_and(|site| known_typevars.iter().any(|tv| tv.span == site)),
+        Expr::Subscript(sub) => expr_references_known_typevar(bindings, &sub.slice, known_typevars),
+        Expr::Starred(starred) => {
+            expr_references_known_typevar(bindings, &starred.value, known_typevars)
+        }
         Expr::BinOp(bin) => {
-            expr_references_known_typevar(&bin.left, known_typevars)
-                || expr_references_known_typevar(&bin.right, known_typevars)
+            expr_references_known_typevar(bindings, &bin.left, known_typevars)
+                || expr_references_known_typevar(bindings, &bin.right, known_typevars)
         }
         Expr::Tuple(tup) => tup
             .elts
             .iter()
-            .any(|elt| expr_references_known_typevar(elt, known_typevars)),
+            .any(|elt| expr_references_known_typevar(bindings, elt, known_typevars)),
         // `Callable[[X, Y], Z]` argument lists.
         Expr::List(list) => list
             .elts
             .iter()
-            .any(|elt| expr_references_known_typevar(elt, known_typevars)),
+            .any(|elt| expr_references_known_typevar(bindings, elt, known_typevars)),
         _ => false,
     }
 }

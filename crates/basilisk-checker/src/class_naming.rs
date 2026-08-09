@@ -35,13 +35,32 @@ use crate::types::{InferredType, LiteralValue};
 /// function's callers move to it and this goes away; keeping the logic here
 /// rather than in a consumer means there is exactly one call site to migrate.
 #[must_use]
-pub fn annotation_class_name(annotation: &str) -> Option<String> {
-    let parsed = ruff_python_parser::parse_expression(annotation).ok()?;
-    class_name_of(parsed.expr())
+pub fn annotation_class_name(_annotation: &str) -> Option<String> {
+    // DELETED: a `&str` annotation has already lost its original AST node,
+    // scope, offset, and binding. Parsing it again and returning a trailing
+    // identifier manufactured class identity from presentation text.
+    panic!(
+        "basilisk-checker: `annotation_class_name` was DELETED because it reparsed \
+         annotation source text and reduced the resulting expression to a class-name \
+         string. The real implementation must consume the original annotation `Expr` \
+         and resolved binding identity. Do not restore the parser or return `None`."
+    )
 }
 
 /// The class an annotation expression names, if it names exactly one.
-fn class_name_of(expr: &ruff_python_ast::Expr) -> Option<String> {
+#[expect(
+    dead_code,
+    reason = "orphaned by the annotation text API deletion; retained as the rebuild map"
+)]
+fn class_name_of(_expr: &ruff_python_ast::Expr) -> Option<String> {
+    // DELETED: even with a freshly parsed AST this helper discarded attribute
+    // qualifiers and returned only a rendered tail name, not a definition.
+    panic!(
+        "basilisk-checker: `class_name_of` was DELETED because it collapsed an \
+         annotation expression to an unresolved class-name string. Rebuild it on the \
+         original AST plus binding table; do not return a spelling."
+    )
+    /*
     match expr {
         // `list` / `Model`.
         ruff_python_ast::Expr::Name(name) => Some(name.id.to_string()),
@@ -57,6 +76,7 @@ fn class_name_of(expr: &ruff_python_ast::Expr) -> Option<String> {
         // written as a call, literals, and anything unparseable as a type.
         _ => None,
     }
+    */
 }
 
 /// The name of the class a TYPE's members belong to, and whether that type is
@@ -76,7 +96,17 @@ fn class_name_of(expr: &ruff_python_ast::Expr) -> Option<String> {
 /// and the resulting "no members" is indistinguishable from a genuine unknown.
 /// Adding a variant must break this build.
 #[must_use]
-pub fn class_name_of_type(ty: &InferredType) -> Option<(String, bool)> {
+pub fn class_name_of_type(_ty: &InferredType) -> Option<(String, bool)> {
+    // DELETED: the `Named(String)` arm returned rendered nominal identity and
+    // the union arm compared those strings. A type leaf must carry its class
+    // definition site before this question can be answered.
+    panic!(
+        "basilisk-checker: `class_name_of_type` was DELETED because it converted \
+         `Named(String)` into class identity and compared rendered names across union \
+         arms. Rebuild the consumer on resolved class definition sites; do not return \
+         a placeholder name."
+    )
+    /*
     let plain = |name: &str| Some((name.to_owned(), false));
     match ty {
         // PEP 675: a `LiteralString` IS a `str`, refined. Members come from
@@ -89,6 +119,10 @@ pub fn class_name_of_type(ty: &InferredType) -> Option<(String, bool)> {
         // is consistent with `bool`), so `Guard` shares bool's members.
         InferredType::Bool | InferredType::Guard { .. } => plain("bool"),
         InferredType::Bytes => plain("bytes"),
+        // The top type's members are `object`'s own.
+        InferredType::Object => plain("object"),
+        // A class object's members are `type`'s.
+        InferredType::ClassObject => plain("type"),
         // Type arguments do not change which class holds the members.
         InferredType::List(_) => plain("list"),
         InferredType::Set(_) => plain("set"),
@@ -126,6 +160,7 @@ pub fn class_name_of_type(ty: &InferredType) -> Option<(String, bool)> {
         | InferredType::Generator(_, _, _)
         | InferredType::TypeForm(_) => None,
     }
+    */
 }
 
 /// The type produced by ITERATING a value of this type.
@@ -155,7 +190,10 @@ pub fn element_type_of(ty: &InferredType) -> Option<InferredType> {
         | InferredType::Literal(LiteralValue::Str(_)) => Some(InferredType::Str),
         InferredType::Generator(yielded, _, _) => Some((**yielded).clone()),
         // Decidable only from the class declaration, or not iterable at all.
+        // `object` and a class object are not iterable.
         InferredType::Named(_)
+        | InferredType::Object
+        | InferredType::ClassObject
         | InferredType::Unknown
         | InferredType::Any
         | InferredType::Never
@@ -182,15 +220,13 @@ pub fn element_type_of(ty: &InferredType) -> Option<InferredType> {
 ///
 /// Decided on the ruff AST, like [`annotation_class_name`].
 #[must_use]
-pub fn annotation_type_argument(annotation: &str) -> Option<String> {
-    let parsed = ruff_python_parser::parse_expression(annotation).ok()?;
-    let ruff_python_ast::Expr::Subscript(subscript) = parsed.expr() else {
-        return None;
-    };
-    // `X[a, b]` parses its arguments as a tuple; `X[a]` as the bare element.
-    let first = match subscript.slice.as_ref() {
-        ruff_python_ast::Expr::Tuple(tuple) => tuple.elts.first()?,
-        other => other,
-    };
-    class_name_of(first)
+pub fn annotation_type_argument(_annotation: &str) -> Option<String> {
+    // DELETED: this reparsed isolated annotation text, selected a type
+    // argument, and reduced it to a trailing name. The original subscript AST
+    // and its binding context are the only lawful inputs.
+    panic!(
+        "basilisk-checker: `annotation_type_argument` was DELETED because it reparsed \
+         annotation source text and returned a rendered type-argument name. Rebuild it \
+         on the original `Expr::Subscript` and resolved identity; do not return `None`."
+    )
 }

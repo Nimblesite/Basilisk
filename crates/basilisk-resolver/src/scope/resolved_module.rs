@@ -340,6 +340,28 @@ pub struct ResolvedModule {
     /// so editor features and diagnostics never consult a compiled hand table
     /// or another generation's `builtins.pyi`.
     pub builtin_classes: std::sync::Arc<std::collections::HashMap<String, super::IndexedStubClass>>,
+    /// Every name the `builtins` module binds — classes, functions, and
+    /// module-level variables — from the active typeshed generation.
+    ///
+    /// This is the BUILTIN SCOPE: the namespace Python consults when a bare
+    /// name is bound nowhere in the module. It replaces the hard-coded
+    /// spelling whitelists rules used to carry, which blessed any user symbol
+    /// that happened to be spelled like a builtin and kept blessing a builtin
+    /// name the module had rebound.
+    ///
+    /// `None` when the builtin scope could NOT be established — no typeshed
+    /// generation is active, or the one that is could not be read. That is a
+    /// different fact from "the builtin scope binds nothing", and the two must
+    /// never share a value: a rule reading this suppresses on `None` and is
+    /// entitled to report on a name a `Some` scope does not contain
+    /// ([CHKARCH-CONFORMANCE-MODE]).
+    ///
+    /// An earlier revision typed this as a bare set whose EMPTINESS meant
+    /// "unknown". A loader bug then produced an empty set on every run, every
+    /// rule read it as "unknown", and every undefined-name diagnostic in every
+    /// module vanished while the checker reported success. A failure that is
+    /// indistinguishable from an answer is not a failure anyone can see.
+    pub builtin_names: Option<std::sync::Arc<std::collections::HashSet<String>>>,
     /// Public member API of plain-imported modules backed by a user/local stub,
     /// keyed by local binding name (`X` for `import X`).
     ///

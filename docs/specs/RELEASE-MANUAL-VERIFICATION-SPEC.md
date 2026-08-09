@@ -20,7 +20,7 @@ tree; these passes prove the packaged product and the version users install.
 > release.**
 
 - **BEFORE** — install the local release candidate with
-  `make reinstall-vsix-macos` (or `make reinstall-vsix` for the host). It uses
+  `make _reinstall_vsix TARGET=darwin-arm64` (or `make _reinstall_vsix` for the host). It uses
   the same `_release_vsix` packaging path as the release workflow.
 - **AFTER** — wait for the new version to appear in the VS Code Marketplace,
   remove local builds, and install that VSIX through the Marketplace UI. Run
@@ -246,13 +246,13 @@ publishing on a compatible host:
    explained by a deliberate deletion is expected and is noted in the release
    record. **The figure is never published or quoted**
    ([CHKARCH-CONFORMANCE](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE)).
-3. [ ] `make bench` — indicative only, gates nothing; record the numbers.
+3. [ ] `make _bench` — indicative only, gates nothing; record the numbers.
 4. [ ] `python3 scripts/verify_release_attribution.py --policy-only` passes and
    licence manifests are current (`npm run licenses:check` in
    `vscode-extension/`).
 6. [ ] Draft notes from `git log <prev-tag>..HEAD`, create the tag locally, and
    run [RELEASE-PROVENANCE-TAG](#RELEASE-PROVENANCE-TAG) without pushing it.
-7. [ ] `make reinstall-vsix-macos` (or `make reinstall-vsix`) — installs the
+7. [ ] `make _reinstall_vsix TARGET=darwin-arm64` (or `make _reinstall_vsix`) — installs the
    candidate built through the release packaging path.
 8. [ ] [RELEASE-PROVENANCE-BINARY](#RELEASE-PROVENANCE-BINARY) and
    [RELEASE-PROVENANCE-ARTIFACT](#RELEASE-PROVENANCE-ARTIFACT) against the

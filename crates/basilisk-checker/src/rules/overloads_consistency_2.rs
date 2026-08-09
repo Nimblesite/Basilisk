@@ -20,10 +20,16 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/overloads_consistency_2",
 };
 
-fn has_dec(decorators: &[String], name: &str) -> bool {
-    decorators
-        .iter()
-        .any(|d| d == name || d.ends_with(&format!(".{name}")))
+fn has_dec(_decorators: &[String], _name: &str) -> bool {
+    // ILLEGAL TO RESTORE: the deleted implementation classified decorators by
+    // their rendered spelling and trailing token. It therefore missed aliases
+    // of the builtin decorators and granted builtin semantics to unrelated user
+    // attributes. The real implementation must consume resolver-provided
+    // canonical decorator identity; that implementation does not exist yet.
+    panic!(
+        "overloads_consistency_2: decorator identity was deleted because it was derived from \
+         rendered source spelling; rebuild this caller on canonical resolved decorator identity"
+    )
 }
 
 /// Emits `overloads_consistency_2` for decorator inconsistencies within an overload group.

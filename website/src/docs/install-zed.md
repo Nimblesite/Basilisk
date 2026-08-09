@@ -31,7 +31,7 @@ Basilisk is **not yet listed in Zed's extension registry** — the [submission t
 
 Zed compiles the extension to WASM itself — you never pre-build or copy a `.wasm` file. Open a Python file and Basilisk is your language server.
 
-> **Working in the monorepo?** Select the `basilisk-zed/` directory of your [Basilisk](https://github.com/Nimblesite/Basilisk) checkout instead of cloning separately. `make package-zed` builds the extension and a local `basilisk` binary in one step.
+> **Working in the monorepo?** Select the `basilisk-zed/` directory of your [Basilisk](https://github.com/Nimblesite/Basilisk) checkout instead of cloning separately. `make _package_zed` builds the extension and a local `basilisk` binary in one step.
 
 To update, `git pull` in the cloned directory and re-run **zed: install dev extension**. Once the registry listing lands, the extensions view will handle installs and updates for you.
 

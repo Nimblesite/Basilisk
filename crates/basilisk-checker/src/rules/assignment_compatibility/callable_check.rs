@@ -1,27 +1,3 @@
-// ############################################################################
-// # BROKEN — THIS FILE DOES NOT COMPILE. DO NOT "FIX" IT BY RESTORING TEXT   #
-// # MATCHING.                                                                #
-// #                                                                          #
-// # Deleted helper this file called:                                         #
-// #   crate::subtyping (SubtypingContext::is_subtype / name_subtype)
-// #                                                                          #
-// # That helper decided types from the SPELLING of source text (lowercased   #
-// # annotation strings, `"int"`/`"str"`/`"object"` literal matching, `|`     #
-// # splitting, `starts_with("tuple[")`). It was deleted, not replaced.       #
-// #                                                                          #
-// # The call sites below are LEFT BROKEN ON PURPOSE. They are the map of     #
-// # what must be rebuilt on the resolved AST — resolved bindings, canonical  #
-// # `TypeNode`, and `assignable`/`equivalent` — or made to abstain.          #
-// #                                                                          #
-// # Restoring the deleted helper, vendoring a copy of it, or re-deriving a   #
-// # type from source text anywhere below is FORBIDDEN.                       #
-// #                                                                          #
-// # Evidence and the failing tests that pin the real behaviour:              #
-// #   docs/RULE-VALIDITY-REPORT.md                                           #
-// #   crates/basilisk-checker/tests/legacy_annotation_text_parser_pin_tests.rs
-// #   crates/basilisk-checker/tests/pep_spelling_invariance_pin_tests.rs     #
-// ############################################################################
-
 //! Implements [`assignment_compatibility`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! Structural callable subtyping for classes with `__call__` methods.
 //!
@@ -55,16 +31,12 @@ use super::sig_subtype::sig_subtype;
 pub(super) struct CallIndex {
     /// Class name → structural entry (methods, attributes, bases).
     pub(super) classes: HashMap<String, ClassEntry>,
-    /// Module-seeded nominal context — the ONE subtyping implementation
-    /// every signature verdict routes through ([NARROWPLAN-SUBTYPING]).
-    pub(super) subtyping: crate::subtyping::SubtypingContext,
 }
 
 /// Build the [`CallIndex`] for a module.
 pub(super) fn build_index(module: &ResolvedModule) -> CallIndex {
     let mut index = CallIndex {
         classes: HashMap::new(),
-        subtyping: crate::subtyping::module_context(module),
     };
     let Some(parsed) = parse_module(module) else {
         return index;
@@ -99,7 +71,7 @@ pub(super) fn assignment_compatible(declared: &Expr, rhs: &Expr, index: &CallInd
     let Some(source) = resolve(rhs, index) else {
         return false;
     };
-    sigs_compatible(&index.subtyping, &source, &target)
+    sigs_compatible(&source, &target)
 }
 
 /// Overload-set compatibility: incompatible only when some target signature
@@ -107,15 +79,10 @@ pub(super) fn assignment_compatible(declared: &Expr, rhs: &Expr, index: &CallInd
 /// kept diagnostic needs `Some(false)`; abstention counts as compatible).
 /// `Unknown` on either side is compatible.
 ///
-/// The subtyping context is unused for now: signature relations that need
-/// nominal user-class verdicts abstain until the relation layer models them
-/// ([ASTREBUILD-PHASE-RESOLVER]); the parameter is kept for the
-/// protocol-member call sites.
-pub(super) fn sigs_compatible(
-    _subtyping: &crate::subtyping::SubtypingContext,
-    source: &TypeSigs,
-    target: &TypeSigs,
-) -> bool {
+/// Signature relations that need nominal user-class verdicts abstain until
+/// the relation layer models them ([ASTREBUILD-PHASE-RESOLVER]). The deleted
+/// string-keyed subtyping context this once carried was never read.
+pub(super) fn sigs_compatible(source: &TypeSigs, target: &TypeSigs) -> bool {
     match (source, target) {
         (TypeSigs::Unknown, _) | (_, TypeSigs::Unknown) => true,
         (TypeSigs::Sigs(src), TypeSigs::Sigs(tgt)) => tgt

@@ -58,13 +58,11 @@ mod skip_names;
 mod tuple_check;
 mod typeform_check;
 
-use enum_expand::enum_expansion_assignable;
 use skip_names::SkipNames;
 
 use crate::annotation::AnnotationResolver;
 use crate::rules::shared::module_types::ModuleTypes;
 use crate::rules::shared::oracle::ModuleOracle;
-use crate::subtyping::SubtypingContext;
 use crate::types::InferredType;
 use basilisk_resolver::{ResolvedModule, Span, VariableInfo};
 use ruff_python_ast::Expr;
@@ -112,7 +110,7 @@ impl Rule for AssignmentTypeMismatch {
         let skip = SkipNames::collect(module);
         let call_index = callable_check::build_index(module);
         let oracle = types.oracle();
-        let subtyping = types.subtyping();
+        let nominal = types.nominal();
         check_vars(
             &module.module_vars,
             &module.source,
@@ -124,7 +122,7 @@ impl Rule for AssignmentTypeMismatch {
             &call_index,
             resolver,
             oracle,
-            subtyping,
+            nominal,
         );
         check_local_vars(
             module,
@@ -133,7 +131,7 @@ impl Rule for AssignmentTypeMismatch {
             &call_index,
             resolver,
             oracle,
-            subtyping,
+            nominal,
         );
         check_tuple_reassignments(module, diagnostics);
         check_dataclass_attr_assignments(module, diagnostics);
@@ -230,185 +228,95 @@ fn declared_target_judgeable(resolver: &AnnotationResolver<'_>, declared: &Infer
     !resolver.is_structural_target(declared) && declared_target_grounded(resolver, declared)
 }
 
-/// Every top-level nominal leaf (through unions/optionals) is grounded.
-fn declared_target_grounded(resolver: &AnnotationResolver<'_>, declared: &InferredType) -> bool {
-    match declared {
-        InferredType::Named(name) => resolver.is_grounded_name(name),
-        InferredType::Union(arms) => arms
-            .iter()
-            .all(|arm| declared_target_grounded(resolver, arm)),
-        InferredType::Optional(inner) => declared_target_grounded(resolver, inner),
-        _ => true,
-    }
+// ##########################################################################
+// # DELETED BODY — `declared_target_grounded`.                             #
+// #                                                                         #
+// # `InferredType::Named(name)` carries a RENDERING, and                    #
+// # `AnnotationResolver::is_grounded_name(name)` reparsed that rendering   #
+// # against the module's final namespace. The original occurrence's span,  #
+// # scope, and binding were already gone. A groundedness verdict therefore #
+// # changed after an unrelated rebinding or when the same class was reached #
+// # through an alias.                                                       #
+// ##########################################################################
+
+/// DELETED — panics; nominal leaves must carry their resolved identity.
+fn declared_target_grounded(_resolver: &AnnotationResolver<'_>, _declared: &InferredType) -> bool {
+    panic!(
+        "basilisk-checker: `declared_target_grounded` was DELETED because it \
+         grounded `InferredType::Named` through a rendered name string. It panics \
+         because the real implementation — checking the definition identity carried \
+         by each nominal leaf — DOES NOT EXIST YET. Do not restore name reparsing and \
+         do not choose a constant groundedness answer."
+    )
 }
 
 // The nominal-subclass acceptance is the ONE shared judgment in
 // `rules/shared/judge.rs` ([NARROWPLAN-INTEGRATION]: nominal verdicts route
 // through `SubtypingContext`; one implementation, not two).
-use crate::rules::shared::judge::nominal_subclass_assignable;
-
 /// Annotation SPANS per annotated parameter of the enclosing function,
-/// consumed by the structural callable-subtyping rescue. Spans, not text —
+/// consumed by the structural callable-nominal rescue. Spans, not text —
 /// the rescue resolves them to AST nodes ([ASTREBUILD-LAW]).
 #[derive(Default)]
 struct ParamMaps {
     annotations: std::collections::HashMap<String, Span>,
 }
 
-/// Check a slice of annotated variables for type mismatches.
-///
-/// Every RHS is typed by the module's [`ModuleOracle`] — a parameter name
-/// resolves through the engine's scope overlay, a call through
-/// `synth_call`, a display bottom-up with expected-type check mode as the
-/// acceptance path ([NARROWPLAN-INTEGRATION] Step 1).
+// ##########################################################################
+// # DELETED BODY — `check_vars`. DO NOT RESTORE IT AND DO NOT RETURN EMPTY. #
+// #                                                                         #
+// # This was the assignment rule's verdict pipeline, and two of its gates  #
+// # were explicitly spelling-dependent:                                   #
+// #                                                                         #
+// #   let annotation_text = extract_annotation(source, var.name_span)?;    #
+// #   if annotation_text.starts_with('"') || ...                          #
+// #   let name = annotation_text.trim().to_ascii_lowercase();              #
+// #   alias_match::alias_value_assignable(..., name, ...)                  #
+// #                                                                         #
+// # `extract_annotation` scanned one source line for punctuation. The      #
+// # lowercase alias key then made the annotation's SPELLING decide which   #
+// # alias definition to expand. Quoting, case, formatting, qualification,  #
+// # aliasing, and rebinding therefore changed the diagnostic before the    #
+// # otherwise-resolved type relation ran. Its fallback also called         #
+// # `resolve_text`, re-parsing a source rendering without its original      #
+// # position or scope.                                                      #
+// #                                                                         #
+// # The lawful rebuild starts with each variable's annotation `Expr`, keeps #
+// # resolved alias identity throughout, and renders text only after a       #
+// # semantic mismatch is proven.                                           #
+// ##########################################################################
+
+/// DELETED — panics; see the banner above. The signature remains as the map
+/// of callers that must be rebuilt around annotation AST nodes.
 #[expect(
     clippy::too_many_arguments,
-    clippy::too_many_lines,
-    reason = "assignment checking threads full module context across per-variable branches"
+    reason = "the deleted verdict's callers still expose every context dependency needed by the AST rebuild"
 )]
 fn check_vars(
-    vars: &[VariableInfo],
-    source: &str,
-    path: &str,
-    diagnostics: &mut Vec<Diagnostic>,
-    params: &ParamMaps,
-    skip: &SkipNames,
-    functions: &[basilisk_resolver::FunctionInfo],
-    call_index: &callable_check::CallIndex,
-    resolver: &AnnotationResolver<'_>,
-    oracle: Option<&ModuleOracle<'_>>,
-    subtyping: &SubtypingContext,
+    _vars: &[VariableInfo],
+    _source: &str,
+    _path: &str,
+    _diagnostics: &mut Vec<Diagnostic>,
+    _params: &ParamMaps,
+    _skip: &SkipNames,
+    _functions: &[basilisk_resolver::FunctionInfo],
+    _call_index: &callable_check::CallIndex,
+    _resolver: &AnnotationResolver<'_>,
+    _oracle: Option<&ModuleOracle<'_>>,
+    _nominal: &super::shared::nominal::NominalHierarchy<'_>,
 ) {
-    vars.iter()
-        .filter(|var| var.has_annotation && var.rhs_span.is_some())
-        .filter_map(|var| {
-            let annotation_text = extract_annotation(source, var.name_span)?;
-
-            // Quoted forward-reference annotations (e.g. `"Literal[Color.RED]"`)
-            // are not evaluated as value types here; skip to avoid false positives.
-            if annotation_text.starts_with('"') || annotation_text.starts_with('\'') {
-                return None;
-            }
-
-            // The declared type is the annotation resolved through the shared
-            // cascade ([TYPEINF-ANNOTATION-RESOLUTION]), so an alias or a
-            // same-file class is the type it denotes rather than opaque text.
-            // Resolved from the annotation NODE where the resolver recorded its
-            // span; `resolve_text` re-parses, which costs a `ruff` expression
-            // parse per annotated variable ([CHKARCH-TESTING-BENCH]).
-            let declared_type = var
-                .annotation_span
-                .and_then(|span| resolver.resolve_span(span))
-                .or_else(|| resolver.resolve_text(annotation_text))?;
-            // TypeForm assignments require type-expression validation, not
-            // value-type inference.  Delegate to the dedicated module.
-            if let InferredType::TypeForm(ref inner) = declared_type {
-                if typeform_check::is_valid_typeform_assignment(
-                    var, source, inner, functions, resolver,
-                ) {
-                    return None;
-                }
-                let inferred_type = rhs_inferred(oracle, var);
-                return Some((
-                    var,
-                    annotation_text.to_owned(),
-                    inferred_type,
-                    declared_type,
-                ));
-            }
-
-            // Skip dict literal assignments to TypedDict annotations. E0014 compares
-            // the top-level type (e.g. `dict[str, str|int]` vs `Movie`) which always
-            // mismatches. Field-level checking is done by E0093 instead.
-            if typeddict_literal_skipped(var, oracle, &declared_type, skip) {
-                return None;
-            }
-
-            // The engine types every RHS form — a literal keeps its value
-            // (`Literal[...]`) so Literal-declared targets compare by value,
-            // a parameter name resolves through the scope overlay, and a
-            // call resolves through its callee's declared return.
-            let inferred_type = rhs_inferred(oracle, var);
-
-            // PEP 728: a TypedDict declaring `extra_items=` may be assignable
-            // to `dict[str, VT]`; the name-level comparison below cannot
-            // evaluate that, so such assignments are skipped.
-            if extra_items_dict_skipped(&declared_type, &inferred_type, skip) {
-                return None;
-            }
-
-            // A reference to a legacy value alias — a recursive `Union` alias
-            // (`Json`) or a generic `list[...]`-bodied alias needing `TypeVar`
-            // substitution (`G[str]`) — needs value-level matching against the
-            // expanded definition. It is keyed by the annotation's own
-            // spelling, not by the resolved type: expanding a *recursive* alias
-            // through the cascade necessarily makes its recursive arm gradual
-            // ([TYPEINF-ANNOTATION-RESOLUTION] cycle guard), which would accept
-            // values this matcher rejects. The matcher dies with the alias
-            // tables in [NARROWPLAN-INTEGRATION] Step 7.
-            {
-                let name = &annotation_text.trim().to_ascii_lowercase();
-                let ctx = alias_match::AliasCtx {
-                    union: &skip.value_aliases,
-                    generic: &skip.generic_aliases,
-                };
-                if let Some(matched) =
-                    alias_match::alias_value_assignable(&inferred_type, name, &ctx)
-                {
-                    if matched {
-                        return None;
-                    }
-                    // A rejection is only evidence when the inferred value
-                    // carries evidence: `dict[Unknown, Unknown]` (an empty
-                    // display, an unresolved element) proves nothing, so the
-                    // judgment falls through to the general path instead of
-                    // firing on gradality ([CHKARCH-CONFORMANCE-MODE]).
-                    if crate::expr_type::is_fully_known(&inferred_type) {
-                        return Some((
-                            var,
-                            annotation_text.to_owned(),
-                            inferred_type,
-                            declared_type,
-                        ));
-                    }
-                }
-            }
-
-            let judged_before_engine = legacy_inference_surface(var, oracle, params);
-            if inferred_type.is_assignable_to(&declared_type)
-                || literal_collection_assignable(var, oracle, &inferred_type, &declared_type, skip)
-                || enum_expansion_assignable(&inferred_type, &declared_type, &skip.enum_members)
-                || (!judged_before_engine && !declared_target_judgeable(resolver, &declared_type))
-                || (!judged_before_engine && resolver.is_structural_target(&inferred_type))
-                || nominal_subclass_assignable(&inferred_type, &declared_type, subtyping)
-            {
-                None
-            } else if callable_rescue(var, params, call_index, oracle) {
-                // Structurally valid callable subtyping (callback protocols,
-                // `Callable[...]` forms, `TypeAlias` callables) — not a mismatch.
-                None
-            } else {
-                Some((
-                    var,
-                    annotation_text.to_owned(),
-                    inferred_type,
-                    declared_type,
-                ))
-            }
-        })
-        .for_each(|(var, annotation, inferred, declared)| {
-            diagnostics.push(make_diagnostic(
-                var,
-                &annotation,
-                &inferred,
-                &declared,
-                path,
-            ));
-        });
+    panic!(
+        "basilisk-checker: `assignment_compatibility::check_vars` was DELETED because \
+         its verdict read annotations from SOURCE LINES, skipped quoted types by their \
+         first character, lowercased rendered annotations to join alias tables, and \
+         reparsed text when span resolution failed. It panics because the real \
+         implementation — retaining each annotation's original `Expr` and resolved \
+         alias/type identity through the comparison — DOES NOT EXIST YET. Do not \
+         restore the text pipeline and do not silently return no diagnostics."
+    )
 }
 
 /// Attempt to validate a flagged assignment as structurally compatible
-/// callable subtyping: the RHS must be a name bound to a parameter whose
+/// callable nominal: the RHS must be a name bound to a parameter whose
 /// annotation NODE, compared against the declared annotation NODE, passes
 /// the callable subtype check. Both annotations are judged as resolved AST
 /// nodes, never as source text ([ASTREBUILD-LAW]).
@@ -441,7 +349,7 @@ fn callable_rescue(
 ///
 /// The engine's scope overlay types parameter references
 /// (`x: Literal[False] = a` where `a: Literal[0]` compares by value); the
-/// raw annotation texts feed only the structural callable-subtyping rescue.
+/// raw annotation texts feed only the structural callable-nominal rescue.
 fn check_local_vars(
     module: &ResolvedModule,
     diagnostics: &mut Vec<Diagnostic>,
@@ -449,7 +357,7 @@ fn check_local_vars(
     call_index: &callable_check::CallIndex,
     resolver: &AnnotationResolver<'_>,
     oracle: Option<&ModuleOracle<'_>>,
-    subtyping: &SubtypingContext,
+    nominal: &super::shared::nominal::NominalHierarchy<'_>,
 ) {
     let source = &module.source;
     for func in &module.functions {
@@ -465,13 +373,13 @@ fn check_local_vars(
             call_index,
             resolver,
             oracle,
-            subtyping,
+            nominal,
         );
     }
 }
 
 /// Annotation span per annotated parameter, for the structural
-/// callable-subtyping rescue ([`callable_rescue`]).
+/// callable-nominal rescue ([`callable_rescue`]).
 fn build_param_maps(params: &[basilisk_resolver::ParameterInfo]) -> ParamMaps {
     let mut maps = ParamMaps::default();
     for param in params {
@@ -483,62 +391,72 @@ fn build_param_maps(params: &[basilisk_resolver::ParameterInfo]) -> ParamMaps {
     maps
 }
 
-/// A nominal type's spelling, folded to the case this rule's name tables use.
-///
-/// Those tables are keyed lower-case, a legacy of
-/// `InferredType::from_annotation` having lower-cased every annotation it
-/// parsed. The [TYPEINF-ANNOTATION-RESOLUTION] cascade preserves a class's real
-/// case, so every lookup folds here rather than at each site — and the tables
-/// can be re-keyed in one place once the last lower-casing consumer dies.
-fn nominal_name(ty: &InferredType) -> Option<String> {
-    match ty {
-        InferredType::Named(name) => Some(name.to_ascii_lowercase()),
-        _ => None,
-    }
+// ##########################################################################
+// # DELETED BODIES — `nominal_name` / `nominal_key`.                       #
+// #                                                                         #
+// # These converted a nominal type back into a lowercase STRING, then      #
+// # split that rendering at `[` to manufacture the lookup key used by      #
+// # TypedDict skip tables. Case-folding merges distinct Python identifiers; #
+// # bracket splitting is a second type parser; aliases and qualified names #
+// # never share keys even when they resolve to one definition.              #
+// #                                                                         #
+// # TypedDict identity and schema membership must be keyed by definition   #
+// # site, not by `InferredType::Named`'s display text.                      #
+// ##########################################################################
+
+/// DELETED — panics; see the banner above.
+fn nominal_name(_ty: &InferredType) -> Option<String> {
+    panic!(
+        "basilisk-checker: `nominal_name` was DELETED because it lowercased a \
+         nominal type's RENDERING to create a semantic lookup key. It panics because \
+         the real implementation — a resolved definition identity — DOES NOT EXIST \
+         YET. Do not restore case-folding and do not return `None` in its place."
+    )
 }
 
-/// [`nominal_name`] with any subscript stripped — `Pair[int]` keys as `pair`.
-fn nominal_key(ty: &InferredType) -> Option<String> {
-    nominal_name(ty).map(|name| match name.split_once('[') {
-        Some((base, _)) => base.to_owned(),
-        None => name,
-    })
+/// DELETED — panics; see the banner above.
+fn nominal_key(_ty: &InferredType) -> Option<String> {
+    panic!(
+        "basilisk-checker: `nominal_key` was DELETED because it extracted a type's \
+         supposed identity by splitting its RENDERING at `[`. It panics because the \
+         real implementation — resolved nominal and specialization structure — DOES \
+         NOT EXIST YET. Do not restore the split and do not return `None`."
+    )
 }
 
 /// `true` when a dict-literal assignment to a `TypedDict` annotation should
 /// be skipped (field-level checking is E0093's job). The RHS is judged by its
 /// AST node, never by sniffing source text.
 fn typeddict_literal_skipped(
-    var: &VariableInfo,
-    oracle: Option<&ModuleOracle<'_>>,
-    declared_type: &InferredType,
-    skip: &SkipNames,
+    _var: &VariableInfo,
+    _oracle: Option<&ModuleOracle<'_>>,
+    _declared_type: &InferredType,
+    _skip: &SkipNames,
 ) -> bool {
-    let Some(name) = nominal_key(declared_type) else {
-        return false;
-    };
-    skip.typeddict.contains(name.as_str())
-        && oracle
-            .zip(var.rhs_span)
-            .and_then(|(o, span)| o.expr(span))
-            .is_some_and(|rhs| matches!(rhs, Expr::Dict(_) | Expr::DictComp(_)))
+    panic!(
+        "basilisk-checker: `typeddict_literal_skipped` was DELETED because it \
+         identified the declared TypedDict by a lowercased, bracket-stripped RENDERED \
+         NAME and looked that string up in a name-keyed set. It panics because the real \
+         implementation — matching the resolved TypedDict definition site — DOES NOT \
+         EXIST YET. Do not restore the name set and do not choose a default skip verdict."
+    )
 }
 
 /// `true` when an `extra_items=` `TypedDict` is assigned to a `dict[...]`
 /// annotation — assignability depends on PEP 728 value types, which the
 /// name-level comparison cannot evaluate.
 fn extra_items_dict_skipped(
-    declared_type: &InferredType,
-    inferred_type: &InferredType,
-    skip: &SkipNames,
+    _declared_type: &InferredType,
+    _inferred_type: &InferredType,
+    _skip: &SkipNames,
 ) -> bool {
-    if !matches!(declared_type, InferredType::Dict(..)) {
-        return false;
-    }
-    let Some(base) = nominal_key(inferred_type) else {
-        return false;
-    };
-    skip.typeddict_extra_items.contains(base.as_str())
+    panic!(
+        "basilisk-checker: `extra_items_dict_skipped` was DELETED because it \
+         identified a PEP 728 TypedDict by a lowercased, bracket-stripped RENDERED NAME. \
+         It panics because the real implementation — the inferred value's resolved \
+         TypedDict definition and schema — DOES NOT EXIST YET. Do not restore the name \
+         lookup and do not choose a default skip verdict."
+    )
 }
 
 /// Create diagnostic for inference-based type mismatch.
@@ -566,40 +484,23 @@ fn make_diagnostic(
     )
 }
 
-/// Extract the annotation text from the source line containing `name_span`.
-///
-/// Looks for `: <annotation>` on the same source line as the variable name,
-/// stopping at the `=` sign that introduces the RHS.  Returns `None` if no
-/// such pattern is found.
-pub(super) fn extract_annotation(source: &str, name_span: Span) -> Option<&str> {
-    // Find the byte offset of the start of the line containing the name.
-    let start = usize::try_from(name_span.start).ok()?;
-    let line_start = source.get(..start)?.rfind('\n').map_or(0, |pos| pos + 1);
-    let line_end = source
-        .get(start..)?
-        .find('\n')
-        .map_or(source.len(), |pos| start + pos);
+// ##########################################################################
+// # DELETED BODY — `extract_annotation`. DO NOT RESTORE IT.                #
+// #                                                                         #
+// # It found an annotation by scanning one SOURCE LINE for the literal     #
+// # punctuation `": "`, then cut at the first `=`. A missing style-space, #
+// # a multiline annotation, or `=` inside `Literal[...]` changed the type  #
+// # the checker believed was declared. `StmtAnnAssign::annotation` and its #
+// # span already exist in the parser AST.                                  #
+// ##########################################################################
 
-    let line = source.get(line_start..line_end)?;
-
-    // Position of the name within the line.
-    let name_offset = start.checked_sub(line_start)?;
-
-    // Find `: ` after the name position on this line.
-    let colon_pos = line.get(name_offset..)?.find(": ")? + name_offset;
-    let after_colon = colon_pos + 2; // skip ': '
-
-    // Find `=` that ends the annotation (must be after the colon).
-    let annotation_end = line
-        .get(after_colon..)?
-        .find('=')
-        .map_or(line.len(), |p| after_colon + p);
-
-    let annotation = line.get(after_colon..annotation_end)?.trim();
-
-    if annotation.is_empty() {
-        None
-    } else {
-        Some(annotation)
-    }
+/// DELETED — panics; callers must retain the original annotation `Expr`.
+pub(super) fn extract_annotation(_source: &str, _name_span: Span) -> Option<&str> {
+    panic!(
+        "basilisk-checker: `assignment_compatibility::extract_annotation` was \
+         DELETED because it recovered a type annotation by scanning SOURCE TEXT for \
+         punctuation on one line. It panics because the real implementation — the \
+         original annotation `Expr` and span — DOES NOT EXIST YET at these callers. Do \
+         not restore the line scan and do not return `None` in its place."
+    )
 }

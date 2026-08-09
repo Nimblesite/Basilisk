@@ -32,7 +32,7 @@
 use std::collections::HashMap;
 
 use ruff_python_ast::{ExceptHandler, Expr, Pattern, Stmt};
-use ruff_text_size::{Ranged, TextSize};
+use ruff_text_size::{Ranged, TextRange, TextSize};
 
 use crate::form::{form_at, CanonicalSymbol, TypingForm};
 use crate::registry::registry;
@@ -76,7 +76,58 @@ enum BindingKind {
     /// A module object (`import x`, `import x as y`).
     Module(String),
     /// A local definition or assignment — not an imported symbol.
-    LocalDefinition,
+    LocalDefinition(LocalBinding),
+}
+
+/// Which statement in this module made a local binding.
+///
+/// The payload is what lets a class hierarchy be keyed on DEFINITION SITE
+/// rather than on a rendered name. Two classes spelled the same are two
+/// definitions and never collide; one class reached through several names is
+/// one definition and never splits.
+#[derive(Debug, Clone)]
+enum LocalBinding {
+    /// A `class` statement. The range is the class's NAME token — the identity
+    /// every consumer keys on.
+    Class(TextRange),
+    /// A `def` statement. The range is the function's NAME token, matching
+    /// `FunctionInfo::name_span`. Several `def`s may bind one name — an
+    /// `@overload` group, or a conditional redefinition — and each is its own
+    /// definition; the positional rule picks the one in force at a use site.
+    Function(TextRange),
+    /// `name = <other name>`: an assignment that rebinds one name to whatever
+    /// another name refers to at that point. Following it is the only way
+    /// `Alias = Movie` / `class Film(Alias)` reaches `Movie`'s definition.
+    AliasOf {
+        /// The bare name on the right-hand side.
+        name: String,
+        /// Where that name is used, so it resolves under the same positional
+        /// rule as any other use.
+        offset: TextSize,
+    },
+    /// `name = <expression>`: an assignment whose right-hand side is not a
+    /// bare name. The range is that EXPRESSION, which is the value's identity
+    /// in this module — `T = TypeVar("T")` binds the `TypeVar(...)` call, and
+    /// two assignments of the same-looking call are two distinct values.
+    Value(TextRange),
+    /// Any other binding statement — `def`, a loop target, an `except … as`
+    /// name, a relative import.
+    Other,
+}
+
+/// Alias hops followed before giving up.
+///
+/// `A = B; B = A` is legal Python that binds both names to whatever they held
+/// before, and a walk over it would not terminate on its own.
+const MAX_ALIAS_HOPS: u32 = 32;
+
+/// The head of a subscripted expression: `Base[T]` and `Base` denote the same
+/// class, and `Base[T][U]` still does.
+fn unsubscript(expr: &Expr) -> &Expr {
+    match expr {
+        Expr::Subscript(subscript) => unsubscript(&subscript.value),
+        other => other,
+    }
 }
 
 /// Every name the module scope binds, and what each one refers to where.
@@ -135,9 +186,17 @@ impl BindingTable {
         match stmt {
             Stmt::Import(import) => self.bind_plain_import(offset, import),
             Stmt::ImportFrom(import) => self.bind_from_import(offset, import),
-            Stmt::ClassDef(class) => self.push_local(offset, class.name.as_str()),
-            Stmt::FunctionDef(function) => self.push_local(offset, function.name.as_str()),
-            Stmt::Assign(assign) => self.bind_each_target(offset, &assign.targets),
+            Stmt::ClassDef(class) => self.push_event(
+                class.name.to_string(),
+                offset,
+                BindingKind::LocalDefinition(LocalBinding::Class(class.name.range())),
+            ),
+            Stmt::FunctionDef(function) => self.push_event(
+                function.name.to_string(),
+                offset,
+                BindingKind::LocalDefinition(LocalBinding::Function(function.name.range())),
+            ),
+            Stmt::Assign(assign) => self.bind_assign(offset, assign),
             Stmt::AnnAssign(assign) => self.bind_target(offset, &assign.target),
             Stmt::AugAssign(assign) => self.bind_target(offset, &assign.target),
             Stmt::TypeAlias(alias) => self.bind_target(offset, &alias.name),
@@ -306,9 +365,10 @@ impl BindingTable {
                 .asname
                 .as_ref()
                 .map_or(name, ruff_python_ast::Identifier::as_str);
-            let kind = module.map_or(BindingKind::LocalDefinition, |module| {
-                BindingKind::Symbol(CanonicalSymbol::new(module, name))
-            });
+            let kind = module.map_or_else(
+                || BindingKind::LocalDefinition(LocalBinding::Other),
+                |module| BindingKind::Symbol(CanonicalSymbol::new(module, name)),
+            );
             self.push_event(local.to_owned(), offset, kind);
         }
     }
@@ -324,6 +384,36 @@ impl BindingTable {
             let symbol = CanonicalSymbol::new(module, name.clone());
             self.push_event(name.clone(), offset, BindingKind::Symbol(symbol));
         }
+    }
+
+    /// `target = value`, recording the single-name form as an alias.
+    ///
+    /// `Alias = Movie` makes both names refer to one class object; anything
+    /// else (a call, a subscript, several targets, a tuple unpack) binds a
+    /// value this table cannot follow, and stays an opaque local binding.
+    fn bind_assign(&mut self, offset: TextSize, assign: &ruff_python_ast::StmtAssign) {
+        if let ([Expr::Name(target)], Expr::Name(value)) =
+            (assign.targets.as_slice(), assign.value.as_ref())
+        {
+            self.push_event(
+                target.id.to_string(),
+                offset,
+                BindingKind::LocalDefinition(LocalBinding::AliasOf {
+                    name: value.id.to_string(),
+                    offset: value.range().start(),
+                }),
+            );
+            return;
+        }
+        if let [Expr::Name(target)] = assign.targets.as_slice() {
+            self.push_event(
+                target.id.to_string(),
+                offset,
+                BindingKind::LocalDefinition(LocalBinding::Value(assign.value.range())),
+            );
+            return;
+        }
+        self.bind_each_target(offset, &assign.targets);
     }
 
     /// Record binding events for an assignment-like target expression.
@@ -353,9 +443,13 @@ impl BindingTable {
             .push(BindingEvent { offset, kind });
     }
 
-    /// Append a local-definition event for `name`.
+    /// Append an opaque local-definition event for `name`.
     fn push_local(&mut self, offset: TextSize, name: &str) {
-        self.push_event(name.to_owned(), offset, BindingKind::LocalDefinition);
+        self.push_event(
+            name.to_owned(),
+            offset,
+            BindingKind::LocalDefinition(LocalBinding::Other),
+        );
     }
 
     /// The binding governing a use of `name` at `offset`: the latest event at
@@ -394,7 +488,7 @@ impl BindingTable {
         match expr {
             Expr::Name(name) => match self.binding_at(name.id.as_str(), name.range().start())? {
                 BindingKind::Symbol(symbol) => Some(symbol.clone()),
-                BindingKind::Module(_) | BindingKind::LocalDefinition => None,
+                BindingKind::Module(_) | BindingKind::LocalDefinition(_) => None,
             },
             Expr::Attribute(attribute) => {
                 let module = self.module_path_of(&attribute.value)?;
@@ -414,7 +508,7 @@ impl BindingTable {
         match expr {
             Expr::Name(name) => match self.binding_at(name.id.as_str(), name.range().start())? {
                 BindingKind::Module(module) => Some(module.clone()),
-                BindingKind::Symbol(_) | BindingKind::LocalDefinition => None,
+                BindingKind::Symbol(_) | BindingKind::LocalDefinition(_) => None,
             },
             Expr::Attribute(attribute) => {
                 let base = self.module_path_of(&attribute.value)?;
@@ -526,6 +620,55 @@ impl BindingTable {
         }
     }
 
+    /// [`Self::form_of_with_builtins`] against the module's FINAL namespace:
+    /// the resolution a LAZILY EVALUATED annotation sees.
+    ///
+    /// PEP 484 forward references are evaluated after the module has run, so
+    /// the binding in force is each name's last one. Use this — never the
+    /// positional [`Self::form_of`] — for an expression whose own offsets do
+    /// not locate it in the module, such as one re-parsed from a rendering.
+    #[must_use]
+    pub fn deferred_form_of(&self, expr: &Expr) -> Option<TypingForm> {
+        self.form_of_final(expr)
+    }
+
+    /// [`Self::local_class_definition`] against the module's FINAL namespace.
+    ///
+    /// The definition site of the class an expression denotes once the module
+    /// has executed. See [`Self::deferred_form_of`] for when to prefer this
+    /// over the positional form.
+    #[must_use]
+    pub fn deferred_local_class(&self, expr: &Expr) -> Option<TextRange> {
+        let Expr::Name(name) = unsubscript(expr) else {
+            return None;
+        };
+        self.follow_to_class_final(name.id.as_str())
+    }
+
+    /// [`Self::follow_to_class`] entered through a name's LAST binding.
+    ///
+    /// Only the FIRST lookup is deferred, and only because the name being
+    /// resolved may come from a lazily evaluated annotation whose own offsets
+    /// locate nothing. Once an alias event is reached the walk becomes
+    /// POSITIONAL, because an assignment binds an object, not a name:
+    /// `Espalier = Trellis` captured whichever class `Trellis` named when that
+    /// line ran, and a later `class Trellis` rebinds only the name. Following
+    /// the alias through `Trellis`'s final binding would hand back a class the
+    /// alias has never referred to at any point in the program's life.
+    fn follow_to_class_final(&self, name: &str) -> Option<TextRange> {
+        match self.last_binding(name)? {
+            BindingKind::LocalDefinition(LocalBinding::Class(range)) => Some(*range),
+            BindingKind::LocalDefinition(LocalBinding::AliasOf { name, offset }) => {
+                self.follow_to_class(name, *offset, 1)
+            }
+            BindingKind::LocalDefinition(
+                LocalBinding::Value(_) | LocalBinding::Function(_) | LocalBinding::Other,
+            )
+            | BindingKind::Symbol(_)
+            | BindingKind::Module(_) => None,
+        }
+    }
+
     /// [`Self::form_of`] against the module's FINAL namespace, with the
     /// builtin fallback: the resolution a lazily evaluated forward
     /// reference sees.
@@ -547,7 +690,7 @@ impl BindingTable {
         match expr {
             Expr::Name(name) => match self.last_binding(name.id.as_str())? {
                 BindingKind::Symbol(symbol) => Some(symbol.clone()),
-                BindingKind::Module(_) | BindingKind::LocalDefinition => None,
+                BindingKind::Module(_) | BindingKind::LocalDefinition(_) => None,
             },
             Expr::Attribute(attribute) => {
                 let module = self.module_path_of_final(&attribute.value)?;
@@ -564,7 +707,7 @@ impl BindingTable {
         match expr {
             Expr::Name(name) => match self.last_binding(name.id.as_str())? {
                 BindingKind::Module(module) => Some(module.clone()),
-                BindingKind::Symbol(_) | BindingKind::LocalDefinition => None,
+                BindingKind::Symbol(_) | BindingKind::LocalDefinition(_) => None,
             },
             Expr::Attribute(attribute) => {
                 let base = self.module_path_of_final(&attribute.value)?;
@@ -583,6 +726,131 @@ impl BindingTable {
             .map(|event| &event.kind)
     }
 
+    /// The DEFINITION SITE of the class an expression refers to, when that
+    /// class is defined in this module.
+    ///
+    /// This is the lawful key for a class hierarchy: the range of the `class`
+    /// statement's name token, which is unique per definition within a module.
+    /// Resolution goes through the module's bindings, never a spelling, so:
+    ///
+    /// ```python
+    /// class Movie: ...
+    /// Alias = Movie
+    /// class Film(Alias): ...    # -> Movie's definition site
+    ///
+    /// import other
+    /// class Other(other.Movie): ...  # -> None: a class in another module,
+    ///                                #    NOT the local `Movie`
+    /// class Movie(Movie): ...   # -> the EARLIER `Movie`, because the class
+    ///                           #    statement binds its own name only once
+    ///                           #    it completes — never itself
+    /// ```
+    ///
+    /// A subscripted base (`Base[T]`) denotes the same class as `Base`.
+    /// `None` means "not a class this module defines" — an import, a builtin,
+    /// a call, or a name that is not bound at the use site — and every caller
+    /// must treat it as abstention rather than as a negative answer.
+    #[must_use]
+    pub fn local_class_definition(&self, expr: &Expr) -> Option<TextRange> {
+        let Expr::Name(name) = unsubscript(expr) else {
+            return None;
+        };
+        self.follow_to_class(name.id.as_str(), name.range().start(), 0)
+    }
+
+    /// The DEFINITION SITE of the function an expression refers to, when that
+    /// function is defined in this module.
+    ///
+    /// The range of the `def` statement's name token, matching
+    /// `FunctionInfo::name_span`. Assignment aliases are followed, so
+    /// `shorthand = describe; shorthand(1)` reaches `describe`'s definition,
+    /// and resolution is positional, so a name rebound before the call reaches
+    /// whatever it is bound to there. `None` means "not a function this module
+    /// defines" — an import, a class, a builtin — and every caller must treat
+    /// it as abstention rather than as a negative answer.
+    #[must_use]
+    pub fn local_function_definition(&self, expr: &Expr) -> Option<TextRange> {
+        let Expr::Name(name) = unsubscript(expr) else {
+            return None;
+        };
+        self.follow_to_function(name.id.as_str(), name.range().start(), 0)
+    }
+
+    /// [`Self::local_function_definition`]'s alias-following walk.
+    fn follow_to_function(&self, name: &str, offset: TextSize, hops: u32) -> Option<TextRange> {
+        if hops >= MAX_ALIAS_HOPS {
+            return None;
+        }
+        match self.binding_at(name, offset)? {
+            BindingKind::LocalDefinition(LocalBinding::Function(range)) => Some(*range),
+            BindingKind::LocalDefinition(LocalBinding::AliasOf { name, offset }) => {
+                self.follow_to_function(name, *offset, hops + 1)
+            }
+            BindingKind::LocalDefinition(
+                LocalBinding::Class(_) | LocalBinding::Value(_) | LocalBinding::Other,
+            )
+            | BindingKind::Symbol(_)
+            | BindingKind::Module(_) => None,
+        }
+    }
+
+    /// The EXPRESSION an assignment bound to the name this expression names.
+    ///
+    /// `T = TypeVar("T")` binds the `TypeVar(...)` call; asking for `T` here
+    /// returns that call's range, and asking for `Alias` after `Alias = T`
+    /// returns the same range, because an alias binds the same object. `None`
+    /// when the name is not bound by an assignment in this module — an import,
+    /// a `def`, a `class`, a loop target, or a name never bound.
+    ///
+    /// This is the lawful key for "do these two references denote the same
+    /// value?", which a rendered name cannot answer: a module may bind two
+    /// different `TypeVar`s whose names are spelled alike, and one `TypeVar`
+    /// may be reached under several names.
+    #[must_use]
+    pub fn local_value_binding(&self, expr: &Expr) -> Option<TextRange> {
+        let Expr::Name(name) = unsubscript(expr) else {
+            return None;
+        };
+        self.follow_to_value(name.id.as_str(), name.range().start(), 0)
+    }
+
+    /// [`Self::local_value_binding`]'s alias-following walk.
+    fn follow_to_value(&self, name: &str, offset: TextSize, hops: u32) -> Option<TextRange> {
+        if hops >= MAX_ALIAS_HOPS {
+            return None;
+        }
+        match self.binding_at(name, offset)? {
+            BindingKind::LocalDefinition(LocalBinding::Value(range)) => Some(*range),
+            BindingKind::LocalDefinition(LocalBinding::AliasOf { name, offset }) => {
+                self.follow_to_value(name, *offset, hops + 1)
+            }
+            BindingKind::LocalDefinition(
+                LocalBinding::Class(_) | LocalBinding::Function(_) | LocalBinding::Other,
+            )
+            | BindingKind::Symbol(_)
+            | BindingKind::Module(_) => None,
+        }
+    }
+
+    /// Resolve `name` at `offset` to a class definition, following assignment
+    /// aliases. Bounded by [`MAX_ALIAS_HOPS`] so an alias cycle terminates.
+    fn follow_to_class(&self, name: &str, offset: TextSize, hops: u32) -> Option<TextRange> {
+        if hops >= MAX_ALIAS_HOPS {
+            return None;
+        }
+        match self.binding_at(name, offset)? {
+            BindingKind::LocalDefinition(LocalBinding::Class(range)) => Some(*range),
+            BindingKind::LocalDefinition(LocalBinding::AliasOf { name, offset }) => {
+                self.follow_to_class(name, *offset, hops + 1)
+            }
+            BindingKind::LocalDefinition(
+                LocalBinding::Value(_) | LocalBinding::Function(_) | LocalBinding::Other,
+            )
+            | BindingKind::Symbol(_)
+            | BindingKind::Module(_) => None,
+        }
+    }
+
     /// Whether a bare-name use refers to a module-level local definition —
     /// a `def`, `class`, or assignment this module makes — rather than an
     /// import or the builtin scope.
@@ -597,7 +865,7 @@ impl BindingTable {
         };
         matches!(
             self.binding_at(name.id.as_str(), name.range().start()),
-            Some(BindingKind::LocalDefinition)
+            Some(BindingKind::LocalDefinition(_))
         )
     }
 

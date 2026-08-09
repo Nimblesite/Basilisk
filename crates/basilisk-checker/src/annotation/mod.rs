@@ -68,14 +68,22 @@ pub struct AnnotationResolver<'m> {
     /// resulting type. The cascade is pure, so the second answer is the first
     /// one ([CHKARCH-TESTING-BENCH]).
     resolved: RefCell<HashMap<(u32, u32), InferredType>>,
-    /// Names of the STRUCTURAL classes this module declares — `Protocol` and
-    /// `TypedDict` subclasses, from the resolver's binding-resolved flags
-    /// ([RESOLV-CANONICAL-BINDING]). Structural types are satisfied by shape,
-    /// not identity, so nominal judgments abstain on them.
-    structural: std::collections::HashSet<&'m str>,
     /// The module's binding table ([RESOLV-CANONICAL-BINDING]) — the ONE
     /// lawful answer to "which typing symbol does this expression denote?".
     bindings: &'m basilisk_resolver::BindingTable,
+    /// The module's classes, for grounding a member leaf (`Color.RED`)
+    /// against the declarations of the class its qualifier resolves to.
+    ///
+    /// ORPHANED BY A DELETION, NOT UNUSED. Its only reader was
+    /// `class_declares`, reached from `grounds`, whose caller
+    /// `is_grounded_name` was deleted for taking a `&str`. Both are retained
+    /// as the rebuild map — see their banners.
+    #[expect(
+        dead_code,
+        reason = "reader orphaned by the `is_grounded_name` deletion; retained for the \
+                  rebuild that passes an `Expr` instead of a rendering"
+    )]
+    classes: &'m [basilisk_resolver::ClassInfo],
 }
 
 /// One step of resolution: the alias parameters currently bound, the aliases
@@ -121,13 +129,8 @@ impl<'m> AnnotationResolver<'m> {
             tables: Tables::build(&parsed.ast),
             annotations: index::annotation_nodes(&parsed.ast),
             resolved: RefCell::default(),
-            structural: module
-                .classes
-                .iter()
-                .filter(|class| class.is_protocol || class.is_typed_dict)
-                .map(|class| class.name.as_str())
-                .collect(),
             bindings: &module.bindings,
+            classes: &module.classes,
         })
     }
 
@@ -138,31 +141,38 @@ impl<'m> AnnotationResolver<'m> {
         self.bindings
     }
 
-    /// Does this type mention a STRUCTURAL class this module declares — a
-    /// `Protocol` or `TypedDict` — at any depth? Structural targets need
-    /// member-level judgment, so nominal assignability rules abstain when
-    /// this answers `true`.
-    ///
-    /// The leaf test is set membership of the engine's `Named` leaf — the
-    /// [TYPEINF-LEGACY] boundary — against binding-resolved class nature; no
-    /// source text is consulted.
+    // ######################################################################
+    // # DELETED BODY — `is_structural_target`. DO NOT RESTORE IT.           #
+    // #                                                                     #
+    // # The resolver knew which class DEFINITIONS were Protocols and        #
+    // # TypedDicts, but this function discarded those identities into a set #
+    // # of class-name strings, then classified every `Named(String)` leaf by #
+    // # membership of that spelling:                                        #
+    // #                                                                     #
+    // #   InferredType::Named(name) => structural.contains(name.as_str())   #
+    // #                                                                     #
+    // # Two same-spelled definitions therefore became one structural type, #
+    // # while an alias of a structural class was not one. Recursing through #
+    // # containers only propagated the bad leaf verdict more deeply.        #
+    // #                                                                     #
+    // # The rebuild requires nominal leaves to carry the definition site    #
+    // # resolved from their original AST node. Structural classification is #
+    // # then a property of that definition, never of its display name.      #
+    // #                                                                     #
+    // # Pinned by: tests/nominal_leaf_identity_tests.rs                     #
+    // ######################################################################
+
+    /// DELETED — panics; see the banner above.
     #[must_use]
-    pub fn is_structural_target(&self, ty: &InferredType) -> bool {
-        match ty {
-            InferredType::Named(name) => self.structural.contains(name.as_str()),
-            InferredType::Union(arms) => arms.iter().any(|arm| self.is_structural_target(arm)),
-            InferredType::Optional(inner)
-            | InferredType::List(inner)
-            | InferredType::Set(inner)
-            | InferredType::TypeForm(inner) => self.is_structural_target(inner),
-            InferredType::Dict(key, value) => {
-                self.is_structural_target(key) || self.is_structural_target(value)
-            }
-            InferredType::Tuple(elements) => elements
-                .iter()
-                .any(|element| self.is_structural_target(element)),
-            _ => false,
-        }
+    pub fn is_structural_target(&self, _ty: &InferredType) -> bool {
+        panic!(
+            "basilisk-checker: `AnnotationResolver::is_structural_target` was DELETED \
+             because it classified `Named(String)` leaves as Protocols or TypedDicts by \
+             membership in a SET OF CLASS-NAME SPELLINGS. It panics because the real \
+             implementation DOES NOT EXIST YET: nominal leaves must carry their resolved \
+             definition site, whose class metadata supplies structural identity. Do not \
+             restore the name set and do not return `true` or `false` in its place."
+        )
     }
 
     /// Resolve an annotation expression to the type it denotes.
@@ -191,48 +201,119 @@ impl<'m> AnnotationResolver<'m> {
         Some(resolved)
     }
 
-    /// Resolve an annotation the resolver holds only as **stored text** — a
-    /// `ResolvedModule` field that kept the annotation's rendering but not its
-    /// span.
-    ///
-    /// The text is parsed by `ruff` into the type expression it always was and
-    /// then run through this same cascade, so the caller gets alias expansion,
-    /// same-file classes and shadowing exactly as `resolve_span` does. It is
-    /// *not* the condemned text path: nothing here pattern-matches source
-    /// characters. `None` when the text is not a parseable type expression.
-    ///
-    /// Callers that can reach the annotation node should use [`Self::resolve`]
-    /// or [`Self::resolve_span`]; this seam closes as the resolver's structures
-    /// grow spans ([NARROWPLAN-INTEGRATION]).
+    // ######################################################################
+    // # DELETED BODY — `resolve_text`. DO NOT RESTORE IT.                  #
+    // #                                                                     #
+    // #   let parsed = ruff_python_parser::parse_expression(text.trim())?;  #
+    // #   Some(self.resolve(parsed.expr()))                                 #
+    // #                                                                     #
+    // # Re-parsing a RENDERING is still deriving a type from characters.    #
+    // # The reconstructed expression has no offset in the file, so:         #
+    // #                                                                     #
+    // #   * resolution cannot be positional and falls back to the module's  #
+    // #     FINAL namespace — an annotation written before a rebinding      #
+    // #     resolves to whatever the name means after it;                   #
+    // #   * the enclosing scope is gone, so a class-local or function-local #
+    // #     binding that governed the original expression is invisible;     #
+    // #   * a rendering that does not round-trip resolves to something      #
+    // #     else, or to nothing.                                            #
+    // #                                                                     #
+    // # The signature survives only as the map of callers that must be      #
+    // # rebuilt to carry the annotation's own `Expr` to `resolve` /         #
+    // # `resolve_span`.                                                     #
+    // ######################################################################
+
+    /// DELETED — panics; see the banner above.
     #[must_use]
-    pub fn resolve_text(&self, text: &str) -> Option<InferredType> {
-        let parsed = ruff_python_parser::parse_expression(text.trim()).ok()?;
-        Some(self.resolve(parsed.expr()))
+    pub fn resolve_text(&self, _text: &str) -> Option<InferredType> {
+        panic!(
+            "basilisk-checker: `AnnotationResolver::resolve_text` was DELETED because it \
+             recovered a type by RE-PARSING a rendering, which has no position in the \
+             file and therefore no scope and no positional binding. It panics because \
+             the real implementation DOES NOT EXIST YET: the caller must carry the \
+             annotation's `Expr` to `resolve`/`resolve_span`. Do not restore the parse-back \
+             and do not return `None` in its place."
+        )
     }
 
-    /// Is `name` a leaf the module GROUNDS — a class declared here or a
-    /// builtin type? An unresolved spelling (a `TypeVar`, an imported class
-    /// this module cannot see into, a typo) is NOT grounded, and a judgment
-    /// that needs to know what the name IS must abstain rather than guess.
-    ///
-    /// DELETED — panics. The body split a RENDERED type at `[` to get its base
-    /// and then looked that STRING up in a nominal table and a builtin-name
-    /// whitelist. Both halves were spelling tests: `list[int]` and
-    /// `list [int]` disagreed, a builtin rebound in the module was still
-    /// "grounded", and `from builtins import int as Whole` was not. Whether a
-    /// leaf is grounded is a question about its BINDING — answer it from the
-    /// binding table, or abstain.
+    // ######################################################################
+    // # DELETED BODY — `is_grounded_name`. DO NOT RESTORE IT.              #
+    // #                                                                     #
+    // #   let parsed = ruff_python_parser::parse_expression(name.trim())?;  #
+    // #   self.grounds(parsed.expr())                                       #
+    // #                                                                     #
+    // # Same defect as `resolve_text` above: a `&str` in, a verdict out.    #
+    // # The parameter is a `&str` only because the engine's nominal leaf    #
+    // # carries a RENDERING ([TYPEINF-LEGACY]). `grounds` itself is kept —  #
+    // # it reads an `Expr` through the binding table and is what the        #
+    // # rebuild calls once the leaf carries its definition site.            #
+    // ######################################################################
+
+    /// DELETED — panics; see the banner above.
     #[must_use]
     pub fn is_grounded_name(&self, _name: &str) -> bool {
         panic!(
-            "basilisk-checker: `AnnotationResolver::is_grounded_name` was DELETED \
-             because it split a RENDERED type at `[` and matched the result against a \
-             table of builtin NAME SPELLINGS. It panics because the real \
-             implementation — asking the binding table what the leaf's name is bound \
-             to — DOES NOT EXIST YET. Do not restore the split and do not answer \
-             `true`/`false` in its place: `true` lets every judgment fire on \
-             unresolvable types, `false` silences every judgment entirely."
+            "basilisk-checker: `AnnotationResolver::is_grounded_name` was DELETED because \
+             it decided whether a leaf is grounded by RE-PARSING its rendering against the \
+             module's final namespace, with no offset and no scope. It panics because the \
+             real implementation DOES NOT EXIST YET: the nominal leaf must carry the \
+             definition site it resolved to. Do not restore the parse-back and do not \
+             return `false` in its place."
         )
+    }
+
+    /// Is `expr` a leaf the module GROUNDS — a class declared here, a member
+    /// of one, or a definition the canonical registry describes?
+    ///
+    /// ORPHANED, NOT DELETED. This is the lawful half of the deleted
+    /// `is_grounded_name`: it reads an `Expr` through the binding table and
+    /// has none of that function's defects. It is exactly what the rebuild
+    /// calls once the nominal leaf carries its definition site. Do not delete
+    /// it to silence the dead-code lint.
+    #[expect(
+        dead_code,
+        reason = "caller deleted for taking a rendering; this AST-based helper is the \
+                  rebuild target — see the `is_grounded_name` banner"
+    )]
+    fn grounds(&self, expr: &Expr) -> bool {
+        // `X[...]` is grounded exactly when `X` is: a subscript parameterises
+        // the class its head denotes.
+        let head = match expr {
+            Expr::Subscript(subscript) => subscript.value.as_ref(),
+            other => other,
+        };
+        if self.bindings.deferred_local_class(head).is_some()
+            || self.bindings.deferred_form_of(head).is_some()
+        {
+            return true;
+        }
+        // `Color.RED` — a member of a class this module defines. The
+        // qualifier resolves to the class; the attribute must be one it
+        // declares, not merely a word after a dot.
+        match head {
+            Expr::Attribute(attribute) => self
+                .bindings
+                .deferred_local_class(&attribute.value)
+                .is_some_and(|site| self.class_declares(Span::from(site), attribute.attr.as_str())),
+            _ => false,
+        }
+    }
+
+    /// Does the class defined at `site` declare `member` as an attribute or a
+    /// method?
+    ///
+    /// ORPHANED with [`Self::grounds`], its only caller.
+    #[expect(
+        dead_code,
+        reason = "reached only from `grounds`, whose caller was deleted; retained for \
+                  the rebuild"
+    )]
+    fn class_declares(&self, site: Span, member: &str) -> bool {
+        self.classes.iter().any(|class| {
+            class.name_span == site
+                && (class.attributes.iter().any(|attr| attr.name == member)
+                    || class.method_names.iter().any(|name| name == member))
+        })
     }
 
     /// The cascade over one type expression.
@@ -339,7 +420,7 @@ impl<'m> AnnotationResolver<'m> {
             TypingForm::BoolClass => InferredType::Bool,
             TypingForm::BytesClass => InferredType::Bytes,
             TypingForm::NoneTypeClass => InferredType::None_,
-            TypingForm::ObjectClass => InferredType::Named("object".to_owned()),
+            TypingForm::ObjectClass => InferredType::Object,
             _ => return None,
         })
     }

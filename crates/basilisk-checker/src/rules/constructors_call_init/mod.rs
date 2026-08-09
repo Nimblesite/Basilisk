@@ -99,7 +99,7 @@ fn check_class_scoped_typevars_in_self(
     _module: &ResolvedModule,
     _source: &str,
     _class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
-    _method_map: &HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>>,
+    _method_map: &HashMap<(basilisk_resolver::Span, &str), Vec<&basilisk_resolver::FunctionInfo>>,
     _typevar_names: &[&str],
     _diagnostics: &mut Vec<Diagnostic>,
 ) {
@@ -143,7 +143,8 @@ struct Ctx<'a> {
     module: &'a ResolvedModule,
     path: &'a str,
     class_map: &'a HashMap<&'a str, &'a basilisk_resolver::ClassInfo>,
-    method_map: &'a HashMap<(&'a str, &'a str), Vec<&'a basilisk_resolver::FunctionInfo>>,
+    method_map:
+        &'a HashMap<(basilisk_resolver::Span, &'a str), Vec<&'a basilisk_resolver::FunctionInfo>>,
     typevar_names: &'a [&'a str],
     index: &'a super::shared::ExprIndex<'a>,
 }
@@ -226,7 +227,7 @@ fn check_subscript_constructor(
         return;
     }
 
-    if let Some(init_funcs) = method_map.get(&(class_name, "__init__")) {
+    if let Some(init_funcs) = method_map.get(&(class_info.name_span, "__init__")) {
         for init_func in init_funcs {
             check_init_method_args(
                 init_func,
@@ -278,7 +279,7 @@ fn check_no_init_with_args(
     _class_name: &str,
     _class_info: &basilisk_resolver::ClassInfo,
     _class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
-    _method_map: &HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>>,
+    _method_map: &HashMap<(basilisk_resolver::Span, &str), Vec<&basilisk_resolver::FunctionInfo>>,
     _module: &ResolvedModule,
     _path: &str,
     _diagnostics: &mut Vec<Diagnostic>,

@@ -412,7 +412,7 @@ Every step, no exceptions:
 - A live conformance run, **recorded not gated**: it detects unintended
   regressions in rules that were working. A drop traced to a deliberate deletion
   is reported and kept ([CHKARCH-CONFORMANCE](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE)).
-- `make bench`: indicative only, gates nothing ([CHKARCH-TESTING-BENCH]). The
+- `make _bench`: indicative only, gates nothing ([CHKARCH-TESTING-BENCH]). The
   walker is real production cost the moment step 1 lands — record the baseline
   **in that same change**.
 - `make test` fail-fast, coverage ratchet up, mutation ratchet up — read against
@@ -427,7 +427,7 @@ made cheap BEFORE the first rule consumed it — DONE.** The same staging that
 kept these cores off live diagnostics also kept them off every performance
 gate: `narrow::analyse_function_in` is reached only through the
 `narrowed_uses` Salsa query, whose sole callers today are tests and
-`examples/`. `make bench` times `basilisk check`, which never enters this code
+`examples/`. `make _bench` times `basilisk check`, which never enters this code
 — so no ratchet was watching it, and a cost that small fixtures hide would
 have landed as a *regression on the first wiring change*, when the
 benchmark ([CHKARCH-TESTING-BENCH](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING-BENCH), indicative, non-gating)
@@ -977,13 +977,13 @@ before the stage is declared closed:
   — 8/8 (`param_inference`, `typeis_narrowing`, `enum_literal_expansion`,
   `tuple_index`, `recursive_aliases`, `generic_constructor`,
   `paramspec_decorator`, `recursive_bases`).
-- [x] `make bench` — no fixture slower than the committed baseline
+- [x] `make _bench` — no fixture slower than the committed baseline
   ([CHKARCH-TESTING-BENCH]). **Closed by maintainer decision
   (2026-08-05): the branch's current numbers are accepted as the committed
   baseline, with an absolute ceiling of 20 ms per fixture; the ratchet stays
   armed from here — any further material regression is still a build
   failure.** History of the chase, kept for the record: the stage's first
-  `make bench` run failed on EVERY fixture, +2.0%
+  `make _bench` run failed on EVERY fixture, +2.0%
   to +82.4%. Bisected to the branch, not to this stage's boxes: `da742832`
   (main) checks `aliases_type_statement` in 8.9 ms, `84a7661e` (this branch,
   2026-08-03) in 15.8 ms; the Stage 0.5 work added ~2% on top of that. It went
@@ -1327,7 +1327,7 @@ before the stage is declared closed:
   `walk_if` probe-then-walk and the `walk_stmts` re-probe no longer
   re-synthesize the same expressions. Cost went from linear in module size to
   flat.
-- [ ] Record an indicative `make bench` measurement on a fixture that actually
+- [ ] Record an indicative `make _bench` measurement on a fixture that actually
   exercises the flow walker **in the same change that first wires it**, so its
   cost is visible for human review. Do not turn that workstation timing into a
   pass/fail gate.
@@ -1670,7 +1670,7 @@ before the stage is declared closed:
   reports docs and READMEs in sync. *Still to run:* the instrumented
   coverage ratchet (`./scripts/test-rust.sh`), `make _test_vsix`,
   `make _test_nvim`, the mutation ratchet (in scope — `names_unbound`,
-  `rebind`, and eleven rule files changed), and `make bench` on a quiet
+  `rebind`, and eleven rule files changed), and `make _bench` on a quiet
   machine (the prior benchmark alert was attributed to thermal load by a
   head-to-head against the committed binary: 19.3/14.2/14.9/13.2 ms
   baseline vs 20.6/14.6/14.9/13.2 ms working, a true code delta of 0–7%).*

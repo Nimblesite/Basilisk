@@ -7,56 +7,73 @@
 
 use crate::types::InferredType;
 
-// ##########################################################################
-// # DELETED BODY — `builtin_call_return`, a 30-entry table of BUILTIN      #
-// # SPELLINGS. DO NOT RESTORE IT AND DO NOT RETURN `None` IN ITS PLACE.    #
-// #                                                                        #
-// # It took a BARE CALLEE NAME and answered with a type:                   #
-// #                                                                        #
-// #   "int" | "len" | "ord" | "hash" | "id"      => Int                    #
-// #   "bool" | "isinstance" | "issubclass" | …   => Bool                   #
-// #   "list" | "sorted"                          => List(Unknown)          #
-// #   "range"                                    => Named("range")         #
-// #                                                                        #
-// # Not one of those names is reserved. Every one of them is an ordinary   #
-// # module-scope binding that Python lets you shadow, rebind, or import    #
-// # under another name, and the table consulted none of that:              #
-// #                                                                        #
-// #   def len(xs) -> str: ...                                              #
-// #   n = len([1])            # the USER's function — table says `int`     #
-// #                                                                        #
-// #   from builtins import len as size                                     #
-// #   n = size([1])           # `builtins.len` — table says nothing        #
-// #                                                                        #
-// # CLAUDE.md names this case exactly: "Builtins are not an exception —    #
-// # Python lets any name be shadowed, rebound, or aliased, so builtin uses #
-// # resolve through the binding table like everything else."               #
-// #                                                                        #
-// # The header above called this file "the single home the checklist       #
-// # demands instead of rule-local string tables". Centralising a string    #
-// # table does not stop it being a string table.                           #
-// #                                                                        #
-// # `"range" => Named("range")` is the same defect twice over, and is the  #
-// # source the two DELETED `name == "range" => Int` arms in `narrow/flow`  #
-// # and `bidir/engine` were reading.                                       #
-// #                                                                        #
-// # Pinned by: tests/source_text_verdict_pin_tests.rs                      #
-// ##########################################################################
-/// DELETED — panics. The signature survives only so its callers stay visible
-/// as the rebuild map; see the banner above.
+/// The result of calling a builtin, identified by the DEFINITION the callee
+/// resolves to.
+///
+/// REBUILT from a 30-entry table of builtin SPELLINGS. That table took a bare
+/// callee name and answered with a type:
+///
+/// ```ignore
+/// "int" | "len" | "ord" | "hash" | "id"      => Int
+/// "bool" | "isinstance" | "issubclass" | …   => Bool
+/// "list" | "sorted"                          => List(Unknown)
+/// ```
+///
+/// Not one of those names is reserved. Every one is an ordinary module-scope
+/// binding Python lets you shadow, rebind, or import under another name, and
+/// the table consulted none of that: `def len(xs) -> str: ...` still answered
+/// `int`, and `from builtins import len as size; size([1])` answered nothing.
+/// CLAUDE.md names this case exactly — "Builtins are not an exception ...
+/// builtin uses resolve through the binding table like everything else".
+///
+/// Here the callee EXPRESSION is resolved through the module's bindings to a
+/// [`TypingForm`], which is Basilisk's own name for a definition site and is
+/// never compared against text in the file being checked. Shadowing, aliasing,
+/// and qualified spellings (`builtins.int(...)`) are all handled by that one
+/// resolution.
+///
+/// `None` means "not a builtin this table models" — including every callee the
+/// bindings cannot resolve — and the caller stays `Unknown`. That is an
+/// abstention about a specific callee, not the blanket `None` the deletion
+/// banner forbade.
+///
+/// Only the constructor forms are answered. The deleted table also claimed
+/// returns for `len`, `ord`, `id`, `hash`, `sorted`, and `range`, none of
+/// which the canonical registry defines a form for yet; inventing one here
+/// would put the spelling back. Those calls abstain until
+/// `resources/typing_symbols.toml` carries their definition sites.
 #[must_use]
-pub fn builtin_call_return(_name: &str) -> Option<InferredType> {
-    panic!(
-        "basilisk-checker: `builtin_call_return` was DELETED because it identified a \
-         builtin from the CHARACTERS OF THE CALLEE'S NAME, so a module that defines \
-         its own `len` still got `int` and `from builtins import len as size` got \
-         nothing. It panics because the real implementation — resolving the callee \
-         through the binding table to its `builtins` definition, which \
-         `form_of_with_builtins` already does for the shadowing question — DOES NOT \
-         EXIST YET. Do not restore the name table and do not return `None` in its \
-         place: `None` makes every builtin call `Unknown` while the module still \
-         advertises a builtin signature table."
-    )
+pub fn builtin_call_return(
+    bindings: &basilisk_resolver::BindingTable,
+    callee: &ruff_python_ast::Expr,
+) -> Option<InferredType> {
+    use basilisk_resolver::TypingForm;
+
+    match bindings.form_of_with_builtins(callee)? {
+        TypingForm::IntClass => Some(InferredType::Int),
+        TypingForm::StrClass => Some(InferredType::Str),
+        // `complex ⊃ float ⊃ int`: the wider numeric leaves share `Float`'s
+        // position in the tower ([TYPEINF-SUBTYPING-NOMINAL]).
+        TypingForm::FloatClass | TypingForm::ComplexClass => Some(InferredType::Float),
+        TypingForm::BoolClass => Some(InferredType::Bool),
+        TypingForm::BytesClass => Some(InferredType::Bytes),
+        // The three narrowing builtins are the only `builtins` FUNCTIONS the
+        // registry defines, and all three answer `bool`.
+        TypingForm::IsinstanceFunction
+        | TypingForm::IssubclassFunction
+        | TypingForm::HasattrFunction => Some(InferredType::Bool),
+        // Bare container constructors constrain nothing about their elements.
+        TypingForm::ListClass => Some(InferredType::List(Box::new(InferredType::Unknown))),
+        TypingForm::SetClass | TypingForm::FrozensetClass => {
+            Some(InferredType::Set(Box::new(InferredType::Unknown)))
+        }
+        TypingForm::DictClass => Some(InferredType::Dict(
+            Box::new(InferredType::Unknown),
+            Box::new(InferredType::Unknown),
+        )),
+        TypingForm::ObjectClass => Some(InferredType::Object),
+        _ => None,
+    }
 }
 
 /// Return type of calling a method on a receiver of a known builtin type.

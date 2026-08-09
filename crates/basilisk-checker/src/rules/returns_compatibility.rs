@@ -62,7 +62,7 @@ impl Rule for ReturnTypeMismatch {
         let Some(resolver) = types.annotations() else {
             return;
         };
-        let judge = TypeJudge::new(types.oracle(), resolver, types.subtyping());
+        let judge = TypeJudge::new(types.oracle(), resolver, types.nominal());
         for func in &module.functions {
             // @no_type_check suppresses body checks (E0011); E0041 arity still applies.
             if !is_stub_context(func, &module.classes) && !is_no_type_check(func) {

@@ -53,9 +53,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map_err(|error| format!("benchmark file must resolve: {error}"))?;
 
     // The suite's `@final` classes make negative `type(x) is not C` sound.
+    // Keyed on definition site, and gated on the class actually carrying the
+    // decorator — the previous version inserted EVERY class, which made every
+    // negative branch exclude its class whether or not it was `@final`.
     let mut ctx = NarrowContext::default();
-    for class in &resolved.classes {
-        let _ = ctx.final_classes.insert(class.name.to_ascii_lowercase());
+    for class in resolved.classes.iter().filter(|class| class.is_final) {
+        let _ = ctx.final_class_sites.insert(class.name_span);
     }
 
     let reparsed = ruff_python_parser::parse_module(&source)

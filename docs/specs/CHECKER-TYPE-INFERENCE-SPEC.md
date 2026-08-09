@@ -121,8 +121,11 @@ and no new code may be written against any of them:
   the two entries above grow from: while a type *is* a string, comparing types
   can only ever be comparing strings.
 - `RhsKind` shape dispatch in rules — superseded by synthesized types.
-- Rule-local subtype/text helpers — superseded by
-  `subtyping::SubtypingContext` as the **single** subtyping judgment.
+- Rule-local subtype/text helpers — were to be superseded by
+  `subtyping::SubtypingContext` as the **single** subtyping judgment. That
+  never happened: `SubtypingContext` was itself deleted as a string-keyed
+  layer and is now a panic-only shell, so these helpers were superseded by
+  nothing and the rule-local paths that survive are unreplaced.
 
 **This is the same defect as the symbol-naming ban, one level down.** The names
 these paths match on are true builtins, so
@@ -784,9 +787,13 @@ tested FIRST so the two forms never collapse into each other:
 | `X` <: `Guard` | `X` <: `bool` | the body of a narrowing function returns an ordinary bool (`return False`) |
 
 **Consistency precondition.** `TypeIs[X]` additionally requires `X` to be
-consistent with the input parameter type — judged on RESOLVED types through
-`SubtypingContext`, three-valued, abstaining when either side is not grounded
-(`rules/narrowing_typeis_2.rs`). Invariant container positions are compared in
+consistent with the input parameter type — three-valued, abstaining when
+either side is not grounded (`rules/narrowing_typeis_2.rs`). NOT through
+`SubtypingContext`, which is a panic-only shell; the rule resolves each
+nominal leaf through `rules/shared/nominal.rs`. That path is currently
+unreachable for two nominal leaves: `leaf_consistency` calls
+`InferredType::is_assignable_to` first, which panics on `(Named, Named)`. See
+the function's own doc comment. Invariant container positions are compared in
 BOTH directions, which is why `object` must stay distinct from `Any`
 ([TYPEINF-SUBTYPING-NOMINAL](#TYPEINF-SUBTYPING-NOMINAL)): narrowing
 `list[object]` to `list[int]` is an error, narrowing `list[Any]` is not.
@@ -869,9 +876,12 @@ Nominal-subtyping rules may walk `ClassInfo.bases` transitively; the shared MRO
 model remains tracked by
 [NARROWPLAN-SUBTYPING](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-SUBTYPING).
 
+
+> **STATUS 2026-08-09 — `subtyping.rs` IS A PANIC-ONLY SHELL.** Every body in that file was deleted for deciding subtyping from the SPELLING of type names; `SubtypingContext::is_subtype` took two annotation STRINGS. The struct, `name_subtype`, and every `register_*` method now panic when called. Nothing in the paragraphs below describes running code: read them as the OBLIGATION a replacement must meet, not as a description of this checker. The replacement is a relation over resolved identities — `basilisk-canonical`'s `TypeNode` + `assignable`, and `rules/shared/nominal.rs`'s definition-site class graph — not a revived string layer.
+
 **Builtin numeric tower.** The typing-spec promotions ([Special cases for float and complex](https://typing.python.org/en/latest/spec/special-types.html#special-cases-for-float-and-complex)) hold: `bool`/`int` are accepted where `float` is expected, and `bool`/`int`/`float` where `complex` is expected.
 
-The single home for this judgment is `crates/basilisk-checker/src/subtyping.rs` — `name_subtype` encodes the full `bool <: int <: float <: complex` chain, `SubtypingContext` is the judgment every consumer must go through, and the accepted/rejected table is pinned in `tests/subtyping_context_tests.rs` ([NARROWPLAN-SUBTYPING](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-SUBTYPING)). The rule-local delegates still calling `name_subtype` directly (`rules/shared.rs::is_numeric_subtype` and the helpers in `narrowing_typeis`, `narrowing_typeis_2`, `overloads_evaluation`, `generics_typevartuple_callable`, `aliases_implicit`, `generics_syntax_scoping`, `callables_subtyping`, `generics_defaults_referential`) are legacy shims on the demolition list ([TYPEINF-LEGACY](#TYPEINF-LEGACY)); the `types_parsing.rs` fold of `complex` into `Float` is a legacy-parser artifact that dies with that parser. One subtyping implementation — not two layers.
+This judgment has NO home. `crates/basilisk-checker/src/subtyping.rs` was intended to be it — `name_subtype` encoding the full `bool <: int <: float <: complex` chain, `SubtypingContext` as the judgment every consumer goes through — but that file is now a panic-only shell, because `name_subtype` compared type NAMES and `is_subtype` took two annotation strings. The numeric tower that survives is the hard-coded arm in `InferredType::is_assignable_to`; the accepted/rejected table was pinned in `tests/subtyping_context_tests.rs` ([NARROWPLAN-SUBTYPING](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-SUBTYPING)). The rule-local delegates still calling `name_subtype` directly (`rules/shared.rs::is_numeric_subtype` and the helpers in `narrowing_typeis`, `narrowing_typeis_2`, `overloads_evaluation`, `generics_typevartuple_callable`, `aliases_implicit`, `generics_syntax_scoping`, `callables_subtyping`, `generics_defaults_referential`) are legacy shims on the demolition list ([TYPEINF-LEGACY](#TYPEINF-LEGACY)); the `types_parsing.rs` fold of `complex` into `Float` is a legacy-parser artifact that dies with that parser. One subtyping implementation — not two layers.
 
 **Other builtin relations:**
 - All classes <: `object`. The cascade resolves `object` to the named TOP type, not to `Any`:
@@ -1022,9 +1032,9 @@ Subtyping is decided by `InferredType::is_assignable_to(&self, other)` in `crate
 
 Module-context equivalences that `is_assignable_to` cannot see run as ordered rescues in `rules/assignment_compatibility` after it returns false: expected-type literal-collection checking, the enum literal expansion (`enum_expand.rs`, needing the module's enum-member environment), then callable-signature rescue — all over the skip/alias/schema environment built once per module by `skip_names::SkipNames::collect`.
 
-`Named` types (user classes and unparameterised imports) have **no lawful comparison**: a name is a spelling, not an identity, so any answer computed from it — including the historical "compare the source text before the `[`" — is text matching by [CHKARCH-TEXT-MATCHED-LOGIC](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TEXT-MATCHED-LOGIC) and is FORBIDDEN to execute, not merely documented as weak. The REQUIRED behaviour until resolved generic subtyping exists is abstention: a relation involving a `Named` leaf the module cannot ground answers `Unknown`/no-verdict, never a string-prefix `true` and never a spelling-difference `false`. (The prior justification — that stricter matching would raise false positives against a zero-false-positive conformance gate — was a reason the gate was the wrong instrument, not a licence for the text verdict.)
+`Named` types (user classes and unparameterised imports) have **no lawful comparison**: a name is a spelling, not an identity, so any answer computed from it — including the historical "compare the source text before the `[`" — is text matching by [CHKARCH-TEXT-MATCHED-LOGIC](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TEXT-MATCHED-LOGIC) and is FORBIDDEN to execute, not merely documented as weak. The REQUIRED behaviour until resolved generic subtyping exists is abstention: a relation involving a `Named` leaf the module cannot ground answers `Unknown`/no-verdict, never a string-prefix `true` and never a spelling-difference `false`. **The implementation does not do this.** `InferredType::is_assignable_to` PANICS on a `(Named, Named)` pair rather than abstaining, because the text comparison was deleted and the deletion protocol requires the gap to be loud rather than defaulted. Abstention is what the replacement must do once a nominal leaf carries its definition site; the panic is what happens today, on production paths, including every nested pair (`list[A]` vs `list[B]`, dict values, tuple elements, callable parameters and returns). (The prior justification — that stricter matching would raise false positives against a zero-false-positive conformance gate — was a reason the gate was the wrong instrument, not a licence for the text verdict.)
 
-Nominal MRO walking and structural Protocol/TypedDict compatibility are decided today by the per-conformance-area rule modules (`rules/protocols_*`, `rules/typeddicts_*`, and the class-bases-walking `is_subtype_of` helper in `rules/generics_basic_3/helpers.rs`). The shared home now exists — `crates/basilisk-checker/src/subtyping.rs` (`SubtypingContext`: cycle-guarded nominal walk, structural Protocol satisfaction, `TypedDict` schemas, declared variance, `Callable` kinds) — and the rule modules migrate onto it behind the parity pins in `tests/subtyping_context_tests.rs` and the in-module `helper_parity_tests` at the Integration stage ([NARROWPLAN-SUBTYPING](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-SUBTYPING)).
+Nominal MRO walking and structural Protocol/TypedDict compatibility are decided today by the per-conformance-area rule modules (`rules/protocols_*`, `rules/typeddicts_*`, and the class-bases-walking `is_subtype_of` helper in `rules/generics_basic_3/helpers.rs`). There is no shared home: `crates/basilisk-checker/src/subtyping.rs` was to be it, and is a panic-only shell. Nothing walks a real MRO anywhere in this checker — `ClassGraph::ancestors` is depth-first reachability, not C3. The rule modules were to migrate onto `SubtypingContext` behind the parity pins in `tests/subtyping_context_tests.rs` and the in-module `helper_parity_tests` at the Integration stage ([NARROWPLAN-SUBTYPING](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-SUBTYPING)).
 
 ---
 
@@ -1177,7 +1187,8 @@ The engine lives in `basilisk-checker`:
 - `narrow/` — the flow walker (`flow.rs`), scoped environment (`env.rs`),
   guard interpretation (`guards.rs`), inference-driven reachability
   (`reachability.rs`), and set operations (`set_ops.rs`).
-- `subtyping.rs` — `SubtypingContext`, the single subtyping judgment.
+- `subtyping.rs` — `SubtypingContext`. **Panic-only shell**; deleted for
+  string-keyed subtyping. Not a judgment, single or otherwise.
 - `types.rs` — `InferredType`, the ground-type vocabulary the engine solves
   into.
 

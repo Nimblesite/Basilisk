@@ -1,6 +1,7 @@
 //! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
 //! Scope and function information types produced by the resolver.
 
+mod class_graph;
 mod class_types;
 mod external_symbol;
 mod function_types;
@@ -12,11 +13,13 @@ mod pep695_scoping;
 mod resolved_module;
 mod rhs;
 mod span;
-mod typeddict_meta;
 mod variable_types;
 mod violations;
 
-pub use class_types::{BaseSubscriptEntry, ClassInfo, GenericParamInfo, TypeArg};
+pub use class_graph::{typed_dict_class_names, Ancestry, ClassGraph};
+pub use class_types::{
+    BaseRef, BaseSubscriptEntry, ClassInfo, GenericParamInfo, ResolvedBase, TypeArg,
+};
 pub use external_symbol::{ExternalMethod, ExternalSymbol, ExternalSymbolKind, IndexedStubClass};
 pub use function_types::{
     FunctionInfo, ParameterInfo, ReturnAnnotationKind, ReturnStmtInfo, YieldExprInfo,
@@ -45,9 +48,6 @@ pub use pep695_scoping::{
 pub use resolved_module::{LazyAst, ModuleBindings, ResolvedModule};
 pub use rhs::RhsKind;
 pub use span::Span;
-pub use typeddict_meta::{
-    class_by_name, has_extra_items_transitive, is_transitive_typeddict, transitive_typeddict_names,
-};
 pub use variable_types::{AttributeInfo, DescriptorKind, VariableInfo};
 pub use violations::{
     BoundedTypeVarAttrViolation, EnumValueTypeViolationInfo, EnumValueTypeViolationKind,

@@ -34,7 +34,6 @@ use basilisk_resolver::ResolvedModule;
 use super::Rule;
 use crate::annotation::AnnotationResolver;
 use crate::diagnostic::{error_diag_help_note, Diagnostic, ErrorCode};
-use crate::subtyping::SubtypingContext;
 use crate::types::InferredType;
 
 const CODE: ErrorCode = ErrorCode {
@@ -65,53 +64,26 @@ enum Verdict {
     Unknown,
 }
 
-// ##########################################################################
-// # DELETED BODY — `leaf_name`. DO NOT RESTORE IT AND DO NOT RETURN `None`.#
-// #                                                                        #
-// # This is `judge::nominal_leaf`, which the spelling guard's own header    #
-// # records as already deleted once, BACK UNDER A NEW NAME. It took a       #
-// # resolved `InferredType` and RENDERED IT TO A `String`:                  #
-// #                                                                        #
-// #   InferredType::Int   => Some("int".to_owned()),                        #
-// #   InferredType::Str | InferredType::LiteralString                       #
-// #                       => Some("str".to_owned()),                        #
-// #   InferredType::Named(name) => …then(|| name.clone()),                  #
-// #                                                                        #
-// # so that `leaf_consistency` could hand the two strings to               #
-// # `SubtypingContext::is_subtype` — the DELETED string-keyed hierarchy.    #
-// # Once both sides are text, `class int` in the module under analysis is   #
-// # indistinguishable from `builtins.int`, two same-named classes from      #
-// # different modules collapse into one, and a dotted or aliased name       #
-// # compares unequal to the class it denotes.                               #
-// #                                                                        #
-// # `InferredType::Int` is already the answer; turning it into `"int"` can  #
-// # only lose. Subtyping between two RESOLVED types is what `assignable`    #
-// # is for, and it abstains honestly instead of guessing.                   #
-// #                                                                        #
-// # `leaf_consistency` below is retained as the call site — the map of what #
-// # has to be rebuilt.                                                      #
-// #                                                                        #
-// # Pinned by: tests/no_type_spelling_surgery_tests.rs                      #
-// ##########################################################################
-fn leaf_name(_resolver: &AnnotationResolver<'_>, _ty: &InferredType) -> Option<String> {
-    panic!(
-        "basilisk-checker: `leaf_name` was DELETED because it RENDERED a resolved \
-         `InferredType` into a `String` so that nominal subtyping could be settled \
-         between two spellings — `judge::nominal_leaf` again, under a new name. It \
-         panics because the real implementation — deciding the relation on the \
-         resolved types themselves, via `assignable(&TypeNode, &TypeNode)` — DOES NOT \
-         EXIST YET. Do not restore the rendering and do not return `None` in its \
-         place."
-    )
-}
-
 /// Consistency of `narrowed` with `input` on RESOLVED types.
 fn consistency(
     resolver: &AnnotationResolver<'_>,
-    ctx: &SubtypingContext,
+    ctx: &crate::rules::shared::nominal::NominalHierarchy<'_>,
     narrowed: &InferredType,
     input: &InferredType,
 ) -> Verdict {
+    // DELETED PATH: derived equality on `InferredType::Named(String)` made
+    // `TypeIs` consistency depend on a nominal type's rendering, including at
+    // arbitrary container depth. The resolved-identity leaf required to make
+    // this comparison does not exist yet, so fail loudly before equality can
+    // manufacture a verdict.
+    if narrowed.contains_legacy_named() || input.contains_legacy_named() {
+        panic!(
+            "basilisk-checker: `narrowing_typeis_2::consistency` was DELETED for types \
+             containing `Named(String)` because it compared rendered nominal spellings. The \
+             real implementation requires resolved definition identity on the leaf. Do not \
+             restore derived string equality or return a placeholder verdict."
+        );
+    }
     if narrowed == input
         || matches!(narrowed, InferredType::Any | InferredType::Never)
         || matches!(input, InferredType::Any)
@@ -158,27 +130,43 @@ fn consistency(
             &[bk.as_ref().clone(), bv.as_ref().clone()],
         ),
         (InferredType::Tuple(a), InferredType::Tuple(b)) => invariant(resolver, ctx, a, b),
-        _ => leaf_consistency(resolver, ctx, narrowed, input),
+        _ => leaf_consistency(ctx, narrowed, input),
     }
 }
 
-/// Both sides as nominal leaves through the shared subtype walk; anything
-/// either side cannot ground abstains.
+/// Both sides as nominal leaves; anything either side cannot ground abstains.
+///
+/// PARTIALLY REBUILT, AND CURRENTLY UNREACHABLE FOR ITS MAIN CASE. The deleted
+/// version rendered both `InferredType`s back into `String`s so a string-keyed
+/// hierarchy could compare the spellings — `judge::nominal_leaf` under another
+/// name. The `is_subclass` call below does resolve each `Named` leaf through
+/// the module's binding table to a class definition.
+///
+/// It never gets there. The first statement calls
+/// [`InferredType::is_assignable_to`], which PANICS on a `(Named, Named)` pair
+/// by design — that panic is the deletion boundary standing in for the
+/// comparison that was removed. So for exactly the inputs this function exists
+/// to judge, it aborts the process instead of returning a verdict. Every other
+/// pair returns [`Verdict::Unknown`] here, which is correct.
+///
+/// The ordering is the bug and swapping it is not the fix: `is_assignable_to`
+/// has to be able to answer a nominal pair itself, which needs a leaf carrying
+/// its definition site. Until then this path is live and fatal.
 fn leaf_consistency(
-    resolver: &AnnotationResolver<'_>,
-    ctx: &SubtypingContext,
+    ctx: &crate::rules::shared::nominal::NominalHierarchy<'_>,
     narrowed: &InferredType,
     input: &InferredType,
 ) -> Verdict {
-    match (leaf_name(resolver, narrowed), leaf_name(resolver, input)) {
-        (Some(sub), Some(sup)) => {
-            if ctx.is_subtype(&sub, &sup) {
-                Verdict::Consistent
-            } else {
-                Verdict::Inconsistent
-            }
-        }
-        _ => Verdict::Unknown,
+    if narrowed.is_assignable_to(input) {
+        return Verdict::Consistent;
+    }
+    let (InferredType::Named(sub), InferredType::Named(sup)) = (narrowed, input) else {
+        return Verdict::Unknown;
+    };
+    match ctx.is_subclass(sub, sup) {
+        Some(true) => Verdict::Consistent,
+        Some(false) => Verdict::Inconsistent,
+        None => Verdict::Unknown,
     }
 }
 
@@ -186,7 +174,7 @@ fn leaf_consistency(
 /// difference in either direction is inconsistent, arity mismatch too.
 fn invariant(
     resolver: &AnnotationResolver<'_>,
-    ctx: &SubtypingContext,
+    ctx: &crate::rules::shared::nominal::NominalHierarchy<'_>,
     a: &[InferredType],
     b: &[InferredType],
 ) -> Verdict {
@@ -253,7 +241,7 @@ impl Rule for TypeIsInconsistentNarrowing {
         let Some(resolver) = types.annotations() else {
             return;
         };
-        let subtyping = types.subtyping();
+        let nominal = types.nominal();
 
         for func in &module.functions {
             let Some(ann_span) = func.return_annotation_span else {
@@ -303,7 +291,7 @@ impl Rule for TypeIsInconsistentNarrowing {
                 continue;
             }
 
-            if consistency(resolver, subtyping, &inner, &input) == Verdict::Inconsistent {
+            if consistency(resolver, nominal, &inner, &input) == Verdict::Inconsistent {
                 diagnostics.push(error_diag_help_note(
                     CODE.clone(),
                     format!(

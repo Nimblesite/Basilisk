@@ -378,96 +378,196 @@ class Foo(Generic[T]):
 // Self type in invalid location
 // =============================================================================
 
+// PEP 673 restricts `Self` to annotations within a class definition and
+// excludes static methods because they have no `self` or `cls` parameter:
+// https://peps.python.org/pep-0673/#valid-locations-for-self
+const SELF_USAGE_RULE: &str = "generics_self_usage";
+
+fn assert_self_usage(
+    source: &str,
+    expected: usize,
+    obligation: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let diagnostics = run(source)?;
+    assert_rule_count(&diagnostics, SELF_USAGE_RULE, expected, obligation);
+
+    let messages = messages_for(&diagnostics, SELF_USAGE_RULE);
+    assert_eq!(
+        messages.len(),
+        expected,
+        "{obligation}: every invalid `Self` occurrence must have a rule-specific message: {diagnostics:#?}",
+    );
+    if expected == 0 {
+        assert!(
+            messages.is_empty(),
+            "{obligation}: valid `Self` locations must not produce a message: {messages:#?}",
+        );
+    } else {
+        assert!(
+            messages.iter().all(|message| !message.trim().is_empty()),
+            "{obligation}: no invalid `Self` occurrence may be represented by an empty diagnostic: {messages:#?}",
+        );
+    }
+    Ok(())
+}
+
 #[test]
 fn self_in_module_function() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
-from typing import Self
+    let sources = [
+        r"
+from typing import Self as CurrentKind
 
-def foo(bar: Self) -> Self:
-    return bar
-";
-    let diagnostics = run(source)?;
-    let _ = diagnostics
-        .iter()
-        .filter(|d| d.code.code == "generics_self_usage")
-        .count();
+def create() -> CurrentKind:
+    raise RuntimeError
+",
+        r"
+import typing as type_forms
+
+def create(
+) -> type_forms.Self:
+    raise RuntimeError
+",
+    ];
+    for source in sources {
+        assert_self_usage(
+            source,
+            1,
+            "PEP 673 forbids `Self` in a module function return annotation",
+        )?;
+    }
     Ok(())
 }
 
 #[test]
 fn self_in_module_var() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
-from typing import Self
-
-bar: Self = None
-";
-    let diagnostics = run(source)?;
-    let _ = diagnostics
-        .iter()
-        .filter(|d| d.code.code == "generics_self_usage")
-        .count();
+    let sources = [
+        "from typing import Self as CurrentKind\n\nvalue: CurrentKind = None\n",
+        "import typing as type_forms\n\nvalue: type_forms . Self = None\n",
+    ];
+    for source in sources {
+        assert_self_usage(
+            source,
+            1,
+            "PEP 673 forbids `Self` in a module variable annotation",
+        )?;
+    }
     Ok(())
 }
 
 #[test]
 fn self_in_staticmethod() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
-from typing import Self
+    let sources = [
+        r"
+from typing import Self as CurrentKind
 
-class Base:
+class Crucible:
     @staticmethod
-    def make() -> Self:
-        return Base()
-";
-    let diagnostics = run(source)?;
-    let _ = diagnostics
-        .iter()
-        .filter(|d| d.code.code == "generics_self_usage")
-        .count();
+    def create() -> CurrentKind:
+        return Crucible()
+",
+        r"
+import typing as type_forms
+
+class Crucible:
+
+    @staticmethod
+    def create(
+    ) -> type_forms.Self:
+        return Crucible()
+",
+    ];
+    for source in sources {
+        assert_self_usage(
+            source,
+            1,
+            "PEP 673 forbids `Self` in a static method because no self or cls type is bound",
+        )?;
+    }
     Ok(())
 }
 
 #[test]
-fn self_in_base_class() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
-from typing import Self, Generic
+fn self_as_generic_base_argument() -> Result<(), Box<dyn std::error::Error>> {
+    let sources = [
+        r#"
+from typing import Generic as Family, Self as CurrentKind, TypeVar as VariableForge
 
-class Foo(Self):
+Ore = VariableForge("Ore")
+
+class Vessel(Family[Ore]):
     pass
 
-class Bar(Generic[Self]):
+class Invalid(Vessel[CurrentKind]):
     pass
-";
-    let diagnostics = run(source)?;
-    let _ = diagnostics
-        .iter()
-        .filter(|d| d.code.code == "generics_self_usage")
-        .count();
+"#,
+        r#"
+import typing as type_forms
+
+Ore = type_forms.TypeVar("Ore")
+
+class Vessel(type_forms.Generic[Ore]):
+    pass
+
+class Invalid(
+    Vessel[
+        type_forms.Self
+    ],
+):
+    pass
+"#,
+    ];
+    for source in sources {
+        assert_self_usage(
+            source,
+            1,
+            "PEP 673 explicitly rejects `Self` as the argument of a parameterized base class",
+        )?;
+    }
     Ok(())
 }
 
 #[test]
 fn valid_self_usage() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
-from typing import Self
+    let sources = [
+        r"
+from typing import Self as CurrentKind
 
-class MyClass:
-    def method(self) -> Self:
+class Crucible:
+    peer: CurrentKind
+
+    def same(self) -> CurrentKind:
         return self
 
     @classmethod
-    def from_value(cls, value: int) -> Self:
+    def create(cls, value: int) -> CurrentKind:
         return cls()
+",
+        r"
+import typing as type_forms
 
-    attr: Self
-";
-    let diagnostics = run(source)?;
-    let e0094 = diagnostics
-        .iter()
-        .filter(|d| d.code.code == "generics_self_usage")
-        .count();
-    // Valid uses should not trigger
-    let _ = e0094;
+class Crucible:
+    peer: type_forms.Self
+
+    def same(
+        self,
+    ) -> type_forms.Self:
+        return self
+
+    @classmethod
+    def create(
+        cls,
+        value: int,
+    ) -> type_forms.Self:
+        return cls()
+",
+    ];
+    for source in sources {
+        assert_self_usage(
+            source,
+            0,
+            "PEP 673 permits `Self` in class attributes, instance returns, and classmethod returns",
+        )?;
+    }
     Ok(())
 }
 

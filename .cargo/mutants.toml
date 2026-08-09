@@ -93,7 +93,7 @@ gitignore = true
 # can never quietly grow on the back of a slow runner.
 #
 # BASELINE & SCOPE — two runs, one honest gate.
-# The whole-crate run (`make mutation-test ALL=1`, examine_re=".", ~9085 mutants,
+# The whole-crate run (`make _mutation_test ALL=1`, examine_re=".", ~9085 mutants,
 # no code excluded) is the thorough audit. But at ~2272 mutants/shard on a 4-core
 # CI runner (~15-24s each, 2 parallel jobs) it takes HOURS per shard — far past
 # the 60-min job budget — so it is an OFFLINE/scheduled run, never the per-PR

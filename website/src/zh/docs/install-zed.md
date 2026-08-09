@@ -27,7 +27,7 @@ Basilisk **尚未收录进 Zed 的扩展注册表**——向 [`zed-industries/ex
 
 Zed 会自行把扩展编译为 WASM——您永远不需要预构建或复制 `.wasm` 文件。打开一个 Python 文件，Basilisk 就是您的语言服务器。
 
-> **在 monorepo 中工作？** 直接选择 [Basilisk](https://github.com/Nimblesite/Basilisk) 检出目录下的 `basilisk-zed/`，无需另行克隆。`make package-zed` 会一步构建扩展和本地 `basilisk` 二进制文件。
+> **在 monorepo 中工作？** 直接选择 [Basilisk](https://github.com/Nimblesite/Basilisk) 检出目录下的 `basilisk-zed/`，无需另行克隆。`make _package_zed` 会一步构建扩展和本地 `basilisk` 二进制文件。
 
 要更新，请在克隆目录中执行 `git pull`，然后重新运行 **zed: install dev extension**。等注册表收录完成后，扩展视图就会为您处理安装和更新。
 

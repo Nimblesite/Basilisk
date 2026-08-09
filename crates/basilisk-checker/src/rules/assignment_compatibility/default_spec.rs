@@ -24,15 +24,14 @@
 use std::collections::HashMap;
 
 use basilisk_resolver::{
-    equivalent, BuiltinClass, ResolvedModule, TypeNode, TypeVarCallInfo, VariableInfo,
+    BuiltinClass, ResolvedModule, Span, TypeNode, TypeVarCallInfo, VariableInfo,
 };
-use ruff_python_ast::{Expr, ExprName};
+use ruff_python_ast::Expr;
+use ruff_text_size::Ranged as _;
 
-use crate::diagnostic::{error_diagnostic_owned, Diagnostic};
+use crate::diagnostic::Diagnostic;
 use crate::rules::shared::{parse_module, ExprIndex};
 use crate::span_util::slice_span;
-
-use super::CODE;
 
 /// Check module-level and function-local annotated variables for
 /// `x: type[C[Args]] = C` assignments where a defaulted type parameter's
@@ -61,135 +60,117 @@ pub(super) fn check_default_specializations(
     }
 }
 
-// ##########################################################################
-// # DELETED BODY — `typevar_defaults`. DO NOT RESTORE IT.
-// #
-// #   let display = tv.default_type_name.as_deref()?;
-// #
-// # `?` on a RENDERED-NAME field made it a FILTER, not just a message string:
-// # `default_type_name` is recorded only when the default "is a simple name",
-// # so `default=list[int]` was dropped from the map entirely and never
-// # checked — even though `default_node` beside it lowers the real
-// # expression to a `TypeNode` perfectly well. The rule silently covered only
-// # defaults that happen to be bare words.
-// #
-// # The replacement keys on the lowered node and takes message text from the
-// # default's own expression span.
-// #
-// # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
-// ##########################################################################
+/// DELETED — panics; see the banner below.
 fn typevar_defaults<'m>(
     _module: &'m ResolvedModule,
     _index: &ExprIndex<'_>,
 ) -> HashMap<&'m str, (TypeNode, &'m str)> {
     panic!(
-        "basilisk-checker: `typevar_defaults` was DELETED because it gated each TypeVar \
-         on `default_type_name`, a RENDERED-NAME field the resolver fills only for bare \
-         words, so every non-trivial `default=` was silently dropped from the check. It \
-         panics because the real implementation — keying on the lowered default \
-         expression — DOES NOT EXIST YET. Do not restore the gate and do not return an \
-         empty map in its place."
+        "basilisk-checker: `default_spec::typevar_defaults` was DELETED because it keyed \
+         each PEP 696 default by the `TypeVar`'s BOUND NAME, so the lookup that decides \
+         this rule joined a class's parameter to a `TypeVar` by spelling. It panics \
+         because the real implementation — keying on `TypeVarCallInfo::span`, the call \
+         expression's own identity — DOES NOT EXIST YET. Do not restore the name key and \
+         do not return an empty map in its place."
     )
 }
 
+// ##########################################################################
+// # DELETED BODY — `typevar_defaults`. DO NOT RESTORE IT AND DO NOT RETURN  #
+// # AN EMPTY MAP.                                                           #
+// #                                                                         #
+// #   Some((tv.name.as_str(), (node, display)))                             #
+// #   ... later: defaults.get(param_name.as_str())                          #
+// #                                                                         #
+// # A `TypeVar` IS NOT ITS NAME. `TypeVarCallInfo::span` is the range of     #
+// # the `TypeVar(...)` call expression, and that is the identity of the type #
+// # variable — it is what an assignment binds and what every alias of that   #
+// # binding leads back to. Keying on `TypeVarCallInfo::name` instead means:  #
+// #                                                                         #
+// #   * two `TypeVar` calls in one module bound to different names but       #
+// #     written `TypeVar("T", default=int)` and `TypeVar("T", default=str)`  #
+// #     collapse onto one entry, and whichever the iteration reached last    #
+// #     decides the diagnostic;                                              #
+// #   * `T = TypeVar("T", default=str); Alias = T` — a class parameterised   #
+// #     on `Alias` finds no default and the rule silently stops checking.    #
+// #                                                                         #
+// # The name in `TypeVar("T")`'s first argument is a RUNTIME LABEL. It is    #
+// # not required to match the variable it is bound to and nothing about the  #
+// # type system reads it.                                                    #
+// #                                                                         #
+// # The rebuild keys this map on `TypeVarCallInfo::span` and requires        #
+// # `free_type_params` — already deleted, directly above the `check_var`     #
+// # loop — to yield parameter IDENTITIES rather than rendered names, so the  #
+// # two sides have something lawful to join on. `check_var` is kept as the   #
+// # map of what reads this.                                                  #
+// ##########################################################################
+
+/// The lowered `default=` argument of a recorded `TypeVar(...)` call, with the
+/// source text of the expression it came from.
+///
+/// The expression is found on the call NODE and lowered through the module's
+/// bindings — never read back from source text ([ASTREBUILD-LAW]). The
+/// returned `&str` is that expression's own span, for message rendering.
 #[expect(
     dead_code,
-    reason = "caller deleted for spelling dependence; this helper lowers the default \
-              expression through the binding table and is retained for the rebuild — \
-              see tests/string_keyed_class_hierarchy_pin_tests.rs"
+    reason = "the name-keyed PEP 696 verdict was deleted; this AST lowering is retained for the identity-based rebuild"
 )]
-/// The lowered `default=` argument of a recorded `TypeVar(...)` call.  The
-/// expression is found on the call NODE and lowered through the module's
-/// bindings — never read back from source text ([ASTREBUILD-LAW]).
-fn default_node(
+fn default_node<'m>(
     tv: &TypeVarCallInfo,
     index: &ExprIndex<'_>,
-    module: &ResolvedModule,
-) -> Option<TypeNode> {
+    module: &'m ResolvedModule,
+) -> Option<(TypeNode, &'m str)> {
     let Expr::Call(call) = index.expr(tv.span)? else {
         return None;
     };
+    // A keyword argument's name is fixed syntax at the call site: it cannot be
+    // imported, aliased, or rebound, so reading it is not a spelling test on a
+    // type ([ASTREBUILD-LAW]).
     let default = call
         .arguments
         .keywords
         .iter()
         .find(|kw| kw.arg.as_ref().is_some_and(|arg| arg.as_str() == "default"))?;
-    Some(TypeNode::lower(&module.bindings, &default.value))
+    let display = slice_span(&module.source, Span::from(default.value.range()))?;
+    Some((TypeNode::lower(&module.bindings, &default.value), display))
 }
 
-/// Check one annotated variable for a default-specialization mismatch.
+// ##########################################################################
+// # DELETED BODY — `check_var`. DO NOT RESTORE IT AND DO NOT RETURN EARLY. #
+// #                                                                         #
+// # The class join itself had been repaired to compare definition sites,   #
+// # but the decisive TypeVar/default join remained:                        #
+// #                                                                         #
+// #   let free_params = free_type_params(class_info, module);              #
+// #   defaults.get(param_name.as_str())                                    #
+// #                                                                         #
+// # Both sides are RENDERED NAMES. `free_type_params` produced spellings   #
+// # harvested from base subscripts and `typevar_defaults` keyed defaults   #
+// # by `TypeVarCallInfo::name`. An alias of a TypeVar therefore lost its    #
+// # default, while distinct TypeVar objects carrying the same runtime label #
+// # collided. The later `equivalent(TypeNode, TypeNode)` comparison cannot #
+// # repair a wrong spelling-based join.                                    #
+// #                                                                         #
+// # The lawful implementation joins both maps on `TypeVarCallInfo::span`,  #
+// # reached by resolving each original base-argument `Expr`.               #
+// ##########################################################################
+
+/// DELETED — panics; see the banner above.
 fn check_var(
-    var: &VariableInfo,
-    module: &ResolvedModule,
-    index: &ExprIndex<'_>,
-    defaults: &HashMap<&str, (TypeNode, &str)>,
-    diagnostics: &mut Vec<Diagnostic>,
+    _var: &VariableInfo,
+    _module: &ResolvedModule,
+    _index: &ExprIndex<'_>,
+    _defaults: &HashMap<&str, (TypeNode, &str)>,
+    _diagnostics: &mut Vec<Diagnostic>,
 ) {
-    if !var.has_annotation {
-        return;
-    }
-    let Some(Expr::Name(rhs)) = var.rhs_span.and_then(|span| index.expr(span)) else {
-        return;
-    };
-    let Some(annotation_span) = var.annotation_span else {
-        return;
-    };
-    let Some(annotation) = index.expr(annotation_span) else {
-        return;
-    };
-    let Some((class_ref, type_args)) = type_of_subscript(annotation, module) else {
-        return;
-    };
-    if class_ref.id.as_str() != rhs.id.as_str() {
-        return;
-    }
-
-    let Some(class_info) = module
-        .classes
-        .iter()
-        .find(|c| c.name == class_ref.id.as_str())
-    else {
-        return;
-    };
-    let free_params = free_type_params(class_info, module);
-
-    for (idx, arg) in type_args.iter().enumerate() {
-        let Some(param_name) = free_params.get(idx) else {
-            break;
-        };
-        let Some((default, default_name)) = defaults.get(param_name.as_str()) else {
-            continue;
-        };
-        let arg_node = TypeNode::lower(&module.bindings, arg);
-        // A diagnostic only on a definite mismatch between the requested
-        // argument and the parameter's resolved default; `None` (either node
-        // unresolvable) abstains ([ASTREBUILD-LAW]).
-        if equivalent(&arg_node, default) == Some(false) {
-            let annotation_text = slice_span(&module.source, annotation_span).unwrap_or("");
-            let class_name = class_ref.id.as_str();
-            diagnostics.push(error_diagnostic_owned(
-                CODE.clone(),
-                format!(
-                    "Type mismatch: `{}` is annotated `{annotation_text}` but assigned bare \
-                     `{class_name}`, whose type parameter `{param_name}` defaults to \
-                     `{default_name}`",
-                    var.name
-                ),
-                var.name_span,
-                &module.path,
-                Some(format!(
-                    "Subscript the right-hand side explicitly or change the annotation to \
-                     `type[{class_name}[{default_name}]]`"
-                )),
-                Some(
-                    "A bare generic class is equivalent to the class specialized with its \
-                     type-parameter defaults (PEP 696)"
-                        .to_owned(),
-                ),
-            ));
-            return;
-        }
-    }
+    panic!(
+        "basilisk-checker: `default_spec::check_var` was DELETED because its \
+         PEP 696 verdict joined a class parameter to a TypeVar default through two \
+         RENDERED NAME strings. It panics because the real implementation — resolving \
+         each parameter expression to `TypeVarCallInfo::span` and joining defaults on \
+         that identity — DOES NOT EXIST YET. Do not restore the string-keyed maps and \
+         do not return without checking in its place."
+    )
 }
 
 /// Destructure a `type[C[args…]]` annotation NODE: the outer base must
@@ -197,10 +178,14 @@ fn check_var(
 /// module's bindings, so `typing.Type`, an aliased import, or any other
 /// spelling behaves identically ([ASTREBUILD-LAW]) — the inner base must be
 /// a plain name, and the returned args are the inner subscript's elements.
+#[expect(
+    dead_code,
+    reason = "the name-keyed PEP 696 verdict was deleted; this AST destructuring is retained for the identity-based rebuild"
+)]
 fn type_of_subscript<'e>(
     annotation: &'e Expr,
     module: &ResolvedModule,
-) -> Option<(&'e ExprName, Vec<&'e Expr>)> {
+) -> Option<(&'e Expr, Vec<&'e Expr>)> {
     let Expr::Subscript(outer) = annotation else {
         return None;
     };
@@ -210,9 +195,13 @@ fn type_of_subscript<'e>(
     let Expr::Subscript(inner) = outer.slice.as_ref() else {
         return None;
     };
-    let Expr::Name(class_ref) = inner.value.as_ref() else {
+    // The inner base must be a plain name; the NODE is returned so the
+    // caller can resolve it through the binding table rather than compare
+    // its spelling.
+    let class_ref = inner.value.as_ref();
+    if !matches!(class_ref, Expr::Name(_)) {
         return None;
-    };
+    }
     let args = match inner.slice.as_ref() {
         Expr::Tuple(tuple) => tuple.elts.iter().collect(),
         single => vec![single],
@@ -220,30 +209,45 @@ fn type_of_subscript<'e>(
     Some((class_ref, args))
 }
 
-/// The class's free type parameters, in declaration order.
-///
-/// `class C(Generic[T1, T2])` declares them directly; `class Bar(Base[int, T])`
-/// inherits the typevars referenced in its base subscripts.
+// ##########################################################################
+// # DELETED BODY — `free_type_params`. DO NOT RESTORE IT.                  #
+// #                                                                         #
+// #   let typevar_names = collect_name_set(&module.typevar_calls);         #
+// #   base.type_arg_names.iter().filter(|n| typevar_names.contains(n))     #
+// #                                                                         #
+// # A class's type parameters were identified by matching the RENDERED     #
+// # names in its base subscripts against the set of names `TypeVar`s were  #
+// # declared with. The result is a `Vec<String>` that `typevar_defaults`   #
+// # is then keyed by, so PEP 696 default checking is a spelling join end   #
+// # to end:                                                                 #
+// #                                                                         #
+// #   * `Param = T; class C(Base[Param])` records `"Param"`, which matches #
+// #     no `TypeVar` entry, and every default check on `C` vanishes;       #
+// #   * a class attribute or import merely SPELLED like a `TypeVar` is     #
+// #     counted as a type parameter;                                        #
+// #   * two `TypeVar`s spelled alike in one module collapse to one entry.  #
+// #                                                                         #
+// # The lawful replacement resolves each base subscript ARGUMENT through   #
+// # the binding table and keeps `TypeVarCallInfo::span` — the construction #
+// # itself — as the parameter's identity, which is what                    #
+// # `BindingTable::local_value_binding` reaches through any alias chain.   #
+// ##########################################################################
+
+/// DELETED — panics; see the banner above.
+#[expect(
+    dead_code,
+    reason = "the name-keyed PEP 696 caller was deleted; this panic shell remains as the rebuild boundary"
+)]
 fn free_type_params(
-    class_info: &basilisk_resolver::ClassInfo,
-    module: &ResolvedModule,
+    _class_info: &basilisk_resolver::ClassInfo,
+    _module: &ResolvedModule,
 ) -> Vec<String> {
-    if !class_info.generic_params.is_empty() {
-        return class_info
-            .generic_params
-            .iter()
-            .map(|p| p.name.clone())
-            .collect();
-    }
-    let typevar_names: std::collections::HashSet<&str> =
-        basilisk_resolver::collect_name_set(&module.typevar_calls);
-    let mut seen = std::collections::HashSet::new();
-    class_info
-        .base_subscripts
-        .iter()
-        .flat_map(|base| base.type_arg_names.iter())
-        .filter(|name| typevar_names.contains(name.as_str()))
-        .filter(|name| seen.insert(name.as_str()))
-        .cloned()
-        .collect()
+    panic!(
+        "basilisk-checker: `free_type_params` was DELETED because it identified a \
+         class's type parameters by matching RENDERED names from its base subscripts \
+         against the names `TypeVar`s were declared with. It panics because the real \
+         implementation — base subscript arguments resolved to `TypeVarCallInfo::span` \
+         through the binding table — DOES NOT EXIST YET. Do not restore the name set and \
+         do not return an empty vector in its place."
+    )
 }

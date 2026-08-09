@@ -6,13 +6,7 @@ use ruff_text_size::Ranged;
 
 use crate::canonical::{BindingTable, TypingForm};
 use crate::scope::{
-    // `InvalidStringAnnotationKind` was imported ONLY by the deleted body of
-    // `check_annotation_for_invalid_patterns`; it comes back when the real
-    // resolved-head implementation does.
-    InvalidStringAnnotation,
-    RhsKind,
-    Span,
-    VariableInfo,
+    InvalidStringAnnotation, InvalidStringAnnotationKind, RhsKind, Span, VariableInfo,
 };
 
 use super::class_info_ext::expr_simple_name;
@@ -117,49 +111,84 @@ pub(super) fn ann_assign_info_from(node: &StmtAnnAssign) -> Option<VariableInfo>
     })
 }
 
-pub(super) fn count_unbounded_in_tuple_slice(slice: &Expr) -> usize {
+pub(super) fn count_unbounded_in_tuple_slice(bindings: &BindingTable, slice: &Expr) -> usize {
     let elements: &[Expr] = match slice {
         Expr::Tuple(t) => &t.elts,
         // Single-element tuple slice — check just this element
-        other => return usize::from(is_unbounded_component(other)),
+        other => return usize::from(is_unbounded_component(bindings, other)),
     };
     elements
         .iter()
-        .filter(|e| is_unbounded_component(e))
+        .filter(|e| is_unbounded_component(bindings, e))
         .count()
+}
+
+/// Whether the subscript head denotes the builtin `tuple` class.
+///
+/// REBUILT from `expr_simple_name(...) == "tuple"`, which granted builtin
+/// meaning to the final token of any expression: `typing.Tuple[...]` and
+/// `from builtins import tuple as T; T[...]` were missed, and a module that
+/// declares its own `class tuple` had that class mistaken for the builtin.
+/// Resolution goes through the module's bindings, so both PEP 585 spellings
+/// answer alike and a shadowed name answers not at all
+/// ([RESOLV-CANONICAL-BINDING]).
+fn head_is_builtin_tuple(bindings: &BindingTable, head: &Expr) -> bool {
+    matches!(
+        bindings.form_of_with_builtins(head),
+        Some(TypingForm::TupleClass | TypingForm::TupleAlias)
+    )
 }
 
 /// Returns `true` if this expression is an unbounded tuple component:
 /// - `*tuple[T, ...]` — starred subscript with an ellipsis last element
-/// - `*Name` — starred name (type-variable-tuple unpack)
-pub(super) fn is_unbounded_component(expr: &Expr) -> bool {
-    match expr {
-        Expr::Starred(starred) => match starred.value.as_ref() {
-            // `*tuple[T, ...]` or `*tuple[str, *tuple[str, ...]]`
-            Expr::Subscript(sub) => {
-                if expr_simple_name(&sub.value).as_deref() != Some("tuple") {
-                    return false;
-                }
-                inner_tuple_is_unbounded(&sub.slice)
-            }
-            // `*Ts` — type-variable-tuple unpack
-            Expr::Name(_) => true,
-            _ => false,
-        },
+/// - `*Ts` — starred name (type-variable-tuple unpack)
+///
+/// [PEP 646](https://peps.python.org/pep-0646/) gives the unpack two
+/// spellings: the `*` prefix and `Unpack[...]`, which "are equivalent". Both
+/// are accepted here, with `Unpack` recognised by RESOLVING the subscript head
+/// through the module's bindings — so `from typing import Unpack as Splat` and
+/// `typing.Unpack` behave identically, and a local `class Unpack` does not.
+pub(super) fn is_unbounded_component(bindings: &BindingTable, expr: &Expr) -> bool {
+    let Some(unpacked) = unpacked_operand(bindings, expr) else {
+        return false;
+    };
+    match unpacked {
+        // `*tuple[T, ...]` or `*tuple[str, *tuple[str, ...]]`
+        Expr::Subscript(sub) => {
+            head_is_builtin_tuple(bindings, &sub.value)
+                && inner_tuple_is_unbounded(bindings, &sub.slice)
+        }
+        // `*Ts` — type-variable-tuple unpack
+        Expr::Name(_) => true,
         _ => false,
+    }
+}
+
+/// The operand of an unpack, written either way, or `None` if this expression
+/// is not an unpack at all.
+fn unpacked_operand<'e>(bindings: &BindingTable, expr: &'e Expr) -> Option<&'e Expr> {
+    match expr {
+        Expr::Starred(starred) => Some(starred.value.as_ref()),
+        Expr::Subscript(sub)
+            if bindings.form_of_with_builtins(&sub.value) == Some(TypingForm::Unpack) =>
+        {
+            Some(sub.slice.as_ref())
+        }
+        _ => None,
     }
 }
 
 /// Returns `true` when the slice of a `tuple[...]` represents an unbounded tuple
 /// (i.e. the tuple contains an ellipsis: `tuple[T, ...]`).
-pub(super) fn inner_tuple_is_unbounded(slice: &Expr) -> bool {
+pub(super) fn inner_tuple_is_unbounded(bindings: &BindingTable, slice: &Expr) -> bool {
     match slice {
         Expr::Tuple(t) => t.elts.last().is_some_and(|e| {
-            matches!(e, Expr::EllipsisLiteral(_)) || is_unbounded_component(e) // nested unbounded: `*tuple[str, ...]`
+            matches!(e, Expr::EllipsisLiteral(_)) || is_unbounded_component(bindings, e)
+            // nested unbounded: `*tuple[str, ...]`
         }),
         Expr::EllipsisLiteral(_) => true,
         // Single element that is itself an unbounded starred expr
-        other => is_unbounded_component(other),
+        other => is_unbounded_component(bindings, other),
     }
 }
 
@@ -172,15 +201,15 @@ pub(super) fn inner_tuple_is_unbounded(slice: &Expr) -> bool {
 ///   `tuple[int, ..., int]`
 /// - More than one non-ellipsis type before the ellipsis: `tuple[int, int, ...]`
 /// - Non-variadic starred expression paired with ellipsis: `tuple[*tuple[str], ...]`
-pub(super) fn annotation_has_multiple_unbounded(expr: &Expr) -> bool {
+pub(super) fn annotation_has_multiple_unbounded(bindings: &BindingTable, expr: &Expr) -> bool {
     let Expr::Subscript(sub) = expr else {
         return false;
     };
-    if expr_simple_name(&sub.value).as_deref() != Some("tuple") {
+    if !head_is_builtin_tuple(bindings, &sub.value) {
         return false;
     }
     // Check for multiple unbounded components (original rule)
-    if count_unbounded_in_tuple_slice(&sub.slice) >= 2 {
+    if count_unbounded_in_tuple_slice(bindings, &sub.slice) >= 2 {
         return true;
     }
     // Check for invalid ellipsis forms
@@ -228,61 +257,73 @@ pub(super) fn tuple_slice_has_invalid_ellipsis(slice: &Expr) -> bool {
 }
 
 /// Collect all annotation spans that contain invalid multiple-unbounded-tuple patterns.
-pub(super) fn collect_multiple_unbounded_tuple_spans(stmts: &[Stmt]) -> Vec<Span> {
+pub(super) fn collect_multiple_unbounded_tuple_spans(
+    bindings: &BindingTable,
+    stmts: &[Stmt],
+) -> Vec<Span> {
     let mut out = Vec::new();
-    collect_multi_unbounded_from_stmts(stmts, &mut out);
+    collect_multi_unbounded_from_stmts(bindings, stmts, &mut out);
     out
 }
 
-pub(super) fn collect_multi_unbounded_from_stmts(stmts: &[Stmt], out: &mut Vec<Span>) {
+pub(super) fn collect_multi_unbounded_from_stmts(
+    bindings: &BindingTable,
+    stmts: &[Stmt],
+    out: &mut Vec<Span>,
+) {
     for stmt in stmts {
-        collect_multi_unbounded_from_stmt(stmt, out);
+        collect_multi_unbounded_from_stmt(bindings, stmt, out);
     }
 }
 
-pub(super) fn collect_multi_unbounded_from_stmt(stmt: &Stmt, out: &mut Vec<Span>) {
+pub(super) fn collect_multi_unbounded_from_stmt(
+    bindings: &BindingTable,
+    stmt: &Stmt,
+    out: &mut Vec<Span>,
+) {
     match stmt {
-        Stmt::AnnAssign(ann) if annotation_has_multiple_unbounded(&ann.annotation) => {
+        Stmt::AnnAssign(ann) if annotation_has_multiple_unbounded(bindings, &ann.annotation) => {
             out.push(text_range_to_span(ann.annotation.range()));
         }
         Stmt::FunctionDef(func) => {
             // Check parameter annotations
             for param in super::walks::iter_all_params(&func.parameters) {
                 if let Some(ann) = param.parameter.annotation.as_ref() {
-                    if annotation_has_multiple_unbounded(ann) {
+                    if annotation_has_multiple_unbounded(bindings, ann) {
                         out.push(text_range_to_span(ann.range()));
                     }
                 }
             }
             if let Some(vararg) = &func.parameters.vararg {
                 if let Some(ann) = vararg.annotation.as_ref() {
-                    if annotation_has_multiple_unbounded(ann) {
+                    if annotation_has_multiple_unbounded(bindings, ann) {
                         out.push(text_range_to_span(ann.range()));
                     }
                 }
             }
             if let Some(kwarg) = &func.parameters.kwarg {
                 if let Some(ann) = kwarg.annotation.as_ref() {
-                    if annotation_has_multiple_unbounded(ann) {
+                    if annotation_has_multiple_unbounded(bindings, ann) {
                         out.push(text_range_to_span(ann.range()));
                     }
                 }
             }
             // Check return annotation
             if let Some(ret) = func.returns.as_ref() {
-                if annotation_has_multiple_unbounded(ret) {
+                if annotation_has_multiple_unbounded(bindings, ret) {
                     out.push(text_range_to_span(ret.range()));
                 }
             }
             // Recurse into function body
-            collect_multi_unbounded_from_stmts(&func.body, out);
+            collect_multi_unbounded_from_stmts(bindings, &func.body, out);
         }
         Stmt::ClassDef(cls) => {
-            collect_multi_unbounded_from_stmts(&cls.body, out);
+            collect_multi_unbounded_from_stmts(bindings, &cls.body, out);
         }
         Stmt::If(if_stmt) => {
-            collect_multi_unbounded_from_stmts(&if_stmt.body, out);
+            collect_multi_unbounded_from_stmts(bindings, &if_stmt.body, out);
             collect_multi_unbounded_from_stmts(
+                bindings,
                 &if_stmt
                     .elif_else_clauses
                     .iter()
@@ -297,7 +338,10 @@ pub(super) fn collect_multi_unbounded_from_stmt(stmt: &Stmt, out: &mut Vec<Span>
 }
 
 /// Recursively walk statements collecting invalid annotation patterns.
-pub(super) fn collect_invalid_annotations(stmts: &[Stmt]) -> Vec<InvalidStringAnnotation> {
+pub(super) fn collect_invalid_annotations(
+    bindings: &BindingTable,
+    stmts: &[Stmt],
+) -> Vec<InvalidStringAnnotation> {
     let mut out = Vec::new();
     for stmt in stmts {
         match stmt {
@@ -311,55 +355,56 @@ pub(super) fn collect_invalid_annotations(stmts: &[Stmt]) -> Vec<InvalidStringAn
                     .chain(func.parameters.kwonlyargs.iter())
                 {
                     if let Some(ann) = &param.parameter.annotation {
-                        check_annotation_for_invalid_patterns(ann, &mut out);
+                        check_annotation_for_invalid_patterns(bindings, ann, &mut out);
                     }
                 }
                 // Check return annotation
                 if let Some(ret) = &func.returns {
-                    check_annotation_for_invalid_patterns(ret, &mut out);
+                    check_annotation_for_invalid_patterns(bindings, ret, &mut out);
                 }
-                out.extend(collect_invalid_annotations(&func.body));
+                out.extend(collect_invalid_annotations(bindings, &func.body));
             }
             Stmt::AnnAssign(ann) => {
-                check_annotation_for_invalid_patterns(&ann.annotation, &mut out);
+                check_annotation_for_invalid_patterns(bindings, &ann.annotation, &mut out);
             }
-            Stmt::ClassDef(cls) => out.extend(collect_invalid_annotations(&cls.body)),
+            Stmt::ClassDef(cls) => out.extend(collect_invalid_annotations(bindings, &cls.body)),
             _ => {}
         }
     }
     out
 }
 
-// ##########################################################################
-// # DELETED BODY — `check_annotation_for_invalid_patterns`. DO NOT RESTORE #
-// # IT AND DO NOT LEAVE THE BODY EMPTY.                                    #
-// #                                                                        #
-// #   let is_tuple = matches!(sub.value.as_ref(),                          #
-// #       Expr::Name(n) if n.id.as_str() == "tuple");                      #
-// #                                                                        #
-// # `tuple[...]` (a bare ellipsis as the only argument) is rejected by the #
-// # typing spec, and this recognised the subscripted head by its five      #
-// # characters. `builtins.tuple[...]` is the identical annotation and was  #
-// # accepted; `typing.Tuple[...]` likewise; `from builtins import tuple as #
-// # T` then `T[...]` likewise. A module defining `class tuple` had its own #
-// # perfectly legal `tuple[...]` rejected.                                 #
-// #                                                                        #
-// # This one sat in basilisk-resolver, BELOW the checker's spelling guard  #
-// # — the same place the name-keyed TypedDict walk was found.              #
-// #                                                                        #
-// # Pinned by: basilisk-checker/tests/source_text_verdict_pin_tests.rs     #
-// ##########################################################################
+/// Record an annotation that is not a type expression.
+///
+/// One shape today: `tuple[...]`, a bare ellipsis as the only type argument.
+/// The typing spec allows `tuple[int, ...]` — the homogeneous variadic tuple —
+/// and does not allow the ellipsis to stand alone
+/// (<https://typing.python.org/en/latest/spec/tuples.html>).
+///
+/// REBUILT from the deleted `n.id.as_str() == "tuple"` test. The subscript
+/// head is resolved through the module's bindings, so `builtins.tuple[...]`,
+/// `typing.Tuple[...]` (the PEP 585 alias) and `from builtins import tuple as
+/// T; T[...]` are all the same class and all reported, while a module that
+/// defines its own `class tuple` is a different class and is not.
+/// Implements [RESOLV-CANONICAL-BINDING].
 pub(super) fn check_annotation_for_invalid_patterns(
-    _expr: &Expr,
-    _out: &mut Vec<InvalidStringAnnotation>,
+    bindings: &BindingTable,
+    expr: &Expr,
+    out: &mut Vec<InvalidStringAnnotation>,
 ) {
-    panic!(
-        "basilisk-resolver: `check_annotation_for_invalid_patterns` was DELETED \
-         because it recognised the subscripted `tuple` by its SPELLING, so \
-         `builtins.tuple[...]` and every aliased import of the same class escaped the \
-         check while a user-defined `class tuple` was wrongly caught by it. It panics \
-         because the real implementation — resolving the subscript head through the \
-         binding table — DOES NOT EXIST YET. Do not restore the name test and do not \
-         leave the body empty: an empty body reports every annotation as valid."
-    )
+    let Expr::Subscript(sub) = expr else {
+        return;
+    };
+    if !matches!(
+        bindings.form_of_with_builtins(&sub.value),
+        Some(TypingForm::TupleClass | TypingForm::TupleAlias)
+    ) {
+        return;
+    }
+    if matches!(sub.slice.as_ref(), Expr::EllipsisLiteral(_)) {
+        out.push(InvalidStringAnnotation {
+            kind: InvalidStringAnnotationKind::NonTypeExpression,
+            span: text_range_to_span(sub.range()),
+        });
+    }
 }

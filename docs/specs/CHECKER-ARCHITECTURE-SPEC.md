@@ -1543,7 +1543,7 @@ a design target, not a claim of existing measurement.
 | Golden file tests | Expected diagnostic output | Diagnostic regression |
 | Fuzzing | `cargo-fuzz` | Crash resistance, soundness |
 | Property tests | `proptest` crate | Type system invariants |
-| Benchmarks | `make bench` (hyperfine, `benchmarks/run.sh`) vs Pyright/mypy/ty/Pyrefly/Zuban | Indicative performance tracking, written to `benchmarks/status/<machine>.csv` immediately, every run. **Gates nothing** — developer-machine numbers, compared between tools within one run ([CHKARCH-TESTING-BENCH]) |
+| Benchmarks | `make _bench` (hyperfine, `benchmarks/run.sh`) vs Pyright/mypy/ty/Pyrefly/Zuban | Indicative performance tracking, written to `benchmarks/status/<machine>.csv` immediately, every run. **Gates nothing** — developer-machine numbers, compared between tools within one run ([CHKARCH-TESTING-BENCH]) |
 
 A test is judged by what it would catch, never by whether it is green. **A failing
 test that pins real incorrect behaviour is worth more than a passing fixture carried
@@ -1760,7 +1760,7 @@ attributes on e2e tests drive the `cargo mutants` examine regex
 `mutation_testing/mutation_scores.json` holds the committed baseline and
 `mutants_report.py::regression_messages` fails the build when `kill_rate` drops below
 the baseline or the absolute floor, when `detected` drops while the viable pool did
-not grow, or when `timeout` rises. Both `make mutation-test` and the CI shard merge
+not grow, or when `timeout` rises. Both `make _mutation_test` and the CI shard merge
 call the same function.
 
 **Three ways the number overstates what is proven.** Each is a correction owed, not a
@@ -1794,7 +1794,7 @@ convention to preserve:
 
 - **Never widen the mutant pool by weakening what is mutated**, and never narrow scope
   to protect a rate. Scope only grows; each checker-logic PR leaves the viable pool the
-  same size or larger. End state is the full workspace (`make mutation-test ALL=1`).
+  same size or larger. End state is the full workspace (`make _mutation_test ALL=1`).
 - **Never tune a test to kill a mutant without asserting the behaviour** the mutant
   changed. A kill obtained by asserting on incidental output is the same defect as a
   rule that matches text — it moves a number without proving meaning.
@@ -1806,7 +1806,7 @@ convention to preserve:
 
 ### Benchmark — Indicative, Not a Gate {#CHKARCH-TESTING-BENCH}
 
-`make bench` (`benchmarks/run.sh`) times the fixture suite against
+`make _bench` (`benchmarks/run.sh`) times the fixture suite against
 pyright/mypy/ty/pyrefly/zuban and records what it measured. **It gates nothing.
 No CI job passes or fails on a benchmark number, and none is to be
 reintroduced.**
@@ -1862,7 +1862,7 @@ beside the table on the website, so a reader can always see what was measured.
 exceeds 15% is automatically remeasured with at least 30 runs, so a scheduler
 spike surfaces as more evidence rather than as a misleading mean.
 
-**Basilisk-only iteration (`make bench-basilisk`, `BENCH_ONLY_BASILISK=1`).**
+**Basilisk-only iteration (`make _bench ONLY=basilisk`, `BENCH_ONLY_BASILISK=1`).**
 Closing a basilisk performance gap is a tight edit-measure loop, and five
 competitors at ~0.5 s per invocation add minutes to every turn of it while
 saying nothing about a change to this tree. This mode times the basilisk columns
@@ -1878,7 +1878,7 @@ names which tools this run timed and which it carried, with the date they came
 from, so the fresh `# generated` stamp can never imply a competitor was
 re-timed. Nothing measured is ever carried, so the write-always rule is
 untouched. CI never runs benchmarks at all; **a number published as a full
-benchmark must come from `make bench`** — this mode is for iteration.
+benchmark must come from `make _bench`** — this mode is for iteration.
 
 **Publication.** Every existing figure and ranking is withdrawn. The website
 may read the status CSV only to render a clearly labelled historical audit
@@ -1894,7 +1894,7 @@ Basilisk is **public**: GitHub-hosted runner compute (all `ubuntu-24.04`) is fre
 
 - **CI stores no artifacts.** No `actions/upload-artifact` for coverage HTML,
   mutation reports, logs, screenshots. Coverage and mutation gates enforce
-  in-job, and reports reproduce locally (`make test`, `make mutation-test`).
+  in-job, and reports reproduce locally (`make test`, `make _mutation_test`).
   Benchmarks do not run or gate in CI. Codecov consumes `lcov.info` directly
   without GitHub storage.
 - **The only permanent store is the GitHub Release.** Release assets (binaries,

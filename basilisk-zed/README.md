@@ -47,7 +47,7 @@ This is the **Zed editor integration**. It is a native Zed extension compiled to
 From a monorepo checkout, build the extension and set up the local dev loop:
 
 ```sh
-make package-zed
+make _package_zed
 ```
 
 Standalone (this repository on its own), the build is exactly the one the release pipeline gates the publish on:

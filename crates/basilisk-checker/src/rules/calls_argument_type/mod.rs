@@ -62,7 +62,7 @@ impl Rule for ArgumentTypeMismatch {
         let Some(resolver) = types.annotations() else {
             return;
         };
-        let judge = TypeJudge::new(types.oracle(), resolver, types.subtyping());
+        let judge = TypeJudge::new(types.oracle(), resolver, types.nominal());
         check_local_function_calls(module, resolver, &judge, diagnostics);
         builtin_methods::check_builtin_method_argument_types(module, &judge, diagnostics);
     }

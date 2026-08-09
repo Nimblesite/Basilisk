@@ -9,7 +9,7 @@
 # fixture's construct; the published tables therefore compare per-tool
 # distributions (median/range), never construct-vs-construct across tools.
 #
-# Run from the repo root:  make bench   (or:  bash benchmarks/run.sh)
+# Run from the repo root:  make _bench   (or:  bash benchmarks/run.sh)
 #
 # WRITE-ALWAYS, REVIEW-SEPARATELY. The recorder and the human review must never
 # suppress each other (benchmarks/summarize.py enforces unconditional writes):
@@ -87,7 +87,7 @@ MIN_STABILITY_RUNS=30
 # runs populate them so the measured runs are cache hits.
 WARMCACHE="$OUT/.warmcache"
 MYPYCACHE="$OUT/.mypycache"
-# LOCAL ITERATION MODE (make bench-basilisk). Times ONLY the basilisk columns
+# LOCAL ITERATION MODE (make _bench ONLY=basilisk). Times ONLY the basilisk columns
 # and skips the competitor pull, discovery, preflight, and timing. Closing a
 # basilisk performance gap needs the basilisk number in a minute, not the many
 # minutes five 0.5s-per-invocation competitors add to every iteration — and

@@ -47,8 +47,10 @@ fn has_builtin_decorator_form(
 pub(super) fn function_info_from(
     bindings: &BindingTable,
     func: &StmtFunctionDef,
-    class_name: Option<String>,
+    owner: Option<(String, crate::scope::Span)>,
 ) -> FunctionInfo {
+    let (class_name, class_site) =
+        owner.map_or((None, None), |(name, site)| (Some(name), Some(site)));
     let params = &func.parameters;
 
     let positional: Vec<ParameterInfo> = params
@@ -122,6 +124,7 @@ pub(super) fn function_info_from(
         params_end: func.parameters.range().end().to_u32(),
         return_annotation_span,
         class_name,
+        class_site,
         all_local_assigns,
         return_name_refs,
         unhashable_keys,
@@ -150,6 +153,7 @@ pub(super) fn function_info_from(
             &func.decorator_list,
             TypingForm::ClassMethod,
         ),
+        is_final: has_decorator_form(bindings, &func.decorator_list, TypingForm::FinalDecorator),
         is_abstractmethod: has_decorator_form(
             bindings,
             &func.decorator_list,
@@ -231,10 +235,6 @@ pub(super) fn parameter_to_info(p: &Parameter) -> ParameterInfo {
             .annotation
             .as_deref()
             .map(|e| text_range_to_span(e.range())),
-        // The rendered-text serializer behind this field was deleted as
-        // text-matched logic; consumers comparing parameter types must move
-        // to resolved annotation nodes ([ASTREBUILD-PHASE-TYPEEXPR]).
-        annotation_text: None,
     }
 }
 

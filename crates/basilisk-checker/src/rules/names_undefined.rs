@@ -83,6 +83,7 @@ impl Rule for UndefinedVariable {
             });
 
         let scope = ModuleScope {
+            builtin_names: module.builtin_names.as_deref(),
             import_names: &import_names,
             module_var_names: &module_var_names,
             class_names: &class_names,
@@ -135,7 +136,7 @@ fn check_module_level_callees(
         }
         if module.module_bindings.contains_key(callee)
             || scope.imported_symbols.contains_key(callee)
-            || is_builtin_name(callee)
+            || is_builtin_name(scope.builtin_names, callee)
         {
             continue;
         }
@@ -175,14 +176,69 @@ fn check_module_level_callees(
 // #
 // # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
 // ##########################################################################
-fn check_self_inheriting_classes(_module: &ResolvedModule, _out: &mut Vec<Diagnostic>) {
-    panic!(
-        "basilisk-checker: `check_self_inheriting_classes` was DELETED because it \
-         compared a base's RENDERED TEXT to the class's own name and then suppressed \
-         itself via a hard-coded BUILTINS spelling list. It panics because the real \
-         implementation — resolving the base expression through the binding table at its \
-         own offset — DOES NOT EXIST YET. Do not restore the comparison and do not skip \
-         the check in its place."
+fn check_self_inheriting_classes(module: &ResolvedModule, out: &mut Vec<Diagnostic>) {
+    for class in &module.classes {
+        for base in &class.resolved_bases {
+            // ##############################################################
+            // # THIS CONDITION CANNOT FIRE. THE RULE IS DEAD.
+            // #
+            // # An earlier comment here explained how the check "comes out
+            // # right". It does not come out anything: it never runs.
+            // #
+            // # `resolved_bases` resolves each base POSITIONALLY, at the base
+            // # expression's own offset. A class does not bind its own name
+            // # until its statement completes — the resolver says so in as
+            // # many words at `visitor/class_info_ext.rs::resolved_bases`:
+            // # "A class never resolves to itself." So for `class Foo(Foo)`
+            // # with no earlier `Foo`, the base resolves to
+            // # `ResolvedBase::Unknown`, `local_site()` is `None`, and the
+            // # comparison below is `None == Some(..)` — false, every time,
+            // # on every input.
+            // #
+            // # The text-matching version this replaced DID report
+            // # `class Foo(Foo)`. Replacing it with an identity comparison
+            // # that cannot hold did not rebuild the rule; it deleted the
+            // # diagnostic while leaving something that reads like a rule.
+            // # That is worse than the panic the deletion protocol asks for,
+            // # because silence looks like a clean file.
+            // #
+            // # What a real implementation needs: the resolver must model the
+            // # PENDING class binder — the fact that a base expression named
+            // # `Foo` inside `class Foo`'s own base list refers to a name
+            // # that this statement is in the middle of binding and that
+            // # nothing else has bound. `ResolvedBase::Unknown` throws that
+            // # away. Until it is modelled, `class Foo(Foo)` goes unreported.
+            // #
+            // # Do not "fix" this by comparing `class.name` to the base's
+            // # spelling. That is the defect that was deleted, and it is what
+            // # made `class ascii(ascii)` need a builtin-spelling exemption.
+            // ##############################################################
+            if base.resolved.local_site() == Some(class.name_span) {
+                out.push(self_inheritance_diagnostic(
+                    &class.name,
+                    base.span,
+                    &module.path,
+                ));
+            }
+        }
+    }
+}
+
+/// `class Foo(Foo)` with no earlier binding for `Foo`.
+fn self_inheritance_diagnostic(name: &str, span: Span, path: &str) -> Diagnostic {
+    error_diagnostic_owned(
+        CODE.clone(),
+        format!("`{name}` is used as its own base class but is not defined yet"),
+        span,
+        path,
+        Some(format!(
+            "A class cannot inherit from itself; the base list is evaluated before `{name}` is bound"
+        )),
+        Some(
+            "The bases tuple is evaluated before the class statement binds its name, so a \
+             self-reference raises NameError"
+                .to_owned(),
+        ),
     )
 }
 
@@ -205,6 +261,11 @@ fn module_level_diagnostic(name: &str, span: Span, path: &str) -> Diagnostic {
 
 /// Module-scope names visible to every function body.
 struct ModuleScope<'a> {
+    /// The BUILTIN SCOPE: every name `builtins` binds, from the active
+    /// typeshed generation, or `None` when it could not be established.
+    /// `None` means "unknown", which suppresses rather than reports; an EMPTY
+    /// `Some` is a real answer and reports (see [`is_builtin_name`]).
+    builtin_names: Option<&'a std::collections::HashSet<String>>,
     import_names: &'a [&'a str],
     module_var_names: &'a [&'a str],
     class_names: &'a [&'a str],
@@ -260,18 +321,40 @@ fn is_in_enclosing_scope(name: &str, func: &FunctionInfo, all_functions: &[Funct
 // #   crates/basilisk-checker/tests/string_keyed_class_hierarchy_pin_tests.rs
 // ##########################################################################
 
-/// DELETED — panics. The whitelist's three call sites survive only as the
-/// rebuild map; see the banner above.
-fn is_builtin_name(_name: &str) -> bool {
-    panic!(
-        "basilisk-checker: `names_undefined`'s BUILTINS whitelist was DELETED \
-         because it decided whether a name was defined by looking its SPELLING \
-         up in a hard-coded table, so a rebound builtin kept its blessing and a \
-         user symbol spelled like a builtin inherited one. It panics because \
-         the real implementation — resolving the name through the binding \
-         table, which already models builtin scope and rebinding — DOES NOT \
-         EXIST YET. Do not restore the list and do not shorten it."
-    )
+/// Whether `name` is bound in the BUILTIN SCOPE this module is checked
+/// against, and not shadowed by the module itself.
+///
+/// REBUILT from a hard-coded whitelist of builtin SPELLINGS. That list decided
+/// whether a name was defined by looking its characters up in a table, so a
+/// module that rebound a builtin name kept the whitelist's blessing, and any
+/// user symbol merely SPELLED like a builtin inherited one:
+///
+/// ```python
+/// class ascii(ascii): ...   # self-referencing base, suppressed only because
+///                           # "ascii" was in the list, while the identical
+///                           # `class Foo(Foo)` was correctly reported
+/// ```
+///
+/// `ResolvedModule::builtin_names` is the `builtins` module's own namespace,
+/// read from the active typeshed generation, so the answer tracks the
+/// configured target version instead of a table in this file. A name the
+/// module binds itself is NOT resolved here — Python looks in the module scope
+/// first, and the callers have already checked it.
+///
+/// `None` — the builtin scope could not be established — means "unknown", not
+/// "no builtins": every caller uses this to SUPPRESS a diagnostic, so an
+/// unknown scope suppresses rather than inventing a report about a name it
+/// cannot see ([CHKARCH-CONFORMANCE-MODE]).
+///
+/// An EMPTY `Some` is a different fact: the scope WAS read and binds nothing.
+/// That is not the same as not knowing, and it does not suppress. The two used
+/// to share one value, and a loader bug that produced the empty one on every
+/// run silently disabled this rule everywhere.
+fn is_builtin_name(builtin_names: Option<&std::collections::HashSet<String>>, name: &str) -> bool {
+    match builtin_names {
+        Some(names) => names.contains(name),
+        None => true,
+    }
 }
 
 fn check_function(
@@ -299,7 +382,7 @@ fn check_function(
             // `return helper` must not be flagged for a real `def helper`.
             || all_functions.iter().any(|f| f.name == name_str)
             || is_in_enclosing_scope(name_str, func, all_functions)
-            || is_builtin_name(name_str)
+            || is_builtin_name(scope.builtin_names, name_str)
         {
             continue;
         }

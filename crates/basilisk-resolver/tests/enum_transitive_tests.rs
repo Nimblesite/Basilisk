@@ -94,3 +94,70 @@ class DerivedRecord(GeologicalRecord):
         "a plain local hierarchy is not an enum"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Propagation follows the RESOLVED base, not the rendered one
+//
+// Pins the 2026-08-09 review finding against `visitor/mod.rs`: enum-ness was
+// closed over a `HashSet<String>` of class NAMES compared against
+// `ClassInfo::bases`, a rendering. An assignment alias named no class in that
+// set, and two classes spelled the same were one entry in it.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn enum_base_reached_through_an_assignment_alias_is_an_enum() {
+    let src = r"
+from enum import Enum as category_root
+
+class MineralFamily(category_root):
+    pass
+
+StoneFamily = MineralFamily
+
+class IgneousGrade(StoneFamily):
+    BASALT = 1
+";
+    assert!(
+        is_enum(src, "IgneousGrade"),
+        "`StoneFamily` is one more name for `MineralFamily`; binding a second \
+         name to an enum class does not make its subclasses stop being enums"
+    );
+}
+
+#[test]
+fn a_local_class_sharing_an_enums_name_does_not_make_a_subclass_an_enum() {
+    let src = r"
+from enum import Enum as category_root
+
+class MineralFamily(category_root):
+    pass
+
+class Registry:
+    pass
+
+MineralFamily = Registry
+
+class SurveyRecord(MineralFamily):
+    pass
+";
+    assert!(
+        !is_enum(src, "SurveyRecord"),
+        "at `SurveyRecord`'s base list the name `MineralFamily` is bound to \
+         `Registry`; matching the SPELLING of the earlier enum attaches an \
+         inheritance edge the program does not have"
+    );
+}
+
+#[test]
+fn an_imported_base_does_not_make_a_class_an_enum() {
+    let src = r"
+from quarry import MineralFamily
+
+class IgneousGrade(MineralFamily):
+    BASALT = 1
+";
+    assert!(
+        !is_enum(src, "IgneousGrade"),
+        "another module's class is unknown here — unknown is not `Enum`"
+    );
+}

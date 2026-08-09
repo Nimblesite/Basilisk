@@ -9,7 +9,7 @@ instant each score exists. A benchmark run that measured a number but did not
 record it is a lie about the build's performance.
 
 THIS SCRIPT DOES NOT GATE ANYTHING, and nothing in CI fails on a benchmark
-number.  The benchmark is an INDICATIVE, developer-run measurement: `make bench`
+number.  The benchmark is an INDICATIVE, developer-run measurement: `make _bench`
 executes on whatever workstation a contributor happens to use, against whatever
 else that machine is doing at the time. Background load moves every tool in the
 table together and can shift absolute times by tens of percent between two runs

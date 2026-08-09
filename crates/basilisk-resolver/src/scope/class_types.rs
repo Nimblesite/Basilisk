@@ -1,7 +1,63 @@
 //! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
 //! Class-related types: class info, generic parameters, type arguments.
 
+use basilisk_canonical::TypingForm;
+
 use super::{span::Span, variable_types::AttributeInfo};
+
+/// What a declared base class expression resolves to.
+///
+/// This is the identity a hierarchy is built on. It is produced at collection
+/// time by resolving the base EXPRESSION through the module's binding table,
+/// so it is unaffected by how the base happens to be written: an aliased
+/// import, a module-qualified path, and a bare name that all denote one class
+/// give one answer, and two classes that merely share a rendered name never
+/// collapse into one. Implements [RESOLV-CANONICAL-BINDING].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResolvedBase {
+    /// A class defined in this module, keyed on its definition site — the
+    /// span of the `class` statement's name token ([`ClassInfo::name_span`]).
+    LocalClass(Span),
+    /// A definition the canonical registry describes: `builtins.object`,
+    /// `typing.Generic`, `typing.Protocol`, `typing.TypedDict`, and so on.
+    Form(TypingForm),
+    /// A base that resolves to no definition visible from here — a class
+    /// imported from a module outside the registry, a computed base, a name
+    /// bound to something opaque.
+    ///
+    /// Means "unknown", never "no base": a consumer must abstain on it rather
+    /// than conclude anything from its absence.
+    Unknown,
+}
+
+impl ResolvedBase {
+    /// The definition site, when this base is a class defined in this module.
+    #[must_use]
+    pub const fn local_site(self) -> Option<Span> {
+        match self {
+            Self::LocalClass(span) => Some(span),
+            Self::Form(_) | Self::Unknown => None,
+        }
+    }
+
+    /// Whether this base denotes exactly `form`.
+    #[must_use]
+    pub fn is_form(self, form: TypingForm) -> bool {
+        self == Self::Form(form)
+    }
+}
+
+/// One declared base class: where it is written, and what it denotes.
+///
+/// The span locates a diagnostic and supplies its message text; every verdict
+/// comes from [`Self::resolved`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BaseRef {
+    /// The span of the base expression, as written.
+    pub span: Span,
+    /// What the base expression resolves to.
+    pub resolved: ResolvedBase,
+}
 
 /// Type parameters declared in a `Generic[T1, T2, ...]` base expression.
 #[derive(Debug, Clone, PartialEq)]
@@ -61,7 +117,18 @@ pub struct ClassInfo {
     /// The span of the `class` keyword.
     pub def_span: Span,
     /// Base class names (simple names only; complex expressions ignored).
+    ///
+    /// A RENDERING, kept for diagnostic message text only. It cannot answer
+    /// which class a base denotes: `other.Movie` is recorded as `Movie`, and a
+    /// base reached through an alias is recorded under the alias. Use
+    /// [`Self::resolved_bases`] for identity.
     pub bases: Vec<String>,
+    /// Every declared base, in declaration order: where it is written and
+    /// what it denotes.
+    ///
+    /// The identity half of `bases`, and the only one a verdict may come
+    /// from. See [`BaseRef`] and [`ResolvedBase`].
+    pub resolved_bases: Vec<BaseRef>,
     /// Attributes declared directly in the class body.
     pub attributes: Vec<AttributeInfo>,
     /// Names of methods defined in the class body.
@@ -134,6 +201,16 @@ pub struct ClassInfo {
     /// For `class Foo[V](dict[K, V])`, this would include `"dict"`, `"K"`, and `"V"`.
     /// Used by E0042 to detect traditional `TypeVars` mixed into PEP 695 classes.
     pub base_expression_names: Vec<String>,
+    /// Every NAME referenced inside this class's base expressions that an
+    /// assignment in this module bound, as `(reference span, value site)`.
+    ///
+    /// [`Self::base_expression_names`] is a `Vec<String>` of RENDERED simple
+    /// names, which cannot answer whether a base argument denotes a particular
+    /// value: `Alias = T; class Foo(Generic[Alias])` names no `T`, while an
+    /// unrelated `class T` matches one. The value site here is the range of
+    /// the EXPRESSION the assignment bound — `TypeVarCallInfo::span` for a
+    /// `T = TypeVar("T")` — so identity survives aliasing and rebinding.
+    pub base_name_value_sites: Vec<(Span, Span)>,
     /// Spans of arguments in `Generic[...]` or `Protocol[...]` that are NOT simple names
     /// (i.e. not plain `TypeVar` references, but literals, subscripts, etc.).
     ///
@@ -145,6 +222,17 @@ pub struct ClassInfo {
     /// For `class Foo(metaclass=Meta): ...`, this is `Some("Meta")`.
     /// `None` when no explicit metaclass is specified.
     pub metaclass_name: Option<String>,
+    /// DEFINITION SITE of the metaclass, when `metaclass=` names a class this
+    /// module defines.
+    ///
+    /// [`Self::metaclass_name`] is a RENDERING: it is filled only when the
+    /// `metaclass=` value is a bare word, so `metaclass=mod.Meta` records
+    /// nothing, and an assignment alias records the alias's spelling rather
+    /// than the class it names. This field is the metaclass EXPRESSION
+    /// resolved through the binding table, and is the lawful key for "whose
+    /// `__call__` governs construction?". `None` means the metaclass is not a
+    /// class of this module — abstention, never "no metaclass".
+    pub metaclass_site: Option<Span>,
     /// `true` when at least one base class expression is a subscript.
     ///
     /// For example, `class Foo(SubclassMe[float])` has a subscript base.

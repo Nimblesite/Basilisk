@@ -32,10 +32,13 @@ pub(super) fn collect_reveal_type_calls(_stmts: &[Stmt]) -> Vec<RevealTypeCallIn
 /// statement records ([#381](https://github.com/Nimblesite/Basilisk/issues/381));
 /// [`call_site_from_call`] still decides which callee/receiver shapes are
 /// representable.
-pub(super) fn collect_calls_from_stmts(stmts: &[Stmt]) -> Vec<CallSite> {
+pub(super) fn collect_calls_from_stmts(
+    bindings: &basilisk_canonical::BindingTable,
+    stmts: &[Stmt],
+) -> Vec<CallSite> {
     let mut out = Vec::new();
     crate::visit_calls(stmts, &mut |call| {
-        if let Some(site) = call_site_from_call(call) {
+        if let Some(site) = call_site_from_call(bindings, call) {
             out.push(site);
         }
     });
@@ -44,21 +47,37 @@ pub(super) fn collect_calls_from_stmts(stmts: &[Stmt]) -> Vec<CallSite> {
 
 /// Build a [`CallSite`] from a call node, when its callee shape is one the
 /// site model represents (a bare name, or a method on a supported receiver).
-pub(super) fn call_site_from_call(call: &ruff_python_ast::ExprCall) -> Option<CallSite> {
-    let (callee, receiver) = match call.func.as_ref() {
-        Expr::Name(name) => (name.id.to_string(), None),
+pub(super) fn call_site_from_call(
+    bindings: &basilisk_canonical::BindingTable,
+    call: &ruff_python_ast::ExprCall,
+) -> Option<CallSite> {
+    let (callee, receiver, receiver_class_site) = match call.func.as_ref() {
+        Expr::Name(name) => (name.id.to_string(), None, None),
         Expr::Attribute(attribute) => {
-            let receiver = match attribute.value.as_ref() {
-                Expr::StringLiteral(_) => CallReceiver::StringLiteral,
-                Expr::BytesLiteral(_) => CallReceiver::BytesLiteral,
-                Expr::Name(name) => CallReceiver::Name(name.id.to_string()),
+            // The receiver's CLASS is resolved from its expression, at the
+            // call's own offset; the string in `CallReceiver` is kept for
+            // message text only ([RESOLV-CANONICAL-BINDING]).
+            let (receiver, site) = match attribute.value.as_ref() {
+                Expr::StringLiteral(_) => (CallReceiver::StringLiteral, None),
+                Expr::BytesLiteral(_) => (CallReceiver::BytesLiteral, None),
+                Expr::Name(name) => (
+                    CallReceiver::Name(name.id.to_string()),
+                    bindings
+                        .local_class_definition(attribute.value.as_ref())
+                        .map(text_range_to_span),
+                ),
                 Expr::Call(constructor) => match constructor.func.as_ref() {
-                    Expr::Name(name) => CallReceiver::Constructor(name.id.to_string()),
+                    Expr::Name(name) => (
+                        CallReceiver::Constructor(name.id.to_string()),
+                        bindings
+                            .local_class_definition(&constructor.func)
+                            .map(text_range_to_span),
+                    ),
                     _ => return None,
                 },
                 _ => return None,
             };
-            (attribute.attr.to_string(), Some(receiver))
+            (attribute.attr.to_string(), Some(receiver), site)
         }
         _ => return None,
     };
@@ -83,7 +102,13 @@ pub(super) fn call_site_from_call(call: &ruff_python_ast::ExprCall) -> Option<Ca
     let has_unpacked_kwargs = call.arguments.keywords.iter().any(|kw| kw.arg.is_none());
     Some(CallSite {
         callee,
+        // Positional: which class the callee names is decided by the binding
+        // in force AT THE CALL ([RESOLV-CANONICAL-BINDING]).
+        callee_class_site: bindings
+            .local_class_definition(&call.func)
+            .map(text_range_to_span),
         receiver,
+        receiver_class_site,
         args,
         keywords,
         has_unpacked_kwargs,

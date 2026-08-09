@@ -35,9 +35,10 @@ pub(super) fn leaf(name: &str) -> Option<InferredType> {
         // Bare `type` means `type[Any]`: SOME class object. Which class is
         // gradual, but class-object-ness is not — a value positively known to
         // be an instance (`None`, `3`, `"x"`) can never be one, and the
-        // nominal leaf keeps that judgment while the class-object guard in the
-        // oracle keeps `x: type = C` silent ([NARROWPLAN-INTEGRATION] Step 3).
-        "type" => Some(InferredType::Named("type".to_owned())),
+        // resolved leaf keeps that judgment while the class-object guard in
+        // the oracle keeps `x: type = C` silent ([NARROWPLAN-INTEGRATION]
+        // Step 3).
+        "type" => Some(InferredType::ClassObject),
         // `object` is the TOP type, not the gradual one. It accepts every value
         // exactly as `Any` does (see `is_assignable_to`), but it is a real named
         // leaf: collapsing it into `Any` made `list[object]` and `list[Any]`
@@ -45,7 +46,7 @@ pub(super) fn leaf(name: &str) -> Option<InferredType> {
         // narrowing `list[object]` to `list[int]` is an error the spec requires
         // ([TYPEINF-NARROWING-TYPEIS]), while `list[Any]` is consistent with
         // anything.
-        "object" => Some(InferredType::Named("object".to_owned())),
+        "object" => Some(InferredType::Object),
         // Bare generics are implicitly parameterised with `Any`.
         "list" => Some(InferredType::List(Box::new(InferredType::Any))),
         "dict" => Some(InferredType::Dict(

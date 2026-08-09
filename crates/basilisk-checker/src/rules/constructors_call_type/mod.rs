@@ -22,7 +22,6 @@ mod helpers;
 use std::collections::HashMap;
 
 use ruff_python_ast::{self as ast, Expr, Stmt};
-use ruff_text_size::Ranged as _;
 
 use basilisk_resolver::{ResolvedModule, Span};
 
@@ -32,7 +31,7 @@ use super::Rule;
 
 use helpers::{
     build_typevar_bound_map, check_kwarg_types, check_positional_arg_types, expr_simple_name,
-    resolve_constructor_sig, ConstructorSig, CODE,
+    ConstructorSig, CODE,
 };
 
 /// Emits `constructors_call_type` for invalid constructor calls via `type[T]` parameters.
@@ -54,6 +53,7 @@ impl Rule for TypeCallConstructorViolation {
         let class_map: HashMap<&str, &basilisk_resolver::ClassInfo> =
             basilisk_resolver::name_lookup(&module.classes);
 
+        let graph = basilisk_resolver::ClassGraph::new(&module.classes);
         let method_map = super::shared::method_name_map(&module.functions);
 
         // Collect TypeVar names (module-level).
@@ -72,6 +72,7 @@ impl Rule for TypeCallConstructorViolation {
                     &module.bindings,
                     &index,
                     &class_map,
+                    &graph,
                     &method_map,
                     &typevar_names,
                     &typevar_bounds,
@@ -99,7 +100,8 @@ fn check_function(
     bindings: &basilisk_resolver::BindingTable,
     index: &super::shared::ExprIndex<'_>,
     class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
-    method_map: &HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>>,
+    graph: &basilisk_resolver::ClassGraph<'_>,
+    method_map: &HashMap<(basilisk_resolver::Span, &str), Vec<&basilisk_resolver::FunctionInfo>>,
     typevar_names: &[&str],
     typevar_bounds: &HashMap<&str, &str>,
     diagnostics: &mut Vec<Diagnostic>,
@@ -118,6 +120,7 @@ fn check_function(
         index,
         type_param_map: &type_param_map,
         class_map,
+        graph,
         method_map,
         typevar_names,
         typevar_bounds,
@@ -128,49 +131,61 @@ fn check_function(
     }
 }
 
-/// Extract all parameters annotated as `type[X]` in a function definition.
-/// Returns a map from parameter name to the inner type name `X`.
-fn collect_type_params(func: &ast::StmtFunctionDef, source: &str) -> HashMap<String, String> {
-    let mut map = HashMap::new();
-    let params = &func.parameters;
-
-    let all_params: Vec<&ast::ParameterWithDefault> = params
-        .posonlyargs
-        .iter()
-        .chain(params.args.iter())
-        .collect();
-
-    for param_wd in all_params {
-        let Some(ann) = &param_wd.parameter.annotation else {
-            continue;
-        };
-        if let Some(inner) = extract_type_subscript_text(ann, source) {
-            let _ = map.insert(param_wd.parameter.name.to_string(), inner);
-        }
-    }
-
-    map
+// DELETED: this body built the `type[X]` parameter map from rendered annotation
+// text. Rebuild it from the annotation AST and resolved definition identities.
+fn collect_type_params(_func: &ast::StmtFunctionDef, _source: &str) -> HashMap<String, String> {
+    panic!(concat!(
+        "basilisk-checker: `collect_type_params` was DELETED because it built constructor ",
+        "targets by extracting `X` from the SOURCE SPELLING of `type[X]`. It panics ",
+        "because the real implementation — resolving the annotation head to ",
+        "`TypingForm::TypeClass` and its slice to a class or TypeVar definition site — ",
+        "DOES NOT EXIST YET. Do not restore the text extractor and do not return an ",
+        "empty map in its place."
+    ))
 }
 
-/// If `expr` is `type[X]`, return the text of `X` (trimmed).
-fn extract_type_subscript_text(expr: &Expr, source: &str) -> Option<String> {
-    let Expr::Subscript(sub) = expr else {
-        return None;
-    };
-    // The subscript value must be the bare name `type`.
-    let Expr::Name(name_node) = sub.value.as_ref() else {
-        return None;
-    };
-    if name_node.id.as_str() != "type" {
-        return None;
-    }
-    // Extract the inner text from source.
-    let range = sub.slice.range();
-    let text = source
-        .get(range.start().to_usize()..range.end().to_usize())?
-        .trim()
-        .to_owned();
-    Some(text)
+// ##########################################################################
+// # DELETED BODY — `extract_type_subscript_text`. DO NOT RESTORE IT.       #
+// #                                                                         #
+// #   if name_node.id.as_str() != "type" { return None; }                  #
+// #   source.get(range.start()..range.end())?.trim().to_owned()            #
+// #                                                                         #
+// # Two spelling operations. `type` was recognised only when written as    #
+// # that exact bare word — CLAUDE.md: builtins are not an exception, a     #
+// # name resolves through the binding table like any other — so:           #
+// #                                                                         #
+// #   * `builtins.type[X]` is the identical object and was never seen;     #
+// #   * a module declaring its own `class type` had its subscript treated  #
+// #     as the typing form, producing diagnostics about a contract that    #
+// #     does not apply;                                                     #
+// #   * `from builtins import type as Class` was invisible.                #
+// #                                                                         #
+// # `X` was then taken as SOURCE TEXT and joined to classes, `TypeVar`s    #
+// # and bounds through name-keyed maps, so an aliased class was missed and #
+// # a same-named one matched.                                              #
+// #                                                                         #
+// # The lawful replacement resolves `sub.value` with                        #
+// # `BindingTable::form_of_with_builtins` against `TypingForm::TypeClass`, #
+// # then resolves `sub.slice` to a definition site with                    #
+// # `local_class_definition` / `local_value_binding` and joins on THAT.    #
+// #                                                                         #
+// # Pinned by: tests/constructor_identity_tests.rs                          #
+// ##########################################################################
+
+/// DELETED — panics; see the banner above.
+#[expect(
+    dead_code,
+    reason = "the rendered-text caller was deleted; retained as an explicit reconstruction boundary"
+)]
+fn extract_type_subscript_text(_expr: &Expr, _source: &str) -> Option<String> {
+    panic!(
+        "basilisk-checker: `extract_type_subscript_text` was DELETED because it \
+         recognised `type[X]` only by the bare spelling `type` and then read `X` as raw \
+         SOURCE TEXT. It panics because the real implementation — `sub.value` resolved \
+         through the binding table to `TypingForm::TypeClass`, and `sub.slice` resolved \
+         to a definition site — DOES NOT EXIST YET. Do not restore the name comparison \
+         or the slice, and do not return `None` in its place."
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -178,6 +193,10 @@ fn extract_type_subscript_text(expr: &Expr, source: &str) -> Option<String> {
 // ---------------------------------------------------------------------------
 
 /// Shared context for statement/expression checking to reduce argument count.
+#[expect(
+    dead_code,
+    reason = "definition-site inputs are retained for the identity-based rebuild after deleting the name-keyed verdict"
+)]
 struct CheckCtx<'a> {
     source: &'a str,
     path: &'a str,
@@ -185,7 +204,9 @@ struct CheckCtx<'a> {
     index: &'a super::shared::ExprIndex<'a>,
     type_param_map: &'a HashMap<String, String>,
     class_map: &'a HashMap<&'a str, &'a basilisk_resolver::ClassInfo>,
-    method_map: &'a HashMap<(&'a str, &'a str), Vec<&'a basilisk_resolver::FunctionInfo>>,
+    graph: &'a basilisk_resolver::ClassGraph<'a>,
+    method_map:
+        &'a HashMap<(basilisk_resolver::Span, &'a str), Vec<&'a basilisk_resolver::FunctionInfo>>,
     typevar_names: &'a [&'a str],
     typevar_bounds: &'a HashMap<&'a str, &'a str>,
 }
@@ -250,54 +271,28 @@ fn check_expr_inner(expr: &Expr, cctx: &CheckCtx<'_>, diagnostics: &mut Vec<Diag
 // Core validation
 // ---------------------------------------------------------------------------
 
-/// Validate a call `cls(...)` where `cls: type[inner_type]`.
+// DELETED: this body joined a rendered inner-type name to TypeVars, bounds, and
+// classes. Rebuild the whole judgment on resolved definition sites.
 fn check_type_call(
-    call: &ast::ExprCall,
-    inner_type: &str,
-    cctx: &CheckCtx<'_>,
-    diagnostics: &mut Vec<Diagnostic>,
+    _call: &ast::ExprCall,
+    _inner_type: &str,
+    _cctx: &CheckCtx<'_>,
+    _diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let span = Span::from(call.range());
-    let total_args = call.arguments.args.len() + call.arguments.keywords.len();
-
-    // Is inner_type an unbound TypeVar (no bound)?
-    if cctx.typevar_names.contains(&inner_type) && !cctx.typevar_bounds.contains_key(inner_type) {
-        check_unbound_typevar_call(inner_type, total_args, span, cctx.path, diagnostics);
-        return;
-    }
-
-    // Resolve the effective class name (follow TypeVar bounds).
-    let class_name = cctx
-        .typevar_bounds
-        .get(inner_type)
-        .copied()
-        .unwrap_or(inner_type);
-
-    // Look up the class.
-    let Some(class_info) = cctx.class_map.get(class_name) else {
-        return;
-    };
-
-    let constructor_sig = resolve_constructor_sig(
-        class_name,
-        class_info,
-        cctx.class_map,
-        cctx.method_map,
-        cctx.source,
-    );
-
-    check_constructor_call(
-        call,
-        class_name,
-        &constructor_sig,
-        total_args,
-        span,
-        cctx,
-        diagnostics,
-    );
+    panic!(concat!(
+        "basilisk-checker: `check_type_call` was DELETED because it decided whether the ",
+        "inner type was a TypeVar, followed its bound, and selected a class by comparing ",
+        "RENDERED NAMES. It panics because the real implementation — a constructor target ",
+        "carried as a resolved TypeVar or class definition site — DOES NOT EXIST YET. Do ",
+        "not restore the name maps and do not substitute a default verdict."
+    ))
 }
 
 /// Emit diagnostic for calling an unbound `TypeVar` constructor with arguments.
+#[expect(
+    dead_code,
+    reason = "orphaned by the deleted name-keyed `check_type_call`; retained for the identity-based rebuild"
+)]
 fn check_unbound_typevar_call(
     inner_type: &str,
     total_args: usize,
@@ -323,9 +318,18 @@ fn check_unbound_typevar_call(
 }
 
 /// Check a constructor call against its resolved signature.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the class arrives as both an identity (for lookups) and a rendering (for messages)"
+)]
+#[expect(
+    dead_code,
+    reason = "orphaned by the deleted name-keyed `check_type_call`; retained for the identity-based rebuild"
+)]
 fn check_constructor_call(
     call: &ast::ExprCall,
     class_name: &str,
+    class_site: basilisk_resolver::Span,
     constructor_sig: &ConstructorSig,
     total_args: usize,
     span: Span,
@@ -388,6 +392,7 @@ fn check_constructor_call(
             } else {
                 check_kwarg_types(
                     call,
+                    class_site,
                     class_name,
                     &kw_names,
                     cctx.method_map,
@@ -400,6 +405,7 @@ fn check_constructor_call(
                 );
                 check_positional_arg_types(
                     call,
+                    class_site,
                     class_name,
                     cctx.method_map,
                     cctx.bindings,

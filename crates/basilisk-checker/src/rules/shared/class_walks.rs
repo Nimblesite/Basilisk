@@ -1,5 +1,5 @@
 // ############################################################################
-// # DELETED IMPLEMENTATION — PANIC-ONLY SHELL. DO NOT PUT LOGIC BACK HERE.   #
+// # REBUILT ON DEFINITION-SITE IDENTITY. DO NOT PUT NAME KEYING BACK.        #
 // #                                                                          #
 // # This file WAS `crate::subtyping` under another name: a class hierarchy   #
 // # keyed on RENDERED CLASS NAMES. `class_name_map` built                    #
@@ -20,72 +20,77 @@
 // # same rendered name are one entry. Roughly twenty rules asked this file   #
 // # "does X inherit from Y?" and got an answer about spelling.               #
 // #                                                                          #
-// # `method_name_map` is the same defect for methods: it keys on             #
-// # `(class_name, method_name)` STRINGS, so a method's owning class is       #
-// # identified by how the class is written.                                  #
+// # The prerequisite the deletion banner named — "base SPANS on `ClassInfo`, #
+// # which the resolver does not record yet" — NOW EXISTS:                    #
+// # `ClassInfo::resolved_bases` carries each base expression already         #
+// # resolved through the binding table, and `basilisk_resolver::ClassGraph`  #
+// # keys the hierarchy on definition site. Everything below delegates to it. #
 // #                                                                          #
-// # THE SIGNATURES SURVIVE ONLY AS A MAP. Each body panics because the real  #
-// # implementation DOES NOT EXIST YET:                                       #
-// #                                                                          #
-// #   * DO NOT return an empty map — every base lookup then misses and       #
-// #     every inheritance rule silently stops firing.                        #
-// #   * DO NOT return `false` from the walk — that blesses every illegal     #
-// #     inheritance; `true` invents an ancestor for every class.             #
-// #   * DO NOT rebuild the map under a new name in a rule module.            #
-// #                                                                          #
-// # The replacement resolves each base EXPRESSION through the binding table  #
-// # to the class it denotes, and keys the hierarchy on definition site       #
-// # (module path + name span), never on a rendered name. That needs base     #
-// # SPANS on `ClassInfo`, which the resolver does not record yet.            #
+// # `class_name_map` is GONE rather than rebuilt: a `HashMap<&str, _>` over  #
+// # class names has no lawful form. A caller that needs the class a NAME     #
+// # denotes resolves that name's expression through the binding table.       #
 // #                                                                          #
 // # Pinned by:                                                               #
 // #   crates/basilisk-checker/tests/string_keyed_class_hierarchy_pin_tests.rs
 // ############################################################################
 
-//! The DELETED string-keyed class hierarchy, reduced to loudly panicking
-//! signatures so its call sites remain visible as the rebuild map.
+//! Shared walks over a module's class hierarchy, answered from resolved class
+//! identity rather than from how a class happens to be written.
 
 use std::collections::HashMap;
 
-use basilisk_resolver::{ClassInfo, FunctionInfo};
+use basilisk_resolver::{ClassGraph, ClassInfo, FunctionInfo, Span};
 
-/// Panic message shared by every deleted body in this module.
-macro_rules! deleted {
-    ($what:literal) => {
-        panic!(concat!(
-            "basilisk-checker: `",
-            $what,
-            "` was DELETED because it keyed the class hierarchy on RENDERED \
-             CLASS NAMES — `ClassInfo::bases` is a `Vec<String>` of simple \
-             names, looked up in a map keyed on `ClassInfo::name`. A base \
-             reached through an alias missed, a dotted base collided with any \
-             local class sharing its trailing word, and two classes with the \
-             same rendered name were one entry. It panics because the real \
-             implementation — bases resolved through the binding table and \
-             keyed on definition site — DOES NOT EXIST YET. Do not restore the \
-             map and do not substitute an empty one: rebuild this caller on \
-             resolved class identity, or make it abstain."
-        ))
-    };
-}
-
-/// DELETED — panics; see the banner at the head of this file.
-pub(crate) fn class_name_map(_classes: &[ClassInfo]) -> HashMap<&str, &ClassInfo> {
-    deleted!("class_name_map")
-}
-
-/// DELETED — panics; see the banner at the head of this file.
-pub(crate) fn class_or_base_matches<'a>(
-    _cls: &'a ClassInfo,
-    _resolve: &dyn Fn(&str) -> Option<&'a ClassInfo>,
-    _predicate: &dyn Fn(&'a ClassInfo) -> bool,
+/// Whether `cls` itself, or any class it inherits from IN THIS MODULE,
+/// satisfies `predicate`.
+///
+/// Each edge comes from a base expression the resolver already resolved
+/// through the binding table, so `Alias = Base; class Sub(Alias)` is one edge
+/// to `Base`, and `class Client(httpx.Client)` is NO edge to a local class
+/// spelled `Client` — the two failures the deleted by-name walk made in both
+/// directions. The walk visits each class once, so a cyclic base list
+/// terminates (GitHub #278, #398).
+///
+/// Answers `true` on a match and `false` otherwise. When the answer matters as
+/// evidence of ABSENCE — "this class is definitely not a subclass of that
+/// one" — use [`ClassGraph::ancestry`] instead and check its `complete` flag,
+/// because a base from another module is an edge this module cannot follow.
+pub(crate) fn class_or_base_matches(
+    graph: &ClassGraph<'_>,
+    cls: &ClassInfo,
+    predicate: impl Fn(&ClassInfo) -> bool,
 ) -> bool {
-    deleted!("class_or_base_matches")
+    graph.ancestors(cls).into_iter().any(predicate)
 }
 
-/// DELETED — panics; see the banner at the head of this file.
+/// Every method definition in the module, indexed by the DEFINITION SITE of
+/// its owning class and its own name.
+///
+/// REBUILT from a `HashMap<(&str, &str), _>` keyed on the owning class's
+/// rendered name, which merged two classes declared with the same name in one
+/// module into a single entry — so a call to one class's method was checked
+/// against the other class's signature. `FunctionInfo::class_site` is the
+/// owning `class` statement's name span, the same key [`ClassGraph`] uses, so
+/// an index built here lines up with the hierarchy exactly.
+///
+/// The method's own name is the name it is DEFINED under in the class body,
+/// which is what an attribute access on that class looks up; it is not a
+/// use-site spelling standing in for a resolution.
+///
+/// A `Vec` per key because a method may be defined more than once —
+/// `@overload` stubs followed by an implementation, or a conditional
+/// redefinition. Entries stay in source order, so the last is the one in force.
 pub(crate) fn method_name_map(
-    _functions: &[FunctionInfo],
-) -> HashMap<(&str, &str), Vec<&FunctionInfo>> {
-    deleted!("method_name_map")
+    functions: &[FunctionInfo],
+) -> HashMap<(Span, &str), Vec<&FunctionInfo>> {
+    let mut map: HashMap<(Span, &str), Vec<&FunctionInfo>> = HashMap::new();
+    for func in functions {
+        let Some(site) = func.class_site else {
+            continue;
+        };
+        map.entry((site, func.name.as_str()))
+            .or_default()
+            .push(func);
+    }
+    map
 }

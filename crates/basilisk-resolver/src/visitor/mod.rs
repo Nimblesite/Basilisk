@@ -54,7 +54,7 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
     };
     core::collect_from_body(&bindings, &module.ast.body, &mut sinks, true);
 
-    let calls = calls_and_reveal::collect_calls_from_stmts(&module.ast.body);
+    let calls = calls_and_reveal::collect_calls_from_stmts(&bindings, &module.ast.body);
     // Which callee is a type-parameter factory is decided by resolving the
     // callee node through the same bindings, so `TypeVar as TV` and
     // `typing.TypeVar` answer identically and a locally-defined `TypeVar` does
@@ -78,29 +78,40 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
     )
 }
 
-/// Propagate enum-ness through module-local bases to a fixpoint.
+/// Propagate enum-ness through module-local bases.
 ///
 /// `ClassInfo::is_enum` promises "directly or transitively inherits from an
 /// `Enum` family class" (`scope/class_types.rs`), matching the runtime
 /// (<https://docs.python.org/3/library/enum.html#enum.Enum>). Direct bases
 /// were classified through binding resolution when each class was collected;
 /// this pass closes the relation over the module's own class hierarchy.
+///
+/// REBUILT on definition-site identity. The deleted version closed the
+/// relation over a `HashSet<String>` of class NAMES tested against
+/// `ClassInfo::bases`, a `Vec<String>` of renderings, so it made two errors at
+/// once: `StoneFamily = MineralFamily; class Grade(StoneFamily)` named no
+/// class in the set and LOST a real enum edge, while a class whose base name
+/// had since been rebound to something else matched the set anyway and GAINED
+/// an edge the program does not have. [`ClassGraph`] answers from resolved
+/// bases keyed on definition site, and closes the relation transitively on its
+/// own, so no fixpoint loop is needed.
 fn propagate_enum_bases(classes: &mut [crate::scope::ClassInfo]) {
-    loop {
-        let enum_names: std::collections::HashSet<String> = classes
+    let enum_sites: std::collections::HashSet<crate::scope::Span> = {
+        let graph = crate::scope::ClassGraph::new(classes);
+        classes
             .iter()
-            .filter(|class| class.is_enum)
-            .map(|class| class.name.clone())
-            .collect();
-        let mut changed = false;
-        for class in classes.iter_mut() {
-            if !class.is_enum && class.bases.iter().any(|base| enum_names.contains(base)) {
-                class.is_enum = true;
-                changed = true;
-            }
-        }
-        if !changed {
-            break;
+            .filter(|class| {
+                graph
+                    .ancestors(class)
+                    .into_iter()
+                    .any(|ancestor| ancestor.is_enum)
+            })
+            .map(|class| class.name_span)
+            .collect()
+    };
+    for class in classes.iter_mut() {
+        if enum_sites.contains(&class.name_span) {
+            class.is_enum = true;
         }
     }
 }
@@ -159,31 +170,42 @@ fn collect_analysis_results(
     let stmts = &module.ast.body;
     let source = &module.source;
 
-    let typeddict_class_names: std::collections::HashSet<&str> = classes
-        .iter()
-        .filter(|c| c.is_typed_dict)
-        .map(|c| c.name.as_str())
-        .collect();
-    let mut isinstance_typeddict_spans = typeddict_ext::collect_isinstance_typeddict_violations(
-        bindings,
-        stmts,
-        &typeddict_class_names,
-    );
+    let class_graph = crate::scope::ClassGraph::new(classes);
+    let mut isinstance_typeddict_spans =
+        typeddict_ext::collect_isinstance_typeddict_violations(bindings, stmts, &class_graph);
     isinstance_typeddict_spans.extend(typevar::collect_typevar_bound_typeddict_violations(
         bindings, stmts,
     ));
 
     // Fields initialised to an empty collection below had their collectors
-    // deleted as text-matched logic. The rules downstream of them are
-    // registered and INERT — never silently satisfied — pending
-    // [ASTREBUILD-PHASE-RESOLVER]; see docs/plans/CHECKER-AST-RECONSTRUCTION-PLAN.md.
+    // deleted as text-matched logic.
+    //
+    // READ THIS BEFORE TRUSTING ANY RULE THAT CONSUMES THEM. An earlier
+    // version of this comment claimed the downstream rules were "INERT —
+    // never silently satisfied". That was false, and it was false in the
+    // worst direction: `Vec::new()` is not a signal, it is an ANSWER. A rule
+    // handed `newtype_calls: Vec::new()` iterates nothing, finds nothing, and
+    // reports the module clean — indistinguishable from a module that genuinely
+    // contains no `NewType` call. Every such rule is therefore SILENTLY
+    // SATISFIED on every input, and the checker reports a pass it never
+    // computed.
+    //
+    // This is a known, unrepaired defect, not a design. The honest shape is a
+    // per-collector "not computed" state that makes the consuming rule abstain
+    // visibly; that state does not exist yet, and until it does these fields
+    // are lies told in a type the compiler cannot object to. Do not add a new
+    // `Vec::new()` here, and do not cite this comment as licence for one.
+    // Tracking: [ASTREBUILD-PHASE-RESOLVER],
+    // docs/plans/CHECKER-AST-RECONSTRUCTION-PLAN.md.
     AnalysisResults {
         reveal_type_calls: calls_and_reveal::collect_reveal_type_calls(stmts),
         assert_type_calls: calls_and_reveal::collect_assert_type_calls_from_stmts(stmts, source),
         typeddict_calls: Vec::new(),
         newtype_calls: Vec::new(),
         namedtuple_defs: Vec::new(),
-        multiple_unbounded_tuple_spans: annotations::collect_multiple_unbounded_tuple_spans(stmts),
+        multiple_unbounded_tuple_spans: annotations::collect_multiple_unbounded_tuple_spans(
+            bindings, stmts,
+        ),
         module_bare_assignments: assigns::collect_module_bare_assignments(stmts),
         module_attr_assignments: assigns::collect_module_attr_assignments(stmts),
         final_issues: final_readonly_ext::collect_final_violations(bindings, stmts, classes),
@@ -220,14 +242,25 @@ fn build_resolved_module(
 ) -> ResolvedModule {
     let stmts = &module.ast.body;
     // `TypeAliasType` validation was deleted with its text-matched recogniser
-    // and depended on the equally-deleted `TypeVar` census. Inert pending
-    // [ASTREBUILD-PHASE-RESOLVER].
+    // and depended on the equally-deleted `TypeVar` census. This empty vector
+    // is read downstream as "no violations found", NOT as "not computed" — the
+    // rule is silently satisfied on every input. See the banner in
+    // `analyse_module` above. Pending [ASTREBUILD-PHASE-RESOLVER].
     let type_alias_type_violations = Vec::new();
     // The `key=` lambda tuple-index collector identified its callees through a
     // spelling whitelist (`sorted`/`min`/`max`/`sort`) and was deleted with it.
-    // Inert pending [ASTREBUILD-PHASE-RESOLVER].
+    // As above: this reads downstream as a clean result, not as an abstention.
+    // Pending [ASTREBUILD-PHASE-RESOLVER].
     let tuple_index_violations: Vec<crate::scope::TupleIndexViolation> = Vec::new();
+    // Computed before `bindings` is moved into the module: which class an
+    // annotation's subscript head denotes is a binding question.
+    let invalid_string_annotations = annotations::collect_invalid_annotations(&bindings, stmts);
     ResolvedModule {
+        // Filled by the import-resolution layer, which owns the typeshed
+        // generation. `None` here is the literal truth: the resolver has not
+        // been told which builtin scope this module is checked against, and
+        // an empty set would claim it had been told and found nothing.
+        builtin_names: None,
         bindings: crate::scope::ModuleBindings::new(bindings),
         functions,
         classes,
@@ -273,7 +306,7 @@ fn build_resolved_module(
         historical_positional_violations: historical::collect_historical_positional_violations(
             stmts,
         ),
-        invalid_string_annotations: annotations::collect_invalid_annotations(stmts),
+        invalid_string_annotations,
         protocol_self_violations: results.protocol_self_issues,
         protocol_instantiation_violations: results.protocol_instantiation_issues,
         isinstance_typeddict_violations: results.isinstance_typeddict_spans,

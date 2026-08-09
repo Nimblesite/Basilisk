@@ -169,6 +169,73 @@ const FORBIDDEN: &[(&str, &str)] = &[
         "identifies the `staticmethod` builtin by its spelling on an \
          `Expr::Name` decorator, so `@builtins.staticmethod` is not one",
     ),
+    // ---------------------------------------------------------------------
+    // Active verdict bodies found by the 2026-08-09 staged-code audit.
+    // These are deliberately exact fragments: comments and mandatory panic
+    // bodies are ignored by `code_lines`, so a DELETED banner may name the
+    // old implementation while executable code may not retain it.
+    // ---------------------------------------------------------------------
+    (
+        "parse_expression(rendering.trim())",
+        "reconstructs a nominal definition from an `InferredType::Named` \
+         RENDERING after the original AST node, scope, offset, and definition \
+         identity have already been discarded",
+    ),
+    (
+        "parse_expression(name.trim())",
+        "grounds a `Named(String)` by reparsing its rendering instead of \
+         carrying the resolved type identity from the annotation AST",
+    ),
+    (
+        "parse_expression(member.trim())",
+        "reconstructs enum-member identity from rendered dotted text instead \
+         of the original attribute AST and resolved owner definition",
+    ),
+    (
+        "extract_type_subscript_text(ann, source)",
+        "extracts `X` from the source spelling of `type[X]`; the annotation is \
+         already an `Expr::Subscript` whose head and slice must be resolved",
+    ),
+    (
+        "typevar_names.contains(&inner_type)",
+        "decides whether a constructor target is a TypeVar by membership of \
+         its rendered name rather than its resolved declaration identity",
+    ),
+    (
+        "cctx.class_map.get(class_name)",
+        "joins a constructor target to a class by rendered class name rather \
+         than by definition site",
+    ),
+    (
+        "typevar.name == returned",
+        "compares sliced return-annotation text with a TypeVar declaration \
+         name to decide metaclass construction semantics",
+    ),
+    (
+        "child_ann != base_ann",
+        "makes override compatibility depend on the source spelling of two \
+         annotations instead of a relation between their resolved types",
+    ),
+    (
+        "class_ref.id.as_str() != rhs.id.as_str()",
+        "joins an annotated class reference to an assigned value by identifier \
+         spelling rather than binding identity",
+    ),
+    (
+        "c.name == class_ref.id.as_str()",
+        "looks up a class definition by its rendered name, so aliases miss and \
+         same-spelled redefinitions collide",
+    ),
+    (
+        "collect_name_set(&module.typevar_calls)",
+        "collapses TypeVar declaration identities into a spelling set before \
+         deciding generic defaults",
+    ),
+    (
+        "typevar_names.contains(name.as_str())",
+        "recognises a TypeVar reference from identifier text instead of the \
+         binding/value definition it resolves to",
+    ),
 ];
 
 /// Files exempt for a stated reason — NOT a general escape hatch. A new entry

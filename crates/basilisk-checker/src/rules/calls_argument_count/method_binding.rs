@@ -29,11 +29,11 @@ struct BoundMethod<'a> {
 /// against the bound method's signature, consuming the implicit receiver
 /// according to the access path and any descriptor wrapper ([#382]).
 pub(super) fn check_method_calls(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-    let class_map = shared::class_name_map(&module.classes);
+    let graph = basilisk_resolver::ClassGraph::new(&module.classes);
     let method_map = shared::method_name_map(&module.functions);
 
     for call in &module.calls {
-        let Some((class_info, instance_access)) = receiver_class(call, &class_map) else {
+        let Some((class_info, instance_access)) = receiver_class(call, &graph) else {
             continue;
         };
         // Keyword arguments and `**kwargs` unpacking hide how many parameters
@@ -59,13 +59,21 @@ pub(super) fn check_method_calls(module: &ResolvedModule, diagnostics: &mut Vec<
 
 /// The class a call's receiver denotes, and whether the access path goes
 /// through an instance (`C().m` — `true`) or the class object (`C.m`).
+///
+/// REBUILT on resolved identity: the receiver's class comes from
+/// `CallSite::receiver_class_site`, which the resolver filled by resolving the
+/// receiver EXPRESSION through the binding table. The deleted version looked
+/// `CallReceiver`'s stored SPELLING up in a name-keyed class map, so
+/// `Shorthand = Widget; Shorthand.method()` found no class at all, and a name
+/// rebound away from a class still found the class it used to name.
 fn receiver_class<'a>(
     call: &CallSite,
-    class_map: &std::collections::HashMap<&str, &'a ClassInfo>,
+    graph: &basilisk_resolver::ClassGraph<'a>,
 ) -> Option<(&'a ClassInfo, bool)> {
+    let class = graph.at(call.receiver_class_site?)?;
     match call.receiver.as_ref()? {
-        CallReceiver::Name(name) => class_map.get(name.as_str()).map(|cls| (*cls, false)),
-        CallReceiver::Constructor(name) => class_map.get(name.as_str()).map(|cls| (*cls, true)),
+        CallReceiver::Name(_) => Some((class, false)),
+        CallReceiver::Constructor(_) => Some((class, true)),
         CallReceiver::StringLiteral | CallReceiver::BytesLiteral => None,
     }
 }
@@ -78,9 +86,9 @@ fn resolve_bound_method<'a>(
     module: &'a ResolvedModule,
     class_info: &'a ClassInfo,
     method: &str,
-    method_map: &std::collections::HashMap<(&str, &str), Vec<&'a FunctionInfo>>,
+    method_map: &std::collections::HashMap<(basilisk_resolver::Span, &str), Vec<&'a FunctionInfo>>,
 ) -> Option<BoundMethod<'a>> {
-    if let Some(defs) = method_map.get(&(class_info.name.as_str(), method)) {
+    if let Some(defs) = method_map.get(&(class_info.name_span, method)) {
         let all_preserving = defs.iter().all(|f| signature_preserving_decorators(f));
         return all_preserving.then(|| BoundMethod {
             candidates: defs.clone(),

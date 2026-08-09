@@ -30,7 +30,7 @@ only variable is ``typeshed-path``:
 
 Network: downloads one wheel from PyPI via ``pip``. Not wired into the blocking
 CI matrix (PyPI availability must never gate a merge); run it on demand with
-``make smoke-micropython``.
+``make _smoke_micropython``.
 
 Usage:
   python3 scripts/smoke_micropython_typeshed.py [--bin PATH] [--version VER]

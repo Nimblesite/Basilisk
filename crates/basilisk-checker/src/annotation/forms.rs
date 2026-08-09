@@ -33,7 +33,7 @@ pub(super) fn special_form(
         // provably an instance (`None`, `3`) is no class object" enforceable,
         // while WHICH class stays gradual — `X` is not modelled yet:
         // gradual, so no rule invents a verdict from it.
-        "type" => Some(InferredType::Named("type".to_owned())),
+        "type" => Some(InferredType::ClassObject),
         _ => None,
     }
 }

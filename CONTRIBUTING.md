@@ -55,7 +55,7 @@ Coverage percentage is the floor, not the goal. Judge whether assertions actuall
 
 Performance is a feature, but the benchmark is **indicative, not a gate** ([CHKARCH-TESTING-BENCH]). It runs on a workstation against whatever else that machine is doing, so background load moves every tool together. Nothing in CI passes or fails on a benchmark number, and no gate is to be reintroduced.
 
-Only a human can do this: run `make bench` on a quiet machine, compare the tools *within* that single run (timed back to back, so machine speed cancels), and dig into anything that looks off. Never compare against a number from a different machine or time. Every run writes to `benchmarks/status/<machine>.csv` immediately — measuring without recording is a lie.
+Only a human can do this: run `make _bench` on a quiet machine, compare the tools *within* that single run (timed back to back, so machine speed cancels), and dig into anything that looks off. Never compare against a number from a different machine or time. Every run writes to `benchmarks/status/<machine>.csv` immediately — measuring without recording is a lie.
 
 ### 6. Report GitHub issues
 

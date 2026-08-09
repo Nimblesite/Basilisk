@@ -3,7 +3,7 @@
 
 use ruff_python_ast::{Expr, Stmt, StmtAnnAssign, StmtAssign};
 
-use crate::scope::{Span, TypedDictKeyViolation, TypedDictKeyViolationKind};
+use crate::scope::{ClassGraph, Span, TypedDictKeyViolation, TypedDictKeyViolationKind};
 
 use super::class_info_ext::expr_simple_name;
 use super::core::text_range_to_span;
@@ -142,36 +142,48 @@ pub(super) fn td_check_regular_assign(
     }
 }
 
-/// Check annotated assignments `var: TypedDict = {...}`.
+// ##########################################################################
+// # DELETED BODY — `td_check_ann_assign`. DO NOT RESTORE IT AND DO NOT      #
+// # RETURN WITHOUT DIAGNOSING.                                             #
+// #                                                                         #
+// #   let class_name = ann_name.id.as_str();                                #
+// #   let Some(..) = fields.get(class_name) else { return };                #
+// #                                                                         #
+// # THE SAME SPELLING JOIN AS `td_var_type_from_stmts`, REACHING THE        #
+// # SCHEMA DIRECTLY. `m: Movie = {"titel": "x"}` is validated against a     #
+// # schema found by matching the annotation's CHARACTERS to a class's       #
+// # CHARACTERS, so:                                                         #
+// #                                                                         #
+// #   * `Alias = Movie; m: Alias = {"titel": "x"}` finds no schema and the  #
+// #     misspelled key is accepted silently;                                #
+// #   * `m: other.Movie = {...}` is not an `Expr::Name` and is likewise     #
+// #     never checked;                                                      #
+// #   * an ordinary `class Movie` sharing the name of a `TypedDict` gets    #
+// #     that `TypedDict`'s required-key and invalid-key errors reported     #
+// #     against a plain dict assignment that is entirely correct.           #
+// #                                                                         #
+// # The annotation is an `Expr` at its own offset here. The rebuild         #
+// # resolves it through the module's binding table to the `class` statement #
+// # it denotes and keys the schema on `ClassInfo::name_span`.               #
+// # `check_td_stmts` is kept as the map of what reads this.                 #
+// ##########################################################################
+
+/// DELETED — panics; see the banner above.
 pub(super) fn td_check_ann_assign(
-    node: &StmtAnnAssign,
-    fields: &TdFieldMap<'_>,
-    out: &mut Vec<TypedDictKeyViolation>,
+    _node: &StmtAnnAssign,
+    _fields: &TdFieldMap<'_>,
+    _out: &mut Vec<TypedDictKeyViolation>,
 ) {
-    use ruff_text_size::Ranged as _;
-    let Some(value) = &node.value else { return };
-    let Expr::Name(ann_name) = node.annotation.as_ref() else {
-        return;
-    };
-    let class_name = ann_name.id.as_str();
-    let Some((all_fields, field_types, is_total, has_extra_items)) = fields.get(class_name) else {
-        return;
-    };
-    let Expr::Dict(dict) = value.as_ref() else {
-        return;
-    };
-    check_dict_against_typeddict(
-        dict,
-        &TdSpec {
-            class_name,
-            all_fields,
-            field_types,
-            is_total: *is_total,
-            has_extra_items: *has_extra_items,
-        },
-        node.range(),
-        out,
-    );
+    panic!(
+        "basilisk-resolver: `td_check_ann_assign` was DELETED because it found the \
+         `TypedDict` schema for `var: Movie = {{...}}` by matching the ANNOTATION'S \
+         SPELLING against a map keyed by CLASS SPELLING, so an aliased or dotted \
+         annotation was never validated and an ordinary class sharing a `TypedDict`'s name \
+         had that schema's errors reported against it. It panics because the real \
+         implementation — the annotation expression resolved through the binding table, \
+         keyed on `ClassInfo::name_span` — DOES NOT EXIST YET. Do not restore the name \
+         lookup and do not return without diagnosing in its place."
+    )
 }
 
 /// Walk an expression and report subscript reads with invalid `TypedDict` keys.
@@ -246,26 +258,33 @@ fn subscript_key_literal(slice: &Expr) -> Option<String> {
 /// such as `isinstance(d, Movie)`." Both sides of the call resolve through
 /// the module's [`basilisk_canonical::BindingTable`] ([ASTREBUILD-LAW]): the
 /// callee must resolve to the builtin `isinstance`/`issubclass`, and the
-/// checked name must still refer to the module-level TypedDict definition at
-/// the use site — not a later rebinding of the same spelling.
+/// checked expression must resolve to the DEFINITION of a class this module
+/// defines, which the [`ClassGraph`] then judges.
+///
+/// The second half was REBUILT. It used to test the argument's `Expr::Name.id`
+/// against a `HashSet<&str>` of names of classes DIRECTLY declared with a
+/// `TypedDict` base, which got the question wrong three ways at once: a
+/// TypedDict reached under a second name was not in the set, a subclass of a
+/// TypedDict was not in the set even though it is just as un-checkable, and a
+/// name since rebound to an ordinary class matched the set and was reported
+/// anyway.
 pub(super) fn collect_isinstance_typeddict_violations(
     bindings: &basilisk_canonical::BindingTable,
     stmts: &[Stmt],
-    typeddict_names: &std::collections::HashSet<&str>,
+    graph: &ClassGraph<'_>,
 ) -> Vec<Span> {
     let mut out = Vec::new();
-    collect_isinstance_typeddict_in_stmts(bindings, stmts, typeddict_names, &mut out);
+    collect_isinstance_typeddict_in_stmts(bindings, stmts, graph, &mut out);
     out
 }
 
 pub(super) fn collect_isinstance_typeddict_in_stmts(
     bindings: &basilisk_canonical::BindingTable,
     stmts: &[Stmt],
-    typeddict_names: &std::collections::HashSet<&str>,
+    graph: &ClassGraph<'_>,
     out: &mut Vec<Span>,
 ) {
-    let mut check =
-        |expr: &Expr| collect_isinstance_typeddict_in_expr(bindings, expr, typeddict_names, out);
+    let mut check = |expr: &Expr| collect_isinstance_typeddict_in_expr(bindings, expr, graph, out);
     crate::walk_all_stmts(stmts, &mut |stmt| match stmt {
         Stmt::If(node) => {
             check(&node.test);
@@ -290,7 +309,7 @@ pub(super) fn collect_isinstance_typeddict_in_stmts(
 pub(super) fn collect_isinstance_typeddict_in_expr(
     bindings: &basilisk_canonical::BindingTable,
     expr: &Expr,
-    typeddict_names: &std::collections::HashSet<&str>,
+    graph: &ClassGraph<'_>,
     out: &mut Vec<Span>,
 ) {
     use basilisk_canonical::TypingForm;
@@ -306,15 +325,22 @@ pub(super) fn collect_isinstance_typeddict_in_expr(
     let Some(second_arg) = call.arguments.args.get(1) else {
         return;
     };
-    if let Expr::Name(name) = second_arg {
-        if typeddict_names.contains(name.id.as_str())
-            && bindings.refers_to_local_definition(second_arg)
-        {
-            let range = call.range();
-            out.push(Span {
-                start: range.start().to_u32(),
-                end: range.end().to_u32(),
-            });
-        }
+    // Positional resolution: which class the argument denotes is decided by
+    // the binding in force AT THE CALL, so a name later rebound to something
+    // else does not retroactively make this call illegal, and a name rebound
+    // to an ordinary class before it is not illegal at all.
+    let Some(site) = bindings.local_class_definition(second_arg) else {
+        return;
+    };
+    let Some(class) = graph.at(text_range_to_span(site)) else {
+        return;
+    };
+    if !graph.is_typed_dict(class) {
+        return;
     }
+    let range = call.range();
+    out.push(Span {
+        start: range.start().to_u32(),
+        end: range.end().to_u32(),
+    });
 }

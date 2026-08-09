@@ -8,7 +8,7 @@
 
 use std::collections::HashMap;
 
-use basilisk_resolver::{ClassInfo, FunctionInfo, ResolvedModule, TypingForm};
+use basilisk_resolver::{ClassInfo, FunctionInfo, ResolvedModule, Span, TypingForm};
 use ruff_python_ast::{Arguments, Decorator, Expr, Stmt, StmtClassDef};
 
 /// Returns `true` when a function is in a "stub context" — a context where
@@ -67,11 +67,41 @@ pub(crate) struct TransformClassInfo {
 
 /// PEP 681 transform providers declared at module level: decorator functions
 /// and base/metaclass classes carrying `@dataclass_transform(...)`, each with
-/// its `frozen_default`, plus a name map of every module-level class.
+/// its `frozen_default`, plus every module-level class definition.
+///
+/// KEYED ON DEFINITION SITE — the span of the `def`/`class` statement's own
+/// name token, which is unique per definition in a module and is what
+/// [`basilisk_resolver::BindingTable::local_class_definition`] answers with.
+/// The deleted version keyed all three maps on the RENDERED name, so a
+/// transform base reached under an alias was not a transform base and an
+/// unrelated class merely spelled alike was.
 struct TransformProviders<'ast> {
-    functions: HashMap<&'ast str, bool>,
-    classes: HashMap<&'ast str, bool>,
-    class_defs: HashMap<&'ast str, &'ast StmtClassDef>,
+    /// Module-level functions carrying `@dataclass_transform(...)`.
+    functions: HashMap<Span, bool>,
+    /// Module-level classes carrying `@dataclass_transform(...)`.
+    classes: HashMap<Span, bool>,
+    /// Every module-level class definition, so a base resolved to a site can
+    /// be walked further.
+    class_defs: HashMap<Span, &'ast StmtClassDef>,
+}
+
+/// The definition site of a class statement: its own name token.
+///
+/// Identical to [`basilisk_resolver::ClassInfo::name_span`], so a map built
+/// here joins with the resolver's class table and with
+/// [`basilisk_resolver::ClassGraph`].
+fn class_site(class: &StmtClassDef) -> Span {
+    Span::from(class.name.range)
+}
+
+/// The definition site of the class a base or `metaclass=` expression denotes,
+/// resolved through the module's binding table.
+///
+/// `Base`, `Base[T]`, and `Alias` (bound by `Alias = Base`) all reach `Base`'s
+/// definition; a base imported from another module reaches `None`, which is
+/// abstention and never a negative answer ([CHKARCH-CONFORMANCE-MODE]).
+fn resolved_class_site(module: &ResolvedModule, expr: &Expr) -> Option<Span> {
+    module.bindings.local_class_definition(expr).map(Span::from)
 }
 
 /// The bool value of a literal `name=True/False` keyword argument.
@@ -125,13 +155,15 @@ fn transform_providers<'ast>(
         match stmt {
             Stmt::FunctionDef(function) => {
                 if let Some(default) = transform_frozen_default(module, &function.decorator_list) {
-                    let _ = providers.functions.insert(function.name.as_str(), default);
+                    let _ = providers
+                        .functions
+                        .insert(Span::from(function.name.range), default);
                 }
             }
             Stmt::ClassDef(class) => {
-                let _ = providers.class_defs.insert(class.name.as_str(), class);
+                let _ = providers.class_defs.insert(class_site(class), class);
                 if let Some(default) = transform_frozen_default(module, &class.decorator_list) {
-                    let _ = providers.classes.insert(class.name.as_str(), default);
+                    let _ = providers.classes.insert(class_site(class), default);
                 }
             }
             _ => {}
@@ -140,34 +172,12 @@ fn transform_providers<'ast>(
     providers
 }
 
-#[expect(
-    dead_code,
-    reason = "caller deleted for spelling dependence; these AST-based helpers read \
-              base/metaclass nodes and are retained for the rebuild — see \
-              tests/string_keyed_class_hierarchy_pin_tests.rs"
-)]
-/// The simple name a base-class expression denotes: `Base` or `Base[...]`.
-fn base_name(expr: &Expr) -> Option<&str> {
-    match expr {
-        Expr::Name(name) => Some(name.id.as_str()),
-        Expr::Subscript(subscript) => base_name(&subscript.value),
-        _ => None,
-    }
-}
-
-#[expect(
-    dead_code,
-    reason = "caller deleted for spelling dependence; these AST-based helpers read \
-              base/metaclass nodes and are retained for the rebuild — see \
-              tests/string_keyed_class_hierarchy_pin_tests.rs"
-)]
-/// The class's own `metaclass=` keyword when it (or a metaclass ancestor)
-/// is a transform provider.
-fn metaclass_transform_default(
-    class: &StmtClassDef,
-    providers: &TransformProviders<'_>,
-) -> Option<bool> {
-    let name = class
+/// The `metaclass=` expression of a class statement, if it has one.
+///
+/// `metaclass` is a keyword of the `class` statement's own grammar, not a name
+/// the user may rebind, so matching it is syntax rather than spelling.
+fn metaclass_expr(class: &StmtClassDef) -> Option<&Expr> {
+    class
         .keywords()
         .iter()
         .find(|keyword| {
@@ -176,77 +186,116 @@ fn metaclass_transform_default(
                 .as_ref()
                 .is_some_and(|arg| arg.as_str() == "metaclass")
         })
-        .and_then(|keyword| base_name(&keyword.value))?;
-    if let Some(default) = providers.classes.get(name) {
-        return Some(*default);
-    }
-    let metaclass = providers.class_defs.get(name)?;
-    transform_via_bases_or_metaclass(metaclass, providers)
+        .map(|keyword| &keyword.value)
 }
 
 /// The `frozen_default` reaching this class through PEP 681's base-class or
 /// metaclass application forms: a transform class in the transitive
 /// same-module base chain, or a transform metaclass on the class or any
-/// transitive base. Iterative with a visited set (the same termination
-/// guards as `shared::class_walks`).
-// ##########################################################################
-// # DELETED BODY — `transform_via_bases_or_metaclass`. DO NOT RESTORE IT.
-// #
-// #   providers.classes.get(name)  /  providers.class_defs.get(name)
-// #
-// # PEP 681 `dataclass_transform` inheritance was walked through maps keyed on
-// # a base's RENDERED NAME (`visited` on name STRINGS too), so a transform
-// # base reached under an alias was not a transform base, and an unrelated
-// # class sharing a rendered name was.
-// #
-// # The replacement resolves each base expression through the binding table.
-// #
-// # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
-// ##########################################################################
+/// transitive base.
+///
+/// REBUILT ON RESOLVED IDENTITY. The deleted version walked
+/// `providers.classes.get(name)` / `providers.class_defs.get(name)` with a
+/// `visited` set of name STRINGS, so:
+///
+/// * `Provider = TransformBase; class Model(Provider)` found no provider,
+///   because `"Provider"` is not `"TransformBase"`;
+/// * a local class merely spelled like a provider WAS treated as one;
+/// * two same-named classes in one module shared a single `visited` entry, so
+///   the walk stopped early on one of them.
+///
+/// Every hop now goes through [`resolved_class_site`], and `visited` holds
+/// definition sites. A base this module does not define resolves to `None` and
+/// contributes nothing — abstention, never a negative
+/// ([CHKARCH-CONFORMANCE-MODE]). Iterative with a visited set, the same
+/// termination guard as `shared::class_walks`.
 fn transform_via_bases_or_metaclass(
-    _class: &StmtClassDef,
-    _providers: &TransformProviders<'_>,
+    module: &ResolvedModule,
+    class: &StmtClassDef,
+    providers: &TransformProviders<'_>,
 ) -> Option<bool> {
-    panic!(
-        "basilisk-checker: `transform_via_bases_or_metaclass` was DELETED because it \
-         resolved PEP 681 transform bases through maps keyed on RENDERED NAMES. It \
-         panics because the real implementation — base expressions resolved through the \
-         binding table — DOES NOT EXIST YET. Do not restore the name lookup and do not \
-         return `None` in its place."
-    )
+    let mut pending: Vec<&StmtClassDef> = vec![class];
+    let mut visited: std::collections::HashSet<Span> = std::collections::HashSet::new();
+    while let Some(current) = pending.pop() {
+        if !visited.insert(class_site(current)) {
+            continue;
+        }
+        // The metaclass application form, on this class or any base already
+        // reached. A transform metaclass answers immediately; a metaclass this
+        // module defines but which carries no transform is itself walked, so a
+        // metaclass INHERITING the transform still applies.
+        let metaclass = metaclass_expr(current).and_then(|expr| resolved_class_site(module, expr));
+        if let Some(site) = metaclass {
+            if let Some(default) = providers.classes.get(&site) {
+                return Some(*default);
+            }
+            if let Some(definition) = providers.class_defs.get(&site) {
+                pending.push(definition);
+            }
+        }
+        // The base-class application form.
+        for base in current
+            .arguments
+            .as_deref()
+            .map(|arguments| arguments.args.as_ref())
+            .unwrap_or_default()
+        {
+            let Some(site) = resolved_class_site(module, base) else {
+                continue;
+            };
+            if let Some(default) = providers.classes.get(&site) {
+                return Some(*default);
+            }
+            if let Some(definition) = providers.class_defs.get(&site) {
+                pending.push(definition);
+            }
+        }
+    }
+    None
 }
 
 /// The effective `frozen` when the class is decorated by a module-level
 /// transform decorator function: the application-site `frozen=` keyword wins
 /// over the provider's `frozen_default`.
+///
+/// The decorator is resolved to a function DEFINITION SITE, so
+/// `shorthand = model_transform; @shorthand` applies the transform and a
+/// decorator merely spelled like a provider does not.
 fn applied_transform_frozen(
+    module: &ResolvedModule,
     class: &StmtClassDef,
     providers: &TransformProviders<'_>,
 ) -> Option<bool> {
-    class
-        .decorator_list
-        .iter()
-        .find_map(|decorator| match &decorator.expression {
-            Expr::Name(name) => providers.functions.get(name.id.as_str()).copied(),
-            Expr::Call(call) => match call.func.as_ref() {
-                Expr::Name(name) => providers
-                    .functions
-                    .get(name.id.as_str())
-                    .map(|default| keyword_bool(&call.arguments, "frozen").unwrap_or(*default)),
-                _ => None,
-            },
-            _ => None,
-        })
+    class.decorator_list.iter().find_map(|decorator| {
+        let (callee, applied) = match &decorator.expression {
+            Expr::Call(call) => (call.func.as_ref(), Some(&call.arguments)),
+            expression => (expression, None),
+        };
+        let site = module
+            .bindings
+            .local_function_definition(callee)
+            .map(Span::from)?;
+        let default = providers.functions.get(&site)?;
+        Some(
+            applied
+                .and_then(|arguments| keyword_bool(arguments, "frozen"))
+                .unwrap_or(*default),
+        )
+    })
 }
 
 /// The class's effective `frozen` under whichever PEP 681 application form
 /// governs it, `None` when none does. For the base/metaclass forms the
 /// class-definition `frozen=` keyword overrides the provider default.
-fn governed_frozen(class: &StmtClassDef, providers: &TransformProviders<'_>) -> Option<bool> {
-    if let Some(frozen) = applied_transform_frozen(class, providers) {
+fn governed_frozen(
+    module: &ResolvedModule,
+    class: &StmtClassDef,
+    providers: &TransformProviders<'_>,
+) -> Option<bool> {
+    if let Some(frozen) = applied_transform_frozen(module, class, providers) {
         return Some(frozen);
     }
-    let default = transform_via_bases_or_metaclass(class, providers)?;
+    let default = transform_via_bases_or_metaclass(module, class, providers)?;
     Some(
         class
             .arguments
@@ -259,9 +308,15 @@ fn governed_frozen(class: &StmtClassDef, providers: &TransformProviders<'_>) -> 
 /// PEP 681: every class in the module governed by a `dataclass_transform`
 /// provider — via a transform decorator function, a transform base class, or
 /// a transform metaclass — mapped to its effective settings.
+///
+/// KEYED ON DEFINITION SITE. This map used to be keyed on the class's rendered
+/// NAME, and its consumers looked up by `ClassInfo::name`, so two classes
+/// spelled alike in one module collapsed into a single entry and whichever was
+/// collected last decided `frozen` for both. `ClassInfo::name_span` is the
+/// lawful key on the consumer side.
 pub(crate) fn collect_transform_classes(
     module: &ResolvedModule,
-) -> HashMap<String, TransformClassInfo> {
+) -> HashMap<Span, TransformClassInfo> {
     let Some(parsed) = super::shared::parse_module(module) else {
         return HashMap::new();
     };
@@ -270,8 +325,8 @@ pub(crate) fn collect_transform_classes(
         .class_defs
         .values()
         .filter_map(|class| {
-            governed_frozen(class, &providers)
-                .map(|frozen| (class.name.to_string(), TransformClassInfo { frozen }))
+            governed_frozen(module, class, &providers)
+                .map(|frozen| (class_site(class), TransformClassInfo { frozen }))
         })
         .collect()
 }
@@ -303,6 +358,6 @@ pub(crate) fn inherits_dataclass_transform(
     let providers = transform_providers(module, &parsed.ast.body);
     providers
         .class_defs
-        .get(class_info.name.as_str())
-        .is_some_and(|class| transform_via_bases_or_metaclass(class, &providers).is_some())
+        .get(&class_info.name_span)
+        .is_some_and(|class| transform_via_bases_or_metaclass(module, class, &providers).is_some())
 }

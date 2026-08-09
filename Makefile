@@ -2,10 +2,21 @@
 # =============================================================================
 # Standard Makefile — Basilisk
 # Cross-platform: Linux, macOS, Windows (via GNU Make)
-# Exactly 7 standard targets: build, test, lint, fmt, clean, ci, setup
+#
+# PUBLIC targets (the whole interface — 7 standard + 3 repo-specific):
+#   build test lint fmt clean ci setup   — the standard seven, plus
+#   test-checker                         — fast type-checker test subset
+#   test-checker-all                     — the full type-checker suite
+#   conformance                          — fixture regression indicator
+#
+# Everything else is an INTERNAL recipe named with a leading underscore. They
+# are still runnable (`make _bench`, `make _mutation_test`) — they are just not
+# part of the advertised interface, and variants are variables, not targets:
+#   _bench ONLY=basilisk        _reinstall_vsix TARGET=darwin-arm64 PRERELEASE=1
+#   conformance MUTATED=1       _mutation_test PKG=... ALL=1 SHARD=...
 # =============================================================================
 
-.PHONY: build test lint fmt clean ci setup book mutation-test conformance mutation-conformance bench bench-basilisk reinstall-vsix reinstall-vsix-macos reinstall-vsix-prerelease package-zed
+.PHONY: build test test-checker test-checker-all lint fmt clean ci setup conformance
 
 # ---------------------------------------------------------------------------
 # OS Detection
@@ -30,7 +41,7 @@ _MUTATION_DIR              := mutation_testing
 _MUTATION_TEST_PACKAGE     := basilisk-checker
 _MUTATION_TEST_MARKER      := mutation_safe
 # Which crate to mutate. Every crate here mutates ALL its source (no code
-# exclusions); only the TEST suite is scoped per crate (see mutation-test).
+# exclusions); only the TEST suite is scoped per crate (see _mutation_test).
 PKG                        ?= basilisk-checker
 # EXISTING checker test binaries fed to the mutation run as the killing suite.
 # These are the broad, FAST rule-test binaries already in the repo (thousands of
@@ -82,10 +93,74 @@ _CHECKER_MUTATION_TESTS := \
 	--test incremental_resolved_tests \
 	--test inference_all_tests
 _COVERAGE_THRESHOLDS_FILE  := coverage-thresholds.json
+_CHECKER_TEST_PACKAGES     := -p basilisk-checker -p basilisk-resolver \
+                              -p basilisk-canonical -p basilisk-parser
 OPEN                       ?= 0
 ALL                        ?= 0
 SHARD                      ?=
 MUTATION_CHECK             ?= auto
+# Variant switches for the internal recipes (see the header block).
+T                          ?=
+ONLY                       ?=
+MUTATED                    ?= 0
+TARGET                     ?=
+PRERELEASE                 ?=
+_CHECKER_REPORT_LOG        := target/test-checker-all.log
+
+# Summary report for test-checker-all: one line per test — file, test name,
+# result — then the counts. Nothing else. The raw cargo stream (thousands of
+# panic messages and backtraces) goes to the log file, not the terminal.
+#
+# The one thing that is NOT suppressed is a compile error. A crate that fails
+# to build contributes zero test lines, so a report that only counted results
+# would print a small, clean, all-green summary for a suite that never ran.
+# Only genuine build failures match — `error[E0308]:` and `could not compile`;
+# cargo's `error: test failed` / `error: N targets failed:` tallies are the
+# run's own exit summary and are already counted as FAILED.
+export _CHECKER_REPORT_AWK
+define _CHECKER_REPORT_AWK
+cap == 1 {
+    if ($$0 ~ /^[[:space:]]*$$/ || $$0 ~ /^test / ||
+        $$0 ~ /^[[:space:]]*(Running|Compiling|Finished|Doc-tests|warning)/) { cap = 0 }
+    else { B[++nb] = $$0; next }
+}
+/^error/ {
+    if ($$0 ~ /^error: could not compile/) { buildfail = 1; next }
+    if ($$0 ~ /^error: test failed/ || $$0 ~ /targets failed:/) { next }
+    ne++; cap = 1; B[++nb] = $$0
+    next
+}
+/Running / && /\(.*\)/ {
+    b = $$0
+    sub(/.*\(/, "", b); sub(/\).*/, "", b)
+    sub(/.*\//, "", b); sub(/-[0-9a-fA-F]+$$/, "", b)
+    bin = b
+    next
+}
+/^[[:space:]]*Doc-tests / {
+    bin = "doc-tests " $$2
+    next
+}
+/^test result:/ { next }
+/^test .* \.\.\. / {
+    line = $$0
+    sub(/^test /, "", line)
+    i = index(line, " ... ")
+    tn = substr(line, 1, i - 1)
+    res = substr(line, i + 5)
+    if (res == "ok") { np++; printf "%-32s %-64s ok\n", bin, tn }
+    else if (res ~ /^FAILED/) { nf++; printf "%-32s %-64s \033[0;31mFAILED\033[0m\n", bin, tn }
+    else if (res ~ /^ignored/) { ng++; printf "%-32s %-64s ignored\n", bin, tn }
+    next
+}
+END {
+    if (ne || buildfail) {
+        printf "\n\033[0;31mBUILD FAILED (%d) — tests behind this never ran\033[0m\n", ne
+        for (i = 1; i <= nb; i++) print B[i]
+    }
+    printf "\npassed %d   failed %d   ignored %d   total %d\n", np, nf, ng, np + nf + ng
+}
+endef
 
 # =============================================================================
 # Standard Targets
@@ -99,6 +174,29 @@ test: _audit
 	@$(MAKE) --no-print-directory _test_rust && \
 	$(MAKE) --no-print-directory -j3 _test_vsix _test_nvim _test_zed && \
 	echo -e '\n\033[0;32m✓ All tests passed.\033[0m'
+
+## test-checker: Type-checker test subset — the analysis crates only (checker,
+## resolver, canonical, parser). No coverage, no audit, no VSIX/Neovim/Zed
+## suites, so it is the loop to run while iterating on a rule. Fail-fast: cargo
+## stops at the first failing binary. It is NOT the gate: `make test` still is.
+## Filter with T=<substring>, e.g. `make test-checker T=narrowing`.
+test-checker:
+	@echo -e '\033[1m\033[0;36m▶ Type-checker test subset\033[0m' && \
+	cargo test $(_CHECKER_TEST_PACKAGES) -- $(T) && \
+	echo -e '\033[0;32m✓ Type-checker tests passed\033[0m'
+
+## test-checker-all: Same crates, --no-fail-fast, and a report: one line per
+## test — file, test name, result — then the counts. Fail-fast would stop at
+## the first red binary and silently skip the thousands of tests behind it;
+## this runs and reports every one. Panic output goes to the log, not the
+## terminal. Filter with T=<substring>.
+test-checker-all:
+	@mkdir -p target
+	@cargo test --no-fail-fast $(_CHECKER_TEST_PACKAGES) -- $(T) \
+		> $(_CHECKER_REPORT_LOG) 2>&1; \
+	status=$$?; \
+	awk "$$_CHECKER_REPORT_AWK" $(_CHECKER_REPORT_LOG); \
+	exit $$status
 
 ## lint: Run all linters/analyzers (read-only). Does NOT format.
 lint: _lint_rust _lint_vsix _lint_deslop _lint_docs
@@ -117,20 +215,24 @@ setup:
 	@bash scripts/setup.sh
 
 # =============================================================================
-# Repo-Specific Targets
+# Repo-Specific Recipes
+#
+# Only `conformance` is public here. The rest are internal (leading underscore)
+# — occasional, human-driven runs that do not belong in the advertised
+# interface. Invoke them by their exact name, e.g. `make _bench`.
 # =============================================================================
 
-## book: Build and EPUBCheck The Basilisk Book outline EPUB
-book:
+# _book: Build and EPUBCheck The Basilisk Book outline EPUB
+_book:
 	@$(MAKE) --no-print-directory -C $(_BOOK_DIR) epub
 
-## mutation-test: Mutate a crate's source and kill with its fast test suite.
-## PKG=basilisk-checker (default) | basilisk-lsp. The per-PR `working` gate scopes
+# _mutation_test: Mutate a crate's source and kill with its fast test suite.
+# PKG=basilisk-checker (default) | basilisk-lsp. The per-PR `working` gate scopes
 ## mutants to the functions the mutation-safe binaries cover (via
-## scripts/mutation_examine_re.py) so it finishes inside CI's 60-min budget. Use
-## ALL=1 for the WHOLE-crate run (examine_re=".", every line, no exclusions) —
-## thorough but hours-long, so it is an offline/scheduled run, never the PR gate.
-mutation-test:
+# scripts/mutation_examine_re.py) so it finishes inside CI's 60-min budget. Use
+# ALL=1 for the WHOLE-crate run (examine_re=".", every line, no exclusions) —
+# thorough but hours-long, so it is an offline/scheduled run, never the PR gate.
+_mutation_test:
 	@bash -euo pipefail -c '\
 		package="$(PKG)"; \
 		marker="$(_MUTATION_TEST_MARKER)"; \
@@ -238,82 +340,88 @@ mutation-test:
 		fi; \
 	'
 
-## conformance: Run the pristine fixture regression check with python/typing's
-## unmodified harness at the last revision carrying its Basilisk adapter. Writes
-## internal evidence only; it is not a current official conformance score.
-## Clones FRESH every run (no cache); needs network + git.
+## conformance: Fixture regression indicator — a number to READ, never a gate,
+## never a figure to publish (CLAUDE.md "Conformance"). Clones FRESH every run
+## (no cache); needs network + git.
+##
+## Default: the pristine fixtures through python/typing's unmodified harness at
+## the last revision carrying its Basilisk adapter.
+##
+## MUTATED=1: the same fixtures AST-PRESERVINGLY mutated (consistent import
+## renames + whitespace reformatting; sharkdp's harness, vendored verbatim).
+## Identical semantics, so a structural checker must hold its verdicts — the
+## GAP between the two rates is what locates spelling dependence, not the
+## height of either. See conformance/run_mutation_conformance.py and
+## docs/CONFORMANCE-INTEGRITY-AUDIT.md.
+##
+## "Never a gate" is literal in both branches: each script exits 0 whatever it
+## measures. Until 2026-08-09 the MUTATED=1 branch invoked a ratchet that
+## failed the build when the rate fell below a stored floor, which contradicted
+## this very help text and the CLAUDE.md rule it cites. The ratchet and its
+## baseline file were deleted, not made conditional.
+##
+## Neither result is a current official conformance score. Writes internal
+## evidence only.
 conformance:
-	@cargo build -p basilisk-cli --bin basilisk
-	@python3 conformance/run_conformance.py --bin target/debug/basilisk
+	@if [ "$(MUTATED)" = "1" ]; then \
+		cargo build --release -p basilisk-cli --bin basilisk && \
+		python3 conformance/run_mutation_conformance.py --bin target/release/basilisk; \
+	else \
+		cargo build -p basilisk-cli --bin basilisk && \
+		python3 conformance/run_conformance.py --bin target/debug/basilisk; \
+	fi
 
-## mutation-conformance: Gate basilisk on the AST-PRESERVING MUTATED fixtures
-## (consistent import renames + whitespace reformatting; sharkdp's harness,
-## vendored verbatim). Identical semantics, so a structural checker must hold
-## its verdicts; the internal pass-rate ratchet may only rise. Neither this nor
-## the pristine result is a current official conformance score. See
-## conformance/run_mutation_conformance.py and docs/CONFORMANCE-INTEGRITY-AUDIT.md.
-mutation-conformance:
-	@cargo build --release -p basilisk-cli --bin basilisk
-	@python3 conformance/run_mutation_conformance.py --bin target/release/basilisk
+# _bench: Benchmark Basilisk vs pyright/mypy/ty/pyrefly/zuban on the fixture suite.
+# INDICATIVE ONLY — this runs on a developer workstation under whatever else it
+# is doing, so nothing passes or fails on the result. Compare tools within one
+# run; do not compare across machines or across time.
+# Requires hyperfine; competitor tools are skipped if not installed.
+# run.sh does the CLEAN release rebuild itself (fresh binary under test) before
+# timing, so the guarantee holds even when run.sh is invoked directly — this
+# recipe just delegates. Writes per-fixture JSON + a summary to benchmarks/results/.
+#
+# ONLY=basilisk re-times ONLY basilisk (local iteration on a perf fix). Same
+# clean release rebuild and same stability policy — it just skips the five
+# competitors, which add minutes per iteration and say nothing about a change to
+# this tree. Their CSV cells and versions carry forward verbatim and the header
+# records that they were not re-timed. Refused in CI, which runs the full sweep.
+_bench:
+	@if [ "$(ONLY)" = "basilisk" ]; then \
+		BENCH_ONLY_BASILISK=1 bash benchmarks/run.sh; \
+	else \
+		bash benchmarks/run.sh; \
+	fi
 
-## bench: Benchmark Basilisk vs pyright/mypy/ty/pyrefly/zuban on the fixture suite.
-## INDICATIVE ONLY — this runs on a developer workstation under whatever else it
-## is doing, so nothing passes or fails on the result. Compare tools within one
-## run; do not compare across machines or across time.
-## Requires hyperfine; competitor tools are skipped if not installed.
-## run.sh does the CLEAN release rebuild itself (fresh binary under test) before
-## timing, so the guarantee holds even when run.sh is invoked directly — this
-## target just delegates. Writes per-fixture JSON + a summary to benchmarks/results/.
-bench:
-	@bash benchmarks/run.sh
-
-## bench-basilisk: Re-time ONLY basilisk (local iteration on a perf fix).
-## Same clean release rebuild and same stability policy — it just skips the five
-## competitors, which add minutes per iteration and say nothing about a change to
-## this tree. Their CSV cells and versions carry forward verbatim and the header
-## records that they were not re-timed. Refused in CI, which runs the full sweep.
-bench-basilisk:
-	@BENCH_ONLY_BASILISK=1 bash benchmarks/run.sh
-
-## torture: Type-torture scoreboard — hard, spec-grounded typing problems
-## scored conformance-style (`# E` lines) against pyright/mypy/ty/pyrefly/zuban,
-## every tool in its out-of-the-box defaults, with hang detection as a
-## correctness axis. WRITE-ALWAYS to benchmarks/torture/status/torture.csv,
-## read-only regression gate against the committed baseline (exit 3).
-## Needs target/release/basilisk (or BASILISK_BIN); build it first.
-torture:
+# _torture: Type-torture scoreboard — hard, spec-grounded typing problems
+# scored conformance-style (`# E` lines) against pyright/mypy/ty/pyrefly/zuban,
+# every tool in its out-of-the-box defaults, with hang detection as a
+# correctness axis. WRITE-ALWAYS to benchmarks/torture/status/torture.csv,
+# read-only regression gate against the committed baseline (exit 3).
+# Needs target/release/basilisk (or BASILISK_BIN); build it first.
+_torture:
 	@python3 benchmarks/torture/run_torture.py
 
-## smoke-micropython: Real-world smoke test for typeshed-path
-## [STUBRES-CUSTOM-TYPESHED] — points the checker at a pinned, unmodified
-## micropython-stdlib-stubs release and asserts MicroPython stdlib resolves
-## while CPython-only modules fall through per canonicality. Downloads one
-## wheel from PyPI (network); intentionally outside the blocking CI matrix.
-smoke-micropython:
+# _smoke_micropython: Real-world smoke test for typeshed-path
+# [STUBRES-CUSTOM-TYPESHED] — points the checker at a pinned, unmodified
+# micropython-stdlib-stubs release and asserts MicroPython stdlib resolves
+# while CPython-only modules fall through per canonicality. Downloads one
+# wheel from PyPI (network); intentionally outside the blocking CI matrix.
+_smoke_micropython:
 	@python3 scripts/smoke_micropython_typeshed.py
 
-## reinstall-vsix: Clean rebuild + reinstall a host-targeted VSIX. Builds the
-## EXACT package the release.yml `vsix` job ships (via the shared _release_vsix
-## recipe) and rebuilds every binary from a clean tree.
-## Implements [VSIX-PACKAGING-PARITY].
-reinstall-vsix: _clean_rust _clean_vsix _release_vsix _uninstall_vsix _install_vsix
-	@echo -e '\033[0;32m✓ reinstall-vsix complete\033[0m'
-
-## reinstall-vsix-macos: Clean rebuild + reinstall the macOS VSIX (darwin-arm64)
-## — byte-for-byte the artifact the release.yml `vsix` darwin job publishes. Pins
-## the target so it matches the shipped macOS package regardless of host, and
-## rebuilds every binary from a clean tree.
-## Implements [VSIX-PACKAGING-PARITY].
-reinstall-vsix-macos: export BSK_VSIX_TARGET := darwin-arm64
-reinstall-vsix-macos: _clean_rust _clean_vsix _release_vsix _uninstall_vsix _install_vsix
-	@echo -e '\033[0;32m✓ reinstall-vsix-macos complete (darwin-arm64)\033[0m'
-
-## reinstall-vsix-prerelease: Same as reinstall-vsix but packages with
-## --pre-release so the VSIX matches what the release pipeline builds for
-## tags like v0.1.0-alpha. Use to dry-run a prerelease install locally.
-reinstall-vsix-prerelease: VSCE_PRERELEASE := 1
-reinstall-vsix-prerelease: _clean_rust _clean_vsix _release_vsix _uninstall_vsix _install_vsix
-	@echo -e '\033[0;32m✓ reinstall-vsix-prerelease complete\033[0m'
+# _reinstall_vsix: Clean rebuild + reinstall a host-targeted VSIX. Builds the
+# EXACT package the release.yml `vsix` job ships (via the shared _release_vsix
+# recipe) and rebuilds every binary from a clean tree.
+# Implements [VSIX-PACKAGING-PARITY].
+#
+# TARGET=darwin-arm64 pins the platform regardless of host, so the artifact is
+# byte-for-byte what the release.yml `vsix` darwin job publishes; unset
+# auto-detects from uname. PRERELEASE=1 packages with --pre-release, matching
+# what the release pipeline builds for tags like v0.1.0-alpha.
+_reinstall_vsix: export BSK_VSIX_TARGET := $(TARGET)
+_reinstall_vsix: VSCE_PRERELEASE := $(PRERELEASE)
+_reinstall_vsix: _clean_rust _clean_vsix _release_vsix _uninstall_vsix _install_vsix
+	@echo -e '\033[0;32m✓ _reinstall_vsix complete\033[0m'
 
 # =============================================================================
 # Internal Recipes
@@ -528,12 +636,12 @@ _test_nvim:
 _test_zed:
 	@bash scripts/test-zed.sh
 
-## package-zed: Build the local Zed dev loop — compile the extension to WASM,
-## install the basilisk CLI, then print the `zed: install dev extension` steps.
-## Point the dev extension at the locally built binary with
-## `BASILISK_PATH=$$(which basilisk)` or `lsp.basilisk.binary.path`
-## ([ZED-DIST]); with neither, it downloads the release binary.
-package-zed:
+# _package_zed: Build the local Zed dev loop — compile the extension to WASM,
+# install the basilisk CLI, then print the `zed: install dev extension` steps.
+# Point the dev extension at the locally built binary with
+# `BASILISK_PATH=$$(which basilisk)` or `lsp.basilisk.binary.path`
+# ([ZED-DIST]); with neither, it downloads the release binary.
+_package_zed:
 	@echo -e '\033[1m\033[0;36m▶ Building Zed extension (wasm32-wasip2)\033[0m' && \
 	rustup target add wasm32-wasip2 && \
 	cargo build --release --target wasm32-wasip2 --manifest-path $(_ZED_DIR)/Cargo.toml && \

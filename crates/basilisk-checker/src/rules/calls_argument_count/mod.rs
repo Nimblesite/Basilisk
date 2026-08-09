@@ -20,9 +20,7 @@
 
 use std::collections::HashMap;
 
-use basilisk_resolver::{
-    AttributeInfo, ClassInfo, FunctionInfo, NamedTupleDefInfo, ResolvedModule, RhsKind,
-};
+use basilisk_resolver::{AttributeInfo, ClassInfo, FunctionInfo, ResolvedModule, RhsKind};
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
@@ -134,7 +132,17 @@ pub(super) fn stub_arity_accepts(
 }
 
 /// Check plain (non-constructor) function calls for too few arguments.
-fn check_plain_function_calls(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+fn check_plain_function_calls(_module: &ResolvedModule, _diagnostics: &mut Vec<Diagnostic>) {
+    // DELETED: this grouped definitions by `FunctionInfo::name` and joined
+    // calls through `CallSite::callee`, both renderings. Aliases, rebindings,
+    // and same-spelled definitions therefore changed the arity verdict.
+    panic!(
+        "basilisk-checker: `check_plain_function_calls` was DELETED because it joined \
+         calls to functions by rendered callee/definition names. The resolver must carry \
+         the callee's function definition site at the call offset. Do not restore the \
+         name map or silently skip the rule."
+    )
+    /*
     // Group functions by name (module-level functions only).
     let mut func_groups: HashMap<&str, Vec<&FunctionInfo>> = HashMap::new();
     for func in &module.functions {
@@ -235,6 +243,7 @@ fn check_plain_function_calls(module: &ResolvedModule, diagnostics: &mut Vec<Dia
             }
         }
     }
+    */
 }
 
 // ##########################################################################
@@ -250,21 +259,29 @@ fn check_plain_function_calls(module: &ResolvedModule, diagnostics: &mut Vec<Dia
 // #
 // # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
 // ##########################################################################
-fn metaclass_passes_through(_metaclass_name: &str, _module: &ResolvedModule) -> bool {
-    panic!(
-        "basilisk-checker: `metaclass_passes_through` was DELETED because it matched a \
-         metaclass by the RENDERED TEXT of its `metaclass=` value against class names \
-         and method owners. It panics because the real implementation — the metaclass \
-         expression resolved through the binding table — DOES NOT EXIST YET. Do not \
-         restore the name matching and do not substitute a default answer."
-    )
+fn metaclass_passes_through(
+    graph: &basilisk_resolver::ClassGraph<'_>,
+    method_map: &std::collections::HashMap<(basilisk_resolver::Span, &str), Vec<&FunctionInfo>>,
+    class_info: &ClassInfo,
+    module: &ResolvedModule,
+) -> bool {
+    // No `metaclass=` naming a class of this module: nothing here can
+    // intercept construction, so the ordinary constructor check applies.
+    let Some(meta) = class_info.metaclass_site.and_then(|site| graph.at(site)) else {
+        return true;
+    };
+    // `__call__` may be declared by the metaclass or inherited by it.
+    let Some(call_fn) = graph
+        .ancestors(meta)
+        .into_iter()
+        .find_map(|ancestor| method_map.get(&(ancestor.name_span, "__call__")))
+        .and_then(|defs| defs.last().copied())
+    else {
+        return true;
+    };
+    constructs_an_instance(call_fn, module)
 }
 
-#[expect(
-    dead_code,
-    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
-              tests/string_keyed_class_hierarchy_pin_tests.rs"
-)]
 /// Does this metaclass `__call__` still yield an instance of the class being
 /// constructed, so `__new__`/`__init__` are evaluated as usual?
 ///
@@ -278,25 +295,49 @@ fn metaclass_passes_through(_metaclass_name: &str, _module: &ResolvedModule) -> 
 /// An UNANNOTATED `__call__` is decided from its body instead of assumed, so
 /// this judgment survives [TYPEINF-TARGET-GRADUAL]: stripping the annotations
 /// off a metaclass must not turn a silent constructor call into an error.
-fn constructs_an_instance(call_fn: &FunctionInfo, module: &ResolvedModule) -> bool {
-    let Some(span) = call_fn.return_annotation_span else {
-        return body_delegates_construction(call_fn);
-    };
-    let Some(text) = slice_span(&module.source, span) else {
-        return body_delegates_construction(call_fn);
-    };
-    let returned = text.trim();
-    module
-        .typevar_calls
-        .iter()
-        .any(|typevar| typevar.name == returned)
+///
+// ##########################################################################
+// # DELETED BODY — `constructs_an_instance`. DO NOT RESTORE IT.            #
+// #                                                                         #
+// #   let text = slice_span(&module.source, span)?;                        #
+// #   module.typevar_calls.iter().any(|tv| tv.name == text.trim())         #
+// #                                                                         #
+// # The return annotation was SLICED OUT OF THE FILE and its trimmed        #
+// # characters compared against the NAME a `TypeVar` was declared with.     #
+// # This decides whether a metaclass `__call__` passes construction through #
+// # to `__new__`/`__init__`, so it gates every constructor arity            #
+// # diagnostic on the class:                                                #
+// #                                                                         #
+// #   * `-> T` and `-> "T"` are the same annotation and compare unequal;    #
+// #   * `Alias = T` used as `-> Alias` denotes the SAME `TypeVar` object    #
+// #     and does not match, silently dropping the diagnostic;               #
+// #   * a class or variable merely SPELLED like a `TypeVar` matches;        #
+// #   * a qualified spelling, or whitespace the slice happens to include,   #
+// #     changes the answer.                                                 #
+// #                                                                         #
+// # The lawful replacement resolves the return annotation's `Expr` through  #
+// # the binding table and compares the resulting definition site against    #
+// # the `TypeVar` construction's own `TypeVarCallInfo::span` — the same     #
+// # mechanism `generics_basic_2` uses. `FunctionInfo` carries only a SPAN   #
+// # for the annotation, so the caller must first reach the node through     #
+// # `rules::shared::ExprIndex`.                                             #
+// #                                                                         #
+// # Pinned by: tests/constructor_identity_tests.rs                          #
+// ##########################################################################
+
+/// DELETED — panics; see the banner above.
+fn constructs_an_instance(_call_fn: &FunctionInfo, _module: &ResolvedModule) -> bool {
+    panic!(
+        "basilisk-checker: `constructs_an_instance` was DELETED because it decided \
+         whether a metaclass `__call__` passes construction through by SLICING the \
+         return annotation out of the source and comparing its characters to a \
+         `TypeVar`'s declared name. It panics because the real implementation — the \
+         annotation's `Expr` resolved through the binding table and compared against \
+         `TypeVarCallInfo::span` — DOES NOT EXIST YET. Do not restore the slice and do \
+         not return `true` or `false` in its place."
+    )
 }
 
-#[expect(
-    dead_code,
-    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
-              tests/string_keyed_class_hierarchy_pin_tests.rs"
-)]
 /// Does an unannotated metaclass `__call__` hand construction back to the
 /// normal machinery?
 ///
@@ -304,6 +345,15 @@ fn constructs_an_instance(call_fn: &FunctionInfo, module: &ResolvedModule) -> bo
 /// its signature governs. A body that returns a value of its own (`return 1`) or
 /// never returns at all (`raise TypeError(...)`) produces something that is not
 /// an instance of the class, so the constructor is never consulted.
+///
+/// ORPHANED, NOT DELETED. It reads `FunctionInfo::return_stmts` — resolver
+/// structure, no text — and does not have `constructs_an_instance`'s defect.
+/// The rebuild calls it unchanged for the unannotated case.
+#[expect(
+    dead_code,
+    reason = "caller deleted for slicing the return annotation; this structural helper \
+              is retained for the rebuild — see the `constructs_an_instance` banner"
+)]
 fn body_delegates_construction(call_fn: &FunctionInfo) -> bool {
     let mut returns_values = call_fn.return_stmts.iter().filter(|stmt| stmt.has_value);
     returns_values.clone().next().is_some() && returns_values.all(|stmt| stmt.value_is_call)
@@ -466,15 +516,17 @@ fn check_constructor_calls(module: &ResolvedModule, diagnostics: &mut Vec<Diagno
     if crate::annotation::AnnotationResolver::for_module(module).is_none() {
         return;
     }
-    // Build a map of class names for quick lookup.
-    let class_map = super::shared::class_name_map(&module.classes);
+    let graph = basilisk_resolver::ClassGraph::new(&module.classes);
 
-    // Build a map of (class_name, method_name) → FunctionInfo for methods.
+    // Build a map of (class definition site, method_name) → FunctionInfo.
     let method_map = super::shared::method_name_map(&module.functions);
 
     for call in &module.calls {
-        // Only process constructor calls (callee matches a class name)
-        let Some(class_info) = class_map.get(call.callee.as_str()) else {
+        // Only process constructor calls. Which class the callee names was
+        // RESOLVED at the call site, so `Shorthand = Widget; Shorthand()`
+        // checks `Widget`'s constructor and a callee whose name merely matches
+        // a class checks nothing ([RESOLV-CANONICAL-BINDING]).
+        let Some(class_info) = call.callee_class_site.and_then(|site| graph.at(site)) else {
             continue;
         };
 
@@ -488,10 +540,8 @@ fn check_constructor_calls(module: &ResolvedModule, diagnostics: &mut Vec<Diagno
 
         // Check metaclass: if the class has a metaclass that does NOT pass through
         // arguments, skip validation (the metaclass controls the call signature).
-        if let Some(ref meta_name) = class_info.metaclass_name {
-            if !metaclass_passes_through(meta_name, module) {
-                continue;
-            }
+        if !metaclass_passes_through(&graph, &method_map, class_info, module) {
+            continue;
         }
 
         // Find the constructor method to validate against.
@@ -616,13 +666,16 @@ fn check_dataclass_no_explicit_constructor(
 /// (not just `*args, **kwargs`), otherwise falls back to `__init__`.
 fn find_constructor_method<'a>(
     class_info: &ClassInfo,
-    method_map: &HashMap<(&str, &str), Vec<&'a FunctionInfo>>,
+    method_map: &HashMap<(basilisk_resolver::Span, &str), Vec<&'a FunctionInfo>>,
 ) -> Option<&'a FunctionInfo> {
-    let class_name = class_info.name.as_str();
+    // Keyed on the class's DEFINITION SITE, so a module that declares two
+    // classes with the same name checks each call against its own class's
+    // constructor instead of collapsing both into one entry.
+    let site = class_info.name_span;
 
     // Try __new__ first
     if let Some(func) = method_map
-        .get(&(class_name, "__new__"))
+        .get(&(site, "__new__"))
         .and_then(|new_methods| new_methods.first().copied())
     {
         return Some(func);
@@ -630,7 +683,7 @@ fn find_constructor_method<'a>(
 
     // Fall back to __init__
     method_map
-        .get(&(class_name, "__init__"))
+        .get(&(site, "__init__"))
         .and_then(|init_methods| init_methods.first().copied())
 }
 
@@ -639,7 +692,17 @@ fn find_constructor_method<'a>(
 /// Validates:
 /// - Too few positional args (below required field count, considering defaults)
 /// - Too many positional args (above total field count)
-fn check_namedtuple_calls(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+fn check_namedtuple_calls(_module: &ResolvedModule, _diagnostics: &mut Vec<Diagnostic>) {
+    // DELETED: this joined `CallSite::callee` to `NamedTupleDefInfo::lhs_name`
+    // through a string map. Which factory result a call invokes is binding
+    // identity, not the current spelling of either name.
+    panic!(
+        "basilisk-checker: `check_namedtuple_calls` was DELETED because it matched a \
+         call to a NamedTuple definition by rendered name. Rebuild it on the resolved \
+         value-definition site at the call offset; do not restore the map or return \
+         without checking."
+    )
+    /*
     let nt_map: HashMap<&str, &NamedTupleDefInfo> = module
         .namedtuple_defs
         .iter()
@@ -694,4 +757,5 @@ fn check_namedtuple_calls(module: &ResolvedModule, diagnostics: &mut Vec<Diagnos
             ));
         }
     }
+    */
 }

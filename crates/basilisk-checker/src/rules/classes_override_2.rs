@@ -15,47 +15,33 @@
 
 use std::collections::HashMap;
 
-use basilisk_resolver::{AttributeInfo, ClassInfo, ResolvedModule, Span};
+use basilisk_resolver::{AttributeInfo, ClassGraph, ClassInfo, ResolvedModule, Span};
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
-use crate::span_util::slice_span;
 
 use super::Rule;
 
-/// Returns `true` when the child class is a `TypedDict` or inherits from one.
-///
-/// `TypedDict` subclassing has entirely different rules from normal OOP attribute
-/// inheritance — subclasses can narrow `ReadOnly` items, change `Required`/`NotRequired`,
-/// etc.  Applying E0017 to `TypedDict` classes produces only false positives.
-fn is_typed_dict_hierarchy(_child: &ClassInfo, _class_map: &HashMap<&str, &ClassInfo>) -> bool {
-    // ######################################################################
-    // # DELETED BODY. DO NOT RESTORE IT AND DO NOT RETURN A DEFAULT.       #
-    // #                                                                    #
-    // #   class_map.get(base.as_str()).is_some_and(|b| b.is_typed_dict)    #
-    // #                                                                    #
-    // # It took a base class's identity from its RENDERED NAME and looked  #
-    // # that string up in a name-keyed map. A base reached through an      #
-    // # alias missed; a base sharing a rendered name with an unrelated     #
-    // # local class matched. This gate decides whether the whole rule runs #
-    // # at all, so a wrong answer here silently disables E0017 or applies  #
-    // # it to a TypedDict where it produces only false positives.          #
-    // #                                                                    #
-    // # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs         #
-    // ######################################################################
-    panic!(
-        "basilisk-checker: `is_typed_dict_hierarchy` was DELETED because it identified \
-         a base class by its RENDERED NAME in a name-keyed map. It panics because the \
-         real implementation — resolving each base expression through the binding table \
-         — DOES NOT EXIST YET. Do not restore the lookup and do not return a default in \
-         its place."
-    )
-}
+// ######################################################################
+// # `is_typed_dict_hierarchy` IS GONE, NOT REBUILT IN PLACE.            #
+// #                                                                    #
+// # Its body was:                                                      #
+// #                                                                    #
+// #   class_map.get(base.as_str()).is_some_and(|b| b.is_typed_dict)    #
+// #                                                                    #
+// # It took a base class's identity from its RENDERED NAME and looked  #
+// # that string up in a name-keyed map. A base reached through an      #
+// # alias missed; a base sharing a rendered name with an unrelated     #
+// # local class matched. This gate decides whether the whole rule runs #
+// # at all, so a wrong answer here silently disabled E0017 or applied  #
+// # it to a TypedDict where it produces only false positives.          #
+// #                                                                    #
+// # `ClassGraph::is_typed_dict` answers exactly this question from     #
+// # resolved bases keyed on definition site, so the wrapper had no     #
+// # work left to do. The call site below asks the graph directly.      #
+// #                                                                    #
+// # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs         #
+// ######################################################################
 
-#[expect(
-    dead_code,
-    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
-              tests/string_keyed_class_hierarchy_pin_tests.rs"
-)]
 const CODE: ErrorCode = ErrorCode {
     code: "classes_override_2",
     docs_url: "https://www.basilisk-python.dev/errors/classes_override_2",
@@ -72,31 +58,30 @@ impl Rule for IncompatibleVariableOverride {
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        // Build map: class_name → &ClassInfo
-        let class_map = super::shared::class_name_map(&module.classes);
+        let graph = ClassGraph::new(&module.classes);
 
-        // Build map: (class_name, attr_name) → &AttributeInfo
-        let attr_map: HashMap<(&str, &str), &AttributeInfo> = module
+        // Build map: (class DEFINITION SITE, attr_name) → &AttributeInfo, so
+        // an attribute is attached to the class that declares it rather than
+        // to every class sharing its rendered name.
+        let attr_map: HashMap<(Span, &str), &AttributeInfo> = module
             .classes
             .iter()
             .flat_map(|cls| {
                 cls.attributes
                     .iter()
-                    .map(move |attr| ((cls.name.as_str(), attr.name.as_str()), attr))
+                    .map(move |attr| ((cls.name_span, attr.name.as_str()), attr))
             })
             .collect();
 
-        let class_names: Vec<&str> = basilisk_resolver::collect_names(&module.classes);
-
         module.classes.iter().for_each(|child| {
             // TypedDict hierarchies have their own subtyping rules — skip.
-            if is_typed_dict_hierarchy(child, &class_map) {
+            if graph.is_typed_dict(child) {
                 return;
             }
             check_class(
+                &graph,
                 child,
                 &attr_map,
-                &class_names,
                 &module.source,
                 &module.path,
                 diagnostics,
@@ -105,49 +90,90 @@ impl Rule for IncompatibleVariableOverride {
     }
 }
 
-// ##################################################################
-// # DELETED BODY. DO NOT RESTORE IT AND DO NOT RETURN A DEFAULT.
-// #
-// # `class_names.contains(&base_name.as_str())` and `attr_map.get(&(base_name.as_str(), ...))` keyed both the base class AND the inherited attribute on rendered names.
-// #
-// # `ClassInfo::bases` holds RENDERED SIMPLE NAMES ("complex
-// # expressions ignored") and the lookup map is keyed on
-// # `ClassInfo::name`, so an aliased base MISSED, a dotted base
-// # collided with any local class sharing its trailing word, and two
-// # classes with one rendered name were a single entry.
-// #
-// # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
-// ##################################################################
+// ##########################################################################
+// # DELETED BODY — `check_class`. DO NOT RESTORE IT OR RETURN EARLY.        #
+// #                                                                         #
+// # The class walk and attribute lookup had been rebuilt on definition      #
+// # sites, but the verdict at the end still read both annotation SPANS back #
+// # out of the source and compared their characters:                        #
+// #                                                                         #
+// #   let child_ann = annotation_text(source, attr.annotation_span);        #
+// #   let base_ann = annotation_text(source, base_attr.annotation_span);    #
+// #   child_ann != base_ann                                                  #
+// #                                                                         #
+// # That makes formatting, aliases, qualification, and forward-reference    #
+// # quotes part of type compatibility. `int` and `builtins.int` conflict,   #
+// # while two unrelated classes rendered with one spelling agree. The sound #
+// # definition-site walk around that comparison cannot make the comparison  #
+// # lawful, so the ENTIRE verdict body is deleted.                           #
+// #                                                                         #
+// # The rebuild must retrieve both original annotation `Expr` nodes by      #
+// # their spans, lower them through the binding table, and report only a     #
+// # definite semantic incompatibility. An unresolvable side abstains.        #
+// #                                                                         #
+// # Pinned by: tests/pep_spelling_invariance_pin_tests.rs                    #
+// ##########################################################################
+
+/// DELETED — panics; see the banner above.
 fn check_class(
+    _graph: &ClassGraph<'_>,
     _child: &ClassInfo,
-    _attr_map: &HashMap<(&str, &str), &AttributeInfo>,
-    _class_names: &[&str],
+    _attr_map: &HashMap<(Span, &str), &AttributeInfo>,
     _source: &str,
     _path: &str,
     _out: &mut Vec<Diagnostic>,
 ) {
     panic!(
-        "basilisk-checker: `classes_override_2::check_class` was DELETED because it identified base classes by \
-         their RENDERED NAMES. It panics because the real implementation — base \
-         expressions resolved through the binding table — DOES NOT EXIST YET. Do not \
-         restore the name lookup and do not substitute a default answer."
+        "basilisk-checker: `classes_override_2::check_class` was DELETED because it \
+         decided override compatibility by comparing the SOURCE SPELLINGS of the child \
+         and base annotations. It panics because the real implementation — resolving \
+         both original annotation `Expr` nodes and relating their binding-backed types — \
+         DOES NOT EXIST YET. Do not restore the text comparison and do not return early \
+         or emit no diagnostic in its place."
+    )
+}
+
+// ##########################################################################
+// # DELETED BODY — `annotation_text`. DO NOT RESTORE IT.                   #
+// #                                                                         #
+// #   slice_span(source, span?)                                            #
+// #                                                                         #
+// # Innocuous on its own; the defect is what the caller does with it. The  #
+// # override check compares a child attribute's annotation to the base's   #
+// # AS WRITTEN and reports a mismatch when the characters differ, so this  #
+// # rule's whole verdict is a spelling comparison:                         #
+// #                                                                         #
+// #   * `x: int` overriding `x: builtins.int` reads as a type mismatch;    #
+// #   * `Alias = int` used in one of the two reads as a mismatch;          #
+// #   * `list[int]` vs `list[ int ]` — pure formatting — reads as one too; #
+// #   * two genuinely different classes SPELLED alike read as a match, so  #
+// #     the real error goes unreported.                                     #
+// #                                                                         #
+// # The lawful replacement resolves both annotation spans to their `Expr`  #
+// # nodes through `rules::shared::ExprIndex` and relates the two lowered   #
+// # types, reporting only on a proven incompatibility and abstaining when  #
+// # either side is unresolvable ([CHKARCH-CONFORMANCE-MODE]).              #
+// ##########################################################################
+
+/// DELETED — panics; see the banner above.
+#[expect(
+    dead_code,
+    reason = "caller deleted with the source-spelling verdict; retained as part of the rebuild map"
+)]
+fn annotation_text(_source: &str, _span: Option<Span>) -> Option<&str> {
+    panic!(
+        "basilisk-checker: `annotation_text` was DELETED because `classes_override_2` \
+         decided override compatibility by comparing the child's and base's annotation \
+         SOURCE CHARACTERS. It panics because the real implementation — both annotations \
+         resolved to type expressions and related semantically — DOES NOT EXIST YET. Do \
+         not restore the slice and do not return `None` in its place."
     )
 }
 
 #[expect(
     dead_code,
-    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
-              tests/string_keyed_class_hierarchy_pin_tests.rs"
-)]
-/// Extract annotation text from source given an optional span.
-fn annotation_text(source: &str, span: Option<Span>) -> Option<&str> {
-    slice_span(source, span?)
-}
-
-#[expect(
-    dead_code,
-    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
-              tests/string_keyed_class_hierarchy_pin_tests.rs"
+    clippy::too_many_arguments,
+    reason = "orphaned by the deleted verdict body; retained with its diagnostic contract"
 )]
 fn make_diagnostic(
     attr: &AttributeInfo,

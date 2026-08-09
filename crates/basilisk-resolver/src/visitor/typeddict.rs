@@ -26,23 +26,29 @@ pub(super) fn collect_typeddict_key_violations<'a>(
     // (all_fields, field_types, is_total, has_extra_items)
     type FieldMap<'x> = HashMap<&'x str, (Vec<&'x str>, HashMap<&'x str, String>, bool, bool)>;
 
-    let class_map = crate::scope::class_by_name(classes);
+    // Membership and inheritance come from the resolved hierarchy — bases
+    // resolved through the module's bindings, keyed on definition site.
+    //
+    // The schema map below is still keyed on the class's NAME, because the
+    // variable→class association further down (`x: Movie`) has not yet been
+    // rebuilt on resolved annotations. That remaining name key is a separate,
+    // still-open defect; it is not what decides inheritance here.
+    let graph = crate::scope::ClassGraph::new(classes);
 
-    let typeddict_fields: FieldMap<'a> = classes
-        .iter()
-        .filter(|c| crate::scope::is_transitive_typeddict(c.name.as_str(), &class_map))
+    let typeddict_fields: FieldMap<'a> = graph
+        .typed_dicts()
+        .into_iter()
         .map(|c| {
             // Merge own + inherited fields so transitive subclasses
             // (`class Album(NamedDict): ...`) carry the full schema and the
             // most-derived declaration of each redeclared field.
-            let effective = super::typeddict_schema::effective_fields(c, &class_map, source);
+            let effective = super::typeddict_schema::effective_fields(c, &graph, source);
             let all_fields: Vec<&str> = effective.iter().map(|f| f.name).collect();
             let field_types: HashMap<&str, String> = effective
                 .iter()
                 .filter_map(|f| f.annotation.map(|ann| (f.name, ann.to_owned())))
                 .collect();
-            let has_extra_items =
-                crate::scope::has_extra_items_transitive(c.name.as_str(), &class_map);
+            let has_extra_items = graph.has_extra_items(c);
             (
                 c.name.as_str(),
                 (
@@ -76,26 +82,45 @@ pub(super) type TdFieldMap<'a> = std::collections::HashMap<
     ),
 >;
 
-/// Build a variable-name → TypedDict-class-name map from annotated assignments in `stmts`.
+// ##########################################################################
+// # DELETED BODY — `td_var_type_from_stmts`. DO NOT RESTORE IT AND DO NOT   #
+// # RETURN AN EMPTY MAP.                                                    #
+// #                                                                         #
+// #   let class_name = type_name.id.as_str();                               #
+// #   if fields.contains_key(class_name) { map.insert(var_name, ..) }       #
+// #                                                                         #
+// # EVERY `TypedDict` KEY DIAGNOSTIC IN THIS MODULE HANGS OFF THIS JOIN,    #
+// # AND THE JOIN IS TWO STRINGS. `fields` is keyed by `ClassInfo::name`;    #
+// # the lookup is the ANNOTATION'S SPELLING. So:                            #
+// #                                                                         #
+// #   * `Alias = Movie; m: Alias = {...}` matches nothing — no key is ever  #
+// #     validated against the schema and every invalid key is accepted;     #
+// #   * `import other; m: other.Movie` is not an `Expr::Name`, so the same; #
+// #   * an ordinary `class Movie` and a `TypedDict` named `Movie` in one    #
+// #     module are one entry, and `m: Movie` gets a schema the class does   #
+// #     not have — an invalid-key error reported on correct code.           #
+// #                                                                         #
+// # The annotation is an `Expr` at its own offset here. The rebuild         #
+// # resolves it through the module's binding table to the `class` statement #
+// # it denotes and keys the schema map on `ClassInfo::name_span`.           #
+// # `collect_typeddict_key_violations` is kept as the map of what reads     #
+// # this.                                                                   #
+// ##########################################################################
+
+/// DELETED — panics; see the banner above.
 pub(super) fn td_var_type_from_stmts(
-    stmts: &[Stmt],
-    fields: &TdFieldMap<'_>,
+    _stmts: &[Stmt],
+    _fields: &TdFieldMap<'_>,
 ) -> std::collections::HashMap<String, String> {
-    let mut map = std::collections::HashMap::new();
-    for stmt in stmts {
-        let Stmt::AnnAssign(ann) = stmt else { continue };
-        let Some(var_name) = expr_simple_name(&ann.target) else {
-            continue;
-        };
-        let Expr::Name(type_name) = ann.annotation.as_ref() else {
-            continue;
-        };
-        let class_name = type_name.id.as_str();
-        if fields.contains_key(class_name) {
-            let _ = map.insert(var_name, class_name.to_owned());
-        }
-    }
-    map
+    panic!(
+        "basilisk-resolver: `td_var_type_from_stmts` was DELETED because it associated a \
+         variable with a `TypedDict` by looking the ANNOTATION'S SPELLING up in a map keyed \
+         by CLASS SPELLING, so an aliased or dotted annotation validated no keys at all and \
+         an ordinary class sharing a `TypedDict`'s name inherited its schema. It panics \
+         because the real implementation — the annotation expression resolved through the \
+         binding table, keyed on `ClassInfo::name_span` — DOES NOT EXIST YET. Do not \
+         restore the name lookup and do not return an empty map in its place."
+    )
 }
 
 /// Recursively check statements for `TypedDict` violations.

@@ -12,12 +12,9 @@
 
 use std::collections::HashMap;
 
-use crate::scope::ClassInfo;
+use crate::scope::{ClassGraph, ClassInfo};
 
 use super::core::source_slice_span;
-
-/// Maximum inheritance depth walked before bailing out (cycle guard).
-const MAX_DEPTH: u32 = 64;
 
 /// One field of a `TypedDict`'s effective (post-inheritance) schema.
 pub(super) struct EffectiveField<'a> {
@@ -28,6 +25,17 @@ pub(super) struct EffectiveField<'a> {
     /// required-ness checks read the qualifier straight from it.
     pub annotation: Option<&'a str>,
     /// `true` when the most-derived declaration wraps the field in `ReadOnly`.
+    ///
+    /// ORPHANED BY A DELETION, NOT UNUSED. Its only reader,
+    /// `final_readonly::build_typeddict_readonly_map`, was deleted for keying
+    /// the resulting field sets by CLASS NAME. The flag itself is computed
+    /// lawfully from `AttributeInfo::is_readonly` over the definition-site
+    /// ancestry, and it is the input the rebuild consumes.
+    #[expect(
+        dead_code,
+        reason = "its only reader was deleted for keying read-only field sets by class name; \
+                  this flag is the lawful input the identity-keyed rebuild consumes"
+    )]
     pub readonly: bool,
 }
 
@@ -38,32 +46,29 @@ pub(super) struct EffectiveField<'a> {
 /// through to the consuming rules.
 pub(super) fn effective_fields<'a>(
     class: &'a ClassInfo,
-    class_map: &HashMap<&'a str, &'a ClassInfo>,
+    graph: &ClassGraph<'a>,
     source: &'a str,
 ) -> Vec<EffectiveField<'a>> {
     let mut seen: HashMap<&'a str, EffectiveField<'a>> = HashMap::new();
     let mut order: Vec<&'a str> = Vec::new();
-    collect_fields(class, class_map, source, &mut seen, &mut order, 0);
+    // `ancestors` yields the class before the classes it derives from, so the
+    // first declaration of a field seen is always the most-derived one.
+    for ancestor in graph.ancestors(class) {
+        collect_fields(ancestor, source, &mut seen, &mut order);
+    }
     order
         .into_iter()
         .filter_map(|name| seen.remove(name))
         .collect()
 }
 
-/// Walk `class` then its bases, inserting each annotated field the first time it
-/// is seen. Because the leaf class is visited before its bases, the first
-/// insertion is always the most-derived declaration.
+/// Insert each annotated field of `class` the first time it is seen.
 fn collect_fields<'a>(
     class: &'a ClassInfo,
-    class_map: &HashMap<&'a str, &'a ClassInfo>,
     source: &'a str,
     seen: &mut HashMap<&'a str, EffectiveField<'a>>,
     order: &mut Vec<&'a str>,
-    depth: u32,
 ) {
-    if depth >= MAX_DEPTH {
-        return;
-    }
     for attr in &class.attributes {
         if !attr.has_annotation {
             continue;
@@ -85,10 +90,5 @@ fn collect_fields<'a>(
             },
         );
         order.push(name);
-    }
-    for base in &class.bases {
-        if let Some(base_class) = class_map.get(base.as_str()) {
-            collect_fields(base_class, class_map, source, seen, order, depth + 1);
-        }
     }
 }

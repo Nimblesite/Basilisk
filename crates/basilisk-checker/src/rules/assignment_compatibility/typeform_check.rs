@@ -21,48 +21,35 @@ use super::CODE;
 // against a lowercased callee. Its only reader panics; see the banner below.
 // DO NOT RECREATE IT.
 
-/// Check whether a RHS expression is a valid type form assignable to `inner`.
-///
-/// Returns `true` if the assignment is valid (no diagnostic needed),
-/// `false` if a diagnostic should be emitted.
+// ##########################################################################
+// # DELETED BODY — `is_valid_typeform_assignment`.                         #
+// #                                                                         #
+// # Although `RhsKind` correctly identified literal/call node kinds, this  #
+// # function then sliced the RHS back out of SOURCE TEXT and delegated the #
+// # actual TypeForm verdict to helpers that stripped quotes, lowercased    #
+// # callees, reparsed renderings, and scanned characters for operators.    #
+// # That made formatting and spelling decide whether the RHS was a type.   #
+// #                                                                         #
+// # The rebuild must pass the original RHS `Expr` and resolve it through   #
+// # the binding table/type-expression lowering.                            #
+// ##########################################################################
+
+/// DELETED — panics; callers must provide the RHS expression node.
 pub(super) fn is_valid_typeform_assignment(
-    var: &VariableInfo,
-    source: &str,
-    inner: &InferredType,
-    functions: &[FunctionInfo],
-    resolver: &AnnotationResolver<'_>,
+    _var: &VariableInfo,
+    _source: &str,
+    _inner: &InferredType,
+    _functions: &[FunctionInfo],
+    _resolver: &AnnotationResolver<'_>,
 ) -> bool {
-    let Some(rhs_span) = var.rhs_span else {
-        return true; // No RHS to check
-    };
-    let Some(rhs_text) = slice_span(source, rhs_span) else {
-        return true;
-    };
-    let rhs_text = rhs_text.trim();
-
-    // Check the `RhsKind` first for obviously invalid values
-    match &var.rhs_kind {
-        basilisk_resolver::RhsKind::IntLiteral
-        | basilisk_resolver::RhsKind::FloatLiteral
-        | basilisk_resolver::RhsKind::BoolLiteral
-        | basilisk_resolver::RhsKind::BytesLiteral
-        | basilisk_resolver::RhsKind::Tuple(_)
-        | basilisk_resolver::RhsKind::TypeCall => return false,
-        basilisk_resolver::RhsKind::CallExpr => {
-            return is_valid_call_typeform(rhs_text, inner, functions, source, resolver);
-        }
-        basilisk_resolver::RhsKind::StrLiteral => {
-            return is_valid_string_typeform(rhs_text, inner, resolver);
-        }
-        basilisk_resolver::RhsKind::NoneValue => {
-            // `None` is a valid type expression representing `NoneType`.
-            return InferredType::None_.is_assignable_to(inner);
-        }
-        _ => {}
-    }
-
-    // For `Other`/`Lambda`/etc., parse the RHS text as a type expression
-    is_valid_rhs_type_expression(rhs_text, inner, resolver)
+    panic!(
+        "basilisk-checker: `is_valid_typeform_assignment` was DELETED because it \
+         sliced the RHS from SOURCE TEXT and delegated semantic validity to quote, \
+         callee-name, character-scan, and text-reparse helpers. It panics because the \
+         real implementation — validating the original RHS `Expr` as a resolved type \
+         expression — DOES NOT EXIST YET. Do not restore the source slice and do not \
+         choose a default TypeForm verdict."
+    )
 }
 
 // ##########################################################################
@@ -104,56 +91,44 @@ fn is_valid_call_typeform(
 /// producer. `None` when the annotation is missing or the cascade cannot
 /// resolve it — the caller then accepts conservatively.
 fn callee_return_typeform(
-    func: &FunctionInfo,
-    inner: &InferredType,
-    source: &str,
-    resolver: &AnnotationResolver<'_>,
+    _func: &FunctionInfo,
+    _inner: &InferredType,
+    _source: &str,
+    _resolver: &AnnotationResolver<'_>,
 ) -> Option<bool> {
-    let ret_span = func.return_annotation_span?;
-    let ret_text = slice_span(source, ret_span)?.trim();
-    // The return annotation is a type expression the cascade evaluates
-    // ([NARROWPLAN-INTEGRATION] Step 7).
-    let ret_type = resolver
-        .resolve_span(ret_span)
-        .or_else(|| resolver.resolve_text(ret_text))?;
-    // Returning `TypeForm[S]`: check S assignable to inner.
-    if let InferredType::TypeForm(ref ret_inner) = ret_type {
-        return Some(ret_inner.is_assignable_to(inner));
-    }
-    // `type[S]` is a subtype of `TypeForm[S]` (PEP 747), but the cascade
-    // collapses `type[..]` to the nominal `type` leaf, so `S` is resolved
-    // from the annotation's own subscript.
-    let type_inner = type_subscript_inner(ret_text)?;
-    Some(resolver.resolve_text(type_inner)?.is_assignable_to(inner))
+    panic!(
+        "basilisk-checker: `callee_return_typeform` was DELETED because it fell back \
+         from an annotation span to RE-PARSING its source rendering, then extracted \
+         `type[S]` from characters and reparsed `S` again. It panics because the real \
+         implementation — resolving the return annotation's original subscript `Expr` \
+         — DOES NOT EXIST YET. Do not restore either text round-trip and do not return \
+         `None` in its place."
+    )
 }
 
-/// Check if a string literal is a valid type form.
-///
-/// The string content (without quotes) must parse as a valid type expression,
-/// and the represented type must be assignable to `inner`.
+// ##########################################################################
+// # DELETED BODY — `is_valid_string_typeform`.                             #
+// #                                                                         #
+// # It removed the first and last quote characters by hand, guessed        #
+// # parseability with a character scanner, then handed the resulting text  #
+// # back to `AnnotationResolver::resolve_text`. Prefixes (`r`, `u`), triple #
+// # quotes, escapes, and concatenated string literals all changed the       #
+// # answer despite already having structured string-literal AST nodes.      #
+// ##########################################################################
+
+/// DELETED — panics; quoted type expressions must come from the AST node.
 fn is_valid_string_typeform(
-    rhs_text: &str,
-    inner: &InferredType,
-    resolver: &AnnotationResolver<'_>,
+    _rhs_text: &str,
+    _inner: &InferredType,
+    _resolver: &AnnotationResolver<'_>,
 ) -> bool {
-    // Strip quotes
-    let content = if (rhs_text.starts_with('"') && rhs_text.ends_with('"'))
-        || (rhs_text.starts_with('\'') && rhs_text.ends_with('\''))
-    {
-        &rhs_text[1..rhs_text.len() - 1]
-    } else {
-        return false;
-    };
-
-    // Must parse as a valid type expression
-    if !is_parseable_type_expression(content) {
-        return false;
-    }
-
-    // Check assignability of the represented type to inner
-    resolver
-        .resolve_text(content)
-        .is_some_and(|represented| represented.is_assignable_to(inner))
+    panic!(
+        "basilisk-checker: `is_valid_string_typeform` was DELETED because it stripped \
+         quote CHARACTERS from RHS source and reparsed the remaining rendering as a \
+         type. It panics because the real implementation — decoding the original \
+         string-literal AST node and resolving its quoted type expression in scope — \
+         DOES NOT EXIST YET. Do not restore quote slicing and do not return `false`."
+    )
 }
 
 #[expect(
@@ -228,14 +203,17 @@ fn is_parseable_type_expression(_text: &str) -> bool {
 /// Check if a non-string, non-literal RHS is a valid type expression
 /// assignable to the `TypeForm`'s inner type.
 fn is_valid_rhs_type_expression(
-    rhs_text: &str,
-    inner: &InferredType,
-    resolver: &AnnotationResolver<'_>,
+    _rhs_text: &str,
+    _inner: &InferredType,
+    _resolver: &AnnotationResolver<'_>,
 ) -> bool {
-    // The RHS *is* a type expression — evaluate it through the cascade.
-    resolver
-        .resolve_text(rhs_text.trim())
-        .is_some_and(|represented| represented.is_assignable_to(inner))
+    panic!(
+        "basilisk-checker: `is_valid_rhs_type_expression` was DELETED because it \
+         decided a TypeForm assignment by trimming and RE-PARSING RHS SOURCE TEXT. The \
+         reconstructed expression has no original offset or scope. It panics because \
+         the real implementation — resolving the RHS's original `Expr` — DOES NOT \
+         EXIST YET. Do not restore `resolve_text` and do not choose a default verdict."
+    )
 }
 
 /// Check function calls with `TypeForm` parameters.
@@ -261,76 +239,34 @@ pub(super) fn check_typeform_calls(
     }
 }
 
-/// Check function call arguments against `TypeForm` parameter annotations.
+// ##########################################################################
+// # DELETED BODY — `check_typeform_param_args`. KEEP ITS CALL SITE.         #
+// #                                                                         #
+// # The function definition was selected with                             #
+// #                                                                         #
+// #   functions.iter().find(|func| func.name == call.callee)               #
+// #                                                                         #
+// # which joins a call to a declaration by RENDERED NAME, ignoring alias,  #
+// # rebinding, scope, receiver, and definition position. It then sliced    #
+// # each argument from source and sent string literals through the deleted #
+// # quote-strip/reparse path. Both the callee and argument already have     #
+// # resolved AST identities; neither may be reconstructed from text.       #
+// ##########################################################################
+
+/// DELETED — panics; see the banner above.
 fn check_typeform_param_args(
-    call: &basilisk_resolver::CallSite,
-    functions: &[FunctionInfo],
-    source: &str,
-    path: &str,
-    resolver: &AnnotationResolver<'_>,
-    diagnostics: &mut Vec<Diagnostic>,
+    _call: &basilisk_resolver::CallSite,
+    _functions: &[FunctionInfo],
+    _source: &str,
+    _path: &str,
+    _resolver: &AnnotationResolver<'_>,
+    _diagnostics: &mut Vec<Diagnostic>,
 ) {
-    // Find the function definition
-    let Some(func) = functions.iter().find(|func| func.name == call.callee) else {
-        return;
-    };
-
-    // Check each positional argument against its parameter annotation
-    for (idx, (ref rhs_kind, arg_span)) in call.args.iter().enumerate() {
-        let Some(param) = func.parameters.get(idx) else {
-            continue;
-        };
-
-        if !param.has_annotation {
-            continue;
-        }
-
-        let Some(ann_span) = param.annotation_span else {
-            continue;
-        };
-        let Some(param_type) = resolver.resolve_span(ann_span) else {
-            continue;
-        };
-        let InferredType::TypeForm(ref inner) = param_type else {
-            continue;
-        };
-
-        // This parameter expects a `TypeForm` — validate the argument
-        let Some(arg_text) = slice_span(source, *arg_span) else {
-            continue;
-        };
-        let arg_text = arg_text.trim();
-
-        let is_invalid = match rhs_kind {
-            basilisk_resolver::RhsKind::StrLiteral => {
-                !is_valid_string_typeform(arg_text, inner, resolver)
-            }
-            basilisk_resolver::RhsKind::IntLiteral
-            | basilisk_resolver::RhsKind::FloatLiteral
-            | basilisk_resolver::RhsKind::BoolLiteral
-            | basilisk_resolver::RhsKind::BytesLiteral
-            | basilisk_resolver::RhsKind::Tuple(_) => true,
-            _ => false,
-        };
-
-        if is_invalid {
-            diagnostics.push(error_diagnostic_owned(
-                CODE.clone(),
-                format!(
-                    "Argument `{arg_text}` is not a valid type expression for \
-                     parameter `{}` of type `{param_type}`",
-                    param.name
-                ),
-                *arg_span,
-                path,
-                Some(format!(
-                    "Pass a valid type expression assignable to `{inner}`"
-                )),
-                Some(
-                    "TypeForm parameters require valid type expressions, not runtime values"
-                        .to_owned(),
-                ),
-            ));
-        }
-    }
+    panic!(
+        "basilisk-checker: `check_typeform_param_args` was DELETED because it joined \
+         calls to functions by RENDERED NAME and validated arguments by slicing and \
+         reparsing SOURCE TEXT. It panics because the real implementation — the call's \
+         resolved function definition plus each argument's original `Expr` — DOES NOT \
+         EXIST YET. Do not restore the name join and do not return no diagnostics."
+    )
 }

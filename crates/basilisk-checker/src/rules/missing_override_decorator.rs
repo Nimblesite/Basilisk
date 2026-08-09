@@ -60,8 +60,7 @@ impl Rule for MissingOverrideDecorator {
             return;
         }
 
-        // Build a raw class map first (name → ClassInfo).
-        let raw_map = super::shared::class_name_map(&module.classes);
+        let graph = basilisk_resolver::ClassGraph::new(&module.classes);
 
         // Determine which classes are Protocol (transitively) — e.g.
         // `class MyProto(SomeBase)` where `SomeBase(Protocol)` is also Protocol.
@@ -71,7 +70,7 @@ impl Rule for MissingOverrideDecorator {
             .map(|cls| {
                 (
                     cls.name.as_str(),
-                    (cls, is_protocol_transitively(cls, &raw_map)),
+                    (cls, is_protocol_transitively(&graph, cls)),
                 )
             })
             .collect();
@@ -94,18 +93,15 @@ impl Rule for MissingOverrideDecorator {
     }
 }
 
-/// Returns `true` when `cls` is a Protocol class directly or transitively
-/// (i.e., any base class in `class_map` is itself a Protocol). The shared
-/// walk breaks base-name cycles (GitHub #278): `class Client(httpx.Client)`
-/// records its base under the attribute name `Client`, which the by-name
-/// class map resolves back to the class itself.
-fn is_protocol_transitively<'a>(
-    cls: &'a ClassInfo,
-    class_map: &HashMap<&str, &'a ClassInfo>,
-) -> bool {
-    super::shared::class_or_base_matches(cls, &|name| class_map.get(name).copied(), &|candidate| {
-        candidate.is_protocol
-    })
+/// Returns `true` when `cls` is a Protocol class directly or transitively —
+/// i.e. any class it inherits from IN THIS MODULE is itself a `Protocol`.
+///
+/// The edges come from resolved base expressions keyed on definition site, so
+/// `class Client(httpx.Client)` no longer records its base under the trailing
+/// word `Client` and resolves back to the class itself (GitHub #278): a base
+/// from another module is simply no local edge.
+fn is_protocol_transitively(graph: &basilisk_resolver::ClassGraph<'_>, cls: &ClassInfo) -> bool {
+    super::shared::class_or_base_matches(graph, cls, |candidate| candidate.is_protocol)
 }
 
 // ##########################################################################

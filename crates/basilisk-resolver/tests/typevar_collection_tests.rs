@@ -122,3 +122,97 @@ SampleKind = type_contracts.TypeVar(
         "`bound=int` is a concrete bound, exactly what PEP 484 permits"
     );
 }
+
+// ---------------------------------------------------------------------------
+// A bound/constraint references a TypeVar by IDENTITY, not by spelling
+//
+// Pins the 2026-08-09 review finding against `visitor/typevar.rs`: the walk
+// compared the AST name token against `TypeVarCallInfo::name`, so a name later
+// rebound to something else still "looked like" the TypeVar, while a second
+// name bound to the same TypeVar object did not.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn a_bound_referencing_an_aliased_typevar_is_parameterized() {
+    let src = r#"
+from typing import TypeVar as parameter_slot
+
+Shade = parameter_slot("Shade")
+Tone = Shade
+
+Depth = parameter_slot("Depth", bound=list[Tone])
+"#;
+    let resolved = common::resolve_src(src).expect("source must resolve");
+    let depth = resolved
+        .typevar_calls
+        .iter()
+        .find(|tv| tv.name == "Depth")
+        .expect("`Depth` must be collected");
+    assert!(
+        depth.has_parameterized_bound,
+        "`Tone` is one more name for the `Shade` TypeVar object; binding a \
+         second name to it does not make `list[Tone]` a concrete bound"
+    );
+}
+
+#[test]
+fn a_bound_referencing_a_name_rebound_away_from_a_typevar_is_concrete() {
+    let src = r#"
+from typing import TypeVar as parameter_slot
+
+Shade = parameter_slot("Shade")
+Shade = int
+
+Depth = parameter_slot("Depth", bound=list[Shade])
+"#;
+    let resolved = common::resolve_src(src).expect("source must resolve");
+    let depth = resolved
+        .typevar_calls
+        .iter()
+        .find(|tv| tv.name == "Depth")
+        .expect("`Depth` must be collected");
+    assert!(
+        !depth.has_parameterized_bound,
+        "at the bound's use site `Shade` is `int`; matching the SPELLING of \
+         the earlier TypeVar reports a bound the program does not have"
+    );
+}
+
+#[test]
+fn a_directly_named_typevar_bound_is_still_parameterized() {
+    let src = r#"
+from typing import TypeVar as parameter_slot
+
+Shade = parameter_slot("Shade")
+Depth = parameter_slot("Depth", bound=list[Shade])
+"#;
+    let resolved = common::resolve_src(src).expect("source must resolve");
+    let depth = resolved
+        .typevar_calls
+        .iter()
+        .find(|tv| tv.name == "Depth")
+        .expect("`Depth` must be collected");
+    assert!(
+        depth.has_parameterized_bound,
+        "the direct spelling must keep working"
+    );
+}
+
+#[test]
+fn a_concrete_bound_is_not_parameterized() {
+    let src = r#"
+from typing import TypeVar as parameter_slot
+
+Depth = parameter_slot("Depth", bound=list[int])
+"#;
+    let resolved = common::resolve_src(src).expect("source must resolve");
+    let depth = resolved
+        .typevar_calls
+        .iter()
+        .find(|tv| tv.name == "Depth")
+        .expect("`Depth` must be collected");
+    assert!(
+        !depth.has_parameterized_bound,
+        "PEP 484 permits fully concrete generic bounds"
+    );
+}

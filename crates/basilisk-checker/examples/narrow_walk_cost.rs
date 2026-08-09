@@ -4,7 +4,7 @@
 //!
 //! The walker's expression synthesis is seeded with the module's callable
 //! interfaces. Rebuilding that seed per expression made a single function's
-//! walk scale with the whole file's size — invisible to `make bench`, which
+//! walk scale with the whole file's size — invisible to `make _bench`, which
 //! times `basilisk check` and never enters this code. This example is the
 //! harness that made the cost visible, and the regression check for it: the
 //! reported time must stay flat as `callables` grows.

@@ -136,7 +136,7 @@ impl Rule for GeneratorReturnTypeViolation {
             return;
         };
         let index = ExprIndex::build(&parsed.ast);
-        let judge = TypeJudge::new(types.oracle(), resolver, types.subtyping());
+        let judge = TypeJudge::new(types.oracle(), resolver, types.nominal());
         for func in &module.functions {
             if !func.is_generator || func.yield_exprs.is_empty() {
                 continue;

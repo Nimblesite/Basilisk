@@ -88,6 +88,10 @@ impl<'m> ModuleOracle<'m> {
         walk_body(&mut collector, &parsed.ast.body);
         let mut engine = BidirEngine::new(collector.globals);
         engine.set_class_attributes(collector.class_attributes);
+        // The engine resolves a call's callee to its DEFINITION rather than
+        // reading its name, so it needs the module's binding table
+        // ([RESOLV-CANONICAL-BINDING]). Cloned once per module, not per call.
+        engine.set_bindings(std::sync::Arc::new((*module.bindings).clone()));
         Some(Self {
             engine: RefCell::new(engine),
             expressions: collector.expressions,

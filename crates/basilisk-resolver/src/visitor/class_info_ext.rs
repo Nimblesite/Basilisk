@@ -9,8 +9,8 @@ use ruff_text_size::Ranged;
 
 use crate::canonical::{BindingTable, TypingForm};
 use crate::scope::{
-    BaseSubscriptEntry, ClassInfo, FunctionInfo, ImportInfo, ImportKind, ImportResolution,
-    MatchStmtInfo, Span, TypeArg,
+    BaseRef, BaseSubscriptEntry, ClassInfo, FunctionInfo, ImportInfo, ImportKind, ImportResolution,
+    MatchStmtInfo, ResolvedBase, Span, TypeArg,
 };
 
 use super::calls_and_reveal::expr_to_type_arg;
@@ -36,6 +36,49 @@ fn base_forms(bindings: &BindingTable, class: &StmtClassDef) -> Vec<TypingForm> 
                 .collect()
         })
         .unwrap_or_default()
+}
+
+/// What each declared base resolves to, in declaration order.
+///
+/// Each base expression resolves through the module's bindings, so
+/// `Alias = Movie` / `class Film(Alias)` finds `Movie`'s definition, a
+/// subscripted base finds the class it parameterises, `builtins.object` and a
+/// bare `object` are one form, and `other.Movie` is neither — it is a class in
+/// another module, not the same-named one here. A class never resolves to
+/// itself: its own name is not bound until its statement completes.
+/// Implements [RESOLV-CANONICAL-BINDING].
+fn resolved_bases(bindings: &BindingTable, class: &StmtClassDef) -> Vec<BaseRef> {
+    class
+        .arguments
+        .as_ref()
+        .map(|args| {
+            args.args
+                .iter()
+                .map(|base| BaseRef {
+                    span: text_range_to_span(base.range()),
+                    resolved: resolve_base(bindings, base),
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Resolve one base expression. A class this module defines wins over the
+/// registry: a module that declares its own `class object` has shadowed the
+/// builtin, and the base denotes the local class.
+fn resolve_base(bindings: &BindingTable, base: &Expr) -> ResolvedBase {
+    if let Some(range) = bindings.local_class_definition(base) {
+        return ResolvedBase::LocalClass(text_range_to_span(range));
+    }
+    // A subscripted base parameterises the class its head denotes:
+    // `Generic[T]` is `Generic`.
+    let head = match base {
+        Expr::Subscript(subscript) => subscript.value.as_ref(),
+        other => other,
+    };
+    bindings
+        .form_of_with_builtins(head)
+        .map_or(ResolvedBase::Unknown, ResolvedBase::Form)
 }
 
 /// The literal boolean value of a class keyword, e.g. `total` in
@@ -125,6 +168,7 @@ pub(super) fn class_info_from(
         name_span: text_range_to_span(class.name.range),
         def_span: text_range_to_span(class.range),
         bases,
+        resolved_bases: resolved_bases(bindings, class),
         attributes,
         method_names,
         method_decorators,
@@ -142,8 +186,10 @@ pub(super) fn class_info_from(
             .map(|tp| tp.type_params.iter().map(type_param_name).collect())
             .unwrap_or_default(),
         base_expression_names,
+        base_name_value_sites: base_name_value_sites(bindings, class),
         generic_non_typevar_args,
         metaclass_name: extract_metaclass_name(class),
+        metaclass_site: extract_metaclass_site(bindings, class),
         has_subscript_base,
         base_subscripts: extract_base_subscripts(class),
         has_manual_slots: class_has_manual_slots(class),
@@ -217,6 +263,22 @@ fn extract_class_keywords(class: &StmtClassDef) -> Vec<String> {
         .unwrap_or_default()
 }
 
+/// The definition site of the class named by `metaclass=`, resolved through
+/// the module's bindings.
+///
+/// The keyword's own name is fixed syntax at the class definition: it cannot
+/// be imported, aliased, or rebound, so reading it is not a spelling test on a
+/// type ([ASTREBUILD-LAW]). Its VALUE is an expression, and that is resolved.
+fn extract_metaclass_site(bindings: &BindingTable, class: &StmtClassDef) -> Option<Span> {
+    class.arguments.as_ref().and_then(|args| {
+        args.keywords
+            .iter()
+            .find(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "metaclass"))
+            .and_then(|kw| bindings.local_class_definition(&kw.value))
+            .map(text_range_to_span)
+    })
+}
+
 fn extract_metaclass_name(class: &StmtClassDef) -> Option<String> {
     class.arguments.as_ref().and_then(|args| {
         args.keywords
@@ -224,6 +286,51 @@ fn extract_metaclass_name(class: &StmtClassDef) -> Option<String> {
             .find(|kw| kw.arg.as_ref().is_some_and(|a| a.as_str() == "metaclass"))
             .and_then(|kw| expr_simple_name(&kw.value))
     })
+}
+
+/// The value-binding site of every name referenced inside a class's base
+/// expressions, paired with where that name is written.
+///
+/// Resolution is positional and follows assignment aliases, so
+/// `Alias = T; class Foo(Generic[Alias])` yields `T`'s `TypeVar(...)` call —
+/// the same site a direct `Generic[T]` yields — and a name bound to something
+/// else yields that something else. Names bound by `class`/`def`/import, or
+/// not bound in this module, contribute nothing.
+fn base_name_value_sites(bindings: &BindingTable, class: &StmtClassDef) -> Vec<(Span, Span)> {
+    let mut out = Vec::new();
+    let Some(arguments) = class.arguments.as_ref() else {
+        return out;
+    };
+    for base in &arguments.args {
+        collect_value_sites(bindings, base, &mut out);
+    }
+    out
+}
+
+/// Walk an expression, recording each name that resolves to an assigned value.
+fn collect_value_sites(bindings: &BindingTable, expr: &Expr, out: &mut Vec<(Span, Span)>) {
+    match expr {
+        Expr::Name(_) => {
+            if let Some(site) = bindings.local_value_binding(expr) {
+                out.push((text_range_to_span(expr.range()), text_range_to_span(site)));
+            }
+        }
+        Expr::Subscript(subscript) => {
+            collect_value_sites(bindings, &subscript.value, out);
+            collect_value_sites(bindings, &subscript.slice, out);
+        }
+        Expr::Tuple(tuple) => {
+            for element in &tuple.elts {
+                collect_value_sites(bindings, element, out);
+            }
+        }
+        Expr::Starred(starred) => collect_value_sites(bindings, &starred.value, out),
+        Expr::BinOp(binop) => {
+            collect_value_sites(bindings, &binop.left, out);
+            collect_value_sites(bindings, &binop.right, out);
+        }
+        _ => {}
+    }
 }
 
 /// Extract name references and subscript presence from base class expressions.

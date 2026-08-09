@@ -161,8 +161,18 @@ pub enum NarrowingGuardKind {
     TypeOfIs {
         /// The variable whose `type(...)` is compared.
         variable: String,
-        /// The class name compared against.
+        /// The class name compared against, AS WRITTEN — for message text.
         type_name: String,
+        /// Span of the compared-against type EXPRESSION, so a consumer can
+        /// resolve it through the annotation cascade instead of reconstructing
+        /// a type from its final token.
+        type_span: Span,
+        /// DEFINITION SITE of the compared-against class, when it is a class
+        /// this module defines. Resolved through the binding table at the
+        /// comparison's own offset, so an alias reaches the class it names and
+        /// a rebound name does not. `None` for an imported or unresolvable
+        /// class — abstention, never "no such class".
+        type_class_site: Option<Span>,
         /// `true` for `is`, `false` for `is not`.
         is_positive: bool,
         /// Span of the `if` block.

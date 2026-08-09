@@ -609,7 +609,7 @@ No number is publishable until every box here is ticked.
 - [ ] `python3 conformance/run_conformance.py` — pristine fixture regression,
       freshly cloned, unmodified upstream scorer, release binary from this
       checkout, default config.
-- [ ] `make mutation-conformance` — the same fixtures with imports aliased and
+- [ ] `make conformance MUTATED=1` — the same fixtures with imports aliased and
       formatting varied. **A verdict that changes under a semantics-preserving
       rename means the rebuild reproduced the defect.**
 - [ ] Off-suite tests derived independently from the specification, for every

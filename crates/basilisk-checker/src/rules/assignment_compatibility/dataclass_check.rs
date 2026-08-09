@@ -68,7 +68,7 @@ pub(super) fn check_dataclass_attr_assignments(
     // Build a map: class_name -> { field_name -> annotation_text }
     let mut class_field_types: HashMap<&str, HashMap<&str, &str>> = HashMap::new();
     for cls in &module.classes {
-        let is_dc_like = cls.is_dataclass || transform_classes.contains_key(cls.name.as_str());
+        let is_dc_like = cls.is_dataclass || transform_classes.contains_key(&cls.name_span);
         if !is_dc_like {
             continue;
         }

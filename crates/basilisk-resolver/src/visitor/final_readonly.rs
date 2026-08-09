@@ -11,61 +11,65 @@ use crate::canonical::BindingTable;
 use super::annotations::annotation_is_final;
 use super::core::text_range_to_span;
 
-/// Build a map from `TypedDict` class name to its `ReadOnly` field names.
+// ##########################################################################
+// # DELETED BODIES — `build_typeddict_readonly_map` and                     #
+// # `build_var_type_map`. DO NOT RESTORE THEM AND DO NOT RETURN AN EMPTY    #
+// # MAP.                                                                    #
+// #                                                                         #
+// #   Some((cls.name.as_str(), fields))                                     #
+// #   td_readonly_fields.get_key_value(type_name.id.as_str())               #
+// #                                                                         #
+// # A `ReadOnly` VIOLATION DECIDED BY MATCHING AN ANNOTATION'S SPELLING     #
+// # AGAINST A CLASS'S SPELLING. The `TypedDict` chain and the effective     #
+// # field set were both computed on the definition-site class graph, and    #
+// # then the class was reduced to `ClassInfo::name` so an annotation's      #
+// # `Expr::Name` could be looked up by its characters. So:                  #
+// #                                                                         #
+// #   * `Alias = Album; a: Alias` never matches, and every `a["x"] = ...`   #
+// #     assignment to a read-only field goes unreported;                    #
+// #   * `import other; a: other.Album` is not an `Expr::Name` at all and    #
+// #     falls out silently;                                                 #
+// #   * an ordinary class and a `TypedDict` sharing one name in the same    #
+// #     module collapse onto one entry, so a plain `a["x"] = 1` is          #
+// #     REPORTED against a class that has no read-only anything.            #
+// #                                                                         #
+// # The annotation and the target are both `Expr` nodes with real offsets   #
+// # at the point they are read here. The rebuild resolves each through the  #
+// # module's binding table to the `class` statement it denotes and keys the #
+// # map on `ClassInfo::name_span`. `collect_readonly_violations` is kept as #
+// # the map of what has to be rebuilt.                                      #
+// ##########################################################################
+
+/// DELETED — panics; see the banner above.
 pub(super) fn build_typeddict_readonly_map<'a>(
-    classes: &'a [ClassInfo],
-    source: &'a str,
+    _classes: &'a [ClassInfo],
+    _source: &'a str,
 ) -> std::collections::HashMap<&'a str, std::collections::HashSet<&'a str>> {
-    use std::collections::{HashMap, HashSet};
-    let class_map = crate::scope::class_by_name(classes);
-    // Use the effective (post-inheritance) field set so a subclass that does NOT
-    // redeclare an inherited `ReadOnly` field still treats it as read-only
-    // (`class Album2(NamedDict): year: int` keeps `name: ReadOnly[str]`), while a
-    // subclass that redeclares it as mutable drops the read-only status (the
-    // most-derived declaration wins).
-    let map: HashMap<&str, HashSet<&str>> = classes
-        .iter()
-        .filter(|cls| crate::scope::is_transitive_typeddict(cls.name.as_str(), &class_map))
-        .filter_map(|cls| {
-            let fields: HashSet<&str> =
-                super::typeddict_schema::effective_fields(cls, &class_map, source)
-                    .into_iter()
-                    .filter(|f| f.readonly)
-                    .map(|f| f.name)
-                    .collect();
-            if fields.is_empty() {
-                None
-            } else {
-                Some((cls.name.as_str(), fields))
-            }
-        })
-        .collect();
-    map
+    panic!(
+        "basilisk-resolver: `build_typeddict_readonly_map` was DELETED because it resolved \
+         the `TypedDict` chain on the definition-site class graph and then keyed the \
+         read-only field sets by CLASS NAME, so an annotation was matched to a class by \
+         its characters. It panics because the real implementation — the annotation \
+         expression resolved through the module's binding table, keyed on \
+         `ClassInfo::name_span` — DOES NOT EXIST YET. Do not restore the name key and do \
+         not return an empty map in its place."
+    )
 }
 
-/// Build a borrowed map from variable names to their declared `TypedDict`.
-///
-/// The resolver only needs these names while walking the AST. Borrowing them
-/// avoids allocating two strings per annotated variable in large `TypedDict`
-/// modules; only names that become diagnostics are copied into the result.
+/// DELETED — panics; see the banner above.
 fn build_var_type_map<'a>(
-    stmts: &'a [Stmt],
-    td_readonly_fields: &std::collections::HashMap<&'a str, std::collections::HashSet<&'a str>>,
+    _stmts: &'a [Stmt],
+    _td_readonly_fields: &std::collections::HashMap<&'a str, std::collections::HashSet<&'a str>>,
 ) -> std::collections::HashMap<&'a str, &'a str> {
-    let mut map = std::collections::HashMap::new();
-    for stmt in stmts {
-        let Stmt::AnnAssign(ann) = stmt else { continue };
-        let Expr::Name(var_name) = ann.target.as_ref() else {
-            continue;
-        };
-        let Expr::Name(type_name) = ann.annotation.as_ref() else {
-            continue;
-        };
-        if let Some((&key, _)) = td_readonly_fields.get_key_value(type_name.id.as_str()) {
-            let _ = map.insert(var_name.id.as_str(), key);
-        }
-    }
-    map
+    panic!(
+        "basilisk-resolver: `build_var_type_map` was DELETED because it decided which \
+         `TypedDict` a variable was annotated with by looking the ANNOTATION'S SPELLING up \
+         in a map keyed by CLASS SPELLING, so an aliased or dotted annotation was invisible \
+         and a same-named ordinary class inherited another class's read-only fields. It \
+         panics because the real implementation — both expressions resolved through the \
+         binding table at their own offsets — DOES NOT EXIST YET. Do not restore the name \
+         lookup and do not return an empty map in its place."
+    )
 }
 
 /// Build a map from variable name to its declared `TypedDict` type name.

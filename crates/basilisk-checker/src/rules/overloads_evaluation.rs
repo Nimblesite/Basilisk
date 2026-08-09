@@ -1,27 +1,3 @@
-// ############################################################################
-// # BROKEN — THIS FILE DOES NOT COMPILE. DO NOT "FIX" IT BY RESTORING TEXT   #
-// # MATCHING.                                                                #
-// #                                                                          #
-// # Deleted helper this file called:                                         #
-// #   crate::subtyping (SubtypingContext::is_subtype / name_subtype)
-// #                                                                          #
-// # That helper decided types from the SPELLING of source text (lowercased   #
-// # annotation strings, `"int"`/`"str"`/`"object"` literal matching, `|`     #
-// # splitting, `starts_with("tuple[")`). It was deleted, not replaced.       #
-// #                                                                          #
-// # The call sites below are LEFT BROKEN ON PURPOSE. They are the map of     #
-// # what must be rebuilt on the resolved AST — resolved bindings, canonical  #
-// # `TypeNode`, and `assignable`/`equivalent` — or made to abstain.          #
-// #                                                                          #
-// # Restoring the deleted helper, vendoring a copy of it, or re-deriving a   #
-// # type from source text anywhere below is FORBIDDEN.                       #
-// #                                                                          #
-// # Evidence and the failing tests that pin the real behaviour:              #
-// #   docs/RULE-VALIDITY-REPORT.md                                           #
-// #   crates/basilisk-checker/tests/legacy_annotation_text_parser_pin_tests.rs
-// #   crates/basilisk-checker/tests/pep_spelling_invariance_pin_tests.rs     #
-// ############################################################################
-
 //! Implements [`overloads_evaluation`] from [CHKARCH-DIAG-OPTIONAL]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OPTIONAL
 //! `overloads_evaluation`: Overload union expansion failure.
 //!
@@ -46,8 +22,9 @@ use std::collections::HashMap;
 use basilisk_resolver::{FunctionInfo, ResolvedModule, Span};
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
-use crate::span_util::slice_span;
+use crate::types::InferredType;
 
+use super::shared::judge::TypeJudge;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
@@ -80,15 +57,22 @@ impl Rule for OverloadUnionExpansionFailure {
         if types.annotations().is_none() {
             return;
         }
-        let source = &module.source;
         let path = &module.path;
 
-        // Collect overloaded function groups: name -> Vec<&FunctionInfo> (overload stubs only).
+        // Collect overloaded function groups. A group is every `@overload`
+        // stub bound to one name in the module scope — which is what Python
+        // itself accumulates — so the group's own key is that name. What must
+        // NOT come from a spelling is the join from a CALL to a group; see
+        // `overload_group_for`.
         let mut overload_groups: HashMap<&str, Vec<&FunctionInfo>> = HashMap::new();
+        // Definition site of every module-level `def` → the name it binds, so
+        // a resolved callee can be turned back into its group.
+        let mut definitions: HashMap<Span, &str> = HashMap::new();
         for func in &module.functions {
             if func.class_name.is_some() {
                 continue;
             }
+            let _ = definitions.insert(func.name_span, func.name.as_str());
             if !func.is_stub_body {
                 continue;
             }
@@ -111,87 +95,100 @@ impl Rule for OverloadUnionExpansionFailure {
         };
 
         // Walk each function definition looking for calls inside function bodies.
-        let subtyping = types.subtyping();
+        let Some(resolver) = types.annotations() else {
+            return;
+        };
+        let judge = TypeJudge::new(types.oracle(), resolver, types.nominal());
+        let ctx = OverloadCtx {
+            groups: &overload_groups,
+            definitions: &definitions,
+            bindings: &module.bindings,
+        };
         for stmt in &parsed.ast.body {
-            visit_stmt_for_overload_calls(
-                subtyping,
-                stmt,
-                source,
-                path,
-                &overload_groups,
-                diagnostics,
-            );
+            visit_stmt_for_overload_calls(&judge, stmt, path, &ctx, diagnostics);
         }
+    }
+}
+
+/// The module's overload groups plus the two things needed to reach one from a
+/// call: the definition site of every module-level `def`, and the bindings that
+/// resolve a callee expression to one.
+struct OverloadCtx<'m, 'g> {
+    /// Overload stubs, grouped by the name they are bound to.
+    groups: &'g HashMap<&'m str, Vec<&'m FunctionInfo>>,
+    /// `def` definition site → the name it binds.
+    definitions: &'g HashMap<Span, &'m str>,
+    /// The module's binding table.
+    bindings: &'m basilisk_resolver::BindingTable,
+}
+
+impl<'m, 'g: 'm> OverloadCtx<'m, 'g> {
+    /// The overload group a callee expression targets, with the name to render
+    /// in a diagnostic.
+    ///
+    /// The callee resolves through the binding table to the `def` it denotes —
+    /// following assignment aliases, and positional, so a rebinding before the
+    /// call is honoured. That definition's name selects the group.
+    fn group_for(
+        &self,
+        callee: &ruff_python_ast::Expr,
+    ) -> Option<(&'m str, &'m [&'m FunctionInfo])> {
+        let site = Span::from(self.bindings.local_function_definition(callee)?);
+        let name = *self.definitions.get(&site)?;
+        self.groups.get(name).map(|group| (name, group.as_slice()))
     }
 }
 
 /// Walk a statement recursively to find function definitions and check their bodies.
 fn visit_stmt_for_overload_calls(
-    subtyping: &crate::subtyping::SubtypingContext,
+    judge: &TypeJudge<'_, '_>,
     stmt: &ruff_python_ast::Stmt,
-    source: &str,
     path: &str,
-    overload_groups: &HashMap<&str, Vec<&FunctionInfo>>,
+    ctx: &OverloadCtx<'_, '_>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     use ruff_python_ast::Stmt;
 
     if let Stmt::FunctionDef(func_def) = stmt {
         // Build parameter type map for this function: param_name -> annotation_text.
-        let param_types = build_param_type_map(func_def, source);
+        let param_types = build_param_type_map(judge, func_def);
 
         // Walk the function body for call expressions.
         for body_stmt in &func_def.body {
-            check_stmt_for_calls(
-                subtyping,
-                body_stmt,
-                source,
-                path,
-                overload_groups,
-                &param_types,
-                diagnostics,
-            );
+            check_stmt_for_calls(judge, body_stmt, path, ctx, &param_types, diagnostics);
         }
 
         // Also recurse into nested function definitions.
         for body_stmt in &func_def.body {
-            visit_stmt_for_overload_calls(
-                subtyping,
-                body_stmt,
-                source,
-                path,
-                overload_groups,
-                diagnostics,
-            );
+            visit_stmt_for_overload_calls(judge, body_stmt, path, ctx, diagnostics);
         }
     } else if let Stmt::ClassDef(cls) = stmt {
         for body_stmt in &cls.body {
-            visit_stmt_for_overload_calls(
-                subtyping,
-                body_stmt,
-                source,
-                path,
-                overload_groups,
-                diagnostics,
-            );
+            visit_stmt_for_overload_calls(judge, body_stmt, path, ctx, diagnostics);
         }
     }
 }
 
-/// Build a map from parameter name to its annotation text for a function definition.
+/// Build a map from parameter name to its DECLARED TYPE for a function
+/// definition.
+///
+/// The annotation goes through the module's cascade — alias expansion,
+/// same-file classes, shadowing — rather than being kept as the text between
+/// the colon and the comma. That is what makes the union expansion below
+/// structural: `X | Y`, `Union[X, Y]`, `Optional[X]`, and an alias that
+/// expands to any of them all arrive as [`InferredType::Union`].
 fn build_param_type_map(
+    judge: &TypeJudge<'_, '_>,
     func_def: &ruff_python_ast::StmtFunctionDef,
-    source: &str,
-) -> HashMap<String, String> {
+) -> HashMap<String, InferredType> {
     use ruff_text_size::Ranged as _;
 
     let mut map = HashMap::new();
     for param_with_default in &func_def.parameters.args {
         let param = &param_with_default.parameter;
         if let Some(ann) = &param.annotation {
-            let range = ann.range();
-            if let Some(text) = source.get(range.start().to_usize()..range.end().to_usize()) {
-                let _ = map.insert(param.name.to_string(), text.to_string());
+            if let Some(declared) = judge.declared_at(Span::from(ann.range())) {
+                let _ = map.insert(param.name.to_string(), declared);
             }
         }
     }
@@ -200,12 +197,11 @@ fn build_param_type_map(
 
 /// Check a statement inside a function body for calls to overloaded functions.
 fn check_stmt_for_calls(
-    subtyping: &crate::subtyping::SubtypingContext,
+    judge: &TypeJudge<'_, '_>,
     stmt: &ruff_python_ast::Stmt,
-    source: &str,
     path: &str,
-    overload_groups: &HashMap<&str, Vec<&FunctionInfo>>,
-    param_types: &HashMap<String, String>,
+    ctx: &OverloadCtx<'_, '_>,
+    param_types: &HashMap<String, InferredType>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     use ruff_python_ast::Stmt;
@@ -213,50 +209,25 @@ fn check_stmt_for_calls(
     match stmt {
         Stmt::Expr(expr_stmt) => {
             check_expr_for_overload_call(
-                subtyping,
+                judge,
                 &expr_stmt.value,
-                source,
                 path,
-                overload_groups,
+                ctx,
                 param_types,
                 diagnostics,
             );
         }
         Stmt::Assign(assign) => {
-            check_expr_for_overload_call(
-                subtyping,
-                &assign.value,
-                source,
-                path,
-                overload_groups,
-                param_types,
-                diagnostics,
-            );
+            check_expr_for_overload_call(judge, &assign.value, path, ctx, param_types, diagnostics);
         }
         Stmt::AnnAssign(ann_assign) => {
             if let Some(val) = &ann_assign.value {
-                check_expr_for_overload_call(
-                    subtyping,
-                    val,
-                    source,
-                    path,
-                    overload_groups,
-                    param_types,
-                    diagnostics,
-                );
+                check_expr_for_overload_call(judge, val, path, ctx, param_types, diagnostics);
             }
         }
         Stmt::Return(ret) => {
             if let Some(val) = &ret.value {
-                check_expr_for_overload_call(
-                    subtyping,
-                    val,
-                    source,
-                    path,
-                    overload_groups,
-                    param_types,
-                    diagnostics,
-                );
+                check_expr_for_overload_call(judge, val, path, ctx, param_types, diagnostics);
             }
         }
         _ => {}
@@ -266,12 +237,11 @@ fn check_stmt_for_calls(
 /// Check a call expression to see if it is calling an overloaded function
 /// with union-typed arguments that fail expansion.
 fn check_expr_for_overload_call(
-    subtyping: &crate::subtyping::SubtypingContext,
+    judge: &TypeJudge<'_, '_>,
     expr: &ruff_python_ast::Expr,
-    source: &str,
     path: &str,
-    overload_groups: &HashMap<&str, Vec<&FunctionInfo>>,
-    param_types: &HashMap<String, String>,
+    ctx: &OverloadCtx<'_, '_>,
+    param_types: &HashMap<String, InferredType>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     use ruff_python_ast::Expr;
@@ -281,14 +251,12 @@ fn check_expr_for_overload_call(
         return;
     };
 
-    // Get the callee name.
-    let callee_name = match call.func.as_ref() {
-        Expr::Name(name) => name.id.as_str(),
-        _ => return,
-    };
-
-    // Check if the callee is an overloaded function.
-    let Some(overloads) = overload_groups.get(callee_name) else {
+    // Which overload group this call targets is a BINDING question. The
+    // deleted join read `Expr::Name.id` and looked that spelling up in the
+    // group map, so `shorthand = example; shorthand(v, v, 1)` was missed
+    // entirely, and a name rebound to something else was still attributed to
+    // the old overload group.
+    let Some((callee_name, overloads)) = ctx.group_for(&call.func) else {
         return;
     };
 
@@ -332,14 +300,12 @@ fn check_expr_for_overload_call(
         // where this member is compatible with the parameter at arg_idx.
         for member in &union_members {
             let matches_any = arity_matches.iter().any(|overload| {
-                if let Some(param) = overload.parameters.get(arg_idx) {
-                    if let Some(ann_span) = param.annotation_span {
-                        if let Some(ann_text) = slice_span(source, ann_span) {
-                            return is_type_assignable(subtyping, member, ann_text);
-                        }
-                    }
-                }
-                false
+                overload
+                    .parameters
+                    .get(arg_idx)
+                    .and_then(|param| param.annotation_span)
+                    .and_then(|ann_span| judge.declared_at(ann_span))
+                    .is_some_and(|declared| judge.fits(member, &declared))
             });
 
             if !matches_any {
@@ -371,90 +337,26 @@ fn check_expr_for_overload_call(
 /// Returns `Some(members)` if the argument is a name referencing a parameter
 /// with a union type annotation, where `members.len() > 1`.
 /// Returns `None` for non-parameter-reference arguments or non-union types.
+///
+/// REBUILT on the resolved type. The deleted version took the parameter's
+/// annotation TEXT and split it on the `|` CHARACTER with a bracket-depth
+/// counter, so `Literal["a|b"]` split in the middle of a string literal,
+/// `Union[X, Y]` and `Optional[X]` were not unions at all, and an alias that
+/// expanded to one was invisible.
 fn resolve_arg_union_types(
     expr: &ruff_python_ast::Expr,
-    param_types: &HashMap<String, String>,
-) -> Option<Vec<String>> {
+    param_types: &HashMap<String, InferredType>,
+) -> Option<Vec<InferredType>> {
     use ruff_python_ast::Expr;
 
     let Expr::Name(name) = expr else {
         return None;
     };
 
-    let param_name = name.id.as_str();
-    let ann_text = param_types.get(param_name)?;
-
-    let members = split_union_type(ann_text);
-    if members.len() > 1 {
-        Some(members)
-    } else {
-        None
+    match param_types.get(name.id.as_str())? {
+        InferredType::Union(members) if members.len() > 1 => Some(members.clone()),
+        // `Optional[T]` is `T | None`; both arms must match an overload.
+        InferredType::Optional(inner) => Some(vec![inner.as_ref().clone(), InferredType::None_]),
+        _ => None,
     }
-}
-
-/// Split a union type annotation into its constituent members.
-///
-/// Handles `X | Y` syntax.
-fn split_union_type(annotation: &str) -> Vec<String> {
-    let trimmed = annotation.trim();
-
-    // Try `X | Y` syntax.
-    if trimmed.contains('|') {
-        return split_pipe_union(trimmed)
-            .into_iter()
-            .map(str::to_owned)
-            .collect();
-    }
-
-    // Not a union -- single member.
-    vec![trimmed.to_owned()]
-}
-
-/// Split pipe-union `X | Y | Z` respecting bracket nesting.
-fn split_pipe_union(annotation: &str) -> Vec<&str> {
-    let mut parts = Vec::new();
-    let mut depth = 0u32;
-    let mut start = 0;
-    for (idx, ch) in annotation.char_indices() {
-        match ch {
-            '[' | '(' => depth = depth.saturating_add(1),
-            ']' | ')' => depth = depth.saturating_sub(1),
-            '|' if depth == 0 => {
-                let part = annotation[start..idx].trim();
-                if !part.is_empty() {
-                    parts.push(part);
-                }
-                start = idx + 1;
-            }
-            _ => {}
-        }
-    }
-    let remainder = annotation[start..].trim();
-    if !remainder.is_empty() {
-        parts.push(remainder);
-    }
-    parts
-}
-
-/// Check if a type is assignable to an annotation.
-///
-/// Bracket-aware union decomposition stays here (the context's `|` split is
-/// top-level only); every leaf verdict routes through the module-seeded
-/// context ([NARROWPLAN-SUBTYPING]).
-fn is_type_assignable(
-    subtyping: &crate::subtyping::SubtypingContext,
-    source_type: &str,
-    target_type: &str,
-) -> bool {
-    let src = source_type.trim();
-    let tgt = target_type.trim();
-
-    // Union in target: X | Y
-    if tgt.contains('|') {
-        return split_pipe_union(tgt)
-            .iter()
-            .any(|part| is_type_assignable(subtyping, src, part));
-    }
-
-    subtyping.is_subtype(src, tgt)
 }

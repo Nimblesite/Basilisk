@@ -21,7 +21,7 @@
 | S4 — uv auto-detection | ✅ Done |
 | Cross-cutting checks | ✅ Historical checks for this plan completed; its pristine fixture run did not establish specification conformance |
 
-At the time this plan was implemented, `make bench` recorded a cold-start delta
+At the time this plan was implemented, `make _bench` recorded a cold-start delta
 for later investigation. Those measurements are preserved below as historical
 engineering notes only. Benchmarks now report indicative workstation data and
 do not pass or fail this plan.
@@ -103,7 +103,7 @@ installed `site-packages` tree (the stored wheel is the source).
 the conformance run recorded unchanged (advisories are environment status, not Python
 diagnostics, so they never enter the diagnostic stream) — all green.
 
-`make bench` also ran against the branch, but its outstanding regression is
+`make _bench` also ran against the branch, but its outstanding regression is
 **not attributable to this plan** and is tracked as its own task; see
 [Cross-cutting gates](#cross-cutting-gates) for the evidence. This plan neither claims a benchmark
 result nor licenses re-baselining to slower numbers.
@@ -191,7 +191,7 @@ result nor licenses re-baselining to slower numbers.
 - [x] clippy + fmt at strictest (verified: `cargo clippy --workspace --all-targets` 0 errors/warnings; `cargo fmt --all --check` clean).
 - [x] `make lint` dependency-shape portion (verified: `scripts/check-dependency-shape.sh` — analysis crates offline, only `basilisk-typeshed-fetch` links HTTP).
 - [x] `deslop` clean (verified: `deslop .` exits 0 within the committed `.deslop.toml` budget).
-- [ ] `make bench` — **historical, withdrawn measurement record.** A run logged a
+- [ ] `make _bench` — **historical, withdrawn measurement record.** A run logged a
   cold-start delta, but the figures have not survived the current methodology
   audit and do not gate S1–S4. The contemporaneous investigation recorded:
   - **S4 is perf-neutral**: toggling the `apply_uv_typeshed_override` call off moves the mean within noise (8.4 ms vs 8.8 ms, σ 0.5). Its common-case cost is one `is_file()` stat. S1–S3 add only a skipped `else if` arm to `typeshed_request` on the default path.

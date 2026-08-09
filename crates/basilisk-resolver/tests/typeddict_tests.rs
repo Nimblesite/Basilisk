@@ -31,3 +31,9 @@ mod test_exception_handler;
 
 #[path = "resolver/test_deep_base_chains.rs"]
 mod test_deep_base_chains;
+
+#[path = "resolver/test_resolved_class_hierarchy.rs"]
+mod test_resolved_class_hierarchy;
+
+#[path = "resolver/test_ancestry_completeness.rs"]
+mod test_ancestry_completeness;

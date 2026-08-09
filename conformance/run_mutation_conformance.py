@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Implements [CHKARCH-CONFORMANCE-MUTATION]. See docs/CONFORMANCE-INTEGRITY-AUDIT.md
-"""Run the AST-PRESERVING MUTATED python/typing fixture regression gate.
+"""Run the AST-PRESERVING MUTATED python/typing fixture regression INDICATOR.
 
 Why this exists: the 2026-08 integrity audit (docs/CONFORMANCE-INTEGRITY-AUDIT.md)
 found checker code fitted to the conformance fixtures' exact spellings. A
@@ -20,12 +20,18 @@ The flow mirrors ``run_conformance.py`` and reimplements nothing:
      basilisk`` against the freshly built release binary via ``BASILISK_BIN``,
   4. count files whose harness-computed ``conformance_automated`` is ``Pass``.
 
-The score is a RATCHET (``conformance/mutation_conformance_baseline.json``):
-the mutated pass rate may only rise. A drop means a change re-introduced
-spelling- or formatting-dependent verdicts and FAILS the build. Raising the
-floor to a new high-water mark is done by re-running this script with
-``--update-baseline`` and committing the result alongside the change that
-earned it.
+The score GATES NOTHING. It is printed to be read, and this script exits 0
+whatever it measures. It used to be a ratchet with a floor in
+``conformance/mutation_conformance_baseline.json`` that failed the build on a
+drop; that was deleted, because CLAUDE.md forbids a conformance gate,
+threshold, or ratchet anywhere, and because a floor rewards keeping the number
+up rather than making the analysis right. A drop caused by REMOVING
+text-matched logic is progress and must be recorded as such.
+
+What the number means: a checker that reasons structurally produces identical
+verdicts on the mutated suite and the pristine one, so a GAP between the two
+rates locates spelling dependence. The gap is the signal — not the height of
+either rate.
 
 Like the pristine-fixture result, this is internal regression evidence. The
 adapter has been removed from ``python/typing@main``, and neither this rate nor
@@ -33,13 +39,12 @@ the pristine rate is a current official conformance score.
 
 Usage:
     python3 conformance/run_mutation_conformance.py --bin PATH [--ref REF]
-        [--suite-dir DIR] [--reuse-clone] [--update-baseline]
+        [--suite-dir DIR] [--reuse-clone]
 """
 
 from __future__ import annotations
 
 import argparse
-import json
 import shutil
 import subprocess
 import sys
@@ -47,7 +52,8 @@ import tomllib
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-BASELINE_PATH = REPO_ROOT / "conformance" / "mutation_conformance_baseline.json"
+# NO BASELINE PATH. The ratchet that read one was deleted; see the banner in
+# `main`. Do not reintroduce a floor file here or anywhere else.
 MUTATOR_PATH = REPO_ROOT / "conformance" / "mutate_typing_conformance.py"
 
 
@@ -145,11 +151,6 @@ def main() -> int:
         help="where to clone the suite",
     )
     parser.add_argument("--reuse-clone", action="store_true")
-    parser.add_argument(
-        "--update-baseline",
-        action="store_true",
-        help="write the measured rate as the new ratchet floor",
-    )
     args = parser.parse_args()
 
     suite_dir = clone_suite(args.ref, args.suite_dir, args.reuse_clone)
@@ -161,37 +162,23 @@ def main() -> int:
     if failures:
         print("failing files:", ", ".join(failures))
 
-    baseline = json.loads(BASELINE_PATH.read_text()) if BASELINE_PATH.exists() else {}
-    floor = float(baseline.get("min_pass_rate", 0.0))
-
-    if args.update_baseline:
-        BASELINE_PATH.write_text(
-            json.dumps(
-                {
-                    "min_pass_rate": round(rate, 4),
-                    "measured_passed": passed,
-                    "measured_total": total,
-                    "note": (
-                        "RATCHET — mutated-suite pass rate may only rise. "
-                        "See run_mutation_conformance.py."
-                    ),
-                },
-                indent=2,
-            )
-            + "\n"
-        )
-        print(f"baseline updated: min_pass_rate={rate:.4f}")
-        return 0
-
-    if rate < floor:
-        print(
-            f"FAIL: mutated pass rate {rate:.1%} fell below the ratchet floor "
-            f"{floor:.1%} — a change re-introduced spelling- or "
-            f"formatting-dependent verdicts ([CHKARCH-CONFORMANCE-MUTATION]).",
-            file=sys.stderr,
-        )
-        return 1
-    print(f"ratchet OK: {rate:.1%} >= floor {floor:.1%}")
+    # ###################################################################
+    # # DELETED — the ratchet. DO NOT RESTORE IT IN ANY FORM.
+    # #
+    # # This read `min_pass_rate` from a baseline file and returned 1 when
+    # # the measured rate fell below it, making the mutated conformance
+    # # score a GATE. CLAUDE.md forbids that outright: "Never a gate,
+    # # threshold, or ratchet anywhere ... Do not reintroduce it in that
+    # # file, `make test`, CI, or a script." The floor was the incentive
+    # # that produced the fitting this whole effort exists to undo, and a
+    # # floor on the MUTATED suite is the same incentive wearing a better
+    # # hat — it rewards keeping a number up rather than making the
+    # # analysis right.
+    # #
+    # # A drop caused by removing text-matched logic is PROGRESS. The
+    # # number above is printed to be READ. `--update-baseline` is gone
+    # # with the floor it wrote.
+    # ###################################################################
     return 0
 
 

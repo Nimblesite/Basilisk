@@ -273,6 +273,12 @@ fn extract_type_of_guard(
     Some(NarrowingGuardKind::TypeOfIs {
         variable,
         type_name,
+        type_span: text_range_to_span(right.range()),
+        // Positional: which class the right operand names is decided by the
+        // binding in force at the comparison ([RESOLV-CANONICAL-BINDING]).
+        type_class_site: bindings
+            .local_class_definition(right)
+            .map(text_range_to_span),
         is_positive: matches!(op, CmpOp::Is),
         if_body_span,
         else_body_span,
