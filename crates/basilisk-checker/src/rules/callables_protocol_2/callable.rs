@@ -7,30 +7,10 @@
 
 /// Returns `true` when `source` is assignable to `target` for the purposes of
 /// callable/protocol parameter checking.
-pub(super) fn types_compat(target: &str, source: &str) -> bool {
-    if target == source {
-        return true;
-    }
-    if target.is_empty() || source.is_empty() {
-        return true;
-    }
-    if target == "int" && source == "float" {
-        return true;
-    }
-    if target == "float" && source == "int" {
-        return true;
-    }
-    if target == "bool" && source == "int" {
-        return true;
-    }
-    if target.contains(" | ") {
-        return target.split(" | ").any(|m| m.trim() == source);
-    }
-    let builtins = [
-        "int", "str", "float", "bool", "bytes", "None", "complex", "object",
-    ];
-    if builtins.contains(&target) && builtins.contains(&source) {
-        return false;
-    }
-    true
+pub(super) fn types_compat(_target: &str, _source: &str) -> bool {
+    // The former implementation compared rendered annotation strings, split
+    // unions on textual ` | `, and hard-coded builtin spellings. That was
+    // illegal and has been deleted. This panic is mandatory until callable
+    // compatibility is implemented from resolved types and symbol identity.
+    panic!("callables_protocol_2::types_compat has no legal resolved-type implementation");
 }
