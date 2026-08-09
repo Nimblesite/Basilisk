@@ -36,18 +36,13 @@ fn assert_accepted(source: &str, mutation: &str) -> Result<(), Box<dyn std::erro
         Vec::<&str>::new(),
         "{mutation}: symbol spelling must not invent a diagnostic"
     );
-    assert_rule_count(
-        &diagnostics,
-        RULE,
-        0,
-        "PEP 484 accepted generator behavior",
-    );
+    assert_rule_count(&diagnostics, RULE, 0, "PEP 484 accepted generator behavior");
     Ok(())
 }
 
 #[test]
-fn pep_484_generator_yield_must_match_first_type_argument(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn pep_484_generator_yield_must_match_first_type_argument() -> Result<(), Box<dyn std::error::Error>>
+{
     let rejected = [
         (
             "canonical Generator",
@@ -105,8 +100,7 @@ def observe(
 }
 
 #[test]
-fn pep_484_iterator_yield_must_match_element_type(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn pep_484_iterator_yield_must_match_element_type() -> Result<(), Box<dyn std::error::Error>> {
     let rejected = [
         (
             "canonical Iterator",
@@ -162,8 +156,7 @@ def tune(
 }
 
 #[test]
-fn pep_484_matching_generator_yield_is_accepted(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn pep_484_matching_generator_yield_is_accepted() -> Result<(), Box<dyn std::error::Error>> {
     let accepted = [
         (
             "canonical Generator",
@@ -217,8 +210,8 @@ def observe(
 }
 
 #[test]
-fn pep_484_yield_from_element_must_match_outer_yield_type(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn pep_484_yield_from_element_must_match_outer_yield_type() -> Result<(), Box<dyn std::error::Error>>
+{
     let rejected = [
         (
             "canonical imports",
@@ -287,8 +280,7 @@ def outer(
 }
 
 #[test]
-fn pep_484_bare_yield_matches_iterator_none(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn pep_484_bare_yield_matches_iterator_none() -> Result<(), Box<dyn std::error::Error>> {
     // Regression for issue #108: a bare `yield` yields `None`; a following
     // expression statement must not be mistaken for the yielded expression.
     let accepted = [

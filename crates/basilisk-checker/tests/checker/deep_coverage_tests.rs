@@ -12,48 +12,157 @@ fn messages_for(diags: &[basilisk_checker::Diagnostic], code: &str) -> Vec<Strin
         .collect()
 }
 
-// ============================================================================
-// type statement invalid RHS (PEP 695)
-// ============================================================================
-
+/// PEP 695 restricts a type statement RHS to expression forms allowed in type
+/// annotations. Boolean values are expressions, but they are not types.
+/// <https://peps.python.org/pep-0695/#generic-type-alias>
 #[test]
-fn type_alias_bool_literal_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = "type BadAlias = True\n";
-    // Exercise the code path - may or may not fire depending on resolver support
-    let diags = run(source)?;
+fn pep_695_type_alias_rejects_boolean_value_expressions() -> Result<(), Box<dyn std::error::Error>>
+{
+    let rejected = [
+        ("true literal", "type InvalidBeacon = True\n"),
+        ("false literal", "type InvalidHarbour = False\n"),
+        ("renamed alias", "type BrokenCompass = True\n"),
+        (
+            "reformatted statement",
+            "type InvalidMeasurement = (\n    False\n)\n",
+        ),
+    ];
+    for (mutation, source) in rejected {
+        let diagnostics = run(source)?;
+        assert_eq!(
+            diagnostics.len(),
+            1,
+            "{mutation}: one invalid RHS must produce one isolated diagnostic: {diagnostics:#?}"
+        );
+        assert_eq!(
+            codes(&diagnostics),
+            vec!["aliases_type_statement"],
+            "{mutation}: the PEP 695 alias rule itself must reject the value"
+        );
+        assert_rule_count(
+            &diagnostics,
+            "aliases_type_statement",
+            1,
+            "PEP 695 boolean value used as a type alias RHS",
+        );
+    }
+    Ok(())
+}
 
-    let _msgs = messages_for(&diags, "aliases_type_statement");
+/// Numeric values are likewise not type expressions on a PEP 695 alias RHS.
+#[test]
+fn pep_695_type_alias_rejects_numeric_value_expressions() -> Result<(), Box<dyn std::error::Error>>
+{
+    let rejected = [
+        ("positive integer", "type InvalidBeacon = 42\n"),
+        ("negative integer", "type InvalidHarbour = -7\n"),
+        ("floating value", "type BrokenCompass = 3.5\n"),
+        (
+            "reformatted numeric value",
+            "type InvalidMeasurement = (\n    11\n)\n",
+        ),
+    ];
+    for (mutation, source) in rejected {
+        let diagnostics = run(source)?;
+        assert_eq!(
+            diagnostics.len(),
+            1,
+            "{mutation}: one numeric RHS must produce one isolated diagnostic: {diagnostics:#?}"
+        );
+        assert_eq!(
+            codes(&diagnostics),
+            vec!["aliases_type_statement"],
+            "{mutation}: the PEP 695 alias rule itself must reject the value"
+        );
+        assert_rule_count(
+            &diagnostics,
+            "aliases_type_statement",
+            1,
+            "PEP 695 numeric value used as a type alias RHS",
+        );
+    }
     Ok(())
 }
 
 #[test]
-fn type_alias_int_literal_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = "type BadAlias = 42\n";
-    // Exercise the code path - may or may not fire depending on resolver support
-    let diags = run(source)?;
-
-    let _msgs = messages_for(&diags, "aliases_type_statement");
+fn pep_695_type_alias_accepts_resolved_type_expressions() -> Result<(), Box<dyn std::error::Error>>
+{
+    let accepted = [
+        ("canonical builtins", "type Ledger = list[int]\n"),
+        (
+            "aliased builtins",
+            "from builtins import int as Count, list as Sequence\ntype Ledger = Sequence[Count]\n",
+        ),
+        (
+            "qualified builtins",
+            "import builtins as runtime\ntype Manifest = runtime.list[runtime.str]\n",
+        ),
+        (
+            "renamed and reformatted alias",
+            "from builtins import bytes as Payload, tuple as Record\ntype Archive = (\n    Record[\n        Payload,\n        ...\n    ]\n)\n",
+        ),
+    ];
+    for (mutation, source) in accepted {
+        let diagnostics = run(source)?;
+        assert!(
+            diagnostics.is_empty(),
+            "{mutation}: resolved type expressions must be accepted: {diagnostics:#?}"
+        );
+        assert_eq!(
+            codes(&diagnostics),
+            Vec::<&str>::new(),
+            "{mutation}: type spelling must not change acceptance"
+        );
+        assert_rule_count(
+            &diagnostics,
+            "aliases_type_statement",
+            0,
+            "PEP 695 valid type alias RHS",
+        );
+    }
     Ok(())
 }
 
+/// PEP 695 explicitly permits quoted forward references in alias expressions.
 #[test]
-fn type_alias_valid_no_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let source = "type MyList = list[int]\n";
-    let diags = run(source)?;
-
-    let msgs = messages_for(&diags, "aliases_type_statement");
-    assert!(msgs.is_empty(), "valid type alias should not fire E0057");
-    Ok(())
-}
-
-#[test]
-fn type_alias_str_literal_fires() -> Result<(), Box<dyn std::error::Error>> {
-    let source = "type BadAlias = \"hello\"\n";
-    let diags = run(source)?;
-
-    let msgs = messages_for(&diags, "aliases_type_statement");
-    // String literals may be forward references, so this might not fire
-    let _ = msgs;
+fn pep_695_type_alias_accepts_quoted_forward_references() -> Result<(), Box<dyn std::error::Error>>
+{
+    let accepted = [
+        (
+            "double-quoted forward reference",
+            "type River = \"River\"\n",
+        ),
+        (
+            "single-quoted renamed reference",
+            "type Harbour = 'Harbour'\n",
+        ),
+        (
+            "forward reference in a union",
+            "type Branch = int | \"Canopy\"\nclass Canopy: ...\n",
+        ),
+        (
+            "reformatted forward reference",
+            "type Observatory = (\n    \"Observatory\"\n    | None\n)\n",
+        ),
+    ];
+    for (mutation, source) in accepted {
+        let diagnostics = run(source)?;
+        assert!(
+            diagnostics.is_empty(),
+            "{mutation}: PEP 695 permits this forward reference: {diagnostics:#?}"
+        );
+        assert_eq!(
+            codes(&diagnostics),
+            Vec::<&str>::new(),
+            "{mutation}: quote and symbol spelling must preserve acceptance"
+        );
+        assert_rule_count(
+            &diagnostics,
+            "aliases_type_statement",
+            0,
+            "PEP 695 quoted forward reference in a type alias",
+        );
+    }
     Ok(())
 }
 

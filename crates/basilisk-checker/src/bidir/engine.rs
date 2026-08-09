@@ -361,7 +361,7 @@ impl BidirEngine {
         // Constructor: a class object used as a callee yields an instance.
         // (`Named` deliberately conflates class/instance at Stage 2 — the
         // display value is right and no rule enforces it yet.)
-        if let Ty::Ground(InferredType::Named(name)) = callee {
+        if let Ty::Ground(InferredType::Named(_name)) = callee {
             // ##############################################################
             // # DELETED — the `type`-typed-callee test. DO NOT RESTORE IT  #
             // # AND DO NOT REPLACE IT WITH A PLACEHOLDER BRANCH.           #
@@ -376,7 +376,6 @@ impl BidirEngine {
             // #                                                            #
             // # Pinned by: tests/no_type_spelling_surgery_tests.rs         #
             // ##############################################################
-            let _ = name;
             panic!(
                 "basilisk-checker: recognising a `type`-typed callee was DELETED \
                  because it tested the RENDERED spelling of the callee's type \
@@ -386,7 +385,6 @@ impl BidirEngine {
                  YET. Do not restore the spelling test and do not pick either branch \
                  unconditionally in its place."
             );
-            return Ty::Ground(InferredType::Named(name.clone()));
         }
         match call.func.as_ref() {
             // `type(x)` yields x's CLASS — a class object, which is never a

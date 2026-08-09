@@ -97,14 +97,13 @@ pub(super) fn resolve_constructor_sig(
     }
 
     // 4. Walk base classes (simplified MRO).
-    for base_name in class_bases(class_info) {
+    for _base_name in class_bases(class_info) {
         // ##################################################################
         // # DELETED — the `base_name == "object"` skip. DO NOT RESTORE IT. #
         // # It recognised the top type by its builtin SPELLING; ask the    #
         // # binding table for `TypingForm::ObjectClass` instead.           #
         // # Pinned by: tests/no_type_spelling_surgery_tests.rs             #
         // ##################################################################
-        let _ = base_name;
         panic!(
             "basilisk-checker: skipping the `object` base in \
              `resolve_constructor_sig` was DELETED because it recognised the top \
@@ -113,12 +112,6 @@ pub(super) fn resolve_constructor_sig(
              DOES NOT EXIST YET. Do not restore the comparison and do not drop the \
              skip entirely."
         );
-        if let Some(base_class) = class_map.get(base_name) {
-            let sig = resolve_constructor_sig(base_name, base_class, class_map, method_map, source);
-            if !matches!(sig, ConstructorSig::NoArgs) {
-                return sig;
-            }
-        }
     }
 
     // Default: object() — no args.
@@ -222,7 +215,9 @@ pub(super) fn check_kwarg_types(
         };
         let target = TypeNode::lower(bindings, ann_expr);
         if assignable(&TypeNode::of_literal_expr(&kw.value), &target) == Some(false) {
-            let expected_type = slice_span(source, ann_span).unwrap_or("<annotation>").trim();
+            let expected_type = slice_span(source, ann_span)
+                .unwrap_or("<annotation>")
+                .trim();
             let arg_text = node_message_text(source, &kw.value);
             diagnostics.push(error_diagnostic_owned(
                 CODE.clone(),
@@ -279,7 +274,9 @@ pub(super) fn check_positional_arg_types(
         };
         let target = TypeNode::lower(bindings, ann_expr);
         if assignable(&TypeNode::of_literal_expr(arg_expr), &target) == Some(false) {
-            let expected_type = slice_span(source, ann_span).unwrap_or("<annotation>").trim();
+            let expected_type = slice_span(source, ann_span)
+                .unwrap_or("<annotation>")
+                .trim();
             let arg_text = node_message_text(source, arg_expr);
             let arg_span = Span::from(arg_expr.range());
             diagnostics.push(error_diagnostic_owned(

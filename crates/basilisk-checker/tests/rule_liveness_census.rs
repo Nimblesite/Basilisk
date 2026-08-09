@@ -11,10 +11,11 @@
 //! anything — that is a definite negative, and it is what this census is
 //! for.
 //!
-//! Run explicitly (it walks the filesystem, so it is `#[ignore]`d by default):
+//! This census is part of the normal test graph. A test hidden behind
+//! `#[ignore]` is not evidence and is prohibited by the reachability guard.
 //!
 //! ```text
-//! cargo test -p basilisk-checker --test rule_liveness_census -- --ignored --nocapture
+//! cargo test -p basilisk-checker --test rule_liveness_census -- --nocapture
 //! ```
 #![allow(
     clippy::allow_attributes,
@@ -66,14 +67,17 @@ fn python_files(dir: &Path, out: &mut Vec<PathBuf>) {
 }
 
 #[test]
-#[ignore = "walks vendored corpora; run explicitly for the census"]
 fn census_which_rules_ever_fire() {
     let root = workspace_root();
     let mut files = Vec::new();
     for corpus in CORPORA {
         python_files(&root.join(corpus), &mut files);
     }
-    assert!(!files.is_empty(), "no corpus found under {}", root.display());
+    assert!(
+        !files.is_empty(),
+        "no corpus found under {}",
+        root.display()
+    );
 
     let mut counts: BTreeMap<String, usize> = BTreeMap::new();
     let mut checked = 0usize;

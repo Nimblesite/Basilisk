@@ -24,11 +24,17 @@ use std::path::{Path, PathBuf};
 /// Patterns that consume a checker result without asserting anything about it.
 const NO_ASSERTION_PATTERNS: &[&str] = &[
     "let _ = run(",
+    "let _diags = run(",
+    "let _diagnostics = run(",
     "let _ = codes(",
     "let _ = codes_owned(",
     "let _ = diags",
     "let _ = diagnostics",
     "let _ = messages_for(",
+    "let _msgs = messages_for(",
+    "let _messages = messages_for(",
+    "let _ = msgs;",
+    "let _ = messages;",
 ];
 
 fn tests_dir() -> PathBuf {
@@ -59,7 +65,10 @@ fn no_test_observes_diagnostics_without_asserting() {
     let mut total = 0usize;
     for file in &files {
         // This file necessarily contains the patterns as string literals.
-        if file.file_name().is_some_and(|name| name == "no_assertion_debt_tests.rs") {
+        if file
+            .file_name()
+            .is_some_and(|name| name == "no_assertion_debt_tests.rs")
+        {
             continue;
         }
         let Ok(source) = std::fs::read_to_string(file) else {
@@ -90,7 +99,7 @@ fn no_test_observes_diagnostics_without_asserting() {
     assert_eq!(
         total,
         0,
-        "\n{total} no-assertion test bodies across {} files observe checker output and \
+        "\n{total} no-assertion patterns across {} files observe checker output and \
          assert nothing. Each reports `ok` regardless of whether the rule is correct, \
          silently wrong, or entirely inert — so none of them can catch a wrong result.\n\n\
          Worst offenders (count, file):\n{}\n\n\
