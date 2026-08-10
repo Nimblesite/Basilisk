@@ -40,7 +40,10 @@ fn the_notice_carries_every_required_fact() {
         "rebuilding from the ground up",
         "https://www.christianfindlay.com/blog/basilisk-conformance-apology",
     ] {
-        assert!(NOTICE.contains(required), "the notice must say {required:?}");
+        assert!(
+            NOTICE.contains(required),
+            "the notice must say {required:?}"
+        );
     }
 }
 

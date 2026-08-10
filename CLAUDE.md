@@ -2,11 +2,13 @@
 
 ## Where Basilisk stands
 
-Basilisk's type checker was producing incorrect results. We asked for it to be removed from the `python/typing` results, and it was ([python/typing#2330](https://github.com/python/typing/pull/2330)). The code responsible is not isolated, and we cannot say how many rules are affected.
+Basilisk's type checker was producing incorrect results. We asked for it to be removed from the `python/typing` conformance results, and it has been removed ([python/typing#2330](https://github.com/python/typing/pull/2330)). The code responsible is not isolated to a known set of rules, and we cannot say how many rules are affected.
 
 A code-quality tool that does not produce correct results is worse than useless.
 
-**So: unlist first, no rebuilding until after the public delisting is complete.** Basilisk is being unlisted everywhere and then rebuilt from the ground up as a new product — not fixed, not audited, not salvaged. It will ship only what can be trusted, which most likely will not include type checking. If type checking ever returns, it goes through external auditing before release.
+**So: unlist first, no rebuilding until the unlisting is complete.** Basilisk is being unlisted everywhere and then rebuilt from the ground up as a new product — not fixed, not audited, not salvaged. It will ship only what can be trusted, which most likely will not include type checking. If type checking ever returns, it will be externally audited before release.
+
+One vocabulary, in this order: **incorrect results → removed from `python/typing` → unlisted from every channel → the CLI is inert → rebuilt from the ground up as a new product.** "Unlisted" throughout — never delisted, withdrawn, deprecated, or discontinued as synonyms.
 
 Full messaging, including every approved word of public copy: [`docs/specs/DOCS-WITHDRAWAL-MESSAGING-SPEC.md`](docs/specs/DOCS-WITHDRAWAL-MESSAGING-SPEC.md). It is the single source of truth. Copy from it; never write your own version.
 
@@ -18,7 +20,7 @@ Full messaging, including every approved word of public copy: [`docs/specs/DOCS-
 
 Nothing else is in scope until that is done.
 
-While the eventual plan is to rebuild a Python dev experience tool from the ground up again, you are not currently allowed to contribute to that end.
+While the eventual plan is to rebuild from the ground up as a new product, you are not currently allowed to contribute to that end.
 
 ## Do not
 

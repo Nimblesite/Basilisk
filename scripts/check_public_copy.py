@@ -64,10 +64,20 @@ class Rule:
 
 RULES: tuple[Rule, ...] = (
     Rule(
-        "conformance-figure",
+        "measured-figure",
+        re.compile(r"\b\d{1,3}(?:\.\d+)?\s?%"),
+        "no conformance or benchmark figure, in any tense, caveated or archived",
+    ),
+    # A figure, not the word: the approved copy says "removed from the
+    # python/typing conformance results" and links PR #2330, so `conformance`
+    # and a bare number are both allowed. A percentage, a score, or an "N of M"
+    # is not.
+    Rule(
+        "conformance-score",
         re.compile(
-            r"(conformance|benchmark|pass rate)[^.\n]{0,60}?\d|"
-            r"\d[^.\n]{0,60}?(conformance|benchmark)",
+            r"(?:conformance|benchmark|pass rate|score)[^.\n]{0,80}?"
+            r"\b\d{1,3}(?:\.\d+)?\s?(?:%|of\s+\d|/\s?\d)|"
+            r"\bscored?\b[^.\n]{0,40}?\d",
             re.IGNORECASE,
         ),
         "no conformance or benchmark figure, in any tense, caveated or archived",
@@ -169,7 +179,9 @@ def main() -> int:
             failed = True
 
     if failed:
-        print(f"\nThe prohibitions are {SPEC} [WITHDRAWAL-PROHIBITED].", file=sys.stderr)
+        print(
+            f"\nThe prohibitions are {SPEC} [WITHDRAWAL-PROHIBITED].", file=sys.stderr
+        )
         return 1
     print(f"✓ {len(paths)} public surfaces carry no prohibited copy")
     return 0

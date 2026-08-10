@@ -88,10 +88,16 @@ Every surface below carries a block from [Copy](#WITHDRAWAL-COPY) and nothing el
 | Every retired website URL | redirect to `/` | `website/src/notice.njk` |
 | GitHub / VSIX / PyPI / Zed / Neovim READMEs | [full](#WITHDRAWAL-COPY-FULL) + [action](#WITHDRAWAL-COPY-ACTION) | `scripts/gen_readmes.py` from `docs/readme/README.src.md` |
 | Package + store description fields | [one line](#WITHDRAWAL-COPY-LINE) | copied by hand, asserted by `scripts/test_published_readmes.py` |
-| CLI, every invocation | [notice](#WITHDRAWAL-INERT-TEXT) | `crates/basilisk-cli/src/main.rs` |
-| VS Code extension | [notice](#WITHDRAWAL-INERT-TEXT) | `vscode-extension/src/extension.ts` |
+| CLI, every invocation | [notice](#WITHDRAWAL-INERT-TEXT) | `crates/basilisk-cli/src/withdrawal_notice.txt` |
+| VS Code extension | [notice](#WITHDRAWAL-INERT-TEXT) | `vscode-extension/src/withdrawal-notice.ts` |
+| Zed extension, `/basilisk` | [notice](#WITHDRAWAL-INERT-TEXT) | `basilisk-zed/src/withdrawal_notice.txt` |
+| Neovim plugin + `:help basilisk` | [notice](#WITHDRAWAL-INERT-TEXT) | `basilisk.nvim/lua/basilisk/notice.lua`, `basilisk.nvim/doc/basilisk.txt` |
 
-The extension ships **no checker binary and no type-checking UI** — no diagnostics, commands, views, settings, debugger, or profiler. It activates, states this, and links the website.
+All five notice carriers are written by `scripts/gen_withdrawal_copy.py` from the one fence below and drift-gated by its `--check` in `make lint` and CI, so no surface can print its own version of the statement.
+
+**Every editor extension ships no checker binary and no type-checking UI** — no diagnostics, commands, views, settings, debugger, or profiler, and no language server to launch. The VS Code extension activates, states this, and links the website. The Zed extension registers no `[language_servers.*]`, `[debug_adapters.*]` or `[grammars.*]` table and offers one slash command that prints the statement ([ZED-NOW](ZED-SPEC.md#ZED-NOW)). Each is enforced against the packaged artefact: `scripts/verify-vsix-inert.sh` for the VSIX, `basilisk-zed/src/logic_tests.rs` for the Zed manifest.
+
+**Everything else public is scanned.** `scripts/check_public_copy.py` reads every public surface — the storefront READMEs, the crate READMEs, `SECURITY.md`, `CONTRIBUTING.md`, the package manifests, the Homebrew and Scoop templates, the site templates — and fails on anything [Never](#WITHDRAWAL-PROHIBITED) bars. It runs in `make lint` and in CI. When this spec gains a prohibition, add a rule there; never an exemption for a surface that trips one.
 
 ## Inert Type Checker CLI {#WITHDRAWAL-INERT}
 

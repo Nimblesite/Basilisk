@@ -70,6 +70,27 @@ nvim_tag="$(curl -fsSL "https://api.github.com/repos/Nimblesite/basilisk.nvim/ta
     python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["name"].lstrip("v"))' 2>/dev/null || echo "")"
 check "Nimblesite/basilisk.nvim" "$nvim_tag"
 
+# Zed does not ship from the release workflow — delist/00-publish-zed-final.sh
+# pushes the mirror by hand. Check the mirror tag here; the registry entry it
+# points at only goes live once a Zed maintainer merges the bump PR, which is a
+# separate wait and not a blocker for the other channels ([ZED-MIRROR]).
+step "Zed mirror tag"
+zed_tag="$(curl -fsSL "https://api.github.com/repos/Nimblesite/basilisk-zed/tags" |
+    python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["name"].lstrip("v"))' 2>/dev/null || echo "")"
+check "Nimblesite/basilisk-zed" "$zed_tag"
+
+step "Zed registry entry"
+zed_listed="$(curl -fsSL "https://raw.githubusercontent.com/zed-industries/extensions/main/extensions.toml" |
+    python3 -c 'import sys,tomllib; print(tomllib.loads(sys.stdin.read()).get("basilisk", {}).get("version", ""))' 2>/dev/null || echo "")"
+if [ "$zed_listed" = "$BARE" ]; then
+    ok "Zed registry is at $BARE"
+elif [ -z "$zed_listed" ]; then
+    warn "Zed registry lists no basilisk entry — nothing to unlist there"
+else
+    warn "Zed registry is still at '$zed_listed' — the bump PR has not merged yet."
+    warn "Do not run 06-unlist-zed.sh until it lands."
+fi
+
 echo
 if [ "$failures" -ne 0 ]; then
     fail "$failures channel(s) are not on $BARE — DO NOT UNLIST YET. Publish the final version first."
