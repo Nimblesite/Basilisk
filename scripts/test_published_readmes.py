@@ -33,10 +33,19 @@ APOLOGY = "https://www.christianfindlay.com/blog/basilisk-conformance-apology"
 # rendered markdown, so a link, a badge, or a code fence all count.
 FORBIDDEN = (
     ("a conformance or pass-rate figure", re.compile(r"\d+(\.\d+)?\s*%")),
-    ("install instructions", re.compile(r"\b(pip|pipx|uv tool|brew|scoop|npm)\s+install\b", re.I)),
+    (
+        "install instructions",
+        re.compile(r"\b(pip|pipx|uv tool|brew|scoop|npm)\s+install\b", re.I),
+    ),
     ("an editor install link", re.compile(r"vscode:extension", re.I)),
-    ("a marketplace or package listing link", re.compile(r"marketplace\.visualstudio\.com|open-vsx\.org|pypi\.org", re.I)),
-    ("a competitor comparison", re.compile(r"\b(pyright|mypy|pyrefly|zuban|pylance)\b", re.I)),
+    (
+        "a marketplace or package listing link",
+        re.compile(r"marketplace\.visualstudio\.com|open-vsx\.org|pypi\.org", re.I),
+    ),
+    (
+        "a competitor comparison",
+        re.compile(r"\b(pyright|mypy|pyrefly|zuban|pylance)\b", re.I),
+    ),
     ("a benchmark claim", re.compile(r"\bbenchmark|\bfastest\b", re.I)),
     ("a rule catalogue", re.compile(r"\bBSK-\d{4}\b")),
     ("a `basilisk` invocation", re.compile(r"\bbasilisk (check|analyze|fix|lsp)\b")),

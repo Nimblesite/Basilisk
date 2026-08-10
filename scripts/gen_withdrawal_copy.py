@@ -31,6 +31,8 @@ DATA_PATH = REPO_ROOT / "website/src/_data/withdrawal.json"
 # generated file rather than a hand-typed string ([WITHDRAWAL-INERT-TEXT]).
 CLI_NOTICE_PATH = REPO_ROOT / "crates/basilisk-cli/src/withdrawal_notice.txt"
 VSIX_NOTICE_PATH = REPO_ROOT / "vscode-extension/src/withdrawal-notice.ts"
+NVIM_NOTICE_PATH = REPO_ROOT / "basilisk.nvim/lua/basilisk/notice.lua"
+NVIM_DOC_PATH = REPO_ROOT / "basilisk.nvim/doc/basilisk.txt"
 
 # The anchors naming each approved block in the spec.
 ANCHOR_LINE = "{#WITHDRAWAL-COPY-LINE}"
@@ -170,6 +172,71 @@ def build() -> dict[str, object]:
         "short": [to_html(p) for p in copy.short],
         "action": [to_html(p) for p in copy.action],
         "full": [to_html(p) for p in copy.full],
+        # The same block as markdown, for surfaces that are not HTML. llms.txt
+        # is read by machines: stripping the tags out of the HTML would drop
+        # the source links the copy carries, and rewriting the copy without
+        # them would be a fourth variant of the message.
+        "full_markdown": list(copy.full),
+    }
+
+
+def notice_text() -> str:
+    """The exact bytes the inert CLI and the extension print."""
+    return fenced_after(
+        SPEC_PATH.read_text(encoding="utf-8").splitlines(), ANCHOR_NOTICE
+    )
+
+
+def vsix_notice_module(notice: str) -> str:
+    """The notice as a TypeScript module the extension imports."""
+    return (
+        "// GENERATED FILE — DO NOT EDIT.\n"
+        "// Source: docs/specs/DOCS-WITHDRAWAL-MESSAGING-SPEC.md [WITHDRAWAL-INERT-TEXT]\n"
+        "// Regenerate: python3 scripts/gen_withdrawal_copy.py\n"
+        "/** The approved notice, verbatim. */\n"
+        f"export const WITHDRAWAL_NOTICE = {json.dumps(notice)};\n"
+    )
+
+
+def nvim_notice_module(notice: str) -> str:
+    """The notice as a Lua module the Neovim plugin requires."""
+    return (
+        "-- GENERATED FILE — DO NOT EDIT.\n"
+        "-- Source: docs/specs/DOCS-WITHDRAWAL-MESSAGING-SPEC.md [WITHDRAWAL-INERT-TEXT]\n"
+        "-- Regenerate: python3 scripts/gen_withdrawal_copy.py\n"
+        f"local text = {json.dumps(notice.rstrip(chr(10)))}\n"
+        "return {\n"
+        "  text = text,\n"
+        '  lines = vim.split(text, "\\n", { plain = true }),\n'
+        "}\n"
+    )
+
+
+def nvim_help_doc(notice: str) -> str:
+    """`:help basilisk` — the statement, and nothing else."""
+    return (
+        "*basilisk.txt*  Basilisk is unlisted\n"
+        "\n"
+        "GENERATED FILE — DO NOT EDIT. Source:\n"
+        "docs/specs/DOCS-WITHDRAWAL-MESSAGING-SPEC.md [WITHDRAWAL-INERT-TEXT]\n"
+        "\n"
+        "BASILISK                                                      *basilisk*\n"
+        "\n"
+        f"{notice}"
+        "\n"
+        "vim:tw=78:ts=8:ft=help:norl:\n"
+    )
+
+
+def outputs() -> dict[Path, str]:
+    """Every file generated from the spec, by path."""
+    notice = notice_text()
+    return {
+        DATA_PATH: json.dumps(build(), indent=2, ensure_ascii=False) + "\n",
+        CLI_NOTICE_PATH: notice,
+        VSIX_NOTICE_PATH: vsix_notice_module(notice),
+        NVIM_NOTICE_PATH: nvim_notice_module(notice),
+        NVIM_DOC_PATH: nvim_help_doc(notice),
     }
 
 
@@ -178,30 +245,31 @@ def main() -> int:
     parser.add_argument(
         "--check",
         action="store_true",
-        help="verify the data file matches the spec instead of writing it",
+        help="verify the generated files match the spec instead of writing them",
     )
     args = parser.parse_args()
 
     try:
-        payload = json.dumps(build(), indent=2, ensure_ascii=False) + "\n"
+        generated = outputs()
     except SpecError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
 
-    if not args.check:
-        DATA_PATH.write_text(payload, encoding="utf-8")
-        print(f"wrote {DATA_PATH.relative_to(REPO_ROOT)}")
-        return 0
-
-    current = DATA_PATH.read_text(encoding="utf-8") if DATA_PATH.exists() else ""
-    if current == payload:
-        return 0
-    print(
-        f"error: {DATA_PATH.relative_to(REPO_ROOT)} has drifted from "
-        f"{SPEC_PATH.relative_to(REPO_ROOT)}. Run: python3 scripts/gen_withdrawal_copy.py",
-        file=sys.stderr,
-    )
-    return 1
+    drifted = False
+    for path, payload in generated.items():
+        relative = path.relative_to(REPO_ROOT)
+        if not args.check:
+            path.write_text(payload, encoding="utf-8")
+            print(f"wrote {relative}")
+            continue
+        if (path.read_text(encoding="utf-8") if path.exists() else "") != payload:
+            print(
+                f"error: {relative} has drifted from {SPEC_PATH.name}", file=sys.stderr
+            )
+            drifted = True
+    if drifted:
+        print("Run: python3 scripts/gen_withdrawal_copy.py", file=sys.stderr)
+    return 1 if drifted else 0
 
 
 if __name__ == "__main__":

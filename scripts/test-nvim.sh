@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
-# Run Neovim extension real LSP e2e and screenshot regression tests.
+# Run the Neovim plugin specs.
 #
-# Requires: nvim 0.11+, basilisk binary.
-# Set BASILISK_BIN to override the binary path.
+# The plugin is a notice ([WITHDRAWAL-SURFACES]): it starts no language server
+# and no debug adapter, so this harness needs no `basilisk` binary, no debugpy,
+# and no LSP/DAP/screenshot suites. What is left is plenary and one spec
+# directory, gated on PARSED results exactly as before — every spec file must
+# run AND summarise with zero failures.
+#
+# Requires: nvim 0.11+.
 #
 # Usage:
 #   ./scripts/test-nvim.sh
@@ -13,56 +18,19 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$REPO_ROOT/scripts/common.sh"
 cd "$REPO_ROOT"
 
-# Find or build the basilisk binary. When no explicit binary is provided, build
-# a fresh non-coverage CLI so local `make ci` does not reuse test-rust's
-# coverage-instrumented target/ci artifact.
-if [[ -z "${BASILISK_BIN:-}" ]]; then
-    header "Building basilisk binary"
-    cargo build --profile ci --bin basilisk
-    BASILISK_BIN="$REPO_ROOT/target/ci/basilisk"
-else
-    BASILISK_BIN=$(find_basilisk_bin) || {
-        echo -e "${RED}${BOLD}FATAL: configured basilisk binary not found.${RESET}"
-        exit 1
-    }
-fi
-if [[ ! -x "$BASILISK_BIN" ]]; then
-    echo -e "${RED}${BOLD}FATAL: basilisk binary not found.${RESET}"
+if ! command -v nvim &>/dev/null; then
+    echo -e "${RED}${BOLD}FATAL: nvim not found. Install it: brew install neovim${RESET}" >&2
     exit 1
 fi
-export BASILISK_EXECUTABLE_PATH="$BASILISK_BIN"
-ok "basilisk binary: $BASILISK_BIN"
-
-# ── Dependencies ──────────────────────────────────────────────────────────────
-
-header "Checking dependencies"
-
-if ! command -v pytest &>/dev/null; then
-    echo -e "${RED}${BOLD}FATAL: pytest not found. Install it: pip install pytest${RESET}"
-    exit 1
-fi
-ok "pytest: $(pytest --version 2>&1 | head -1)"
-
-# The tests/dap specs drive the real debug adapter, which launches debugpy.
-# Without it the LSP answers every startDebugSession with "debugpy not found"
-# and ~20 specs fail on assertions that look unrelated to the missing package.
-# Fail here instead, with the fix in the message.
-if ! python3 -c "import debugpy" &>/dev/null; then
-    echo -e "${RED}${BOLD}FATAL: debugpy not found — the DAP specs cannot run.${RESET}"
-    echo -e "${RED}Install it: python3 -m pip install debugpy==1.8.14${RESET}"
-    exit 1
-fi
-ok "debugpy: $(python3 -c 'import debugpy; print(debugpy.__version__)' 2>&1)"
 
 cd "$REPO_ROOT/basilisk.nvim"
 
-# Test plugins live in /tmp (and are restored from the CI cache), so a
-# directory existing proves nothing: macOS's /tmp reaper deletes stale FILES and
-# leaves the empty directory tree behind, and a cache restore can be partial the
-# same way. A hollow checkout fails far away from here — plenary's
-# `:PlenaryBustedDirectory` simply does not exist and every spec is "not an
-# editor command". So each plugin is validated by a file it MUST provide and
-# re-cloned when that file is missing.
+# Test plugins live in /tmp (and are restored from the CI cache), so a directory
+# existing proves nothing: macOS's /tmp reaper deletes stale FILES and leaves the
+# empty tree behind, and a cache restore can be partial the same way. A hollow
+# checkout fails far away from here — `:PlenaryBustedDirectory` simply does not
+# exist and every spec is "not an editor command". So the plugin is validated by
+# a file it MUST provide and re-cloned when that file is missing.
 ensure_plugin() {
     local dir="$1" proof="$2" repo="$3"
     if [[ -f "$dir/$proof" ]]; then
@@ -81,117 +49,28 @@ ensure_plugin() {
 
 ensure_plugin /tmp/plenary.nvim plugin/plenary.vim \
     https://github.com/nvim-lua/plenary.nvim
-ensure_plugin /tmp/nvim-dap plugin/dap.lua \
-    https://github.com/mfussenegger/nvim-dap
-ensure_plugin /tmp/mini.nvim lua/mini/test.lua \
-    https://github.com/echasnovski/mini.nvim
 
-# ── Tests ─────────────────────────────────────────────────────────────────────
+# Remove stale luacov data so coverage reflects this run only.
+rm -f luacov.stats.out luacov.report.out
 
-# Run one plenary spec directory and gate on PARSED results, exactly as the LSP
-# suite below does — every spec file must run AND summarise with zero
-# failures/errors/tracebacks. See common.sh
-# [LSPTEST-EDITOR-SPECIFIC-INTEGRATION-NEOVIM-E2E-GATE].
-run_plenary_dir() {
-    local dir="$1" label="$2" expected out
-    expected="$(find "$dir" -name '*_spec.lua' | wc -l | tr -d ' ')"
-    out="$(mktemp)"
-    # No LUACOV here on purpose: the LSP suite below deletes luacov.stats.out
-    # before a retry, so stats gathered by an earlier suite would silently
-    # vanish on the retry path and make the coverage threshold non-deterministic.
-    # The LSP e2e run remains the single, reproducible coverage input.
-    set +e
-    nvim --headless -u tests/minimal_init.lua \
-        -c "PlenaryBustedDirectory ${dir} {minimal_init = 'tests/minimal_init.lua', sequential = true, timeout = 300000}" 2>&1 \
-        | tee "$out"
-    set -e
-    if ! assert_plenary_pass "$out" "$expected" "$label"; then
-        rm -f "$out"
-        exit 1
-    fi
-    rm -f "$out"
-    ok "$label passed"
-}
-
-if command -v nvim &>/dev/null; then
-    # Remove stale luacov data so coverage reflects this run only.
-    rm -f luacov.stats.out luacov.report.out
-
-    # The unit and DAP specs run BEFORE the LSP e2e suite: they need no binary
-    # round-trip, so a broken module surfaces in seconds instead of after the
-    # multi-minute e2e pass. They are gated identically — these 15 spec files
-    # were previously executed by nothing at all.
-    header "Neovim extension — unit specs"
-    run_plenary_dir tests/basilisk "Neovim unit tests"
-    header "Neovim extension — DAP specs"
-    run_plenary_dir tests/dap "Neovim DAP tests"
-
-    header "Neovim extension — real LSP e2e tests"
-
-    # Plenary spawns a child nvim per test file. With coverage enabled,
-    # children must run sequentially so luacov stats files merge correctly
-    # instead of racing on concurrent writes.
-    #
-    # Gate on PARSED results, not the nvim exit code: under `make ci`'s parallel
-    # `-j3` load the PlenaryBustedDirectory parent can exit non-zero on teardown
-    # even when every test passed. assert_plenary_pass requires that every spec
-    # file ran AND summarised with zero failures/errors/tracebacks — strictly
-    # stronger than trusting the process exit. See common.sh
-    # [LSPTEST-EDITOR-SPECIFIC-INTEGRATION-NEOVIM-E2E-GATE].
-    expected_specs="$(find tests/lsp -name '*_spec.lua' | wc -l | tr -d ' ')"
-    lsp_out="$(mktemp)"
-
-    # Per-file timeout: plenary's default is 50s, and the heaviest spec
-    # (coverage_boost_spec.lua) legitimately needs ~51s against the
-    # coverage-instrumented LSP binary — the child gets SIGTERMed mid-summary
-    # and the run fails on "15/16 spec files produced a summary" with zero
-    # actual test failures. Neovim NIGHTLY (the CI forward-compat matrix leg)
-    # runs every spec ~3× slower than 0.11, pushing the heaviest file
-    # (profiler_spec.lua, ~32s on 0.11) to ~2.5min — at 120s plenary SIGTERMed
-    # it mid-run, its buffered output was lost, and the run mis-read as a
-    # footer flake. 300s keeps the gate strict (every spec must still
-    # summarise clean) without truncating slow-but-passing files on either
-    # matrix leg; a genuinely hung child is still reaped, backstopped by the
-    # job-level timeout-minutes.
-    #
-    # Bounded retry (2 attempts): re-run ONLY when plenary_outcome reports a
-    # `flake` — every test passed but a spec dropped its per-file `Success:`
-    # footer under `-j3` load (a batch-mode flush race, not a test failure). A
-    # real failure (`fail`) breaks out immediately with no retry, so the gate is
-    # never weakened; assert_plenary_pass below is still the authoritative check.
-    max_attempts=2
-    for attempt in $(seq 1 "$max_attempts"); do
-        [[ "$attempt" -gt 1 ]] && warn "Neovim LSP e2e: footer flush race on attempt $((attempt - 1)) (all tests passed) — retrying (${attempt}/${max_attempts})"
-        set +e
-        LUACOV=1 nvim --headless -u tests/minimal_init.lua \
-            -c "PlenaryBustedDirectory tests/lsp {minimal_init = 'tests/minimal_init.lua', sequential = true, timeout = 300000}" 2>&1 \
-            | tee "$lsp_out"
-        nvim_rc=${PIPESTATUS[0]}
-        set -e
-        if [[ "$nvim_rc" -ne 0 ]]; then
-            warn "nvim exited ${nvim_rc} after the LSP suite — validating against parsed results (teardown exit is not authoritative)"
-        fi
-        outcome="$(plenary_outcome "$lsp_out" "$expected_specs")"
-        # Retry only a pure flush-race flake, and only while attempts remain.
-        [[ "$outcome" == "flake" && "$attempt" -lt "$max_attempts" ]] || break
-        rm -f luacov.stats.out luacov.report.out
-    done
-
-    if ! assert_plenary_pass "$lsp_out" "$expected_specs" "Neovim LSP e2e tests"; then
-        rm -f "$lsp_out"
-        exit 1
-    fi
-    rm -f "$lsp_out"
-    ok "Neovim LSP e2e tests passed"
-
-    # Screenshot tests are visual regressions, not coverage inputs. Running
-    # them with LUACOV can replace LSP coverage stats with screenshot-only data.
-    nvim --headless -u tests/minimal_init.lua \
-        -l tests/ui/run_screenshots.lua 2>&1
-    ok "Neovim screenshot regression tests passed"
-else
-    warn "nvim not found — skipping Neovim extension tests"
+header "Neovim extension — plugin specs"
+expected_specs="$(find tests/basilisk -name '*_spec.lua' | wc -l | tr -d ' ')"
+spec_out="$(mktemp)"
+set +e
+LUACOV=1 nvim --headless -u tests/minimal_init.lua \
+    -c "PlenaryBustedDirectory tests/basilisk {minimal_init = 'tests/minimal_init.lua', sequential = true, timeout = 300000}" 2>&1 \
+    | tee "$spec_out"
+nvim_rc=${PIPESTATUS[0]}
+set -e
+if [[ "$nvim_rc" -ne 0 ]]; then
+    warn "nvim exited ${nvim_rc} after the suite — validating against parsed results (teardown exit is not authoritative)"
 fi
+if ! assert_plenary_pass "$spec_out" "$expected_specs" "Neovim plugin tests"; then
+    rm -f "$spec_out"
+    exit 1
+fi
+rm -f "$spec_out"
+ok "Neovim plugin tests passed"
 
 # ── Coverage threshold (local only — skipped on CI) ──────────────────────────
 # luacov records absolute paths which don't match include patterns across
@@ -199,41 +78,39 @@ fi
 
 if [[ -n "${CI:-}" ]]; then
     echo -e "  ${YELLOW:-}⊘ neovim: coverage check skipped on CI${RESET}"
-else
-    header "Neovim extension — coverage threshold"
-    TEST_COVERAGE_NVIM="$(coverage_threshold_for nvim)"
-
-    LUACOV=1 nvim --headless -u tests/minimal_init.lua \
-        -l tests/run_coverage.lua 2>&1
-    ok "Neovim coverage exerciser passed"
-
-    if [[ ! -f luacov.stats.out ]]; then
-        echo -e "  ${RED}${BOLD}✗ neovim: no luacov stats — coverage collection is broken. FAIL${RESET}"
-        exit 1
-    fi
-
-    # Generate coverage report.
-    nvim --headless --noplugin -l tests/generate_report.lua 2>&1
-
-    if [[ ! -f luacov.report.out ]]; then
-        echo -e "  ${RED}${BOLD}✗ neovim: coverage report generation failed. FAIL${RESET}"
-        exit 1
-    fi
-
-    # Show summary section.
-    echo "  luacov report summary:"
-    awk '/^=+$/{s=1} s{print "    "$0}' luacov.report.out | tail -20
-
-    # Parse the Total line from the summary: "Total  977  217  81.83%"
-    nvim_pct=$(awk '/^Total/ { gsub(/%/, "", $NF); printf "%d", $NF }' luacov.report.out)
-    if [[ -z "$nvim_pct" || "$nvim_pct" -eq 0 ]]; then
-        echo -e "  ${RED}${BOLD}✗ neovim: could not parse coverage from luacov report. FAIL${RESET}"
-        exit 1
-    fi
-
-    if [[ "$nvim_pct" -lt "$TEST_COVERAGE_NVIM" ]]; then
-        echo -e "  ${RED}✗ neovim: ${nvim_pct}% < ${TEST_COVERAGE_NVIM}% threshold — FAIL${RESET}"
-        exit 1
-    fi
-    echo -e "  ${GREEN}✓ neovim: ${nvim_pct}% ≥ ${TEST_COVERAGE_NVIM}% threshold${RESET}"
+    exit 0
 fi
+
+header "Neovim extension — coverage threshold"
+TEST_COVERAGE_NVIM="$(coverage_threshold_for nvim)"
+
+LUACOV=1 nvim --headless -u tests/minimal_init.lua -l tests/run_coverage.lua 2>&1
+ok "Neovim coverage exerciser passed"
+
+if [[ ! -f luacov.stats.out ]]; then
+    echo -e "  ${RED}${BOLD}✗ neovim: no luacov stats — coverage collection is broken. FAIL${RESET}"
+    exit 1
+fi
+
+nvim --headless --noplugin -l tests/generate_report.lua 2>&1
+
+if [[ ! -f luacov.report.out ]]; then
+    echo -e "  ${RED}${BOLD}✗ neovim: coverage report generation failed. FAIL${RESET}"
+    exit 1
+fi
+
+echo "  luacov report summary:"
+awk '/^=+$/{s=1} s{print "    "$0}' luacov.report.out | tail -20
+
+# Parse the Total line from the summary: "Total  977  217  81.83%"
+nvim_pct=$(awk '/^Total/ { gsub(/%/, "", $NF); printf "%d", $NF }' luacov.report.out)
+if [[ -z "$nvim_pct" || "$nvim_pct" -eq 0 ]]; then
+    echo -e "  ${RED}${BOLD}✗ neovim: could not parse coverage from luacov report. FAIL${RESET}"
+    exit 1
+fi
+
+if [[ "$nvim_pct" -lt "$TEST_COVERAGE_NVIM" ]]; then
+    echo -e "  ${RED}✗ neovim: ${nvim_pct}% < ${TEST_COVERAGE_NVIM}% threshold — FAIL${RESET}"
+    exit 1
+fi
+echo -e "  ${GREEN}✓ neovim: ${nvim_pct}% ≥ ${TEST_COVERAGE_NVIM}% threshold${RESET}"

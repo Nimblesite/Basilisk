@@ -5,9 +5,13 @@
 }
 ---
 {#- Implements [WITHDRAWAL-COPY-FULL]. There is no documentation or blog left to
-    list; a model reading this site should get the statement itself. -#}
+    list, and a model reading this site must get the statement itself rather
+    than a summary of it — a fourth, unapproved variant of the message is
+    exactly what [WITHDRAWAL-COPY] forbids. So: the full copy, intact, in order.
+    -#}
 # {{ withdrawal.title }}
 
-> {{ withdrawal.line }}
+{% for paragraph in withdrawal.full_markdown %}{{ paragraph | safe }}
 
+{% endfor %}
 {{ site.url }}/

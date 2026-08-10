@@ -1,7 +1,7 @@
 --- Minimal init for plenary.nvim tests.
 ---
 --- Usage: nvim --headless -u tests/minimal_init.lua -c "PlenaryBustedDirectory tests/basilisk"
---- Coverage: LUACOV=1 nvim --headless -u tests/minimal_init.lua ...
+--- Coverage: LUACOV=1 nvim --headless -u tests/minimal_init.lua -l tests/run_coverage.lua
 
 -- Add this plugin to the runtime path.
 local plugin_dir = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":h:h")
@@ -52,13 +52,7 @@ if os.getenv("LUACOV") and not plenary_parent then
 
   local ok, runner = pcall(require, "luacov.runner")
   if ok then
-    runner.init({
-      configfile = plugin_dir .. "/.luacov",
-      -- Plenary terminates children with `:cq`, which can bypass a complete
-      -- exit-only flush. Periodic saves are safe now that the orchestration
-      -- parent is excluded and children run sequentially.
-      tick = true,
-    })
+    runner.init({ configfile = plugin_dir .. "/.luacov", tick = true })
     -- Flush coverage data on VimLeave so headless runs don't lose data.
     vim.api.nvim_create_autocmd("VimLeavePre", {
       callback = function()
@@ -78,33 +72,6 @@ local plenary_paths = {
   "../plenary.nvim",
 }
 for _, path in ipairs(plenary_paths) do
-  if vim.fn.isdirectory(path) == 1 then
-    vim.opt.rtp:prepend(path)
-    break
-  end
-end
-
--- Add mini.test if available.
-local mini_paths = {
-  "/tmp/mini.nvim",
-  vim.fn.expand("~/.local/share/nvim/lazy/mini.nvim"),
-  vim.fn.expand("~/.local/share/nvim/lazy/mini.test"),
-  vim.fn.stdpath("data") .. "/lazy/mini.nvim",
-}
-for _, path in ipairs(mini_paths) do
-  if vim.fn.isdirectory(path) == 1 then
-    vim.opt.rtp:prepend(path)
-    break
-  end
-end
-
--- Add nvim-dap if available.
-local dap_paths = {
-  "/tmp/nvim-dap",
-  vim.fn.expand("~/.local/share/nvim/lazy/nvim-dap"),
-  vim.fn.stdpath("data") .. "/lazy/nvim-dap",
-}
-for _, path in ipairs(dap_paths) do
   if vim.fn.isdirectory(path) == 1 then
     vim.opt.rtp:prepend(path)
     break

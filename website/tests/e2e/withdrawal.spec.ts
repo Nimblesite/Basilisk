@@ -4,8 +4,8 @@ import { fileURLToPath } from "node:url";
 
 import { test, expect } from "@playwright/test";
 
-// Implements [WEBSITE-E2E-WITHDRAWAL]. The site serves one statement and a
-// notice at every retired URL ([WITHDRAWAL-SURFACES]). These tests enforce that
+// Implements [WEBSITE-E2E-WITHDRAWAL]. The site serves ONE statement, and every
+// retired URL redirects to it ([WITHDRAWAL-UNLIST]). These tests enforce that
 // contract against the production build: the statement is the approved copy, no
 // page says anything the messaging spec forbids ([WITHDRAWAL-PROHIBITED]), and
 // no retired URL 404s or offers itself for indexing.
@@ -53,7 +53,10 @@ function visibleText(html: string): string {
     .replace(/<style[\s\S]*?<\/style>/g, " ")
     .replace(/<[^>]+>/g, " ")
     .replace(/\s+/g, " ")
-    .replace(/\s+([.,;:])/g, "$1");
+    // Stripping an inline tag leaves a space the browser never renders:
+    // `<a>x</a>.` reads as `x.`, and `(<a>x</a>)` as `(x)`.
+    .replace(/\s+([.,;:)])/g, "$1")
+    .replace(/\(\s+/g, "(");
 }
 
 test.describe("the statement", () => {
@@ -90,7 +93,9 @@ test.describe("the statement", () => {
 
 test.describe("retired URLs", () => {
   // A representative URL from each family the site used to serve. `/errors/` is
-  // the one that matters most: shipped binaries print those links.
+  // the one that matters most: shipped binaries print those links, so a reader
+  // arriving from a diagnostic must land on the explanation, not a 404 and not
+  // a second copy of the statement ([WITHDRAWAL-UNLIST]).
   const SAMPLES = [
     "/docs/",
     "/docs/rules/",
@@ -101,15 +106,27 @@ test.describe("retired URLs", () => {
   ];
 
   for (const url of SAMPLES) {
-    test(`${url} serves the notice and links home`, async ({ page }) => {
+    test(`${url} redirects to the statement`, async ({ page }) => {
       const response = await page.goto(url);
       expect(response?.status()).toBe(200);
 
+      // GitHub Pages serves static files and has no redirect table, so the
+      // redirect is a meta refresh. Wait for the browser to follow it and
+      // assert on where the reader actually ends up.
+      await page.waitForURL((current) => current.pathname === "/");
       await expect(page.locator(".notice p").first()).toContainText(
-        "Basilisk is unlisted everywhere",
+        "producing incorrect results",
       );
-      await expect(page.locator('.notice a[href="/"]')).toHaveCount(1);
-      await expect(page.locator(`.notice a[href="${APOLOGY}"]`)).toHaveCount(1);
+    });
+
+    test(`${url} tells a crawler the statement is canonical`, async ({ page }) => {
+      await page.goto(url);
+      // Read the served bytes rather than the settled page: after the refresh
+      // fires, the DOM is the home page's.
+      const html = readFileSync(join(SITE, url.replace(/^\//, ""), "index.html"), "utf-8");
+      expect(html).toContain('name="robots" content="noindex');
+      expect(html).toContain('rel="canonical" href="https://www.basilisk-python.dev/"');
+      expect(html).toMatch(/http-equiv="refresh" content="0; url=/);
     });
   }
 
@@ -165,9 +182,14 @@ test.describe("prohibited content", () => {
     });
   }
 
-  test("the apology is linked, never quoted", () => {
+  test("the apology is linked from the statement, and never quoted anywhere", () => {
+    // Only the statement carries the link. A retired URL is a redirect stub
+    // with no copy on it, so requiring the link there would mean putting the
+    // message on 296 pages whose whole job is to send the reader to the one
+    // page that has it.
+    const home = builtPages().find((page) => page.url === "/");
+    expect(home?.html, "the statement must link the apology").toContain(APOLOGY);
     for (const { url, html } of builtPages()) {
-      expect(html, `${url} must link the apology`).toContain(APOLOGY);
       // Link text stays neutral; the page must not reproduce its argument.
       expect(visibleText(html), `${url} must not quote the apology`).not.toMatch(
         /I (was|am) (wrong|sorry)|in my own words/i,

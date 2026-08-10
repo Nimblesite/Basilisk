@@ -75,14 +75,10 @@ rustup component add llvm-tools-preview 2>/dev/null || true
 header "Running tests with coverage instrumentation"
 cargo llvm-cov clean --workspace
 
-# Build the CLEAN release binary the conformance GATE scores — freshly built from
-# THIS checkout's source, un-instrumented, byte-for-byte what ships. Built BEFORE
-# the llvm-cov env is sourced so NO coverage flags touch it. Coverage for the
-# checker/resolver paths the suite exercises comes from a SEPARATE instrumented
-# pass further down. The gate must score what ships — never an instrumented build,
-# never a prior (PyPI) release. See [CHKARCH-CONFORMANCE].
-header "Freshly building the CLEAN release basilisk binary for the conformance gate"
-cargo build --release --bin basilisk
+# NO clean release build here any more. It existed only to give the conformance
+# GATE an un-instrumented binary to score, and that gate is commented out below
+# because the measurement cannot run. Building a second full release copy of a
+# binary nothing reads cost ~5 minutes of every run.
 
 eval "$(cargo llvm-cov show-env --export-prefix)"
 

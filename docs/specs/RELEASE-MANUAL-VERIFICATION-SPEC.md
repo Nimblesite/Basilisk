@@ -2,6 +2,15 @@
 
 # Release manual verification
 
+> **SUPERSEDED for the product surface — one clause survives.** Basilisk is
+> unlisted. There is exactly one release left ([WITHDRAWAL-UNLIST](DOCS-WITHDRAWAL-MESSAGING-SPEC.md#WITHDRAWAL-UNLIST)),
+> and it ships an inert CLI and a notice-only extension: there is no diagnostic,
+> debugger, profiler or editor surface left to walk through, so every checklist
+> below describing one is a record of what used to be verified, not work to do.
+> What still applies is the shape: **verify the published artifact, not the
+> tree.** For the final release that means [`delist/01-verify-final-release.sh`](../../delist/README.md)
+> — every channel must be serving the final version before anything is unlisted.
+
 Every release gets a manual pass **before** the tag is pushed and a second pass
 once the Marketplace VSIX is publicly available. Automated gates prove the
 tree; these passes prove the packaged product and the version users install.
