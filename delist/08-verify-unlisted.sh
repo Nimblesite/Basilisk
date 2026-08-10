@@ -32,11 +32,56 @@ gone() {
 }
 
 step "Channels that must 404"
+# The Marketplace item page is a real signal, checked against controls: it
+# returns 200 for live extensions (ms-python.python, rust-lang.rust-analyzer)
+# and 404 once an extension is unpublished. The gallery `extensionquery` API
+# keeps answering for an unpublished extension — with `unpublished` among its
+# flags — so the API is the wrong thing to ask here.
 gone "VS Code Marketplace" "https://marketplace.visualstudio.com/items?itemName=Nimblesite.basilisk"
 gone "Open VSX"            "https://open-vsx.org/api/Nimblesite/basilisk"
 gone "Homebrew formula"    "https://raw.githubusercontent.com/Nimblesite/homebrew-tap/main/Formula/basilisk.rb"
 gone "Scoop manifest"      "https://raw.githubusercontent.com/Nimblesite/scoop-bucket/main/bucket/basilisk.json"
-gone "Zed registry entry"  "https://raw.githubusercontent.com/zed-industries/extensions/main/extensions/basilisk/extension.toml"
+
+# Zed is NOT a `gone` URL check. Registry entries are git SUBMODULES, so the
+# parent repo serves no files under extensions/<name>/ and that path 404s for
+# every extension in the registry — checking it reported "gone" for `ty` and
+# `pyrefly`, which are both listed. A check that cannot fail is worse than no
+# check. Ask the file that actually holds the listing ([ZED-MIRROR]).
+step "Zed registry entry"
+if curl -fsSL "https://raw.githubusercontent.com/zed-industries/extensions/main/extensions.toml" |
+    grep -q '^\[basilisk\]'; then
+    printf "%b✗ Zed registry: STILL LISTED — a [basilisk] entry exists in extensions.toml%b\n" "$RED" "$RESET"
+    still_listed=$((still_listed + 1))
+else
+    ok "Zed registry: no [basilisk] entry (it was never listed there)"
+fi
+
+# The mirror IS the Zed listing — public, and Zed installs a dev extension from
+# a clone of it. Archived, not deleted, so it must still resolve.
+step "Zed mirror archived"
+zed_archived="$(curl -fsSL "https://api.github.com/repos/Nimblesite/basilisk-zed" |
+    python3 -c 'import json,sys; print(json.load(sys.stdin).get("archived"))' 2>/dev/null || echo "unreachable")"
+case "$zed_archived" in
+    True) ok "Nimblesite/basilisk-zed is archived (read-only)" ;;
+    False)
+        printf "%b✗ Nimblesite/basilisk-zed is NOT archived — run 06-unlist-zed.sh%b\n" "$RED" "$RESET"
+        still_listed=$((still_listed + 1))
+        ;;
+    *) warn "could not read Nimblesite/basilisk-zed — check by hand" ;;
+esac
+
+# Same for the Neovim mirror: plugin managers install straight from the repo.
+step "Neovim mirror archived"
+nvim_archived="$(curl -fsSL "https://api.github.com/repos/Nimblesite/basilisk.nvim" |
+    python3 -c 'import json,sys; print(json.load(sys.stdin).get("archived"))' 2>/dev/null || echo "unreachable")"
+case "$nvim_archived" in
+    True) ok "Nimblesite/basilisk.nvim is archived (read-only)" ;;
+    False)
+        printf "%b✗ Nimblesite/basilisk.nvim is NOT archived — run 05-unlist-nvim-mirror.sh%b\n" "$RED" "$RESET"
+        still_listed=$((still_listed + 1))
+        ;;
+    *) warn "could not read Nimblesite/basilisk.nvim — check by hand" ;;
+esac
 
 step "PyPI — yanked, not deleted"
 # Yanking keeps the files installable by exact pin (so existing lockfiles do not
