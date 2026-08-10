@@ -235,7 +235,7 @@ python-version = \"3.12\"\n\
     ///
     /// Server-initiated requests (e.g. `workspace/applyEdit`) arriving while
     /// waiting are auto-answered so the server never blocks waiting on the
-    /// client — mirroring `LspStdioFixture::auto_respond_if_server_request`.
+    /// client.
     ///
     /// # Errors
     ///

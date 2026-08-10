@@ -19,13 +19,19 @@ readonly PLACEHOLDER="0.0.0-PLACEHOLDER"
 
 # Files that take the full SemVer including any pre-release suffix
 # (e.g. `0.1.0-alpha`). Git tags, Cargo, our own binaries, the shipwright
-# contract, the website data, and the GitHub release all carry this.
+# contract, and the GitHub release all carry this.
+#
+# `website/src/_data/site.json` used to be here. It is gone: the site is one
+# statement page and displays no version, so its metadata is now derived in
+# `site.js` from the generated withdrawal copy. A carrier listed here that does
+# not exist is fatal (`stamp_file` exits 2), and this script is the FIRST step
+# of the build, release, vsix and pypi-wheels jobs — leaving it listed failed
+# every one of them, so no release could ship at all.
 readonly FILES=(
     "Cargo.toml"
     "basilisk-zed/Cargo.toml"
     "basilisk-zed/extension.toml"
     "shipwright.json"
-    "website/src/_data/site.json"
 )
 
 # Files that take a Marketplace-legal MAJOR.MINOR.PATCH only. The VS

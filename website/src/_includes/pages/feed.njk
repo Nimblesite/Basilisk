@@ -4,23 +4,25 @@
   "eleventyExcludeFromCollections": true
 }
 ---
+{#- Implements [WITHDRAWAL-COPY-SHORT]. The blog is gone, but people are still
+    subscribed to this feed, so it carries the statement as its one entry rather
+    than going silent. The timestamp is fixed: deriving it from build time would
+    republish the entry on every deploy. -#}
 <?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
-  <title>Basilisk Blog</title>
-  <subtitle>{{ site.description }}</subtitle>
+  <title>{{ withdrawal.title }}</title>
+  <subtitle>{{ withdrawal.line }}</subtitle>
   <link href="{{ site.url }}/feed.xml" rel="self"/>
   <link href="{{ site.url }}/"/>
-  <updated>{% if collections.posts | length %}{{ collections.posts | getNewestCollectionItemDate | dateToRfc3339 }}{% else %}{{ page.date | dateToRfc3339 }}{% endif %}</updated>
+  <updated>2026-08-10T00:00:00Z</updated>
   <id>{{ site.url }}/</id>
-  <author><name>{{ site.organization.name | default('The Basilisk Project') }}</name></author>
-  {%- for post in collections.posts %}
+  <author><name>{{ site.organization.name }}</name></author>
   <entry>
-    <title>{{ post.data.title }}</title>
-    <link href="{{ site.url }}{{ post.url }}"/>
-    <id>{{ site.url }}{{ post.url }}</id>
-    <updated>{{ post.data.dateModified | default(post.date) | dateToRfc3339 }}</updated>
-    <content type="html" xml:base="{{ site.url }}{{ post.url }}"><![CDATA[{{ post.templateContent | safe }}]]></content>
-    {% if post.data.description %}<summary>{{ post.data.description }}</summary>{% endif %}
+    <title>{{ withdrawal.title }}</title>
+    <link href="{{ site.url }}/"/>
+    <id>{{ site.url }}/#withdrawal</id>
+    <updated>2026-08-10T00:00:00Z</updated>
+    <summary>{{ withdrawal.line }}</summary>
+    <content type="html" xml:base="{{ site.url }}/"><![CDATA[{% for paragraph in withdrawal.short %}<p>{{ paragraph | safe }}</p>{% endfor %}]]></content>
   </entry>
-  {%- endfor %}
 </feed>

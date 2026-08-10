@@ -1,0 +1,8 @@
+-- GENERATED FILE — DO NOT EDIT.
+-- Source: docs/specs/DOCS-WITHDRAWAL-MESSAGING-SPEC.md [WITHDRAWAL-INERT-TEXT]
+-- Regenerate: python3 scripts/gen_withdrawal_copy.py
+local text = "Basilisk is unlisted. Its type checker is inert and checks nothing.\n\nBasilisk's type checker was producing incorrect results. The code responsible is not isolated to a known set of rules, so we cannot say how many rules are affected. We asked for Basilisk to be removed from the python/typing conformance results, and it has been removed: https://github.com/python/typing/pull/2330\n\nA code-quality tool that does not produce correct results is worse than useless. Remove Basilisk from your pipeline, your pre-commit hooks, and your editor. This command failed on purpose. It is not a finding about your code.\n\nWe are not fixing this code. We are rebuilding from the ground up as a new product, shipping only what can be trusted. If type checking ever returns, it will be externally audited before release.\n\nA full public account: https://www.christianfindlay.com/blog/basilisk-conformance-apology"
+return {
+  text = text,
+  lines = vim.split(text, "\n", { plain = true }),
+}

@@ -26,10 +26,9 @@ env:
   # anyway. Verified empirically: with RUSTFLAGS unset the config flag reaches
   # rustc; with RUSTFLAGS set it reaches it zero times.
   #
-  # Three jobs override this per-job because they link something that is not
-  # x86_64 linux and would reject `-fuse-ld=lld`: `website` (wasm32-unknown-
-  # unknown, and it re-adds the playground's 16 MiB stack for the same reason),
-  # `zed` (wasm32-wasip2), and `test-vscode-windows` (MSVC link.exe). Job-level
+  # Two jobs override this per-job because they link something that is not
+  # x86_64 linux and would reject `-fuse-ld=lld`: `zed` (wasm32-wasip2) and
+  # `test-vscode-windows` (MSVC link.exe). Job-level
   # `env` merges per-key, so every other job inherits both flags automatically.
   RUSTFLAGS: "-D warnings -C link-arg=-fuse-ld=lld"
 
@@ -132,30 +131,31 @@ jobs:
             # `website` gates the site build: only files the published site is
             # actually built from (templates/assets + the benchmark CSVs it reads).
             case "$f" in
-              # The site build, plus the checker rule sources the diagnostic
-              # data (website/src/_data/rules.json) and /errors/ pages are
-              # generated from — so a new/renamed rule re-runs the drift guard.
-              website/*|benchmarks/status/*|crates/basilisk-checker/src/rules/*) website=true ;;
-              # The playground ships the checker itself, compiled to wasm at
-              # site-build time ([WASM-BUILD]). A change to ANY crate the
-              # playground links changes what the published site answers, so the
-              # site build and its playground e2e must re-run to catch a
-              # browser-only break. This list is `basilisk-wasm`'s dependency
-              # closure; extend it when that closure grows. The release deploy
-              # publishes whatever is on `main`, unfiltered — so a crate that
-              # skips this check reaches the live playground unverified.
-              crates/basilisk-wasm/*|crates/basilisk-checker/*|crates/basilisk-common/*) website=true ;;
-              crates/basilisk-config/*|crates/basilisk-db/*|crates/basilisk-parser/*) website=true ;;
-              crates/basilisk-resolver/*|crates/basilisk-stubs/*|crates/basilisk-uv/*) website=true ;;
-              Cargo.lock) website=true ;;
-              # The conformance score + graded python/typing commit are stamped
-              # into these by scripts/gen_conformance_reference.py — editing
-              # them re-runs the website job's stamp drift guard. The published
-              # READMEs are generated from docs/readme/ ([README]), so touching
-              # a source OR a generated copy must re-run that guard too.
-              docs/readme/*|docs/specs/CHECKER-ARCHITECTURE-SPEC.md) website=true ;;
-              README.md|README.zh.md|README-pypi.md) website=true ;;
-              vscode-extension/README.md|vscode-extension/README.zh.md) website=true ;;
+              # The site build, plus the messaging spec its every published word
+              # is extracted from ([WITHDRAWAL-COPY]) — so editing the spec
+              # re-runs the drift guard and the site build.
+              website/*|docs/specs/DOCS-WITHDRAWAL-MESSAGING-SPEC.md) website=true ;;
+              # The generators themselves: a change to either one can move the
+              # published words without touching the spec or a template.
+              scripts/gen_withdrawal_copy.py|scripts/gen_readmes.py) website=true ;;
+              scripts/test_published_readmes.py) website=true ;;
+              # The public-copy scan and its own tests ([WITHDRAWAL-SURFACES]).
+              scripts/check_public_copy.py) website=true ;;
+              scripts/test_check_public_copy.py) website=true ;;
+              # Every other surface the scan reads: a marketing sentence in any
+              # of them contradicts the statement just as loudly as one in a
+              # README, so a change to one must re-run the scan.
+              CONTRIBUTING.md|SECURITY.md|pyproject.toml) website=true ;;
+              crates/*/README.md|book/README.md|delist/README.md) website=true ;;
+              vscode-extension/package.json|basilisk-zed/extension.toml) website=true ;;
+              basilisk.nvim/doc/*) website=true ;;
+              .github/release-templates/*) website=true ;;
+              # The published READMEs are generated from docs/readme/ ([README]),
+              # so touching a source OR a generated copy re-runs that guard too.
+              docs/readme/*) website=true ;;
+              README.md|README-pypi.md) website=true ;;
+              vscode-extension/README.md) website=true ;;
+              basilisk-zed/README.md|basilisk.nvim/README.md) website=true ;;
             esac
             # Route each changed path to the NARROWEST code scope that needs it.
             # Pure docs / static site / benchmark tooling / CI YAML never reach a
@@ -201,26 +201,11 @@ jobs:
     needs: changes
     if: needs.changes.outputs.website == 'true'
     runs-on: ubuntu-24.04
-    # Overrides the workflow-level RUSTFLAGS: this job links wasm32-unknown-
-    # unknown, which rejects `-fuse-ld=lld`. It also RESTORES the playground's
-    # 16 MiB stack ([WASM-BUILD]) — that flag lives in .cargo/config.toml, which
-    # the workflow-level RUSTFLAGS discards entirely (see the env block above),
-    # so this pre-merge check was compiling the playground with the 1 MiB wasm
-    # default while deploy-pages.yml (which sets no RUSTFLAGS) shipped it with
-    # 16 MiB. The check and the deploy now build the same thing.
-    env:
-      RUSTFLAGS: "-D warnings -C link-arg=-zstack-size=16777216"
-    # 20, not 10: this job compiles the checker to WebAssembly for the
-    # playground ([WASM-BUILD]) before Eleventy runs, and a cold wasm build of
-    # the parser + typeshed does not fit the old budget.
-    timeout-minutes: 20
+    # The site is templates and one generated data file — no Rust, no wasm, no
+    # git history ([WITHDRAWAL-SURFACES]).
+    timeout-minutes: 10
     steps:
-      # fetch-depth: 0 — mirrors deploy-pages.yml so the conformance over-time
-      # chart (built from the git history of conformance_status.csv) is exercised
-      # by the pre-merge build check, not just the post-merge deploy.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -228,70 +213,45 @@ jobs:
           cache: npm
           cache-dependency-path: website/package-lock.json
 
-      # The playground engine is the real checker compiled to wasm32, built by
-      # `npm run build:wasm` ([WASM-BUILD]). Declare the target explicitly
-      # rather than letting wasm-pack add it implicitly, so a missing target is
-      # a setup failure here instead of a confusing mid-build one.
-      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
-        with:
-          targets: wasm32-unknown-unknown
-
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
-        with:
-          cache-on-failure: true
-          prefix-key: v1-rust-glibc
-
       - name: Install dependencies
         working-directory: website
         run: npm ci
 
-      # The /errors/ pages and the rules reference are generated from the checker
-      # source ([WEBSITE-ERROR-PAGES]); fail if the committed data is stale so the
-      # pages the CLI deep-links to can never drift from the diagnostics it emits.
-      - name: Check generated diagnostic data is in sync with the checker
+      # Every word the site publishes is extracted from the messaging spec
+      # ([WITHDRAWAL-COPY]); fail if the committed data drifted from it, so the
+      # site can never say something the spec does not.
+      - name: Check site copy is in sync with the messaging spec
+        run: python3 scripts/gen_withdrawal_copy.py --check
+
+      # Every published README renders from docs/readme/ ([README-DRIFT]) —
+      # GitHub, the VSIX (Marketplace AND Open VSX), and PyPI cannot drift apart
+      # or be edited in place.
+      - name: Check generated READMEs
         run: |
-          python3 scripts/gen_rules_reference.py --data /tmp/rules.json
-          diff -u website/src/_data/rules.json /tmp/rules.json \
-            || { echo "::error::rules.json is stale — run: python3 scripts/gen_rules_reference.py --data"; exit 1; }
+          python3 scripts/gen_readmes.py --check
+          python3 scripts/test_published_readmes.py
 
-      # The README source/spec quote the live score + graded python/typing
-      # commit, stamped by scripts/gen_conformance_reference.py on every scorer
-      # run; fail if the committed text drifted from conformance_report.json so
-      # a quoted commit can never go stale ([CHKARCH-CONFORMANCE]). The same
-      # command then verifies that every published README still renders from
-      # docs/readme/ unchanged ([README-DRIFT]) — GitHub, the VSIX (Marketplace
-      # AND Open VSX), and PyPI cannot drift apart or be edited in place.
-      - name: Check stamped conformance references and generated READMEs
-        run: python3 scripts/gen_conformance_reference.py --check
-
-      # Separate from `npm run build` ON PURPOSE. The Eleventy build has no Rust
-      # dependency — every page but the playground renders from committed data —
-      # so a checker that does not compile can no longer take the whole site
-      # down, locally or here. The playground e2e below drives the real engine,
-      # so this job still builds it explicitly.
-      - name: Build playground engine (wasm)
-        working-directory: website
-        run: npm run build:wasm
+      # The generated READMEs are five of ~34 public surfaces. This scans the
+      # rest — crate READMEs, the security policy, the package manifests, the
+      # store descriptions, the site templates — for anything
+      # [WITHDRAWAL-PROHIBITED] bars.
+      - name: Scan every public surface for prohibited copy
+        run: |
+          python3 scripts/check_public_copy.py
+          python3 scripts/test_check_public_copy.py
 
       - name: Build site
         working-directory: website
-        # GITHUB_TOKEN raises the GitHub API rate limit for _data/releases.js
-        # (the releases page is generated from the live Releases API at build
-        # time); the build still degrades gracefully if the call fails.
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
         run: npm run build
 
-      # Navigation smoke tests ([WEBSITE-E2E-SMOKE]) and CLI-screenshot render
-      # checks ([WEBSITE-SCREENSHOTS-VERIFY]). Both presets (Desktop Chrome +
-      # Pixel 5) run on Chromium, so only chromium is installed. The screenshots
-      # are committed, regenerated locally with `npm run screenshots` against the
-      # real binary — CI only verifies they render, it never captures them.
+      # Withdrawal-contract tests ([WEBSITE-E2E-WITHDRAWAL]): the statement is
+      # the approved copy, every retired URL still resolves, and no page says
+      # anything [WITHDRAWAL-PROHIBITED] forbids. Both presets run on Chromium.
       - name: Install Playwright browser
         working-directory: website
         run: npx playwright install --with-deps chromium
 
-      - name: Run navigation + screenshot smoke tests (desktop + mobile)
+      - name: Run withdrawal-contract tests (desktop + mobile)
         working-directory: website
         # CI uses the stdout `list` reporter only — no HTML report, trace,
         # video or screenshot is produced or uploaded ([GITHUB-NO-ARTIFACTS]).
@@ -490,22 +450,17 @@ jobs:
   test-vscode:
     name: VS Code Extension
     needs: changes
-    # Its own tree, or any core change — the e2e suite builds + runs the real
-    # release binary, so a checker/LSP change alters what this suite exercises.
-    if: needs.changes.outputs.core == 'true' || needs.changes.outputs.vscode == 'true'
+    # The extension is a notice ([WITHDRAWAL-SURFACES]): it bundles no binary
+    # and starts no language server, so a core Rust change can no longer alter
+    # what this suite exercises. Its own tree is the only trigger left.
+    if: needs.changes.outputs.vscode == 'true'
     runs-on: ubuntu-24.04
-    # TIMEOUT EXCEPTION: VS Code extension e2e tests launch a full VS Code instance
-    # via xvfb (~25 min), plus one VS Code session per real-world corpus repo
-    # ([VSIX-REALWORLD-WIRING]: flask/rich/fastapi whole-workspace analysis)
-    timeout-minutes: 50
+    # No Rust toolchain, no debugpy, no real-world corpus, no per-platform
+    # binary: packaging the VSIX and driving one small suite in a VS Code
+    # instance under xvfb is all that remains.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
-
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
-        with:
-          cache-on-failure: true
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -513,18 +468,10 @@ jobs:
           cache: npm
           cache-dependency-path: vscode-extension/package-lock.json
 
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.12"
-
-      - name: Install Python test dependencies
-        run: pip install debugpy==1.8.21 ruff==0.16.1
-
-      - name: Install lld, xvfb, and VS Code test dependencies
+      - name: Install xvfb and VS Code test dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            lld \
             xvfb \
             libnspr4 \
             libnss3 \
@@ -549,69 +496,31 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: vscode-extension/.vscode-test
-          key: vscode-test-${{ runner.os }}-${{ hashFiles('vscode-extension/.vscode-test.mjs', 'vscode-extension/.vscode-test.js', 'vscode-extension/package.json') }}
+          key: vscode-test-${{ runner.os }}-${{ hashFiles('vscode-extension/.vscode-test.mjs', 'vscode-extension/package.json') }}
           restore-keys: vscode-test-${{ runner.os }}-
-
-      # The real-world corpus ([VSIX-REALWORLD-CORPUS]) is pinned to exact
-      # commit SHAs in the manifest, so a cache hit is byte-identical to a
-      # fresh fetch; the fetch script re-validates the pin marker either way.
-      - name: Cache real-world corpus repos
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: vscode-extension/.real-world
-          key: real-world-corpus-${{ hashFiles('vscode-extension/test-fixtures/real-world-corpus.json') }}
 
       - name: Run VS Code extension tests
         run: make _test_vsix
 
   # ── VS Code extension on Windows (runs in parallel) ────────────────────────
   # Implements [VSIX-CI-PLATFORM-COVERAGE] (docs/specs/VSIX-SPEC.md).
-  # Windows is a first-class target — the VSIX ships win32-x64/win32-arm64
-  # binaries (shipwright.json) — but until this job existed EVERY test ran on
-  # Linux, so win32-only defects (`.exe` suffixes, `\` separators, per-platform
-  # bundle paths) shipped uncaught. This runs the SAME `workspace-suite` the
-  # Linux job runs — all of src/test/suite, including the DAP debugger
-  # ([VSIX-PYTHON-DEBUGGER-DAP]) and CPU/memory profiler
-  # ([VSIX-PROFILER]) suites — natively on Windows.
-  #
-  # It deliberately does NOT call `make _test_vsix`: that recipe packages a
-  # release VSIX and re-enforces the coverage ratchet, both of which the Linux
-  # job already owns. Here the steps are spelled out so the Windows run is the
-  # thing under test — build the win32 binary, stage it through the ONE
-  # canonical staging path ([VSIX-PACKAGING-PARITY], scripts/stage-runtime.mjs),
-  # then drive the suite against that staged bundle.
+  # The VSIX is platform-neutral now — it bundles no binary — so this job no
+  # longer guards `.exe` suffixes or per-platform bundle paths. It still guards
+  # the one thing that is genuinely OS-dependent and shipped: the extension
+  # host loading and running the notice on Windows, where path handling and the
+  # `vscode-test` launcher differ.
   test-vscode-windows:
     name: VS Code Extension (Windows)
     needs: changes
-    # Same gate as the Linux e2e job: the suite runs the real basilisk binary,
-    # so a core change alters what it exercises.
-    if: needs.changes.outputs.core == 'true' || needs.changes.outputs.vscode == 'true'
+    if: needs.changes.outputs.vscode == 'true'
     runs-on: windows-latest
-    # Overrides the workflow-level RUSTFLAGS: MSVC's link.exe rejects the
-    # gcc/clang driver flag `-fuse-ld=lld`.
-    env:
-      RUSTFLAGS: "-D warnings"
-    # TIMEOUT EXCEPTION: a cold Windows cargo build plus a full VS Code e2e
-    # suite (real debugpy sessions, real profiler runs) is slower than the Linux
-    # equivalent; Windows I/O makes both phases materially longer. No real-world
-    # corpus here, so the total still lands under Linux's. 40 rather than 75:
-    # with the `e2e` profile replacing fat-LTO `release` the measured 8m48s
-    # build collapses, so this is a hang backstop with ~3x headroom, not a
-    # perf budget. The first run after a profile change is the cold one.
-    timeout-minutes: 40
-    # Git Bash — the repo's scripts and these steps are POSIX shell, and it is
-    # the shell `_release_vsix` already targets on Windows (MINGW*/MSYS*).
+    timeout-minutes: 20
+    # Git Bash — the repo's scripts and these steps are POSIX shell.
     defaults:
       run:
         shell: bash
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
-      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
-
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
-        with:
-          cache-on-failure: true
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -619,68 +528,23 @@ jobs:
           cache: npm
           cache-dependency-path: vscode-extension/package-lock.json
 
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
-        with:
-          python-version: "3.12"
-
-      # Same pins as the Linux e2e job — the debug suites drive real debugpy
-      # sessions and the LSP shells out to ruff.
-      - name: Install Python test dependencies
-        run: pip install debugpy==1.8.21 ruff==0.16.1
-
       # Keyed on runner.os, so this is a Windows-only cache bucket and never
       # collides with the Linux job's VS Code download.
       - name: Cache VS Code test build
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: vscode-extension/.vscode-test
-          key: vscode-test-${{ runner.os }}-${{ hashFiles('vscode-extension/.vscode-test.mjs', 'vscode-extension/.vscode-test.js', 'vscode-extension/package.json') }}
+          key: vscode-test-${{ runner.os }}-${{ hashFiles('vscode-extension/.vscode-test.mjs', 'vscode-extension/package.json') }}
           restore-keys: vscode-test-${{ runner.os }}-
-
-      # basilisk-profiler-helper is a darwin-arm64-only component in
-      # shipwright.json, so win32 bundles the LSP binary alone.
-      #
-      # `--profile e2e`, not `--release`: this job exists to catch win32-only
-      # defects (`.exe` suffixes, `\` separators, per-platform bundle paths,
-      # process spawn/teardown), none of which depend on how LLVM optimizes.
-      # `release` pins fat LTO + codegen-units=1, which is a SERIAL link — it
-      # used one core for 8m48s of this job's 18m45s while the rest of the
-      # runner idled. The e2e profile keeps opt-level 3 (the suite drives a real
-      # LSP under per-test timeouts, so runtime speed still matters) and gives up
-      # only cross-crate optimization, which this job never measures. Shipped
-      # artifacts and benchmarks stay on `release` — see [profile.e2e] in
-      # Cargo.toml for the measurements and the reasoning.
-      - name: Build the win32 basilisk binary
-        run: cargo build --profile e2e --bin basilisk
-
-      # The ONE canonical staging path ([VSIX-PACKAGING-PARITY]) — the same
-      # script the release packager and release.yml `vsix` job use, so the
-      # bundle these tests see is laid out exactly like the shipped VSIX
-      # (`bin/win32-x64/basilisk.exe`).
-      - name: Stage the bundled runtime
-        run: node vscode-extension/scripts/stage-runtime.mjs target/e2e win32-x64
 
       - name: Build the extension
         working-directory: vscode-extension
         run: |
           npm ci
-          npm run sync:shipwright
           npm run compile
 
-      # Bundled debugpy is what the DAP suites launch against, matching a real
-      # install (the user never has to pip-install it themselves).
-      - name: Vendor debugpy into the bundle
-        working-directory: vscode-extension
-        run: node scripts/vendor-debugpy.mjs
-
-      # `npx vscode-test` rather than `npm test` so npm's `pretest` hook does
-      # not fetch the real-world corpus; `--label workspace-suite` selects the
-      # full src/test/suite run and leaves the corpus configs out.
       # BSK_TEST_BAIL=0 (see .vscode-test.mjs) makes this job report EVERY
-      # win32 failure in one run. Everywhere else the suite still fails fast;
-      # here the ~30s of test time sits behind a ~20min cold cargo build, so
-      # bailing hides the next defect behind the first and buys a full rebuild
-      # to find it — which is exactly how the first two runs went.
+      # win32 failure in one run rather than hiding the next behind the first.
       - name: Run VS Code extension tests
         working-directory: vscode-extension
         env:
@@ -720,8 +584,8 @@ jobs:
       - name: Install lld
         run: sudo apt-get update && sudo apt-get install -y lld
 
-      - name: Build Shipwright binaries
-        run: cargo build --release --bin basilisk --bin basilisk-profiler-helper
+      - name: Build the Shipwright binary
+        run: cargo build --release --bin basilisk
 
       - name: Install VSIX verifier dependencies
         working-directory: vscode-extension
@@ -731,9 +595,7 @@ jobs:
         working-directory: vscode-extension
         run: |
           npm run test:shipwright
-          node scripts/verify-shipwright.mjs versions \
-            ../target/release/basilisk \
-            ../target/release/basilisk-profiler-helper
+          node scripts/verify-shipwright.mjs versions ../target/release/basilisk
 
       - name: Verify Typeshed release attribution policy
         run: python3 scripts/verify_release_attribution.py --policy-only
@@ -742,21 +604,19 @@ jobs:
   test-nvim:
     name: Neovim Extension (${{ matrix.neovim.label }})
     needs: changes
-    # Its own tree, or any core change — the e2e harness drives the real binary
-    # over LSP/DAP, so a checker/LSP change alters what this suite exercises.
-    if: needs.changes.outputs.core == 'true' || needs.changes.outputs.nvim == 'true'
+    # The plugin is a notice ([WITHDRAWAL-SURFACES]): it starts no language
+    # server and no debug adapter, so a core Rust change can no longer alter
+    # what this suite exercises. Its own tree is the only trigger left.
+    if: needs.changes.outputs.nvim == 'true'
     runs-on: ubuntu-24.04
-    # The 0.11 leg finishes in ~7min, but nightly runs the LSP suite ~3× slower
-    # (~12min per pass) and test-nvim.sh's bounded footer-flake retry can
-    # legitimately run the suite twice — build + two passes + screenshots needs
-    # ~30min worst case. This is a hang backstop, not a perf budget.
-    timeout-minutes: 35
+    # One spec directory against a plugin with three modules. This is a hang
+    # backstop, not a perf budget.
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
-        # The plugin requires Neovim 0.11+ (health.lua hard-errors below it and
-        # lua/basilisk/lsp.lua uses the 0.11-only vim.lsp.config/vim.lsp.enable),
-        # so the matrix covers the supported floor and the forward-compat tip.
+        # The plugin requires Neovim 0.11+, so the matrix covers the supported
+        # floor and the forward-compat tip.
         neovim:
           - label: "0.11"
             version: v0.11.6
@@ -765,26 +625,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
-
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
-        with:
-          cache-on-failure: true
-
-      - name: Install lld
-        run: sudo apt-get update && sudo apt-get install -y lld
-
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.12"
-
-      - name: Install pytest, debugpy and luarocks
+      - name: Install luarocks
         run: |
-          # debugpy is a real dependency of this job, not a nicety: the
-          # tests/dap specs drive basilisk's debug adapter end to end, and
-          # without it every one of them fails with "debugpy not found".
-          # Pinned to the same version as test-vscode and the devcontainer.
-          pip install pytest==9.1.1 debugpy==1.8.21
+          sudo apt-get update
           sudo apt-get install -y luarocks
           luarocks install --local luacov
 
@@ -794,17 +637,13 @@ jobs:
           neovim: true
           version: ${{ matrix.neovim.version }}
 
-      # The nvim e2e harness git-clones plenary/dap/mini into /tmp on every run.
-      # Cache them so the clones become no-ops — test-nvim.sh skips any dir that
-      # already exists. Bump the key suffix to force a refresh of the pins.
+      # The harness git-clones plenary into /tmp on every run. Cache it so the
+      # clone becomes a no-op. Bump the key suffix to refresh the pin.
       - name: Cache Neovim test plugins
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: |
-            /tmp/plenary.nvim
-            /tmp/nvim-dap
-            /tmp/mini.nvim
-          key: nvim-test-plugins-${{ runner.os }}-${{ matrix.neovim.label }}-v1
+          path: /tmp/plenary.nvim
+          key: nvim-test-plugins-${{ runner.os }}-${{ matrix.neovim.label }}-v2
 
       - name: Run Neovim extension tests
         run: |

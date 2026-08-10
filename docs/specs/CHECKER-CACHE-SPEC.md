@@ -1,5 +1,7 @@
 # Checker Result Cache — Specification {#CHKCACHE}
 
+> **SUPERSEDED — historical record.** The cross-session result cache described below is deleted. It persisted diagnostics so a fresh `basilisk check --cache` could skip unchanged files; the CLI is inert ([WITHDRAWAL-INERT](DOCS-WITHDRAWAL-MESSAGING-SPEC.md#WITHDRAWAL-INERT)) and produces no results to cache. Kept as the record of what was built.
+
 **Spec group:** `CHKCACHE`
 **Status:** v1 (opt-in)
 **Related:** [`CHKARCH-INCREMENTAL-SALSA`](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-INCREMENTAL-SALSA), [`CHKARCH-CLI`](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CLI), [`STUBRES-TYPESHED`](CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED)

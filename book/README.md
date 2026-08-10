@@ -1,5 +1,7 @@
 # The Basilisk Book
 
+> **NOT BEING PUBLISHED.** Basilisk is unlisted: its type checker was producing incorrect results, and every distribution channel is being unlisted ([the statement](https://www.basilisk-python.dev/)). A book teaching people to install and rely on that checker is not going out. This folder stays as the record of what was drafted; nothing in it is a current claim about a product, and none of it is being finished.
+
 This folder is the publication workspace for *The Basilisk Book*: a free,
 cover-to-cover guide to using Basilisk and understanding the Python typing
 ideas that make its feedback useful.

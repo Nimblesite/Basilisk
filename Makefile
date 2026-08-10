@@ -23,6 +23,10 @@ endif
 # Configuration
 # ---------------------------------------------------------------------------
 _EXTENSION_DIR             := vscode-extension
+# Where THIS Makefile lives. Recipes run in the caller's cwd (the release
+# attribution tests drive them from a temp tree), so repo scripts are located
+# relative to the Makefile rather than relative to `pwd`.
+_MK_DIR                    := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 _ZED_DIR                   := basilisk-zed
 _NVIM_DIR                  := basilisk.nvim
 _BOOK_DIR                  := book
@@ -344,69 +348,30 @@ _build_vsix:
 	cd $(_EXTENSION_DIR) && npm ci && npm run compile && \
 	echo -e '\033[0;32m✓ VS Code extension compiled\033[0m'
 
-# _release_vsix: build a host-targeted VSIX — the EXACT artifact the release.yml
-# `vsix` job ships for that platform. Single recipe shared by reinstall-vsix,
-# reinstall-vsix-macos, and the e2e gate (_test_vsix), so tests, local installs,
-# and the published package can never diverge. Set BSK_VSIX_TARGET (e.g.
-# darwin-arm64) to pin the platform regardless of host; unset auto-detects from
-# uname. Implements [VSIX-PACKAGING-PARITY].
-# [STUBRES-TYPESHED-LICENSE] Every binary-bearing package carries the Basilisk
-# license and the exact third-party attribution files.
+# _release_vsix: build the VSIX — the EXACT artifact the release.yml `vsix` job
+# ships. Single recipe shared by reinstall-vsix and the e2e gate (_test_vsix), so
+# tests, local installs, and the published package can never diverge.
+# Implements [VSIX-PACKAGING-PARITY].
+#
+# ONE package, no `--target`: the extension is a notice ([WITHDRAWAL-SURFACES])
+# and bundles no binary, so there is nothing platform-specific left to build.
+# The Rust build, the runtime staging, the debugpy vendoring, the Shipwright
+# bundle verification and the third-party attribution files are all gone with
+# it — a VSIX carrying none of their content must not claim any of it. The
+# packaged tree is asserted afterwards rather than assumed: shipping the type
+# checker again is the one failure that must be impossible.
 _release_vsix:
 	@set -e; \
-	python3 scripts/verify_release_attribution.py --policy-only; \
-	if [ -n "$${BSK_VSIX_TARGET:-}" ]; then \
-		target="$$BSK_VSIX_TARGET"; \
-		plat="$${target%-*}"; arch="$${target##*-}"; \
-	else \
-		case "$$(uname -s)" in \
-			Darwin) plat=darwin ;; \
-			Linux)  plat=linux ;; \
-			MINGW*|MSYS*|CYGWIN*) plat=win32 ;; \
-			*) echo "Unsupported OS: $$(uname -s)" >&2; exit 1 ;; \
-		esac; \
-		case "$$(uname -m)" in \
-			arm64|aarch64) arch=arm64 ;; \
-			x86_64|amd64)  arch=x64 ;; \
-			*) echo "Unsupported arch: $$(uname -m)" >&2; exit 1 ;; \
-		esac; \
-		target="$$plat-$$arch"; \
-	fi; \
-	case "$$arch" in \
-		arm64) rust_arch=aarch64 ;; \
-		x64)   rust_arch=x86_64 ;; \
-		*) echo "Unsupported arch: $$arch" >&2; exit 1 ;; \
-	esac; \
-	exe=""; \
-	case "$$plat" in \
-		darwin) rust_target="$$rust_arch-apple-darwin" ;; \
-		linux)  rust_target="$$rust_arch-unknown-linux-gnu" ;; \
-		win32)  rust_target="$$rust_arch-pc-windows-msvc"; exe=".exe" ;; \
-		*) echo "Unsupported platform: $$plat" >&2; exit 1 ;; \
-	esac; \
-	echo -e "\033[1m\033[0;36m▶ Building VSIX for $$target ($$rust_target)\033[0m"; \
-	cargo build --release --target "$$rust_target" --bin basilisk; \
-	if [ "$$plat" = "darwin" ]; then \
-		cargo build --release --target "$$rust_target" --bin basilisk-profiler-helper; \
-	fi; \
-	node $(_EXTENSION_DIR)/scripts/stage-runtime.mjs "target/$$rust_target/release" "$$target"; \
-	cp shipwright.json $(_EXTENSION_DIR)/shipwright.json; \
-	cp VSCODE-DISTRIBUTION-LICENSE $(_EXTENSION_DIR)/LICENSE.txt; \
-	cp NOTICES THIRD-PARTY-LICENSES RUST-DEPENDENCY-LICENSES \
-		VSCODE-DEPENDENCY-LICENSES $(_EXTENSION_DIR)/; \
 	repo_root="$$(pwd)"; \
-	cd $(_EXTENSION_DIR) && npm ci && npm run licenses:check && \
-		npm run compile && npm run sync:shipwright; \
-	echo -e "\033[1m\033[0;36m▶ Validating Shipwright manifest\033[0m"; \
-	node scripts/verify-shipwright.mjs manifest; \
-	echo -e "\033[1m\033[0;36m▶ Vendoring debugpy into the VSIX bundle\033[0m"; \
-	node scripts/vendor-debugpy.mjs; \
+	echo -e "\033[1m\033[0;36m▶ Building the notice VSIX\033[0m"; \
+	cp VSCODE-DISTRIBUTION-LICENSE $(_EXTENSION_DIR)/LICENSE.txt; \
+	cd $(_EXTENSION_DIR) && npm ci && npm run licenses:check && npm run compile; \
 	prerelease_flag=""; \
 	if [ -n "$(VSCE_PRERELEASE)" ]; then prerelease_flag="--pre-release"; fi; \
-	npx vsce package $$prerelease_flag --target "$$target" --ignore-other-target-folders --out "$$repo_root/basilisk-$$target.vsix"; \
-	echo -e "\033[1m\033[0;36m▶ Verifying VSIX bundles every manifest component\033[0m"; \
-	node scripts/verify-shipwright.mjs vsix "$$repo_root/basilisk-$$target.vsix" "$$target"; \
-	echo -e "\033[0;32m✓ VSIX built at basilisk-$$target.vsix$${prerelease_flag:+ (pre-release)}\033[0m"
+	npx vsce package $$prerelease_flag --out "$$repo_root/basilisk.vsix"; \
+	echo -e "\033[1m\033[0;36m▶ Verifying the VSIX ships no checker\033[0m"; \
+	bash "$(_MK_DIR)scripts/verify-vsix-inert.sh" "$$repo_root/basilisk.vsix"; \
+	echo -e "\033[0;32m✓ VSIX built at basilisk.vsix$${prerelease_flag:+ (pre-release)}\033[0m"
 
 _uninstall_vsix:
 	@echo -e '\033[1m\033[0;36m▶ Uninstalling VSIX\033[0m' && \
@@ -445,17 +410,19 @@ _lint_deslop:
 	deslop . && \
 	echo -e '\033[0;32m✓ Deslop duplication gate passed\033[0m'
 
-# Generated-documentation drift gates. The published READMEs (GitHub, the VSIX
-# on both Marketplace and Open VSX, PyPI) are rendered from docs/readme/
-# ([README]), and the diagnostic reference data is generated from the checker
-# rule sources ([WEBSITE-ERROR-PAGES-DRIFT]) — editing either output by hand,
-# or editing a source without regenerating, fails here as it does in CI.
+# Generated-documentation drift gates. The published READMEs are rendered from
+# docs/readme/ ([README]), and the site's copy is extracted from the messaging
+# spec ([WITHDRAWAL-COPY]) — editing either output by hand, or editing a source
+# without regenerating, fails here as it does in CI. The withdrawal gate is the
+# load-bearing one: it is what stops the site saying something the messaging
+# spec does not.
 _lint_docs:
 	@echo -e '\033[1m\033[0;36m▶ Checking generated documentation\033[0m' && \
 	python3 scripts/gen_readmes.py --check && \
-	python3 scripts/gen_rules_reference.py --data /tmp/basilisk-rules.json && \
-	diff -u website/src/_data/rules.json /tmp/basilisk-rules.json > /dev/null || \
-		{ echo 'rules.json is stale — run: python3 scripts/gen_rules_reference.py --data'; exit 1; } && \
+	python3 scripts/gen_withdrawal_copy.py --check && \
+	python3 scripts/test_published_readmes.py && \
+	python3 scripts/check_public_copy.py && \
+	python3 scripts/test_check_public_copy.py && \
 	echo -e '\033[0;32m✓ Generated documentation is in sync\033[0m'
 
 _fmt_rust:

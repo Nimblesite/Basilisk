@@ -1,62 +1,20 @@
-# Website: Navigation & End-to-End Smoke Tests {#WEBSITE-E2E}
+# Website: withdrawal-contract end-to-end tests {#WEBSITE-E2E}
 
 ## Purpose {#WEBSITE-E2E-PURPOSE}
 
-Browser smoke tests for the Eleventy site (`website/`), run against the
-**production build** of `_site/` on a desktop and a phone viewport, enforcing in
-CI that a visitor can navigate the site.
+Browser tests for the Eleventy site (`website/`), run against the **production build** of `_site/` on a desktop and a phone viewport. The site publishes one thing — the withdrawal statement ([WITHDRAWAL-COPY-FULL](DOCS-WITHDRAWAL-MESSAGING-SPEC.md#WITHDRAWAL-COPY-FULL)) — so these tests enforce that contract rather than navigation: the published words are the approved words, no retired URL 404s, and nothing forbidden survives anywhere in the build.
 
-## Smoke Coverage {#WEBSITE-E2E-SMOKE}
+## Coverage {#WEBSITE-E2E-WITHDRAWAL}
 
-`website/tests/e2e/navigation.spec.ts` and `website/tests/e2e/homepage.spec.ts`, driven by
-`website/playwright.config.ts` (two projects: `desktop` = Desktop Chrome,
-`mobile` = iPhone SE 3rd generation emulated in Chromium, 375 × 667), served by
-`website/tests/static-server.js`. Run with
-`npm run test:e2e` (`test:e2e:ui` locally). Asserts per viewport:
+`website/tests/e2e/withdrawal.spec.ts`, driven by `website/playwright.config.ts` (two projects: `desktop` = Desktop Chrome, `mobile` = iPhone SE 3rd generation emulated in Chromium, 375 × 667), served by `website/tests/static-server.js`. Run with `npm run test:e2e` (`test:e2e:ui` locally).
 
-- **Top navigation resolves** — the home page links to Docs, Rules, Blog,
-  Discord and GitHub (matched by `href`, so the check holds even where the nav
-  is collapsed behind the hamburger on a phone).
-- **Docs landing page loads** — `/docs/` renders with the docs sidebar present.
-- **Desktop sidebar** — the docs sidebar is permanently visible and navigates
-  between sections without any toggle.
-- **Mobile docs submenu** — see [WEBSITE-MOBILE-DOCS-NAV].
-- **Mobile top nav** — the hamburger reveals the collapsed top nav.
-- **Homepage positioning** — the title, H1 and opening answer identify Basilisk
-  neutrally as a Python type checker and language server, without an unverified
-  speed or conformance claim.
-- **Integrity disclosure is unavoidable** — the hero states that the former
-  conformance and benchmark figures are withdrawn, the current conformance
-  percentage is temporarily unknown, Basilisk was removed from the official
-  results at its request, and clean reimplementation plus robustness/mutation
-  verification must finish before new figures are published. Both notices link
-  to their detailed correction pages.
-- **Social image matches its declared size** — the `og:image` URL resolves and
-  the PNG's own IHDR dimensions equal the advertised `og:image:width`/`height`,
-  so a re-exported image cannot silently desync from its metadata.
-- **The Chinese homepage is a translation, not a second pitch** — `/zh/` and `/`
-  are asserted to produce an identical structural skeleton (section, stat-card,
-  bullet and button class lists, in order). The zh page repeats both withdrawal
-  notices and the temporarily unknown status, so one locale cannot retain a
-  claim the other has retracted.
-- **Homepage mobile usability** — no horizontal overflow and visible calls to
-  action retain a minimum 48 px touch target on the iPhone SE viewport.
+- **The statement is the approved copy** — the home page renders every paragraph of `withdrawal.full`, in order, from `website/src/_data/withdrawal.json`. That file is generated from the messaging spec by `scripts/gen_withdrawal_copy.py`, so a test failure means the page drifted from the spec, and a `--check` failure means the data did.
+- **The four load-bearing facts appear** — incorrect results, removal from the `python/typing` results, the damage not being scoped to a known set of rules, and a wrong tool being worse than useless. Asserted on visible text, so deleting a paragraph fails even if the copy file still contains it.
+- **Every retired URL redirects to the statement** — each entry in `website/src/_data/retiredUrls.json` has a built page, and that page is a redirect stub, not a second copy of the message ([WITHDRAWAL-UNLIST](DOCS-WITHDRAWAL-MESSAGING-SPEC.md#WITHDRAWAL-UNLIST)). A representative URL per family (`/docs/`, `/docs/rules/`, `/errors/BSK-XXXX/`, `/blog/`, `/playground/`, `/zh/docs/…`) is driven in a real browser and asserted to land on `/`; the served bytes are asserted to carry `noindex`, the canonical link to `/`, and the meta refresh. GitHub Pages has no redirect table, so the redirect is a meta refresh — which is why the test follows it rather than trusting a status code. `/errors/` matters most: shipped binaries print those links, and a 404 there strands a user with a diagnostic and no explanation.
+- **Only the statement is indexable** — every built page except `/` carries `noindex`, and the sitemap lists `/` alone. 296 redirect stubs must not be offered to search engines as pages.
+- **Nothing forbidden survives** — the whole build is scanned for anything [WITHDRAWAL-PROHIBITED](DOCS-WITHDRAWAL-MESSAGING-SPEC.md#WITHDRAWAL-PROHIBITED) bars: a percentage figure, install instructions for any channel, a marketplace or PyPI link, a competitor name, a benchmark claim, a `BSK-` rule code. This is the test that catches a page nobody remembered to delete.
+- **The apology is linked, never quoted** — the statement links it; no page reproduces its wording. The redirect stubs carry no copy at all, so they carry no link either.
 
 ### CI constraint {#WEBSITE-E2E-NO-ARTIFACTS}
 
-Per `[GITHUB-NO-ARTIFACTS]`, CI emits only the stdout `list` reporter — no
-Playwright HTML report, trace, video or screenshot. Those (HTML report + on-retry
-trace) are local-only and git-ignored (`website/.gitignore`). The website CI job
-(`.github/workflows/ci.yml`) installs only Chromium, since both presets run on it.
-
-## Mobile Docs Submenu Reachability {#WEBSITE-MOBILE-DOCS-NAV}
-
-On phones (`max-width: 768px`) the docs section sidebar collapses. It **must**
-remain reachable: the hamburger toggle (`mobile-menu.js`, which adds `.open` to
-`.sidebar`) reveals it via `.sidebar.open { display: block; }` in
-`website/src/assets/css/styles.css`, mirroring the `.nav-links.open` rule for the
-top nav. Without that reveal rule the toggle has no effect and the per-section
-submenu is unreachable on a phone (regression issue #186). Guard test
-`"docs section submenu is reachable via the hamburger"` in
-`website/tests/e2e/navigation.spec.ts` asserts the submenu is hidden by default,
-becomes visible after the hamburger is tapped, and navigates to the section.
+Per `[GITHUB-NO-ARTIFACTS]`, CI emits only the stdout `list` reporter — no Playwright HTML report, trace, video or screenshot. Those (HTML report + on-retry trace) are local-only and git-ignored (`website/.gitignore`). The website CI job (`.github/workflows/ci.yml`) installs only Chromium, since both presets run on it.

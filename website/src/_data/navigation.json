@@ -1,92 +1,9 @@
 {
   "main": [
-    { "key": "playground", "text": "Playground", "url": "/playground/" },
-    { "key": "docs", "text": "Docs", "url": "/docs/" },
-    { "key": "rules", "text": "Rules", "url": "/docs/rules/" },
-    { "key": "blog", "text": "Blog", "url": "/blog/" },
-    { "key": "discord", "text": "Discord", "url": "https://discord.gg/4wBDSGEZQd", "external": true },
     { "key": "github", "text": "GitHub", "url": "https://github.com/Nimblesite/Basilisk", "external": true }
   ],
-  "docs": [
-    {
-      "title": "Introduction",
-      "titleZh": "简介",
-      "url": "/docs/"
-    },
-    {
-      "title": "Getting started",
-      "titleZh": "开始使用",
-      "items": [
-        {
-          "title": "Installation",
-          "titleZh": "安装",
-          "children": [
-            { "title": "Overview", "titleZh": "概览", "url": "/docs/installation/" },
-            { "title": "VS Code & Cursor", "titleZh": "VS Code 与 Cursor", "url": "/docs/install-vscode/" },
-            { "title": "Zed", "titleZh": "Zed", "url": "/docs/install-zed/" },
-            { "title": "Neovim", "titleZh": "Neovim", "url": "/docs/install-neovim/" },
-            { "title": "CLI & package managers", "titleZh": "CLI 与包管理器", "url": "/docs/install-cli/" }
-          ]
-        },
-        { "title": "Quick start", "titleZh": "快速开始", "url": "/docs/quick-start/" }
-      ]
-    },
-    {
-      "title": "Set up & adopt",
-      "titleZh": "配置与采用",
-      "items": [
-        { "title": "Configuration", "titleZh": "配置", "url": "/docs/configuration/" },
-        { "title": "Migration guide", "titleZh": "迁移指南", "url": "/docs/migration/" }
-      ]
-    },
-    {
-      "title": "Type checking",
-      "titleZh": "类型检查",
-      "items": [
-        { "title": "Rules", "titleZh": "规则", "url": "/docs/rules/", "kind": "rules" },
-        { "title": "Conformance", "titleZh": "规范符合性", "url": "/docs/conformance/" },
-        { "title": "Type checker comparison", "titleZh": "类型检查器对比", "url": "/docs/comparison/" }
-      ]
-    },
-    {
-      "title": "Developer tools",
-      "titleZh": "开发者工具",
-      "items": [
-        { "title": "Refactoring", "titleZh": "重构", "url": "/docs/refactoring/" },
-        { "title": "Debugging", "titleZh": "调试", "url": "/docs/debugging/" },
-        { "title": "Profiler", "titleZh": "性能分析", "url": "/docs/profiler/" }
-      ]
-    },
-    {
-      "title": "Project",
-      "titleZh": "项目",
-      "items": [
-        { "title": "Benchmarks", "titleZh": "性能基准", "url": "/docs/benchmarks/" },
-        { "title": "Releases", "titleZh": "版本发布", "url": "/docs/releases/" }
-      ]
-    }
-  ],
+  "docs": [],
   "footer": [
-    {
-      "key": "product",
-      "title": "Product",
-      "items": [
-        { "key": "documentation", "text": "Documentation", "url": "/docs/" },
-        { "key": "rulesReference", "text": "Rules Reference", "url": "/docs/rules/" },
-        { "key": "blog", "text": "Blog", "url": "/blog/" },
-        { "key": "authors", "text": "Authors", "url": "/authors/" }
-      ]
-    },
-    {
-      "key": "community",
-      "title": "Community",
-      "items": [
-        { "key": "github", "text": "GitHub", "url": "https://github.com/Nimblesite/Basilisk" },
-        { "key": "issues", "text": "Issues", "url": "https://github.com/Nimblesite/Basilisk/issues" },
-        { "key": "discord", "text": "Discord", "url": "https://discord.gg/4wBDSGEZQd" },
-        { "key": "discussions", "text": "Discussions", "url": "https://github.com/Nimblesite/Basilisk/discussions" }
-      ]
-    },
     {
       "key": "legal",
       "title": "Legal",

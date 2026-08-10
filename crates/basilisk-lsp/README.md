@@ -1,5 +1,12 @@
 # basilisk-lsp
 
+> **A record, not a product claim.** Basilisk is unlisted and its type checker is
+> inert ([WITHDRAWAL](../../docs/specs/DOCS-WITHDRAWAL-MESSAGING-SPEC.md#WITHDRAWAL)).
+> Nothing described below ships in anything a user can install: the `basilisk`
+> binary analyses nothing, and the editor extensions carry no checker. This file
+> is kept as an account of what was built, and nothing in it authorises
+> rebuilding what it describes.
+
 Language Server Protocol implementation for Basilisk.
 
 ## Role in Basilisk
@@ -12,7 +19,7 @@ Editor ⟷ [basilisk-lsp] ⟷ parser + resolver + checker
 
 ## Key concepts
 
-- **Full LSP** — not just a type checker. Provides completions, hover, go-to-definition, find references, rename, code actions, and inlay hints.
+- **Beyond diagnostics** — the server also implemented completions, hover, go-to-definition, find references, rename, code actions, and inlay hints.
 - **Incremental analysis** — depends on `salsa` directly and drives the `BasiliskDatabase` re-exported by `basilisk-checker` (defined in `basilisk-db`), keeping one persistent database across the session so unchanged files are served from the memo ([CHKARCH-INCREMENTAL-SALSA](../../docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-INCREMENTAL-SALSA)).
 - **Integrated debugging** — spawns debugpy and brokers DAP connections so editors get F5-to-debug without separate extensions.
 - **Integrated profiling** — embeds py-spy for performance profiling with heatmap visualization.
@@ -43,4 +50,6 @@ defines reaches this crate through `basilisk-checker`'s re-export.
 
 ## Status
 
-Working — diagnostics, hover, go-to-definition, code actions, inlay hints, debugging, and refactoring are all shipping.
+The language server ships in nothing. `basilisk lsp` no longer exists — the CLI
+parses no arguments and starts no server — and no editor extension launches
+one. Nothing described above runs for a user.
