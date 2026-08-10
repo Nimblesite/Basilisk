@@ -420,9 +420,9 @@ _lint_docs:
 	@echo -e '\033[1m\033[0;36m▶ Checking generated documentation\033[0m' && \
 	python3 scripts/gen_readmes.py --check && \
 	python3 scripts/gen_withdrawal_copy.py --check && \
-	python3 -m pytest scripts/test_published_readmes.py -q && \
+	python3 scripts/test_published_readmes.py && \
 	python3 scripts/check_public_copy.py && \
-	python3 -m pytest scripts/test_check_public_copy.py -q && \
+	python3 scripts/test_check_public_copy.py && \
 	echo -e '\033[0;32m✓ Generated documentation is in sync\033[0m'
 
 _fmt_rust:
