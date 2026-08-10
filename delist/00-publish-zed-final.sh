@@ -1,53 +1,66 @@
 #!/usr/bin/env bash
-# Publish the FINAL Zed extension — run this BEFORE 01-verify-final-release.sh.
+# Replace the public Zed mirror with the notice-only extension.
 #
-# Implements [WITHDRAWAL-UNLIST] and [ZED-MIRROR]. Zed is the one channel the
-# Release workflow does not publish: the `publish-zed` job was removed from
-# release.yml after its registry-listing step failed the v0.41.0 release, so
-# every other channel ships from the tag and Zed ships from here, by hand.
+# Implements [WITHDRAWAL-UNLIST] and [ZED-MIRROR].
 #
-# Why it still has to ship. Zed users are not reached by the CLI release: their
-# extension downloads the binary itself, so once the final binary is inert their
-# editor shows "language server failed to start" and never shows the statement.
-# The final extension is what replaces that with the statement — it registers no
-# language server at all and prints the notice under `/basilisk`.
+# Basilisk is NOT in the Zed extension registry and never was. There is no
+# `[basilisk]` block in zed-industries/extensions/extensions.toml, no
+# extensions/basilisk submodule, and no commit in that repo has ever mentioned
+# it — the `publish-zed` job was removed from release.yml after its registry
+# step failed the v0.41.0 release, and it never landed before that. So there is
+# nothing to bump and nothing to remove there, and opening a listing PR NOW
+# would add Basilisk to a registry it was never in, in the middle of unlisting
+# it. Do not do that. 06-unlist-zed.sh re-checks this and fails if it changes.
 #
-# Two things happen here, in order:
-#   1. push + tag the rendered tree to Nimblesite/basilisk-zed (the mirror)
-#   2. open the PR bumping `basilisk` in zed-industries/extensions to that tag
+# What IS public is the mirror, Nimblesite/basilisk-zed. Anyone can read it, and
+# Zed installs a dev extension straight from a local clone of exactly this
+# layout. Its `main` still serves the OLD extension: a [language_servers.basilisk]
+# block that launches `basilisk lsp` — a command the inert CLI no longer has —
+# and a description advertising diagnostics, autocomplete, refactoring, and
+# profiling. That is a live product claim for a checker that was wrong.
 #
-# Step 2 lands in someone else's review queue. Until it merges, Zed serves the
-# previous version — so `06-unlist-zed.sh` (the removal PR) waits for it.
+# This script replaces that tree with the notice-only extension, so the mirror
+# says what every other surface says. 06-unlist-zed.sh then archives it.
 #
 # Needs: gh authenticated; push rights to Nimblesite/basilisk-zed; cargo with
 # the wasm32-wasip2 target (the push is gated on a real standalone build).
 #
-#   delist/00-publish-zed-final.sh v0.42.0 [--yes]
+#   delist/00-publish-zed-final.sh v0.41.2 [--yes]
 
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 VERSION="${1:-}"
-[ -n "$VERSION" ] || fail "usage: 00-publish-zed-final.sh <tag, e.g. v0.42.0> [--yes]"
+[ -n "$VERSION" ] || fail "usage: 00-publish-zed-final.sh <tag, e.g. v0.41.2> [--yes]"
 shift
 parse_args "$@"
 BARE="${VERSION#v}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REGISTRY_TOML="https://raw.githubusercontent.com/zed-industries/extensions/main/extensions.toml"
 
-banner "Zed extension — Nimblesite/basilisk-zed + zed-industries/extensions"
+banner "Zed mirror — Nimblesite/basilisk-zed"
 
-require_cmd gh "the registry PR is opened through the GitHub API"
+require_cmd gh "the mirror is pushed over an authenticated remote"
 require_cmd git "the mirror is pushed as a clone"
 require_cmd cargo "the push is gated on a standalone wasm build"
+require_cmd curl "the registry is checked before anything is published"
 
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
+# If a listing ever appears, every assumption above is void: publishing would
+# then be updating a real listing, and the removal PR in 06 becomes necessary.
+step "Confirm Basilisk is still absent from the Zed registry"
+if curl -fsSL "$REGISTRY_TOML" | grep -q '^\[basilisk\]'; then
+    fail "zed-industries/extensions now lists basilisk — re-read 06-unlist-zed.sh before publishing"
+fi
+ok "no basilisk entry in the registry; this publishes to the mirror only"
+
 step "Render the standalone tree at $BARE"
 "$REPO_ROOT/scripts/render-zed-mirror.sh" "$work/render" "$BARE"
 
-# Gate the push on the same build the registry will run. A tree that does not
-# compile standalone is a listing that fails on their CI, not ours.
-step "Build it exactly as the registry will"
+# Gate the push on a real build. A tree that does not compile standalone is a
+# broken dev extension for anyone who clones the mirror.
+step "Build it standalone"
 ( cd "$work/render" && cargo build --release --target wasm32-wasip2 )
 ok "standalone wasm build passed"
 
@@ -63,7 +76,7 @@ grep -q "Basilisk is unlisted" "$work/render/src/withdrawal_notice.txt" ||
     fail "the rendered tree carries no withdrawal notice"
 ok "no language server, no debug adapter, no grammar; the notice is present"
 
-if confirm "publish the final Zed extension and open the registry bump PR"; then
+if confirm "replace the public Zed mirror with the notice-only extension"; then
     step "Push the mirror"
     # render-zed-mirror.sh replaces the clone's tracked content and preserves
     # its .git, so the mirror keeps its history rather than being force-reset.
@@ -75,10 +88,6 @@ if confirm "publish the final Zed extension and open the registry bump PR"; then
     act git -C "$work/mirror" tag "$VERSION"
     act git -C "$work/mirror" push origin "$VERSION"
 
-    step "Open the registry bump PR"
-    act python3 "$REPO_ROOT/scripts/publish_zed_registry.py" "$BARE" "$VERSION"
-
-    ok "mirror pushed and tagged $VERSION; bump PR opened"
-    warn "Zed still serves the PREVIOUS version until a maintainer merges that PR."
-    warn "Do not run 06-unlist-zed.sh until it is merged and live."
+    ok "mirror replaced and tagged $VERSION"
+    warn "No registry PR was opened, and none should be: Basilisk is not listed on Zed."
 fi

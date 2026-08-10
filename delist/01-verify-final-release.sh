@@ -71,24 +71,23 @@ nvim_tag="$(curl -fsSL "https://api.github.com/repos/Nimblesite/basilisk.nvim/ta
 check "Nimblesite/basilisk.nvim" "$nvim_tag"
 
 # Zed does not ship from the release workflow — delist/00-publish-zed-final.sh
-# pushes the mirror by hand. Check the mirror tag here; the registry entry it
-# points at only goes live once a Zed maintainer merges the bump PR, which is a
-# separate wait and not a blocker for the other channels ([ZED-MIRROR]).
+# pushes the mirror by hand, and the mirror is the whole Zed surface: Basilisk
+# is not in the zed-industries registry and never was ([ZED-MIRROR]).
 step "Zed mirror tag"
 zed_tag="$(curl -fsSL "https://api.github.com/repos/Nimblesite/basilisk-zed/tags" |
     python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["name"].lstrip("v"))' 2>/dev/null || echo "")"
 check "Nimblesite/basilisk-zed" "$zed_tag"
 
+# Not a version check: an entry appearing here at all would mean Basilisk got
+# listed on Zed during its unlisting, and both Zed scripts refuse to run.
 step "Zed registry entry"
 zed_listed="$(curl -fsSL "https://raw.githubusercontent.com/zed-industries/extensions/main/extensions.toml" |
     python3 -c 'import sys,tomllib; print(tomllib.loads(sys.stdin.read()).get("basilisk", {}).get("version", ""))' 2>/dev/null || echo "")"
-if [ "$zed_listed" = "$BARE" ]; then
-    ok "Zed registry is at $BARE"
-elif [ -z "$zed_listed" ]; then
-    warn "Zed registry lists no basilisk entry — nothing to unlist there"
+if [ -z "$zed_listed" ]; then
+    ok "Zed registry lists no basilisk entry — as expected; nothing to unlist there"
 else
-    warn "Zed registry is still at '$zed_listed' — the bump PR has not merged yet."
-    warn "Do not run 06-unlist-zed.sh until it lands."
+    warn "Zed registry now lists basilisk at '$zed_listed' — it was never listed before."
+    warn "Re-read delist/06-unlist-zed.sh: a removal PR is needed after all."
 fi
 
 echo

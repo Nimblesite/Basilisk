@@ -1,49 +1,57 @@
 #!/usr/bin/env bash
-# Open the PR that removes Basilisk from the Zed extension registry.
+# Archive the Zed extension mirror.
 #
-# Implements [WITHDRAWAL-UNLIST]. The Zed registry is zed-industries/extensions,
-# a repo we do not own: the entry is a `[basilisk]` block in extensions.toml
-# plus a git submodule. Removing it is a pull request, so this script prepares
-# and opens that PR — a human on their side merges it.
+# Implements [WITHDRAWAL-UNLIST] and [ZED-MIRROR].
 #
-# Needs: gh, authenticated; a fork of zed-industries/extensions is created if
-# one does not exist.
+# This script used to open a PR removing `basilisk` from zed-industries/extensions.
+# There is nothing there to remove. Basilisk is not in the Zed registry and never
+# was: no `[basilisk]` block in extensions.toml, no extensions/basilisk submodule,
+# and no commit in that repo has ever mentioned it. The `publish-zed` job was
+# removed from release.yml after its registry step failed the v0.41.0 release,
+# and it had not landed before that. A removal PR would ask a maintainer of
+# someone else's repo to delete an entry that does not exist.
+#
+# The mirror, Nimblesite/basilisk-zed, IS the listing: it is public, and Zed
+# installs a dev extension straight from a clone of that layout. 00 replaces its
+# contents with the notice-only extension; this archives it. Archived rather
+# than deleted, for the same reason as the Neovim mirror — deleting breaks every
+# pinned clone and erases the record, while archiving is read-only and visibly
+# dead.
+#
+# Needs: gh, authenticated with admin access to Nimblesite/basilisk-zed.
 #
 #   delist/06-unlist-zed.sh [--yes]
 
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 parse_args "$@"
-banner "Zed extension registry — zed-industries/extensions"
+banner "Zed extension mirror — Nimblesite/basilisk-zed"
 
-require_cmd gh "the PR is opened through the GitHub API"
-require_cmd git "the registry is edited as a clone"
+require_cmd gh "the repo is edited through the GitHub API"
+require_cmd curl "the registry is re-checked before archiving"
 
-work="$(mktemp -d)"
-trap 'rm -rf "$work"' EXIT
-branch="remove-basilisk"
+REGISTRY_TOML="https://raw.githubusercontent.com/zed-industries/extensions/main/extensions.toml"
 
-body="Please remove the \`basilisk\` extension from the registry.
+# Re-checked rather than assumed. If a listing ever appears, archiving the
+# mirror strands it — the registry entry points at a submodule of this repo —
+# and a removal PR becomes the right move after all.
+step "Confirm Basilisk is absent from the Zed registry"
+if curl -fsSL "$REGISTRY_TOML" | grep -q '^\[basilisk\]'; then
+    fail "zed-industries/extensions now lists basilisk — open a removal PR there BEFORE archiving the mirror"
+fi
+ok "no basilisk entry in the registry — nothing to remove there"
 
-Basilisk's type checker was producing incorrect results. We asked for it to be
-removed from the python/typing conformance results, and it has been removed
-(https://github.com/python/typing/pull/2330). The code responsible is not
-isolated to a known set of rules, so we cannot say how many rules are affected.
-A code-quality tool that does not produce correct results is worse than useless,
-so Basilisk is being unlisted from every distribution channel and its CLI is
-inert — the extension can no longer start a language server.
+step "Confirm the mirror carries the statement"
+manifest="$(curl -fsSL https://raw.githubusercontent.com/Nimblesite/basilisk-zed/main/extension.toml 2>/dev/null || echo "")"
+case "$manifest" in
+    *"[language_servers"*) warn "the mirror still declares a language server — run 00-publish-zed-final.sh first" ;;
+    *"unlisted"*) ok "the mirror manifest already carries the statement" ;;
+    *) warn "could not read the mirror manifest — check it by hand before archiving" ;;
+esac
 
-Full statement: https://www.basilisk-python.dev/"
-
-if confirm "open a PR removing basilisk from zed-industries/extensions"; then
-    act gh repo fork zed-industries/extensions --clone=false --remote=false
-    act gh repo clone zed-industries/extensions "$work/extensions" -- --depth 1
-    act git -C "$work/extensions" checkout -b "$branch"
-    act git -C "$work/extensions" submodule deinit -f extensions/basilisk
-    act git -C "$work/extensions" rm -f extensions/basilisk
-    act python3 "$(dirname "${BASH_SOURCE[0]}")/remove_registry_entry.py" "$work/extensions/extensions.toml" basilisk
-    act git -C "$work/extensions" commit -am "Remove basilisk"
-    act git -C "$work/extensions" push --set-upstream "$(gh api user --jq .login)" "$branch"
-    act gh pr create --repo zed-industries/extensions \
-        --title "Remove basilisk" --body "$body" --head "$branch"
-    ok "PR opened — track it until merged, then confirm the extension is gone from Zed's registry"
+if confirm "archive Nimblesite/basilisk-zed (read-only, permanent-ish)"; then
+    act gh repo edit Nimblesite/basilisk-zed \
+        --description "Basilisk's type checker produced incorrect results. Basilisk is unlisted and is being rebuilt from the ground up as a new product." \
+        --homepage "https://www.basilisk-python.dev"
+    act gh repo archive Nimblesite/basilisk-zed --yes
+    ok "archived — confirm at https://github.com/Nimblesite/basilisk-zed"
 fi

@@ -361,15 +361,9 @@ jobs:
           scripts/render-zed-mirror.sh "${RUNNER_TEMP}/zed-mirror" 0.0.0-ci
           ( cd "${RUNNER_TEMP}/zed-mirror" && cargo build --release --target wasm32-wasip2 )
 
-      # The registry listing edits a ~1400-entry file in a repo we do not own,
-      # and it only ever runs during a tagged release — so it gets its proof
-      # here, on the PR, rather than the first time it touches upstream. Pure
-      # text-editing functions only; no network ([ZED-MIRROR]).
-      - name: Test the zed-industries listing edit
-        run: |
-          set -euo pipefail
-          pip install pytest==9.1.1
-          python3 -m pytest scripts/test_publish_zed_registry.py -q
+      # The zed-industries listing edit used to be proved here. It is gone:
+      # Basilisk is not in that registry and never was, so the only thing the
+      # script could do is ADD a listing during an unlisting ([ZED-MIRROR]).
 
   # ── Rust coverage + thresholds (runs in parallel) ──────────────────────────
   test-rust:

@@ -1,5 +1,14 @@
 # Basilisk Roadmap {#NEXTSTEPS-ROADMAP}
 
+> **Superseded. Kept as the record, not as a plan.** Basilisk is unlisted and its
+> CLI is inert ([WITHDRAWAL](../specs/DOCS-WITHDRAWAL-MESSAGING-SPEC.md#WITHDRAWAL)).
+> Nothing below is scheduled and nothing below authorises work. Two items are
+> flatly wrong now and are called out because they would cause harm if followed:
+> the checker is not "under audit" — it is finished and being deleted; and the
+> Zed mirror push is **not** "safe to list" — Basilisk is not in the Zed registry
+> and must not be added to it ([ZED-MIRROR](../specs/ZED-SPEC.md#ZED-MIRROR)).
+> `scripts/publish_zed_registry.py`, referenced below, is deleted.
+
 This file contains only cross-cutting work that does not belong to a focused
 implementation plan. Specs remain authoritative for behavior; focused plans own
 the engineering detail.
