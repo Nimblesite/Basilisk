@@ -27,12 +27,14 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SPEC_PATH = REPO_ROOT / "docs/specs/DOCS-WITHDRAWAL-MESSAGING-SPEC.md"
 DATA_PATH = REPO_ROOT / "website/src/_data/withdrawal.json"
-# The CLI and the extension print the SAME bytes the spec authored: both read a
-# generated file rather than a hand-typed string ([WITHDRAWAL-INERT-TEXT]).
+# The CLI and every editor extension print the SAME bytes the spec authored:
+# each reads a generated file rather than a hand-typed string
+# ([WITHDRAWAL-INERT-TEXT]).
 CLI_NOTICE_PATH = REPO_ROOT / "crates/basilisk-cli/src/withdrawal_notice.txt"
 VSIX_NOTICE_PATH = REPO_ROOT / "vscode-extension/src/withdrawal-notice.ts"
 NVIM_NOTICE_PATH = REPO_ROOT / "basilisk.nvim/lua/basilisk/notice.lua"
 NVIM_DOC_PATH = REPO_ROOT / "basilisk.nvim/doc/basilisk.txt"
+ZED_NOTICE_PATH = REPO_ROOT / "basilisk-zed/src/withdrawal_notice.txt"
 
 # The anchors naming each approved block in the spec.
 ANCHOR_LINE = "{#WITHDRAWAL-COPY-LINE}"
@@ -237,6 +239,9 @@ def outputs() -> dict[Path, str]:
         VSIX_NOTICE_PATH: vsix_notice_module(notice),
         NVIM_NOTICE_PATH: nvim_notice_module(notice),
         NVIM_DOC_PATH: nvim_help_doc(notice),
+        # Zed compiles to WASM, so the notice is `include_str!`d like the CLI's
+        # rather than escaped into a source literal.
+        ZED_NOTICE_PATH: notice,
     }
 
 

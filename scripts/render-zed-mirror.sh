@@ -1,27 +1,27 @@
 #!/usr/bin/env bash
 # Render a self-contained, version-stamped Zed extension tree for the
-# Nimblesite/basilisk-zed mirror. Implements [ZED-DIST] / [ZED-MIRROR];
+# Nimblesite/basilisk-zed mirror. Implements [ZED-MIRROR];
 # see docs/specs/ZED-SPEC.md#ZED-MIRROR.
 #
-# Why a render step exists. The in-repo basilisk-zed/ crate (a) carries the
-# 0.0.0-PLACEHOLDER version that is stamped only during CI, and (b) depends on
-# basilisk-common via a *workspace* path (`../crates/basilisk-common`). The Zed
-# extension registry (zed-industries/extensions) pins a commit and compiles the
-# extension to WASM *standalone*, with no monorepo around it, so it can neither
-# pin `main` (placeholder version) nor build it (unresolvable path dep). This
-# script produces a tree that the registry can build on its own:
+# Why a render step exists. The in-repo basilisk-zed/ crate carries the
+# 0.0.0-PLACEHOLDER version that is stamped only during CI, and inherits its
+# [lints] from the workspace. The Zed extension registry
+# (zed-industries/extensions) pins a commit and compiles the extension to WASM
+# *standalone*, with no monorepo around it, so it can neither pin `main`
+# (placeholder version) nor resolve workspace inheritance. This script produces
+# a tree that the registry can build on its own:
 #
-#   * vendors basilisk-common (zero-dep, WASM-safe) under vendor/basilisk-common
-#   * rewrites the extension manifest's path dep to the vendored copy
 #   * makes the mirror dir its own workspace root (empty [workspace] table) so
 #     cargo does not search upward for a parent workspace
-#   * stamps the release version into Cargo.toml + extension.toml + the
-#     vendored crate
+#   * stamps the release version into Cargo.toml + extension.toml
 #   * drops workspace-only [lints] inheritance (no parent workspace to inherit
 #     from in the mirror — lint strictness is enforced by the monorepo `zed` CI
 #     job, not by the distribution render)
 #   * omits committed build artifacts (extension.wasm, dist/, stale Cargo.lock);
 #     the publish job regenerates Cargo.lock via the standalone WASM build gate
+#
+# There is no vendoring step any more: the extension states that Basilisk is
+# unlisted and does nothing else, so `zed_extension_api` is its only dependency.
 #
 # Usage:
 #   scripts/render-zed-mirror.sh <dest-dir> [version]
@@ -32,20 +32,14 @@ set -euo pipefail
 readonly PLACEHOLDER="0.0.0-PLACEHOLDER"
 
 # Curated set copied verbatim from basilisk-zed/ into the mirror root. Anything
-# not listed here (extension.wasm, dist/, Cargo.lock, tests/) is intentionally
-# excluded — the registry needs only the manifest, sources, and language assets.
+# not listed here (extension.wasm, dist/, stale Cargo.lock) is intentionally
+# excluded — the registry needs only the manifest and the sources.
 readonly COPY_ITEMS=(
     "extension.toml"
     "Cargo.toml"
     "README.md"
-    # README.md links to the Chinese translation with a *relative* href, so the
-    # mirror must carry it too or the published landing page has a dead link.
-    "README.zh.md"
     "LICENSE"
     "src"
-    "themes"
-    "debug_adapter_schemas"
-    "images"
 )
 
 resolve_version() {
@@ -71,25 +65,6 @@ validate_semver() {
 
 repo_root() {
     cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd
-}
-
-# Read a `key = "value"` field from the [workspace.package] table of the root
-# Cargo.toml so the vendored crate's concrete metadata stays in lockstep with
-# the workspace rather than hardcoding duplicate values here.
-ws_package_field() {
-    local key="$1" file="$2"
-    awk -v key="$key" '
-        /^\[workspace\.package\]/ { in_section = 1; next }
-        /^\[/ { in_section = 0 }
-        in_section && $1 == key {
-            # Strip everything up to the first quote and the trailing quote.
-            line = $0
-            sub(/^[^"]*"/, "", line)
-            sub(/".*$/, "", line)
-            print line
-            exit
-        }
-    ' "$file"
 }
 
 # Drop a whole [lints] table from a Cargo.toml emitted on stdout. The mirror has
@@ -130,54 +105,16 @@ copy_extension_tree() {
     local item
     for item in "${COPY_ITEMS[@]}"; do
         if [[ -e "$src/$item" ]]; then
-            # -L dereferences symlinks so the mirror is self-contained: e.g.
-            # images/zed-screenshot.png links into website/, which does not exist
-            # in the standalone tree — copy the real file, not a dangling link.
             cp -RL "$src/$item" "$dest/$item"
         fi
     done
 }
 
-# Vendor basilisk-common as a standalone crate: concrete metadata (from the
-# workspace package table) replaces every `*.workspace = true` inheritance, and
-# the [lints] table is dropped.
-vendor_common() {
-    local root="$1" dest="$2" version="$3"
-    local out="$dest/vendor/basilisk-common"
-    mkdir -p "$dest/vendor"
-    cp -R "$root/crates/basilisk-common" "$out"
-    rm -rf "$out/target"
-
-    local edition repository rust_version license
-    edition="$(ws_package_field "edition" "$root/Cargo.toml")"
-    repository="$(ws_package_field "repository" "$root/Cargo.toml")"
-    rust_version="$(ws_package_field "rust-version" "$root/Cargo.toml")"
-    license="$(ws_package_field "license" "$root/Cargo.toml")"
-
-    # Resolve the non-version workspace-inherited metadata to concrete literals.
-    # The version is stamped structurally below (not via sed) per §3.3.
-    local manifest="$out/Cargo.toml"
-    sed -i.bak \
-        -e "s|^edition\.workspace = true|edition = \"${edition}\"|" \
-        -e "s|^license\.workspace = true|license = \"${license}\"|" \
-        -e "s|^repository\.workspace = true|repository = \"${repository}\"|" \
-        -e "s|^rust-version\.workspace = true|rust-version = \"${rust_version}\"|" \
-        "$manifest"
-    rm -f "${manifest}.bak"
-    stamp_toml_version "$manifest" "$version"
-    strip_lints_table < "$manifest" > "${manifest}.stripped"
-    mv "${manifest}.stripped" "$manifest"
-}
-
-# Rewrite the extension manifest: vendored path dep, no workspace lints, an
-# explicit empty [workspace] so the mirror dir is its own root, stamped version.
+# Rewrite the extension manifest: no workspace lints, an explicit empty
+# [workspace] so the mirror dir is its own root, stamped version.
 render_extension_manifest() {
     local dest="$1" version="$2"
     local manifest="$dest/Cargo.toml"
-    sed -i.bak \
-        -e 's|path = "../crates/basilisk-common"|path = "vendor/basilisk-common"|' \
-        "$manifest"
-    rm -f "${manifest}.bak"
     strip_lints_table < "$manifest" > "${manifest}.stripped"
     mv "${manifest}.stripped" "$manifest"
     stamp_toml_version "$manifest" "$version"
@@ -205,7 +142,6 @@ main() {
     echo "Rendering Zed mirror (version=${version}) -> ${dest}"
     clear_dest "$dest"
     copy_extension_tree "$root/basilisk-zed" "$dest"
-    vendor_common "$root" "$dest" "$version"
     render_extension_manifest "$dest" "$version"
     stamp_toml_version "$dest/extension.toml" "$version"
 

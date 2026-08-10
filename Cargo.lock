@@ -445,8 +445,6 @@ dependencies = [
 name = "basilisk-zed"
 version = "0.0.0-PLACEHOLDER"
 dependencies = [
- "basilisk-common",
- "serde_json",
  "zed_extension_api",
 ]
 

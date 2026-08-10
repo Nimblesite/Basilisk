@@ -139,6 +139,17 @@ jobs:
               # published words without touching the spec or a template.
               scripts/gen_withdrawal_copy.py|scripts/gen_readmes.py) website=true ;;
               scripts/test_published_readmes.py) website=true ;;
+              # The public-copy scan and its own tests ([WITHDRAWAL-SURFACES]).
+              scripts/check_public_copy.py) website=true ;;
+              scripts/test_check_public_copy.py) website=true ;;
+              # Every other surface the scan reads: a marketing sentence in any
+              # of them contradicts the statement just as loudly as one in a
+              # README, so a change to one must re-run the scan.
+              CONTRIBUTING.md|SECURITY.md|pyproject.toml) website=true ;;
+              crates/*/README.md|book/README.md|delist/README.md) website=true ;;
+              vscode-extension/package.json|basilisk-zed/extension.toml) website=true ;;
+              basilisk.nvim/doc/*) website=true ;;
+              .github/release-templates/*) website=true ;;
               # The published READMEs are generated from docs/readme/ ([README]),
               # so touching a source OR a generated copy re-runs that guard too.
               docs/readme/*) website=true ;;
@@ -219,6 +230,15 @@ jobs:
         run: |
           python3 scripts/gen_readmes.py --check
           python3 -m pytest scripts/test_published_readmes.py -q
+
+      # The generated READMEs are five of ~34 public surfaces. This scans the
+      # rest — crate READMEs, the security policy, the package manifests, the
+      # store descriptions, the site templates — for anything
+      # [WITHDRAWAL-PROHIBITED] bars.
+      - name: Scan every public surface for prohibited copy
+        run: |
+          python3 scripts/check_public_copy.py
+          python3 -m pytest scripts/test_check_public_copy.py -q
 
       - name: Build site
         working-directory: website

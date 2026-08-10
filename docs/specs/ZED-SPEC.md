@@ -1,10 +1,37 @@
 # Basilisk Zed Extension {#ZED}
 
-Zed extension connecting to the same `basilisk lsp` binary as the VS Code and Neovim extensions. All LSP features, DAP integration, custom commands, configuration, and binary resolution live in **[LSP-ARCHITECTURE-SPEC.md](LSP-ARCHITECTURE-SPEC.md)** (single source of truth); this spec documents only **Zed-specific details**.
+> **The feature sections of this spec are superseded and kept only as a record.**
+> Basilisk is unlisted and the `basilisk` binary is inert
+> ([WITHDRAWAL](DOCS-WITHDRAWAL-MESSAGING-SPEC.md#WITHDRAWAL)). The extension no
+> longer launches a language server, downloads a binary, registers a debug
+> adapter, or ships a theme. What it does now is [ZED-NOW](#ZED-NOW); everything
+> from [ZED-FEATURES](#ZED-FEATURES) onwards describes what was built and does
+> not run.
 
 Target: **wasm32 (64-bit) only**.
 
 Reference: [Zed Extension Development](https://zed.dev/docs/extensions/developing-extensions), [Zed Python Language Support](https://zed.dev/docs/languages/python).
+
+## What the extension is now {#ZED-NOW}
+
+One slash command, `/basilisk`, which prints the approved statement into the
+assistant panel. Nothing else. The extension declares no `[language_servers.*]`
+table (there is no server to launch — the binary is inert and starts none), no
+`[debug_adapters.*]` table, no grammars, and no themes; it depends on
+`zed_extension_api` and nothing else, and it reads no settings.
+
+The statement is not written here. `basilisk-zed/src/withdrawal_notice.txt` is
+generated from
+[WITHDRAWAL-INERT-TEXT](DOCS-WITHDRAWAL-MESSAGING-SPEC.md#WITHDRAWAL-INERT-TEXT)
+by `scripts/gen_withdrawal_copy.py` and `include_str!`d, so this extension
+prints the same bytes as the CLI, the VS Code extension, and the Neovim plugin
+([WITHDRAWAL-SURFACES](DOCS-WITHDRAWAL-MESSAGING-SPEC.md#WITHDRAWAL-SURFACES)).
+
+`basilisk-zed/src/logic_tests.rs` enforces this against the shipped
+`extension.toml`: no language server, no debug adapter, no grammar, exactly one
+slash command, the approved one-line description, and no call to
+`latest_github_release`/`download_file` anywhere in the glue. It is the Zed
+equivalent of `scripts/verify-vsix-inert.sh`.
 
 ## Zed Extension Capabilities {#ZED-CAPS}
 
@@ -26,7 +53,122 @@ Zed extensions are Rust compiled to WASM with a deliberately narrow API:
 | File watchers | **No** | Not available — config watching is server-owned ([LSPARCH-CONFIG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG)) |
 | Terminal control | **No** | Not available |
 
-All intelligence flows through LSP and DAP — no client-side tricks. See [LSPARCH-CMDREG](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CMDREG): the server advertises all commands, clients never pre-register them.
+This table describes Zed's API, not Basilisk's use of it: of the capabilities marked available, the extension now uses only slash commands, and only to print the statement ([ZED-NOW](#ZED-NOW)).
+
+## Extension Structure {#ZED-STRUCTURE}
+
+```
+basilisk-zed/
+  extension.toml
+  Cargo.toml
+  src/
+    lib.rs                  # Thin zed_extension_api glue — the WASM entry points
+    logic.rs                # Pure logic, zero zed_extension_api imports (host-testable)
+    logic_tests.rs          # Unit tests for logic.rs; #[path]-included as `mod tests`
+    withdrawal_notice.txt   # GENERATED from the messaging spec — the statement
+```
+
+No `languages/`, `themes/`, or `debug_adapter_schemas/` directory: the extension
+registers no language, no theme, and no debug adapter.
+
+### `extension.toml` {#ZED-EXTTOML}
+
+The manifest ships exactly this shape — the description is the approved one-line
+copy ([WITHDRAWAL-COPY-LINE](DOCS-WITHDRAWAL-MESSAGING-SPEC.md#WITHDRAWAL-COPY-LINE)),
+and the only table below the package metadata is the one slash command:
+
+```toml
+id = "basilisk"
+name = "Basilisk"
+version = "0.0.0-PLACEHOLDER"   # stamped in CI — see [ZED-MIRROR]
+schema_version = 1
+authors = ["Basilisk Contributors"]
+description = "Basilisk's type checker produced incorrect results. Basilisk is unlisted and is being rebuilt from the ground up as a new product."
+repository = "https://github.com/Nimblesite/Basilisk"
+
+[slash_commands.basilisk]
+description = "Why is Basilisk unlisted?"
+requires_argument = false
+```
+
+### `Cargo.toml` {#ZED-CARGOTOML}
+
+```toml
+[package]
+name = "basilisk-zed"
+version = "0.0.0-PLACEHOLDER"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+zed_extension_api = "0.7.0"
+```
+
+One dependency. The extension shares no constants with the language server —
+there is no server to share them with — and serialises nothing, so neither
+`basilisk-common` nor `serde_json` is linked in. That is also why the mirror
+render no longer vendors a workspace crate ([ZED-MIRROR](#ZED-MIRROR)).
+
+### `src/lib.rs` {#ZED-LIBRS}
+
+One trait method is overridden. Every other method of `zed::Extension` keeps its
+default, and the defaults answer "not implemented" — the honest answer for a
+server, adapter, or command this extension no longer provides.
+
+```rust
+use zed_extension_api::{self as zed, Result};
+
+struct BasiliskExtension;
+
+impl zed::Extension for BasiliskExtension {
+    fn new() -> Self { Self }
+
+    /// `/basilisk` — print the approved statement into the assistant panel.
+    fn run_slash_command(
+        &self,
+        _command: zed::SlashCommand,
+        _args: Vec<String>,
+        _worktree: Option<&zed::Worktree>,
+    ) -> Result<zed::SlashCommandOutput> {
+        let (label, text) = logic::notice_output();
+        Ok(zed::SlashCommandOutput {
+            sections: vec![zed::SlashCommandOutputSection {
+                range: (0..text.len()).into(),
+                label,
+            }],
+            text,
+        })
+    }
+}
+
+zed::register_extension!(BasiliskExtension);
+```
+
+## Registry Publishing {#ZED-MIRROR}
+
+Zed has no upload API. Extensions are listed in [`zed-industries/extensions`](https://github.com/zed-industries/extensions) as **git submodules**; that repo's CI compiles each to WASM from the pinned commit and publishes on merge. Two properties of the in-repo `basilisk-zed/` crate make it unpublishable as-is, so the release pipeline renders a self-contained mirror:
+
+1. **Placeholder version.** Every monorepo commit carries `0.0.0-PLACEHOLDER` in `Cargo.toml` + `extension.toml`; real versions are stamped only in CI (see [ZED-CARGOTOML](#ZED-CARGOTOML)). The registry pins a commit, so it cannot point at `main`.
+2. **Workspace `[lints]` inheritance.** `[lints] workspace = true` does not resolve when the registry builds the submodule standalone, with no parent workspace above it.
+
+`scripts/render-zed-mirror.sh` resolves both: it stamps the release version, makes the mirror its own workspace root, and drops the workspace-only `[lints]` inheritance (lint strictness is enforced by the monorepo `zed` CI job, not by the distribution render). It vendors nothing — the extension's only dependency is `zed_extension_api`, from crates.io. The `publish-zed` job in `release.yml` renders the tree, **gates the push on a real `cargo build --release --target wasm32-wasip2`**, then pushes to [`Nimblesite/basilisk-zed`](https://github.com/Nimblesite/basilisk-zed) and tags it with the monorepo tag — same clone-replace-commit-push convention as `publish-nvim`, using the `BREW_SCOOP_PAT` org secret.
+
+The mirror version equals the monorepo tag (`v1.2.3` → `1.2.3`).
+
+**This publishes one final version, and then the listing is removed.** The order is fixed by [WITHDRAWAL-UNLIST](DOCS-WITHDRAWAL-MESSAGING-SPEC.md#WITHDRAWAL-UNLIST): publish the final version → verify it is live → unlist. Unlisting alone would leave every existing install on the last feature release, never showing the statement. The removal PR against `zed-industries/extensions` is `delist/06-unlist-zed.sh`.
+
+**Pushing the mirror publishes nothing.** Zed installs only what `zed-industries/extensions` lists, so the mirror push is a prerequisite, not the release. `scripts/publish_zed_registry.py`, run by `publish-zed` immediately after the mirror is tagged, performs the listing itself: it forks the registry, resets a `listing-basilisk` branch to upstream's head, adds or re-pins the `extensions/basilisk` submodule to the release tag, sets `[basilisk] version` in `extensions.toml`, re-sorts `.gitmodules`, and opens the PR — or, once that PR is open, moves the pointer on the same branch. Every release therefore proposes its own bump; upstream maintainers still merge it.
+
+The registry is a repository Basilisk does not own, and its `extensions.toml` holds ~1400 entries, so the edit is **surgical, not a rewrite**: the entry is spliced into alphabetical position and every other entry stays byte-identical, since a reformatting diff across someone else's registry is a rejected PR. `scripts/test_publish_zed_registry.py` proves both properties — placement, non-disturbance, bump-not-duplicate, and idempotence — in the `zed` CI job, because the real thing runs only during a tagged release.
+
+## Record of what was built {#ZED-FEATURES}
+
+Everything below this line is history. None of it runs: the manifest registers
+no server, adapter, or grammar, and the binary it describes is inert. It is kept
+because it is the account of what existed, not because it is a current contract
+— and nothing here authorises rebuilding what it describes.
 
 ## Architecture {#ZED-ARCH}
 
@@ -59,157 +201,6 @@ graph TB
     PROFILER -->|"Reads process memory"| TARGET
     SLASH -->|"Triggers LSP commands"| LSP_CLIENT
 ```
-
-## Extension Structure {#ZED-STRUCTURE}
-
-```
-basilisk-zed/
-  extension.toml
-  Cargo.toml
-  src/
-    lib.rs                  # Thin zed_extension_api glue — the WASM entry points
-    logic.rs                # Pure logic, zero zed_extension_api imports (host-testable)
-    logic_tests.rs          # Unit tests for logic.rs; #[path]-included as `mod tests`
-  tests/
-    fixtures/               # Python sample files (clean, type_error, completions)
-  themes/
-    basilisk-dark.json
-  debug_adapter_schemas/
-    basilisk-debug.json
-```
-
-No `languages/` directory — the extension binds to Zed's built-in Python language rather than shadowing it. See [ZED-TREESITTER](#ZED-TREESITTER).
-
-### `extension.toml` {#ZED-EXTTOML}
-
-```toml
-id = "basilisk"
-name = "Basilisk"
-version = "0.1.0"
-schema_version = 1
-authors = ["Basilisk Contributors"]
-description = "Strict-by-default Python type checker with debugging and profiling"
-repository = "https://github.com/Nimblesite/Basilisk"
-
-# No [grammars.python] block and no languages/ dir — binds to Zed's built-in Python. See [ZED-GRAMMAR].
-
-[language_servers.basilisk]
-name = "Basilisk"
-languages = ["Python"]
-
-[language_servers.basilisk.language_ids]
-"Python" = "python"
-
-[debug_adapters.basilisk-debug]
-schema_path = "debug_adapter_schemas/basilisk-debug.json"
-```
-
-### `Cargo.toml` {#ZED-CARGOTOML}
-
-```toml
-[package]
-name = "basilisk-zed"
-version = "0.1.0"
-edition = "2021"
-
-[lib]
-crate-type = ["cdylib"]
-
-[dependencies]
-zed_extension_api = "0.7.0"
-```
-
-### `src/lib.rs` {#ZED-LIBRS}
-
-```rust
-use zed_extension_api::{self as zed, Result};
-
-struct BasiliskExtension;
-
-impl zed::Extension for BasiliskExtension {
-    fn language_server_command(
-        &mut self,
-        language_server_id: &zed::LanguageServerId,
-        worktree: &zed::Worktree,
-    ) -> Result<zed::Command> {
-        // 1. Check for user-configured path in Zed settings
-        // 2. Try well-known locations (~/.cargo/bin/basilisk, /usr/local/bin/basilisk, etc.)
-        // 3. Download from GitHub release if not found
-        let binary_path = self.resolve_binary(worktree)?;
-
-        Ok(zed::Command {
-            command: binary_path,
-            args: vec!["lsp".into()],
-            env: Default::default(),
-        })
-    }
-
-    fn language_server_initialization_options(
-        &mut self,
-        _language_server_id: &zed::LanguageServerId,
-        worktree: &zed::Worktree,
-    ) -> Result<Option<zed::serde_json::Value>> {
-        // Pass workspace root so LSP can find .venv, pyproject.toml, etc.
-        Ok(Some(zed::serde_json::json!({
-            "workspaceRoot": worktree.root_path(),
-        })))
-    }
-
-    fn language_server_workspace_configuration(
-        &mut self,
-        _language_server_id: &zed::LanguageServerId,
-        _worktree: &zed::Worktree,
-    ) -> Result<Option<zed::serde_json::Value>> {
-        // Read Zed settings and map to Basilisk config
-        Ok(Some(zed::serde_json::json!({
-            "basilisk": {
-                "inlayHints": {
-                    "parameterNames": true,
-                    "variableTypes": true
-                },
-                // Formatter engine: "ruff" (Ruff formatter embedded in the
-                // Basilisk binary, in-process — no external ruff binary) or
-                // "none". [LSPFMT-CONFIG]
-                "formatter": "ruff"
-            }
-        })))
-    }
-
-    fn get_dap_binary(
-        &mut self,
-        config: zed::DebugConfig,
-    ) -> Result<zed::DebugAdapterBinary> {
-        // Debug sessions use the same basilisk binary
-        // The LSP spawns debugpy; the DAP client connects to it
-        let binary_path = self.resolve_binary_from_config(&config)?;
-
-        Ok(zed::DebugAdapterBinary {
-            command: binary_path,
-            args: vec!["debug-adapter".into()],
-            envs: Default::default(),
-            cwd: config.cwd.clone(),
-            connection: None,
-        })
-    }
-
-    fn run_slash_command(
-        &mut self,
-        command: zed::SlashCommand,
-        args: Vec<String>,
-        worktree: Option<&zed::Worktree>,
-    ) -> Result<zed::SlashCommandOutput> {
-        match command.name.as_str() {
-            "profile" => self.handle_profile_command(args, worktree),
-            "profstop" => self.handle_profstop_command(worktree),
-            _ => Err("Unknown command".into()),
-        }
-    }
-}
-
-zed::register_extension!(BasiliskExtension);
-```
-
-## Features {#ZED-FEATURES}
 
 ### Language Intelligence {#ZED-LSP}
 
@@ -287,6 +278,8 @@ Bundling `[grammars.python]` would force Zed to compile the grammar from source 
 
 ## Binary Distribution {#ZED-DIST}
 
+> **Superseded.** The extension downloads nothing. `resolve_binary`, `download_binary` and `check_for_updates` are deleted, and `basilisk-zed/src/logic_tests.rs` fails the build if `latest_github_release` or `download_file` reappears in the glue. The rest of this section is the record of how it worked.
+
 Installing the extension is enough — no separate binary install. Per the Shipwright contract, the binary ships with every release (`.github/workflows/release.yml`); the extension downloads the matching asset on first activation, caches it in its data directory, and reuses it until a newer release appears. There is **no filesystem default** (no `~/.cargo/bin`, no PATH guess) — a missing override means "download", never "guess".
 
 Resolution order (`basilisk-zed/src/lib.rs::resolve_binary`):
@@ -318,21 +311,6 @@ Target assets (must match `release.yml` — see `basilisk_common::release::asset
 - `basilisk-aarch64-pc-windows-msvc.zip`
 
 Archive kind and in-archive binary path are platform-specific (macOS zip nested; Linux `tar.gz` and Windows zip flat), derived from `basilisk_common::release::{is_zip_archive, extracted_binary_path}` so the downloader cannot drift from the release pipeline.
-
-## Registry Publishing {#ZED-MIRROR}
-
-Zed has no upload API. Extensions are listed in [`zed-industries/extensions`](https://github.com/zed-industries/extensions) as **git submodules**; that repo's CI compiles each to WASM from the pinned commit and publishes on merge. Two properties of the in-repo `basilisk-zed/` crate make it unpublishable as-is, so the release pipeline renders a self-contained mirror:
-
-1. **Placeholder version.** Every monorepo commit carries `0.0.0-PLACEHOLDER` in `Cargo.toml` + `extension.toml`; real versions are stamped only in CI (see [ZED-CARGOTOML](#ZED-CARGOTOML)). The registry pins a commit, so it cannot point at `main`.
-2. **Workspace path dependency.** The crate depends on `basilisk-common` via `{ path = "../crates/basilisk-common" }`, which does not resolve when the registry builds the submodule standalone.
-
-`scripts/render-zed-mirror.sh` resolves both: vendors `basilisk-common` (zero-dependency, WASM-safe) under `vendor/basilisk-common`, rewrites the path dependency, stamps the release version, makes the mirror its own workspace root, and drops the workspace-only `[lints]` inheritance. The `publish-zed` job in `release.yml` renders the tree, **gates the push on a real `cargo build --release --target wasm32-wasip2`**, then pushes to [`Nimblesite/basilisk-zed`](https://github.com/Nimblesite/basilisk-zed) and tags it with the monorepo tag — same clone-replace-commit-push convention as `publish-nvim`, using the `BREW_SCOOP_PAT` org secret.
-
-The mirror version equals the monorepo tag (`v1.2.3` → `1.2.3`); the binary [ZED-DIST](#ZED-DIST) updates independently at runtime.
-
-**Pushing the mirror publishes nothing.** Zed installs only what `zed-industries/extensions` lists, so the mirror push is a prerequisite, not the release. `scripts/publish_zed_registry.py`, run by `publish-zed` immediately after the mirror is tagged, performs the listing itself: it forks the registry, resets a `listing-basilisk` branch to upstream's head, adds or re-pins the `extensions/basilisk` submodule to the release tag, sets `[basilisk] version` in `extensions.toml`, re-sorts `.gitmodules`, and opens the PR — or, once that PR is open, moves the pointer on the same branch. Every release therefore proposes its own bump; upstream maintainers still merge it.
-
-The registry is a repository Basilisk does not own, and its `extensions.toml` holds ~1400 entries, so the edit is **surgical, not a rewrite**: the entry is spliced into alphabetical position and every other entry stays byte-identical, since a reformatting diff across someone else's registry is a rejected PR. `scripts/test_publish_zed_registry.py` proves both properties — placement, non-disturbance, bump-not-duplicate, and idempotence — in the `zed` CI job, because the real thing runs only during a tagged release.
 
 ## Zed Settings {#ZED-CONFIG}
 

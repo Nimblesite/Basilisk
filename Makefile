@@ -421,6 +421,8 @@ _lint_docs:
 	python3 scripts/gen_readmes.py --check && \
 	python3 scripts/gen_withdrawal_copy.py --check && \
 	python3 -m pytest scripts/test_published_readmes.py -q && \
+	python3 scripts/check_public_copy.py && \
+	python3 -m pytest scripts/test_check_public_copy.py -q && \
 	echo -e '\033[0;32m✓ Generated documentation is in sync\033[0m'
 
 _fmt_rust:

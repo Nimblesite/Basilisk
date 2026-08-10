@@ -2,7 +2,20 @@
 
 <!-- agent-pmo:0b21609 -->
 
+## Supported Versions
+
+**None.** Basilisk is unlisted and its type checker is inert
+([the statement](https://www.basilisk-python.dev/)). No version receives
+security fixes, and no version will. If Basilisk is still installed anywhere,
+remove it — that is the only remediation this project can offer.
+
+| Version | Supported |
+| ------- | --------- |
+| all     | ❌        |
+
 ## Reporting a Vulnerability
+
+You can still reach us, and we would rather hear about a problem than not.
 
 **Please do not report security vulnerabilities through public GitHub issues,
 discussions, or pull requests.**
@@ -23,20 +36,9 @@ When reporting, please include:
 
 ## What to Expect
 
-- **Acknowledgement** within **3 business days**.
-- An assessment and a remediation plan (or a reasoned decline) within **10 business days**.
-- Coordinated disclosure: we will agree a disclosure timeline with you and credit
-  you in the advisory unless you prefer to remain anonymous.
-
-## Supported Versions
-
-Security fixes land on the latest released minor version. Older lines are
-supported only as noted below.
-
-| Version | Supported |
-| ------- | --------- |
-| 0.13.x  | ✅        |
-| < 0.13  | ❌        |
+We are not promising a response window on an unlisted project, and we will not
+be shipping a patched version. What a report can still achieve: a published
+advisory, so anyone who has not yet removed Basilisk knows why they should.
 
 ## References
 

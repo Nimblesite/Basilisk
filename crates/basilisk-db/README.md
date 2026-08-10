@@ -1,10 +1,17 @@
 # basilisk-db
 
+> **A record, not a product claim.** Basilisk is unlisted and its type checker is
+> inert ([WITHDRAWAL](../../docs/specs/DOCS-WITHDRAWAL-MESSAGING-SPEC.md#WITHDRAWAL)).
+> Nothing described below ships in anything a user can install: the `basilisk`
+> binary analyses nothing, and the editor extensions carry no checker. This file
+> is kept as an account of what was built, and nothing in it authorises
+> rebuilding what it describes.
+
 Incremental computation database for Basilisk, built on the Salsa framework.
 
 ## Role in Basilisk
 
-This crate provides the **caching and incremental recomputation layer** that makes the LSP fast. Instead of re-analyzing an entire project on every keystroke, Salsa tracks which inputs changed and only recomputes the affected outputs — delivering sub-10ms incremental checks.
+This crate provides the **caching and incremental recomputation layer** for the language server. Instead of re-analyzing an entire project on every keystroke, Salsa tracks which inputs changed and only recomputes the affected outputs.
 
 ```
 file edit ➜ [basilisk-db] ➜ only recompute what changed ➜ updated diagnostics
@@ -25,4 +32,6 @@ file edit ➜ [basilisk-db] ➜ only recompute what changed ➜ updated diagnost
 
 ## Status
 
-Working — powers the LSP's incremental analysis.
+Consumed only by the language server, which ships in nothing. The cross-session
+result cache this crate used to hold was deleted with the checking it cached
+([CHECKER-CACHE-SPEC](../../docs/specs/CHECKER-CACHE-SPEC.md)).
