@@ -13,6 +13,7 @@ linked to an active plan.
 
 | File | Purpose |
 |---|---|
+| [Withdrawal messaging](specs/DOCS-WITHDRAWAL-MESSAGING-SPEC.md) | **Single source of truth for everything Basilisk says publicly** — the message, the approved copy, what is never said, the unlisting scope, and the inert CLI contract. Every README, listing, and website page copies from it. |
 | [Checker architecture](specs/CHECKER-ARCHITECTURE-SPEC.md) | Configuration, rules, diagnostics, analysis pipeline, CLI, and quality gates — including [CHKARCH-TEXT-MATCHED-LOGIC](specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TEXT-MATCHED-LOGIC), the failing-test → delete → report rule that governs any code deciding from source text. |
 | [Type inference](specs/CHECKER-TYPE-INFERENCE-SPEC.md) | The bidirectional/constraint inference engine — the checker's single type oracle — its narrowing contracts, research grounding, and the condemned legacy mechanisms under demolition. |
 | [Stub resolution](specs/CHECKER-STUB-RESOLUTION-SPEC.md) | Pinned typing-spec import order, custom typeshed, offline pin verification against the store, a PyPI-package wheel pin, the segregated download component, bundled stdlib ZIP, and generation. |
@@ -37,9 +38,7 @@ linked to an active plan.
 | [Zed extension](specs/ZED-SPEC.md) | Zed WASM client behavior. |
 | [WASM](specs/WASM-SPEC.md) | The checker compiled for the browser: one-shot in-memory checking with no filesystem, network, or threads. |
 | [Editor screenshots](specs/VSIX-EDITOR-SCREENSHOTS-SPEC.md) | Automated real VS Code screenshots. |
-| [Website E2E](specs/WEBSITE-E2E-SPEC.md) | Navigation and responsive smoke tests. |
-| [Website screenshots](specs/WEBSITE-SCREENSHOTS-SPEC.md) | Verified CLI screenshot generation. |
-| [Website error pages](specs/WEBSITE-ERROR-PAGES-SPEC.md) | Generated per-diagnostic documentation. |
+| [Website E2E](specs/WEBSITE-E2E-SPEC.md) | The withdrawal-contract tests: approved copy on the statement page, every retired URL still resolving, and nothing forbidden anywhere in the build. |
 | [READMEs](specs/DOCS-README-SPEC.md) | One authored README per language, generated to GitHub, the VSIX (Marketplace + Open VSX), and PyPI. |
 | [Repository standards](specs/REPO-STANDARDS-SPEC.md) | Root/`.github` gates: duplication budget, coverage thresholds, committed editor directories, Dependabot, CodeQL, and dependency review. |
 | [Release manual verification](specs/RELEASE-MANUAL-VERIFICATION-SPEC.md) | The manual passes a release person runs before publishing and again after, against the installed artifact: where `/ci-prep` fits, the artifact-provenance gate, the responsiveness smoke test, and the full hands-on test surface. |
@@ -73,4 +72,4 @@ Plans contain only unfinished work. Delete a plan when its acceptance gate passe
 
 | File | Contents |
 |---|---|
-| [Conformance integrity audit](CONFORMANCE-INTEGRITY-AUDIT.md#CHKARCH-CONFORMANCE-INTEGRITY-AUDIT) | Phase 1: the fitted alias predicates, measured impact, wider checker scan, remediation status, and process changes found by the 2026-08 audit. Linked from the site's [conformance correction](../website/src/docs/conformance.md). |
+| [Conformance integrity audit](CONFORMANCE-INTEGRITY-AUDIT.md#CHKARCH-CONFORMANCE-INTEGRITY-AUDIT) | Phase 1: the fitted alias predicates, measured impact, wider checker scan, remediation status, and process changes found by the 2026-08 audit. The public site no longer carries a conformance page; this audit is the internal record ([WITHDRAWAL-SURFACES](specs/DOCS-WITHDRAWAL-MESSAGING-SPEC.md#WITHDRAWAL-SURFACES)). |

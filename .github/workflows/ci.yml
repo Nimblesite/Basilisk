@@ -26,10 +26,9 @@ env:
   # anyway. Verified empirically: with RUSTFLAGS unset the config flag reaches
   # rustc; with RUSTFLAGS set it reaches it zero times.
   #
-  # Three jobs override this per-job because they link something that is not
-  # x86_64 linux and would reject `-fuse-ld=lld`: `website` (wasm32-unknown-
-  # unknown, and it re-adds the playground's 16 MiB stack for the same reason),
-  # `zed` (wasm32-wasip2), and `test-vscode-windows` (MSVC link.exe). Job-level
+  # Two jobs override this per-job because they link something that is not
+  # x86_64 linux and would reject `-fuse-ld=lld`: `zed` (wasm32-wasip2) and
+  # `test-vscode-windows` (MSVC link.exe). Job-level
   # `env` merges per-key, so every other job inherits both flags automatically.
   RUSTFLAGS: "-D warnings -C link-arg=-fuse-ld=lld"
 
@@ -132,28 +131,13 @@ jobs:
             # `website` gates the site build: only files the published site is
             # actually built from (templates/assets + the benchmark CSVs it reads).
             case "$f" in
-              # The site build, plus the checker rule sources the diagnostic
-              # data (website/src/_data/rules.json) and /errors/ pages are
-              # generated from — so a new/renamed rule re-runs the drift guard.
-              website/*|benchmarks/status/*|crates/basilisk-checker/src/rules/*) website=true ;;
-              # The playground ships the checker itself, compiled to wasm at
-              # site-build time ([WASM-BUILD]). A change to ANY crate the
-              # playground links changes what the published site answers, so the
-              # site build and its playground e2e must re-run to catch a
-              # browser-only break. This list is `basilisk-wasm`'s dependency
-              # closure; extend it when that closure grows. The release deploy
-              # publishes whatever is on `main`, unfiltered — so a crate that
-              # skips this check reaches the live playground unverified.
-              crates/basilisk-wasm/*|crates/basilisk-checker/*|crates/basilisk-common/*) website=true ;;
-              crates/basilisk-config/*|crates/basilisk-db/*|crates/basilisk-parser/*) website=true ;;
-              crates/basilisk-resolver/*|crates/basilisk-stubs/*|crates/basilisk-uv/*) website=true ;;
-              Cargo.lock) website=true ;;
-              # The conformance score + graded python/typing commit are stamped
-              # into these by scripts/gen_conformance_reference.py — editing
-              # them re-runs the website job's stamp drift guard. The published
-              # READMEs are generated from docs/readme/ ([README]), so touching
-              # a source OR a generated copy must re-run that guard too.
-              docs/readme/*|docs/specs/CHECKER-ARCHITECTURE-SPEC.md) website=true ;;
+              # The site build, plus the messaging spec its every published word
+              # is extracted from ([WITHDRAWAL-COPY]) — so editing the spec
+              # re-runs the drift guard and the site build.
+              website/*|docs/specs/DOCS-WITHDRAWAL-MESSAGING-SPEC.md) website=true ;;
+              # The published READMEs are generated from docs/readme/ ([README]),
+              # so touching a source OR a generated copy re-runs that guard too.
+              docs/readme/*) website=true ;;
               README.md|README.zh.md|README-pypi.md) website=true ;;
               vscode-extension/README.md|vscode-extension/README.zh.md) website=true ;;
             esac
@@ -201,26 +185,11 @@ jobs:
     needs: changes
     if: needs.changes.outputs.website == 'true'
     runs-on: ubuntu-24.04
-    # Overrides the workflow-level RUSTFLAGS: this job links wasm32-unknown-
-    # unknown, which rejects `-fuse-ld=lld`. It also RESTORES the playground's
-    # 16 MiB stack ([WASM-BUILD]) — that flag lives in .cargo/config.toml, which
-    # the workflow-level RUSTFLAGS discards entirely (see the env block above),
-    # so this pre-merge check was compiling the playground with the 1 MiB wasm
-    # default while deploy-pages.yml (which sets no RUSTFLAGS) shipped it with
-    # 16 MiB. The check and the deploy now build the same thing.
-    env:
-      RUSTFLAGS: "-D warnings -C link-arg=-zstack-size=16777216"
-    # 20, not 10: this job compiles the checker to WebAssembly for the
-    # playground ([WASM-BUILD]) before Eleventy runs, and a cold wasm build of
-    # the parser + typeshed does not fit the old budget.
-    timeout-minutes: 20
+    # The site is templates and one generated data file — no Rust, no wasm, no
+    # git history ([WITHDRAWAL-SURFACES]).
+    timeout-minutes: 10
     steps:
-      # fetch-depth: 0 — mirrors deploy-pages.yml so the conformance over-time
-      # chart (built from the git history of conformance_status.csv) is exercised
-      # by the pre-merge build check, not just the post-merge deploy.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -228,70 +197,36 @@ jobs:
           cache: npm
           cache-dependency-path: website/package-lock.json
 
-      # The playground engine is the real checker compiled to wasm32, built by
-      # `npm run build:wasm` ([WASM-BUILD]). Declare the target explicitly
-      # rather than letting wasm-pack add it implicitly, so a missing target is
-      # a setup failure here instead of a confusing mid-build one.
-      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
-        with:
-          targets: wasm32-unknown-unknown
-
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
-        with:
-          cache-on-failure: true
-          prefix-key: v1-rust-glibc
-
       - name: Install dependencies
         working-directory: website
         run: npm ci
 
-      # The /errors/ pages and the rules reference are generated from the checker
-      # source ([WEBSITE-ERROR-PAGES]); fail if the committed data is stale so the
-      # pages the CLI deep-links to can never drift from the diagnostics it emits.
-      - name: Check generated diagnostic data is in sync with the checker
+      # Every word the site publishes is extracted from the messaging spec
+      # ([WITHDRAWAL-COPY]); fail if the committed data drifted from it, so the
+      # site can never say something the spec does not.
+      - name: Check site copy is in sync with the messaging spec
+        run: python3 scripts/gen_withdrawal_copy.py --check
+
+      # Every published README renders from docs/readme/ ([README-DRIFT]) —
+      # GitHub, the VSIX (Marketplace AND Open VSX), and PyPI cannot drift apart
+      # or be edited in place.
+      - name: Check generated READMEs
         run: |
-          python3 scripts/gen_rules_reference.py --data /tmp/rules.json
-          diff -u website/src/_data/rules.json /tmp/rules.json \
-            || { echo "::error::rules.json is stale — run: python3 scripts/gen_rules_reference.py --data"; exit 1; }
-
-      # The README source/spec quote the live score + graded python/typing
-      # commit, stamped by scripts/gen_conformance_reference.py on every scorer
-      # run; fail if the committed text drifted from conformance_report.json so
-      # a quoted commit can never go stale ([CHKARCH-CONFORMANCE]). The same
-      # command then verifies that every published README still renders from
-      # docs/readme/ unchanged ([README-DRIFT]) — GitHub, the VSIX (Marketplace
-      # AND Open VSX), and PyPI cannot drift apart or be edited in place.
-      - name: Check stamped conformance references and generated READMEs
-        run: python3 scripts/gen_conformance_reference.py --check
-
-      # Separate from `npm run build` ON PURPOSE. The Eleventy build has no Rust
-      # dependency — every page but the playground renders from committed data —
-      # so a checker that does not compile can no longer take the whole site
-      # down, locally or here. The playground e2e below drives the real engine,
-      # so this job still builds it explicitly.
-      - name: Build playground engine (wasm)
-        working-directory: website
-        run: npm run build:wasm
+          python3 scripts/gen_readmes.py --check
+          python3 -m pytest scripts/test_published_readmes.py -q
 
       - name: Build site
         working-directory: website
-        # GITHUB_TOKEN raises the GitHub API rate limit for _data/releases.js
-        # (the releases page is generated from the live Releases API at build
-        # time); the build still degrades gracefully if the call fails.
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
         run: npm run build
 
-      # Navigation smoke tests ([WEBSITE-E2E-SMOKE]) and CLI-screenshot render
-      # checks ([WEBSITE-SCREENSHOTS-VERIFY]). Both presets (Desktop Chrome +
-      # Pixel 5) run on Chromium, so only chromium is installed. The screenshots
-      # are committed, regenerated locally with `npm run screenshots` against the
-      # real binary — CI only verifies they render, it never captures them.
+      # Withdrawal-contract tests ([WEBSITE-E2E-WITHDRAWAL]): the statement is
+      # the approved copy, every retired URL still resolves, and no page says
+      # anything [WITHDRAWAL-PROHIBITED] forbids. Both presets run on Chromium.
       - name: Install Playwright browser
         working-directory: website
         run: npx playwright install --with-deps chromium
 
-      - name: Run navigation + screenshot smoke tests (desktop + mobile)
+      - name: Run withdrawal-contract tests (desktop + mobile)
         working-directory: website
         # CI uses the stdout `list` reporter only — no HTML report, trace,
         # video or screenshot is produced or uploaded ([GITHUB-NO-ARTIFACTS]).

@@ -268,12 +268,6 @@ class ReleaseAttributionTests(unittest.TestCase):
                     "Apache-2.0, with MIT-licensed parts",
                     (REPO_ROOT / relative).read_text(),
                 )
-        for relative in ("README.zh.md", "vscode-extension/README.zh.md"):
-            with self.subTest(readme=relative):
-                self.assertIn(
-                    "Apache-2.0，部分内容采用 MIT 许可证",
-                    (REPO_ROOT / relative).read_text(),
-                )
 
     def test_package_metadata_names_every_license_in_shipped_binaries(self) -> None:
         # PEP 639 License-Expression covers the containing distribution, so the

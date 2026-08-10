@@ -1,7 +1,7 @@
 {
   "name": "basilisk",
   "displayName": "Basilisk",
-  "description": "An open-source Python type checker and language server built in Rust: diagnostics, autocomplete, go-to-definition, refactoring, formatting, integrated debugging, and profiling in one extension. Strictness is configured per rule, so a codebase can adopt type safety incrementally.",
+  "description": "Basilisk is unlisted. Its type checker produced incorrect results, and the product is being rebuilt from scratch.",
   "version": "0.0.0-PLACEHOLDER",
   "publisher": "Nimblesite",
   "license": "SEE LICENSE IN LICENSE.txt",
@@ -22,23 +22,10 @@
     "vscode": "^1.99.0"
   },
   "categories": [
-    "Programming Languages",
-    "Linters",
-    "Debuggers",
     "Other"
   ],
   "keywords": [
-    "python",
-    "language server",
-    "pylance",
-    "pyright",
-    "type checker",
-    "intellisense",
-    "autocomplete",
-    "go to definition",
-    "rust",
-    "basilisk",
-    "lsp"
+    "basilisk"
   ],
   "activationEvents": [
     "onLanguage:python",
@@ -813,7 +800,10 @@
         },
         "basilisk.formatter": {
           "type": "string",
-          "enum": ["ruff", "none"],
+          "enum": [
+            "ruff",
+            "none"
+          ],
           "default": "ruff",
           "description": "Formatter engine. 'ruff' uses the Ruff formatter embedded in the Basilisk binary (in-process — no external ruff binary is ever required or spawned); 'none' disables formatting. See LSP-FORMATTING-SPEC.md#LSPFMT-CONFIG."
         },

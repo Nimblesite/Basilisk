@@ -1,27 +1,25 @@
 name: Deploy GitHub Pages
 
-# A RELEASE is the only thing that publishes this site. There is DELIBERATELY no
-# `push:` trigger — a merge to `main` must NOT deploy, and adding one back is a
-# regression, not a convenience.
+# The site is one statement plus a notice at every retired URL
+# ([WITHDRAWAL-SURFACES]). It publishes on merge to `main`.
 #
-# Why: the site is not static data. The playground embeds the checker itself,
-# compiled to WebAssembly at build time ([WASM-BUILD]), and the docs quote the
-# conformance score and the released binary's behaviour. Publishing on merge
-# would put an UNRELEASED checker in front of users — the playground would
-# answer differently from the `basilisk` anyone can install, and the docs would
-# describe a version that does not exist yet. Deploying only on release keeps
-# the site in lockstep with the binary it documents.
-#
-# A change merged to `main` is verified pre-merge by ci.yml's `Website Build`
-# job (same build, same playground e2e) and ships with the next release.
+# This used to deploy on release ONLY, because the site was coupled to the
+# binary: the playground embedded the checker compiled to wasm, and the docs
+# quoted the conformance score, so publishing on merge would have put an
+# unreleased checker in front of users. None of that is left — there is no
+# playground, no score, no documentation of a shipped version, and there will be
+# no further release to ride along with. Holding the withdrawal notice back
+# until a release that is not coming would leave the old marketing live.
 on:
-  # Called by release.yml after a stable GitHub Release is created. A release
-  # created with the default GITHUB_TOKEN does not emit a `release: published`
-  # event that can start another workflow, so the release pipeline invokes this
-  # one directly instead of relying on that event.
+  push:
+    branches: [main]
+    paths:
+      - "website/**"
+      - "docs/specs/DOCS-WITHDRAWAL-MESSAGING-SPEC.md"
+      - ".github/workflows/deploy-pages.yml"
+  # Still callable by release.yml, which invokes this workflow directly.
   workflow_call:
-  # Manual escape hatch for an out-of-band site fix between releases (a typo, a
-  # dead link). Deliberately a human decision — never automatic.
+  # Manual escape hatch for an out-of-band fix. Deliberately a human decision.
   workflow_dispatch:
 
 permissions:
@@ -37,20 +35,14 @@ jobs:
   deploy:
     name: Build and deploy
     runs-on: ubuntu-latest
-    # 20, not 10: this job compiles the checker to WebAssembly for the
-    # playground ([WASM-BUILD]) before Eleventy runs. Kept in step with the
-    # same budget in ci.yml's website job.
-    timeout-minutes: 20
+    # The site is templates and one generated data file — no Rust, no wasm, no
+    # git history. Kept in step with ci.yml's website job.
+    timeout-minutes: 10
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
-      # fetch-depth: 0 — the conformance over-time chart (_data/conformance.js)
-      # reads the full git history of conformance/conformance_status.csv. A
-      # shallow clone would collapse the chart to a single point.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -58,37 +50,18 @@ jobs:
           cache: npm
           cache-dependency-path: website/package-lock.json
 
-      # The playground engine is the real checker compiled to wasm32, built by
-      # `npm run build:wasm` ([WASM-BUILD]). Without this the deployed site
-      # would serve a playground page whose engine never loads.
-      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
-        with:
-          targets: wasm32-unknown-unknown
-
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
-        with:
-          cache-on-failure: true
-          prefix-key: v1-rust-glibc
-
       - name: Install dependencies
         working-directory: website
         run: npm ci
 
-      # Separate from `npm run build` ON PURPOSE. The Eleventy build has no Rust
-      # dependency, so a checker that does not compile can no longer take every
-      # page down with it. The deployed site DOES ship a working playground, so
-      # this job runs the engine build explicitly and fails here if it breaks.
-      - name: Build playground engine (wasm)
-        working-directory: website
-        run: npm run build:wasm
+      # Every word the site publishes is extracted from the messaging spec
+      # ([WITHDRAWAL-COPY]). Deploy must not be able to ship copy the spec does
+      # not contain, so the drift gate runs here too — not only pre-merge.
+      - name: Check site copy is in sync with the messaging spec
+        run: python3 scripts/gen_withdrawal_copy.py --check
 
       - name: Build site
         working-directory: website
-        # GITHUB_TOKEN raises the GitHub API rate limit for _data/releases.js
-        # (the releases page is generated from the live Releases API at build
-        # time); the build still degrades gracefully if the call fails.
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
         run: npm run build
 
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0

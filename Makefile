@@ -445,17 +445,17 @@ _lint_deslop:
 	deslop . && \
 	echo -e '\033[0;32m✓ Deslop duplication gate passed\033[0m'
 
-# Generated-documentation drift gates. The published READMEs (GitHub, the VSIX
-# on both Marketplace and Open VSX, PyPI) are rendered from docs/readme/
-# ([README]), and the diagnostic reference data is generated from the checker
-# rule sources ([WEBSITE-ERROR-PAGES-DRIFT]) — editing either output by hand,
-# or editing a source without regenerating, fails here as it does in CI.
+# Generated-documentation drift gates. The published READMEs are rendered from
+# docs/readme/ ([README]), and the site's copy is extracted from the messaging
+# spec ([WITHDRAWAL-COPY]) — editing either output by hand, or editing a source
+# without regenerating, fails here as it does in CI. The withdrawal gate is the
+# load-bearing one: it is what stops the site saying something the messaging
+# spec does not.
 _lint_docs:
 	@echo -e '\033[1m\033[0;36m▶ Checking generated documentation\033[0m' && \
 	python3 scripts/gen_readmes.py --check && \
-	python3 scripts/gen_rules_reference.py --data /tmp/basilisk-rules.json && \
-	diff -u website/src/_data/rules.json /tmp/basilisk-rules.json > /dev/null || \
-		{ echo 'rules.json is stale — run: python3 scripts/gen_rules_reference.py --data'; exit 1; } && \
+	python3 scripts/gen_withdrawal_copy.py --check && \
+	python3 -m pytest scripts/test_published_readmes.py -q && \
 	echo -e '\033[0;32m✓ Generated documentation is in sync\033[0m'
 
 _fmt_rust:

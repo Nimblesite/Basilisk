@@ -1,0 +1,25 @@
+---
+layout: layouts/base.njk
+noTranslation: true
+robots: "noindex, follow"
+pagination:
+  data: retiredUrls
+  size: 1
+  alias: retiredUrl
+eleventyComputed:
+  permalink: "{{ retiredUrl }}"
+  title: "{{ withdrawal.title }}"
+  description: "{{ withdrawal.line }}"
+---
+
+{#- Implements [WITHDRAWAL-COPY-SHORT]. One notice at every URL the site used to
+    serve (_data/retiredUrls.json), so a link from an installed binary, a search
+    result, or someone's bookmark lands on the explanation instead of a 404.
+    Copy comes from the messaging spec via _data/withdrawal.json — never edit it
+    here. -#}
+<article class="notice">
+  {% for paragraph in withdrawal.short %}
+  <p>{{ paragraph | safe }}</p>
+  {% endfor %}
+  <p><a href="/">Read the full statement</a></p>
+</article>
