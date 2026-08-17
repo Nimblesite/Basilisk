@@ -1,84 +1,45 @@
-<!-- agent-pmo:f87d349 -->
 # CLAUDE.md
 
-Basilisk is a strict Python type checker written in Rust. It must be correct on Python it has never seen.
+## Where Basilisk stands
 
-# The Job
+Basilisk's type checker was producing incorrect results. We asked for it to be removed from the `python/typing` conformance results, and it has been removed ([python/typing#2330](https://github.com/python/typing/pull/2330)). The code responsible is not isolated to a known set of rules, and we cannot say how many rules are affected.
 
-1. **Find text-pattern-matching logic and delete it.** A rule whose behaviour depends on the *spelling* of its input rather than its *meaning* is broken, whatever it scores. Finding and removing it outranks every other task here.
-2. **Rebuild what was deleted on the real AST** — every decision from resolved bindings, types, and symbol identity; never from how the source happens to be spelled. `from typing import Final as F` behaves identically to `typing.Final`; reformatting a file changes no diagnostic.
-3. **Prove which rules actually work, and name the ones that never did.** A rule carried by text matching was never a rule. Saying so out loud is the deliverable.
-4. **Add spelling mutations to tests that currently prove nothing**. Illegal: tests that observe diagnostics and assert nothing, reporting "ok" or similar while proving nothing.
+A code-quality tool that does not produce correct results is worse than useless.
 
-**Not the job: raising the conformance score.** That number is what caused this. A change that lifts it without improving analysis of arbitrary Python is a regression.
+**So: unlist first, no rebuilding until the unlisting is complete.** Basilisk is being unlisted everywhere and then rebuilt from the ground up as a new product — not fixed, not audited, not salvaged. It will ship only what can be trusted, which most likely will not include type checking. If type checking ever returns, it will be externally audited before release.
 
-RULE PRIORITY: 
+One vocabulary, in this order: **incorrect results → removed from `python/typing` → unlisted from every channel → the CLI is inert → rebuilt from the ground up as a new product.** "Unlisted" throughout — never delisted, withdrawn, deprecated, or discontinued as synonyms.
 
-1) PEP RULES THAT WERE ALREADY WORKING CORRECTLY BEFORE THE CULL
-2) PEP RULES THAT WERE SOMEHWHAT CORRECT
-3) PEP RULES THAT WERE NOT CORRECT MUST BE FLAGGED AS MOSTLY BROKEN. THESE ARE NOT A PRIORITY RIGHT NOW
+Full messaging, including every approved word of public copy: [`docs/specs/DOCS-WITHDRAWAL-MESSAGING-SPEC.md`](docs/specs/DOCS-WITHDRAWAL-MESSAGING-SPEC.md). It is the single source of truth. Copy from it; never write your own version.
 
-OTHER RULES LIKE BASILISK RULES ARE ONLY TO BE WORKED ON IF THEY ARE SIMPLE AND EASY TO FIX
+## The current job
 
-## Why
+1. **Unlist** every channel — Marketplace, Open VSX, Zed, PyPI, Homebrew, Scoop.
+2. **Strip** every public surface to the messaging: READMEs, website, listings.
+3. **Make the CLI inert** ([WITHDRAWAL-INERT](docs/specs/DOCS-WITHDRAWAL-MESSAGING-SPEC.md#WITHDRAWAL-INERT)).
 
-Basilisk was **removed from the python/typing conformance results** on 2026-08-05, at its own author's request — [python/typing#2330](https://github.com/python/typing/pull/2330), reverting [#2316](https://github.com/python/typing/pull/2316). The reason: *"Many of Basilisk's rules match against raw source text and hard-coded typing symbol names instead of resolved symbols on the AST."* Semantics-preserving edits to the suite — renaming imports, adjusting whitespace — broke **113 of 141 test files**. The score was real; the checker under it was not.
+Nothing else is in scope until that is done.
 
-## How to find it
+While the eventual plan is to rebuild from the ground up as a new product, you are not currently allowed to contribute to that end.
 
-- Raw source-text matching — `.contains` / `starts_with` / `ends_with` on user code.
-- Hard-coded symbol spellings instead of resolved identity: `t == "typing.Final"`, `text.starts_with("Callable[")`, `import.module == "typing"`, a whitelist of `int`/`str`/`isinstance` names. **Builtins are not an exception** — Python lets any name be shadowed, rebound, or aliased, so builtin uses resolve through the binding table like everything else.
-- Any regex over Python source.
-- Logic keyed to a test fixture: rule files named after conformance tests (`generics_base_class_2.rs`, `constructors_call_init`), branches for shapes only the suite contains, comments citing a test file as justification.
-- Detection that fires on formatting — line breaks, spacing, quote style, comment text, statement order.
+## Do not
 
-## What to do when you find it
+- **Do not fix, improve, audit, or extend the type checker.** Not a rule, not a diagnostic, not a false positive. That code is finished. Deleting is fine; repairing is not.
+- **Do not touch conformance.** Don't run it, quote it, restore it, or resubmit. Never publish a conformance or benchmark figure, in any tense.
+- **Do not extract "the good parts" yet.** The code is too contaminated to separate; an extraction now carries the problem into the new product.
+- **Do not market anything** — no feature lists, rule counts, or per-rule docs, including for parts that never touched the checker.
+- **Do not reassure about scope.** Never "only a few rules", "the language server is unaffected, keep using it". We cannot scope it; saying so is the point.
+- **Do not quote the apology.** Link it, neutrally, and nothing more.
+- **Do not blame anyone outside the project. Do not give a timeline.**
 
-In this order — **do not fix it in place, do not leave a TODO**:
+## Still standing
 
-1. **Write a test that fails** because of the incorrect code — pin the real defect: an aliased import, a reformatted source, a shape the conformance suite never contains.
-2. **Delete the offending code.** Delete the text-matching function body, not its call site: the call sites are the map of what has to be rebuilt. The deleted body **MUST** be replaced with a loud `panic!` and nothing else — never a default, `None`, `false`, or empty result — with a comment stating plainly that it panics because the real implementation does not exist yet.
-3. **Report what you deleted, why, and which tests now fail.**
-4. **STOP**
-
-Never restore a deleted text helper to unblock a compile, and never patch the text path while "waiting for" its replacement — no production verdict may come from text. A checker with fewer rules and visible failing tests is the correct outcome; a diagnostic that only fires on one spelling looks like coverage and isn't.
-
-**A failing test that pins real incorrect behaviour is worth more than a passing fixture carried by logic that does not analyse code.** Given the choice, take the failing test — every time.
-
-## What a correct rule looks like
-
-- Decides on the **resolved semantic model** from `basilisk-resolver`, never tokens or text.
-- Named for the **typing-spec concept** it implements ([the typing spec](https://typing.python.org/en/latest/spec/) and [`typing` docs](https://docs.python.org/3/library/typing.html)), not a test file.
-- Survives **semantics-preserving mutation**: aliased imports, reformatting, reordering → identical diagnostics.
-- Tested against Python the conformance suite has never contained.
-
-# Proving Rules Work
-
-Judge a test by what it would catch, never by whether it's green.
-
-- **Meaning, not spelling**: every rule test gets an aliased-import and a reformatted variant asserting identical diagnostics. The harness that would enforce this suite-wide ([CHKARCH-TESTING-SEMANTIC-MUTATION]) **does not exist yet** — until it does, every rule is unverified and must be described that way.
-- A test copied from `conformance/tests/` cannot detect a rule fitted to `conformance/tests/`. Write new Python.
-- `let _ = run(source)?` proves a function returned. It is not a test. Every test asserts a specific diagnostic present or absent.
-- **NEVER delete a failing test, remove a failure-causing assertion, reduce assertiveness, or ignore tests.** Broken functionality gets MORE failing tests, never fewer. Failures left by a deletion are the accurate map — keep them.
-
-# Conformance
-
-A regression indicator to read and report. Nothing else.
-
-- **Never publish, quote, or market a figure** — nothing may imply Basilisk is in the official results. Never re-submit to python/typing until the mutation harness passes clean and an external audit has run.
-- **Never a gate, threshold, or ratchet anywhere** — that floor was deleted from `coverage-thresholds.json` on 2026-08-08 at the user's direction because it was the incentive that produced the fitting. Do not reintroduce it in that file, `make test`, CI, or a script.
-- **A drop caused by removing text-matched logic is progress.** Record it and say so plainly — never restore the code or fake a pass.
-- Never move the number by touching the scoreboard: rule-suppressing config, deleting source to dodge a failure, hand-editing `conformance/conformance_status.csv`.
-- `python3 conformance/run_conformance.py` stays honest: fresh `git clone` of `python/typing@main`, clean `cargo build --release` from THIS checkout, the suite's own unmodified `src/main.py --only-run basilisk` via `BASILISK_BIN`. A vendored scorer, injected adapter, cached fixtures, or committed results standing in for a live run is a **BUILD FAILURE**.
-
-# Ground Rules
-
-- **Never parse with strings or regex** — `ruff_python_parser`, `basilisk-resolver`, and the `basilisk-canonical` binding table only.
-- [Pyrefly](https://pyrefly.org/en/docs/) and [Pyright](https://microsoft.github.io/pyright/#/) are references to compare against — NEVER copy their code.
-- Use your judgment — do NOT stop to ask questions. Reporting a deletion isn't a question: report and continue.
-- **Panicking because illegal code was deleted is MANDATORY** — any code path left missing by a deletion MUST `panic!` loudly, commented to say it fires because the replacement is not implemented.
-- No `unsafe`, no `unwrap()`.
-- **Panicking as control flow or error handling is ILLEGAL** — no `panic!`/`todo!`/`unimplemented!` on any live path; `Result`/`Option` with `?` and real error types.
-- Build scripts live in the Makefile.
-- Don't use Git unless asked. Never push to `main`. Never list the agent as co-author.
-- NEVER kill a VS Code process — it disrupts active debugging and test sessions.
+- **Honesty is the product.** Every external claim carries an inline link to its source. Self-measured numbers state their method or don't exist. Screenshots are real captures or absent.
+- Internal specs, plans, and [`docs/CONFORMANCE-INTEGRITY-AUDIT.md`](docs/CONFORMANCE-INTEGRITY-AUDIT.md) are the record of what went wrong. Keep them; they are not marketing surfaces.
+- Spec IDs stay: `[GROUP-TOPIC-DETAIL]`, cited from code, indexed in [`docs/INDEX.md`](docs/INDEX.md).
+- Rust: no `unsafe`, no `unwrap()`, no `panic!`/`todo!`. `Result`/`Option`, early `?`. Clippy and fmt clean. Files under 500 LOC, functions under 20 lines.
+- Structured logging via `tracing` only — never `println!`/`eprintln!`, never PII. (The inert CLI notice is the one deliberate direct write to stderr.)
+- Never delete a failing test, weaken an assertion, or skip a test to go green.
+- Don't use git unless asked. Never push to `main`; never list an agent as co-author; no worktrees; one branch.
+- Use your judgment — don't stop to ask questions.
+- Never kill a VS Code process.

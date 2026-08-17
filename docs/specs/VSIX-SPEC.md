@@ -1,5 +1,7 @@
 # Basilisk VS Code Extension {#VSIX}
 
+> **MOSTLY SUPERSEDED — historical record.** The extension described below shipped a bundled `basilisk` binary, a language client, diagnostics, a debugger, a profiler, a test explorer, and a configuration editor. It ships none of them now: Basilisk is unlisted, and the VSIX is a notice that states so and contributes one command ([WITHDRAWAL-SURFACES](DOCS-WITHDRAWAL-MESSAGING-SPEC.md#WITHDRAWAL-SURFACES)). This spec is kept as the record of what was built. Do not implement from it.
+
 VS Code extension connecting to the `basilisk lsp` binary. All LSP features, DAP integration, custom commands, configuration, and binary resolution are defined in **`LSP-ARCHITECTURE-SPEC.md`** (single source of truth). This spec documents only **VS Code-specific details**, kept at feature parity with the Zed and Neovim extensions.
 
 ## Architecture {#VSIX-ARCHITECTURE}

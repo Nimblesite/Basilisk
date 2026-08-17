@@ -256,29 +256,9 @@ name = "basilisk-cli"
 version = "0.0.0-PLACEHOLDER"
 dependencies = [
  "basilisk-buildinfo",
- "basilisk-checker",
- "basilisk-common",
- "basilisk-config",
- "basilisk-db",
- "basilisk-lsp",
- "basilisk-parser",
- "basilisk-resolver",
- "basilisk-stubs",
- "basilisk-test-utils",
- "basilisk-typeshed-fetch",
- "basilisk-uv",
- "clap",
- "colored",
- "serde",
- "serde_json",
  "shipwright",
  "shipwright-manifest",
  "tempfile",
- "tokio",
- "tower-lsp",
- "tracing",
- "tracing-subscriber",
- "walkdir",
 ]
 
 [[package]]
@@ -481,8 +461,6 @@ dependencies = [
 name = "basilisk-zed"
 version = "0.0.0-PLACEHOLDER"
 dependencies = [
- "basilisk-common",
- "serde_json",
  "zed_extension_api",
 ]
 
@@ -744,15 +722,6 @@ name = "colorchoice"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b05b61dc5112cbb17e4b6cd61790d9845d13888356391624cbe7e41efeac1e75"
-
-[[package]]
-name = "colored"
-version = "3.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "faf9468729b8cbcea668e36183cb69d317348c2e08e994829fb56ebfdfbaac34"
-dependencies = [
- "windows-sys 0.61.2",
-]
 
 [[package]]
 name = "compact_str"
@@ -2848,15 +2817,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "same-file"
-version = "1.0.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "93fc1dc3aaa9bfed95e02e6eadabb4baf7e3078b0bd1b4d7b6b0b68378900502"
-dependencies = [
- "winapi-util",
-]
-
-[[package]]
 name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3689,16 +3649,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
-name = "walkdir"
-version = "2.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29790946404f91d9c5d06f9874efddea1dc06c5efe94541a7d6863108e3a5e4b"
-dependencies = [
- "same-file",
- "winapi-util",
-]
-
-[[package]]
 name = "wasi"
 version = "0.11.1+wasi-snapshot-preview1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3876,15 +3826,6 @@ name = "winapi-i686-pc-windows-gnu"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ac3b87c63620426dd9b991e5ce0329eff545bccbbb34f3be09ff6fb6ab51b7b6"
-
-[[package]]
-name = "winapi-util"
-version = "0.1.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
-dependencies = [
- "windows-sys 0.61.2",
-]
 
 [[package]]
 name = "winapi-x86_64-pc-windows-gnu"

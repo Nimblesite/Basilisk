@@ -1,0 +1,17 @@
+---json
+{
+  "permalink": "llms.txt",
+  "eleventyExcludeFromCollections": true
+}
+---
+{#- Implements [WITHDRAWAL-COPY-FULL]. There is no documentation or blog left to
+    list, and a model reading this site must get the statement itself rather
+    than a summary of it — a fourth, unapproved variant of the message is
+    exactly what [WITHDRAWAL-COPY] forbids. So: the full copy, intact, in order.
+    -#}
+# {{ withdrawal.title }}
+
+{% for paragraph in withdrawal.full_markdown %}{{ paragraph | safe }}
+
+{% endfor %}
+{{ site.url }}/

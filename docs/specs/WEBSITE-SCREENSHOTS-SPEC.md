@@ -1,5 +1,7 @@
 # Website: Automated CLI Screenshots {#WEBSITE-SCREENSHOTS}
 
+> **SUPERSEDED — historical record.** The behaviour below no longer ships. Basilisk is unlisted and the site collapsed to one statement, with every retired URL redirecting to it ([WITHDRAWAL-UNLIST](DOCS-WITHDRAWAL-MESSAGING-SPEC.md#WITHDRAWAL-UNLIST)). This spec is kept as the record of what was built, not as a description of the site or a plan to rebuild it.
+
 ## Purpose {#WEBSITE-SCREENSHOTS-PURPOSE}
 
 The site embeds real `basilisk check` output as PNGs: the homepage before/after

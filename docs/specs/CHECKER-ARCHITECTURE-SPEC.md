@@ -1152,6 +1152,14 @@ recognise an entry.
 | 1 | Source errors were found, including Python syntax errors that prevented analysis |
 | 2 | Invalid configuration (e.g. a `pep` rule resolved to `disabled`) |
 | 3 | Internal failure |
+| 4 | Unlisted — the CLI is inert and checked nothing ([WITHDRAWAL-INERT](DOCS-WITHDRAWAL-MESSAGING-SPEC.md#WITHDRAWAL-INERT)) |
+
+**`4` is the only code the shipped binary returns**, apart from `0` for
+`--version`. Codes `0`–`3` describe a checker that ran; this one does not run.
+It is a separate code precisely so a consumer can tell "Basilisk is gone" from
+"Basilisk found problems" — reusing `1` would report a finding about code that
+was never read, and reusing `0` would let a pipeline pass on a check that never
+happened.
 
 A syntax error in user Python is code 1, never code 3. Code 3 means Basilisk
 itself could not complete for an internal reason; it must not mask diagnostics

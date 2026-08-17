@@ -1,5 +1,12 @@
 # basilisk-checker
 
+> **A record, not a product claim.** Basilisk is unlisted and its type checker is
+> inert ([WITHDRAWAL](../../docs/specs/DOCS-WITHDRAWAL-MESSAGING-SPEC.md#WITHDRAWAL)).
+> Nothing described below ships in anything a user can install: the `basilisk`
+> binary analyses nothing, and the editor extensions carry no checker. This file
+> is kept as an account of what was built, and nothing in it authorises
+> rebuilding what it describes.
+
 Core type checking rules and diagnostic emission for Basilisk.
 
 ## Role in Basilisk
@@ -48,7 +55,7 @@ for the canonical tag model.
 
 ## Status
 
-The checker and severity engine are shipped. The canonical rule-catalog API,
-strict-first adoption transaction, opt-in suppression diagnostics, and visual
-configuration editor are tracked in
-[`LSP-CONFIGURATION-EDITOR-PLAN.md`](../../docs/plans/LSP-CONFIGURATION-EDITOR-PLAN.md).
+This is the code that produced incorrect results. It ships in nothing: the
+`basilisk` binary does not link it, and neither editor extension carries it.
+It is not being fixed, audited, or extended
+([WITHDRAWAL-REBUILD](../../docs/specs/DOCS-WITHDRAWAL-MESSAGING-SPEC.md#WITHDRAWAL-CLAIMS)).
