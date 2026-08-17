@@ -1,0 +1,83 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "oneOf": [
+    {
+      "properties": {
+        "request": {
+          "type": "string",
+          "enum": ["launch"],
+          "default": "launch",
+          "description": "Launch a new Python process to debug"
+        },
+        "program": {
+          "type": "string",
+          "description": "Python file to debug"
+        },
+        "args": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Command-line arguments for the program"
+        },
+        "cwd": {
+          "type": "string",
+          "description": "Working directory for the debug session"
+        },
+        "python": {
+          "type": "string",
+          "description": "Python interpreter path"
+        },
+        "justMyCode": {
+          "type": "boolean",
+          "default": true,
+          "description": "Only debug user code, skip library frames"
+        },
+        "stopOnEntry": {
+          "type": "boolean",
+          "default": false,
+          "description": "Stop at the first line of user code"
+        },
+        "console": {
+          "type": "string",
+          "enum": ["integratedTerminal", "internalConsole"],
+          "default": "integratedTerminal",
+          "description": "Where to launch the debug console"
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Environment variables for the debuggee"
+        }
+      },
+      "required": ["program"]
+    },
+    {
+      "properties": {
+        "request": {
+          "type": "string",
+          "enum": ["attach"],
+          "description": "Attach to a running Python process"
+        },
+        "processId": {
+          "type": "integer",
+          "description": "PID of the running Python process to attach to"
+        },
+        "host": {
+          "type": "string",
+          "default": "127.0.0.1",
+          "description": "Host where debugpy is listening"
+        },
+        "port": {
+          "type": "integer",
+          "description": "Port where debugpy is listening"
+        },
+        "justMyCode": {
+          "type": "boolean",
+          "default": true,
+          "description": "Only debug user code, skip library frames"
+        }
+      },
+      "required": ["request"]
+    }
+  ]
+}

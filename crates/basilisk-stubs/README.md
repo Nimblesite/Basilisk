@@ -1,12 +1,5 @@
 # basilisk-stubs
 
-> **A record, not a product claim.** Basilisk is unlisted and its type checker is
-> inert ([WITHDRAWAL](../../docs/specs/DOCS-WITHDRAWAL-MESSAGING-SPEC.md#WITHDRAWAL)).
-> Nothing described below ships in anything a user can install: the `basilisk`
-> binary analyses nothing, and the editor extensions carry no checker. This file
-> is kept as an account of what was built, and nothing in it authorises
-> rebuilding what it describes.
-
 Standard-library type resolution for Basilisk: a custom `python/typeshed`
 tree, or a pinned commit verified offline against the on-disk store, with a
 bundled full-`stdlib/` ZIP snapshot as the default pin.
@@ -59,4 +52,10 @@ normative selection contract is
 
 ## Status
 
-Consumed only by crates that ship in nothing.
+The `typeshed-path` custom-tree override, the offline store-backed pin, and
+the bundled full-`stdlib/` ZIP snapshot all produce the sole active step-3
+snapshot consumed by `basilisk-checker`. Its real `.pyi` bodies and derived
+indexes remain one indivisible source, as defined by
+[STUBRES-TYPESHED](../../docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md#STUBRES-TYPESHED);
+offline commit-object re-hashing, store immutability, and source reporting are
+tracked against that spec.

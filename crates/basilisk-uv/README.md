@@ -1,12 +1,5 @@
 # basilisk-uv
 
-> **A record, not a product claim.** Basilisk is unlisted and its type checker is
-> inert ([WITHDRAWAL](../../docs/specs/DOCS-WITHDRAWAL-MESSAGING-SPEC.md#WITHDRAWAL)).
-> Nothing described below ships in anything a user can install: the `basilisk`
-> binary analyses nothing, and the editor extensions carry no checker. This file
-> is kept as an account of what was built, and nothing in it authorises
-> rebuilding what it describes.
-
 uv package manager integration for the Basilisk LSP.
 
 ## Role in Basilisk
@@ -21,4 +14,4 @@ This crate provides **uv workspace detection and package intelligence** for the 
 
 ## Status
 
-Consumed only by the language server, which ships in nothing.
+Working — consumed by `basilisk-lsp`.

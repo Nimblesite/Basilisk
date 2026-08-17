@@ -134,16 +134,8 @@ class HarnessEnvironmentTests(unittest.TestCase):
                         run_conformance.resolve_suite(opts, destination), expected
                     )
 
-    def test_rust_gate_scores_nothing_and_owns_its_one_clone(self) -> None:
-        """The conformance passes are gone; only the fixture sync may run.
-
-        Implements [CHKARCH-CONFORMANCE]. python/typing no longer registers a
-        Basilisk checker, so the harness grades nothing and both scoring passes
-        are commented out. This test used to require all three invocations; it
-        now requires that the two SCORING ones stay absent, so an agent cannot
-        quietly reinstate a gate that can only ever produce a number nobody may
-        publish. The remaining call syncs fixtures and scores nothing.
-        """
+    def test_rust_gate_owns_one_isolated_clone_for_all_three_passes(self) -> None:
+        """Sync, coverage, and release scoring must share one run-owned clone."""
         script = (ROOT / "scripts" / "test-rust.sh").read_text()
         invocations = [
             line.strip()
@@ -153,13 +145,12 @@ class HarnessEnvironmentTests(unittest.TestCase):
             and not line.lstrip().startswith("#")
         ]
 
-        self.assertEqual(len(invocations), 1, invocations)
-        self.assertIn("--sync-tests", invocations[0])
-        self.assertNotIn("--gate", invocations[0])
-        self.assertNotIn("--bin", invocations[0])
+        self.assertEqual(len(invocations), 3)
         self.assertTrue(
             all('--suite-dir "$TYPING_SUITE_DIR"' in line for line in invocations)
         )
+        self.assertNotIn("--reuse-clone", invocations[0])
+        self.assertTrue(all("--reuse-clone" in line for line in invocations[1:]))
         self.assertIn("mktemp -d", script)
         self.assertIn("BASILISK_TEST_RUST_LOCK_FD", script)
         self.assertIn("BASILISK_CONFORMANCE_RUN_ID", script)
@@ -335,29 +326,24 @@ class WorktreeLockTests(unittest.TestCase):
 
 
 class GeneratedReferenceTests(unittest.TestCase):
-    """No surface may carry a generated conformance figure, ever again.
-
-    This used to assert that the checked-in conformance reference matched the
-    live report. Both the generator and every page it wrote are deleted
-    ([WITHDRAWAL-PROHIBITED]), so the assertion inverted: the machinery must
-    stay gone. A regenerated reference would put a withdrawn number back on a
-    public page, which is the specific failure this project exists to stop.
-    """
-
-    def test_the_conformance_reference_generator_stays_deleted(self) -> None:
-        self.assertFalse(
-            (ROOT / "scripts" / "gen_conformance_reference.py").exists(),
-            "the conformance reference generator must not come back",
+    def test_checked_in_references_match_the_recorded_historical_snapshot(self) -> None:
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "scripts" / "gen_conformance_reference.py"),
+                "--check",
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
         )
 
-    def test_no_generated_conformance_figure_is_committed(self) -> None:
-        for relative in (
-            "website/src/_data/conformance.js",
-            "website/src/_data/conformance_report.json",
-            "website/src/docs/conformance.md",
-        ):
-            with self.subTest(path=relative):
-                self.assertFalse((ROOT / relative).exists(), relative)
+        self.assertEqual(
+            result.returncode,
+            0,
+            result.stdout + result.stderr,
+        )
 
 
 if __name__ == "__main__":

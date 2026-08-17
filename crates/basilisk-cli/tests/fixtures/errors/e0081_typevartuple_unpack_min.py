@@ -1,0 +1,13 @@
+from typing import TypeVarTuple, Generic, Any
+
+Ts = TypeVarTuple("Ts")
+
+class Array(Generic[*Ts]): ...
+
+class Batch: ...
+class Channels: ...
+
+def process(x: Array[Batch, *tuple[Any, ...], Channels]) -> None: ...
+
+def func(z: Array[Batch]) -> None:
+    process(z)  # E0081 — Array[Batch] has 1 type arg, need at least 2

@@ -1,10 +1,26 @@
 //! Implements [CHKARCH-TESTING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING
-//! Source-level helpers: line/col computation.
-//!
-//! `basilisk_binary()` used to live here, so a fixture could spawn the built
-//! CLI and drive a language server over its stdio. The CLI is inert
-//! ([WITHDRAWAL-INERT]) — it starts no server — so there is nothing to spawn
-//! and the helper is gone with the suites that used it.
+//! Source-level helpers: binary discovery, line/col computation.
+
+/// Path to the pre-built basilisk binary.
+///
+/// Derives the target directory from the test executable's own location,
+/// which works regardless of whether `cargo test` or `cargo llvm-cov`
+/// (which uses a different `--target-dir`) invoked us.
+#[must_use]
+pub fn basilisk_binary() -> String {
+    // The test binary lives under <target-dir>/debug/deps/...
+    // We want <target-dir>/debug/basilisk
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(debug_dir) = exe.parent().and_then(|deps| deps.parent()) {
+            let candidate = debug_dir.join("basilisk");
+            if candidate.exists() {
+                return candidate.to_string_lossy().into_owned();
+            }
+        }
+    }
+    // Fallback to the original hardcoded path.
+    format!("{}/../../target/debug/basilisk", env!("CARGO_MANIFEST_DIR"))
+}
 
 /// Convert a byte offset in `source` into a 1-based (line, col) pair.
 #[must_use]

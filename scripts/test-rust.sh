@@ -75,10 +75,14 @@ rustup component add llvm-tools-preview 2>/dev/null || true
 header "Running tests with coverage instrumentation"
 cargo llvm-cov clean --workspace
 
-# NO clean release build here any more. It existed only to give the conformance
-# GATE an un-instrumented binary to score, and that gate is commented out below
-# because the measurement cannot run. Building a second full release copy of a
-# binary nothing reads cost ~5 minutes of every run.
+# Build the CLEAN release-profile binary the pristine fixture guard scores —
+# freshly built from THIS checkout's source and un-instrumented. Built BEFORE
+# the llvm-cov env is sourced so NO coverage flags touch it. Coverage for the
+# checker/resolver paths the suite exercises comes from a SEPARATE instrumented
+# pass further down. The guard measures this checkout's release profile — never
+# an instrumented build or a prior PyPI release. See [CHKARCH-CONFORMANCE].
+header "Building the clean release binary for the pristine fixture regression"
+cargo build --release --bin basilisk
 
 eval "$(cargo llvm-cov show-env --export-prefix)"
 

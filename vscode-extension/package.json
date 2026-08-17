@@ -1,7 +1,7 @@
 {
   "name": "basilisk",
   "displayName": "Basilisk",
-  "description": "Basilisk's type checker produced incorrect results. Basilisk is unlisted and is being rebuilt from the ground up as a new product.",
+  "description": "An open-source Python type checker and language server built in Rust: diagnostics, autocomplete, go-to-definition, refactoring, formatting, integrated debugging, and profiling in one extension. Strictness is configured per rule, so a codebase can adopt type safety incrementally.",
   "version": "0.0.0-PLACEHOLDER",
   "publisher": "Nimblesite",
   "license": "SEE LICENSE IN LICENSE.txt",
@@ -22,35 +22,1010 @@
     "vscode": "^1.99.0"
   },
   "categories": [
+    "Programming Languages",
+    "Linters",
+    "Debuggers",
     "Other"
   ],
   "keywords": [
-    "basilisk"
+    "python",
+    "language server",
+    "pylance",
+    "pyright",
+    "type checker",
+    "intellisense",
+    "autocomplete",
+    "go to definition",
+    "rust",
+    "basilisk",
+    "lsp"
   ],
   "activationEvents": [
-    "onStartupFinished"
+    "onLanguage:python",
+    "onDebug",
+    "onDebugResolve:basilisk-debug",
+    "onDebugDynamicConfigurations:basilisk-debug"
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "basilisk-explorer",
+          "title": "Basilisk",
+          "icon": "resources/activity-bar-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "basilisk-explorer": [
+        {
+          "id": "basilisk.moduleExplorer",
+          "name": "Modules",
+          "when": "basilisk.hasWorkspace"
+        },
+        {
+          "id": "basilisk.pythonProcesses",
+          "name": "Python Processes",
+          "when": "basilisk.hasWorkspace"
+        },
+        {
+          "id": "basilisk.info",
+          "name": "Basilisk",
+          "visibility": "visible"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "basilisk.moduleExplorer",
+        "contents": "No modules found.\n[Restart Server](command:basilisk.restartServer)"
+      },
+      {
+        "view": "basilisk.pythonProcesses",
+        "contents": "Connecting to the Basilisk language server…",
+        "when": "basilisk.serverState != running && basilisk.serverState != stopped"
+      },
+      {
+        "view": "basilisk.pythonProcesses",
+        "contents": "The Basilisk language server is not running.\n[Restart Server](command:basilisk.restartServer)",
+        "when": "basilisk.serverState == stopped"
+      },
+      {
+        "view": "basilisk.pythonProcesses",
+        "contents": "Loading Python processes…\n[Run & Profile CPU (Current File)](command:basilisk.profileCurrentFileCpu)\n[Run & Track Memory (Current File)](command:basilisk.trackMemoryCurrentFile)",
+        "when": "basilisk.serverState == running && basilisk.processesState == loading"
+      },
+      {
+        "view": "basilisk.pythonProcesses",
+        "contents": "Couldn't load the Python process list.\n[Run & Profile CPU (Current File)](command:basilisk.profileCurrentFileCpu)\n[Run & Track Memory (Current File)](command:basilisk.trackMemoryCurrentFile)",
+        "when": "basilisk.serverState == running && basilisk.processesState == error"
+      },
+      {
+        "view": "basilisk.pythonProcesses",
+        "contents": "No Python processes running.\n[Run & Profile CPU (Current File)](command:basilisk.profileCurrentFileCpu)\n[Run & Track Memory (Current File)](command:basilisk.trackMemoryCurrentFile)",
+        "when": "basilisk.serverState == running && basilisk.processesState == loaded"
+      }
+    ],
     "commands": [
       {
-        "command": "basilisk.showStatement",
-        "title": "Basilisk: Why is Basilisk unlisted?",
+        "command": "basilisk.restartServer",
+        "title": "Basilisk: Restart Language Server",
+        "category": "Basilisk",
+        "icon": "$(debug-restart)"
+      },
+      {
+        "command": "basilisk.showOutput",
+        "title": "Basilisk: Show Output",
         "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.statusMenu",
+        "title": "Basilisk: Status Menu",
+        "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.openConfigurationEditor",
+        "title": "Basilisk: Open Configuration Editor",
+        "category": "Basilisk",
+        "icon": "$(settings-gear)",
+        "enablement": "basilisk.configurationEditorSupported"
+      },
+      {
+        "command": "basilisk.editConfig",
+        "title": "Edit Config",
+        "category": "Basilisk",
+        "icon": "$(settings-gear)",
+        "enablement": "basilisk.configurationEditorSupported"
+      },
+      {
+        "command": "basilisk.organizeImports",
+        "title": "Basilisk: Organize Imports",
+        "category": "Basilisk",
+        "icon": "$(list-ordered)"
+      },
+      {
+        "command": "basilisk.fixFile",
+        "title": "Basilisk: Fix All (Safe) in File",
+        "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.fixFileAll",
+        "title": "Basilisk: Fix All in File",
+        "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.fixWorkspace",
+        "title": "Basilisk: Fix All (Safe) in Workspace",
+        "category": "Basilisk",
+        "icon": "$(wand)"
+      },
+      {
+        "command": "basilisk.fixWorkspaceAll",
+        "title": "Basilisk: Fix All in Workspace",
+        "category": "Basilisk",
+        "icon": "$(wand)"
+      },
+      {
+        "command": "basilisk.adoptFile",
+        "title": "Basilisk: Adopt File",
+        "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.adoptWorkspace",
+        "title": "Basilisk: Adopt Workspace",
+        "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.unadoptFile",
+        "title": "Basilisk: Un-adopt File",
+        "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.uv.sync",
+        "title": "Basilisk: uv Sync Environment",
+        "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.uv.add",
+        "title": "Basilisk: uv Add Dependency",
+        "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.uv.addDev",
+        "title": "Basilisk: uv Add Dev Dependency",
+        "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.uv.remove",
+        "title": "Basilisk: uv Remove Dependency",
+        "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.uv.lock",
+        "title": "Basilisk: uv Lock",
+        "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.uv.createEnv",
+        "title": "Basilisk: uv Create Virtual Environment",
+        "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.refreshModuleExplorer",
+        "title": "Refresh Module Explorer",
+        "category": "Basilisk",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "basilisk.sortModuleExplorer",
+        "title": "Sort Modules…",
+        "category": "Basilisk",
+        "icon": "$(sort-precedence)"
+      },
+      {
+        "command": "basilisk.copyImportPath",
+        "title": "Copy Import Path",
+        "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.copyQualifiedName",
+        "title": "Copy Qualified Name",
+        "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.toggleModuleExplorerView",
+        "title": "Toggle Tree/Flat View",
+        "category": "Basilisk",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "basilisk.filterModuleExplorer",
+        "title": "Filter Modules",
+        "category": "Basilisk",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "basilisk.profileStart",
+        "title": "Basilisk: Start Profiling",
+        "category": "Basilisk",
+        "icon": "$(flame)"
+      },
+      {
+        "command": "basilisk.profileStop",
+        "title": "Basilisk: Stop Profiling",
+        "category": "Basilisk",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "basilisk.profileSnapshot",
+        "title": "Basilisk: Take Profile Snapshot",
+        "category": "Basilisk",
+        "icon": "$(device-camera)"
+      },
+      {
+        "command": "basilisk.profileAttachToDebug",
+        "title": "Basilisk: Profile Debug Session",
+        "category": "Basilisk",
+        "icon": "$(debug-alt)"
+      },
+      {
+        "command": "basilisk.profileShowResults",
+        "title": "Basilisk: Show Profile Results",
+        "category": "Basilisk",
+        "icon": "$(flame)"
+      },
+      {
+        "command": "basilisk.memoryMenu",
+        "title": "Basilisk: Memory…",
+        "category": "Basilisk",
+        "icon": "$(database)"
+      },
+      {
+        "command": "basilisk.memoryStart",
+        "title": "Basilisk: Start Memory Tracking",
+        "category": "Basilisk",
+        "icon": "$(database)"
+      },
+      {
+        "command": "basilisk.memorySnapshot",
+        "title": "Basilisk: Take Memory Snapshot",
+        "category": "Basilisk",
+        "icon": "$(device-camera)"
+      },
+      {
+        "command": "basilisk.memoryStop",
+        "title": "Basilisk: Stop Memory Tracking",
+        "category": "Basilisk",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "basilisk.memoryDiff",
+        "title": "Basilisk: Compare Memory Snapshots",
+        "category": "Basilisk",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "basilisk.memoryGcCollect",
+        "title": "Basilisk: Force Garbage Collection",
+        "category": "Basilisk",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "basilisk.memoryReferences",
+        "title": "Basilisk: Show Reference Graph",
+        "category": "Basilisk",
+        "icon": "$(type-hierarchy)"
+      },
+      {
+        "command": "basilisk.openWalkthrough",
+        "title": "Basilisk: Getting Started",
+        "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.info.runAction",
+        "title": "Toggle Diagnostics",
+        "category": "Basilisk",
+        "icon": "$(arrow-swap)"
+      },
+      {
+        "command": "basilisk.refreshProcesses",
+        "title": "Refresh Python Processes",
+        "category": "Basilisk",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "basilisk.sortProcesses",
+        "title": "Sort Python Processes",
+        "category": "Basilisk",
+        "icon": "$(sort-precedence)"
+      },
+      {
+        "command": "basilisk.groupProcesses",
+        "title": "Group Python Processes",
+        "category": "Basilisk",
+        "icon": "$(group-by-ref-type)"
+      },
+      {
+        "command": "basilisk.filterProcesses",
+        "title": "Filter Python Processes",
+        "category": "Basilisk",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "basilisk.profileCurrentFileCpu",
+        "title": "Run & Profile CPU (Current File)",
+        "category": "Basilisk",
+        "icon": "$(flame)"
+      },
+      {
+        "command": "basilisk.trackMemoryCurrentFile",
+        "title": "Run & Track Memory (Current File)",
+        "category": "Basilisk",
+        "icon": "$(database)"
+      },
+      {
+        "command": "basilisk.profileProcess",
+        "title": "Profile CPU",
+        "category": "Basilisk",
+        "icon": "$(flame)"
+      },
+      {
+        "command": "basilisk.memoryTrackProcess",
+        "title": "Track Memory",
+        "category": "Basilisk",
+        "icon": "$(database)"
+      },
+      {
+        "command": "basilisk.copyProcessPid",
+        "title": "Copy PID",
+        "category": "Basilisk"
+      },
+      {
+        "command": "basilisk.revealProcessScript",
+        "title": "Reveal Script in Editor",
+        "category": "Basilisk"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "basilisk.openConfigurationEditor",
+          "when": "basilisk.configurationEditorSupported"
+        },
+        {
+          "command": "basilisk.editConfig",
+          "when": "false"
+        },
+        {
+          "command": "basilisk.info.runAction",
+          "when": "false"
+        },
+        {
+          "command": "basilisk.profileProcess",
+          "when": "false"
+        },
+        {
+          "command": "basilisk.memoryTrackProcess",
+          "when": "false"
+        },
+        {
+          "command": "basilisk.copyProcessPid",
+          "when": "false"
+        },
+        {
+          "command": "basilisk.revealProcessScript",
+          "when": "false"
+        },
+        {
+          "command": "basilisk.memoryMenu",
+          "when": "basilisk.debugging"
+        },
+        {
+          "command": "basilisk.memoryStart",
+          "when": "basilisk.debugging"
+        },
+        {
+          "command": "basilisk.memorySnapshot",
+          "when": "basilisk.debugging"
+        },
+        {
+          "command": "basilisk.memoryDiff",
+          "when": "basilisk.debugging"
+        },
+        {
+          "command": "basilisk.memoryGcCollect",
+          "when": "basilisk.debugging"
+        },
+        {
+          "command": "basilisk.memoryReferences",
+          "when": "basilisk.debugging"
+        },
+        {
+          "command": "basilisk.memoryStop",
+          "when": "basilisk.debugging"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "basilisk.editConfig",
+          "when": "resourceFilename == pyproject.toml && basilisk.configurationEditorSupported",
+          "group": "navigation@1"
+        }
+      ],
+      "debug/toolBar": [
+        {
+          "command": "basilisk.memorySnapshot",
+          "when": "debugType == basilisk-debug && basilisk.memoryTracking",
+          "group": "navigation@1"
+        },
+        {
+          "command": "basilisk.memoryDiff",
+          "when": "debugType == basilisk-debug && basilisk.memoryTracking",
+          "group": "navigation@2"
+        },
+        {
+          "command": "basilisk.memoryStop",
+          "when": "debugType == basilisk-debug && basilisk.memoryTracking",
+          "group": "navigation@3"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "basilisk.openConfigurationEditor",
+          "when": "view == basilisk.info && basilisk.configurationEditorSupported",
+          "group": "navigation@1"
+        },
+        {
+          "command": "basilisk.openConfigurationEditor",
+          "when": "view == basilisk.moduleExplorer && basilisk.configurationEditorSupported",
+          "group": "z_config@1"
+        },
+        {
+          "command": "basilisk.openConfigurationEditor",
+          "when": "view == basilisk.pythonProcesses && basilisk.configurationEditorSupported",
+          "group": "z_config@1"
+        },
+        {
+          "command": "basilisk.refreshModuleExplorer",
+          "when": "view == basilisk.moduleExplorer",
+          "group": "navigation@1"
+        },
+        {
+          "command": "basilisk.toggleModuleExplorerView",
+          "when": "view == basilisk.moduleExplorer",
+          "group": "navigation@2"
+        },
+        {
+          "command": "basilisk.filterModuleExplorer",
+          "when": "view == basilisk.moduleExplorer",
+          "group": "navigation@3"
+        },
+        {
+          "command": "basilisk.sortModuleExplorer",
+          "when": "view == basilisk.moduleExplorer && basilisk.moduleExplorerView == 'flat'",
+          "group": "navigation@4"
+        },
+        {
+          "command": "basilisk.organizeImports",
+          "when": "view == basilisk.moduleExplorer && basilisk.serverState == 'running'",
+          "group": "1_modify@1"
+        },
+        {
+          "command": "basilisk.fixWorkspace",
+          "when": "view == basilisk.moduleExplorer && basilisk.serverState == 'running' && config.basilisk.experimental.fixAll",
+          "group": "1_modify@2"
+        },
+        {
+          "command": "basilisk.restartServer",
+          "when": "view == basilisk.moduleExplorer && basilisk.serverState == 'running'",
+          "group": "9_server@1"
+        },
+        {
+          "command": "basilisk.profileCurrentFileCpu",
+          "when": "view == basilisk.pythonProcesses && !basilisk.cpuBusy",
+          "group": "navigation@1"
+        },
+        {
+          "command": "basilisk.trackMemoryCurrentFile",
+          "when": "view == basilisk.pythonProcesses && !basilisk.memoryBusy",
+          "group": "navigation@2"
+        },
+        {
+          "command": "basilisk.profileStop",
+          "when": "view == basilisk.pythonProcesses && basilisk.profiling",
+          "group": "navigation@1"
+        },
+        {
+          "command": "basilisk.memorySnapshot",
+          "when": "view == basilisk.pythonProcesses && basilisk.memoryTracking",
+          "group": "navigation@1"
+        },
+        {
+          "command": "basilisk.memoryDiff",
+          "when": "view == basilisk.pythonProcesses && basilisk.memoryTracking",
+          "group": "navigation@2"
+        },
+        {
+          "command": "basilisk.memoryStop",
+          "when": "view == basilisk.pythonProcesses && basilisk.memoryTracking",
+          "group": "navigation@3"
+        },
+        {
+          "command": "basilisk.refreshProcesses",
+          "when": "view == basilisk.pythonProcesses",
+          "group": "navigation@3"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "basilisk.copyImportPath",
+          "when": "view == basilisk.moduleExplorer && viewItem =~ /^(module|symbol)/",
+          "group": "6_copypath@1"
+        },
+        {
+          "command": "basilisk.copyQualifiedName",
+          "when": "view == basilisk.moduleExplorer && viewItem =~ /^(module|symbol)/",
+          "group": "6_copypath@2"
+        },
+        {
+          "command": "basilisk.info.runAction",
+          "when": "view == basilisk.info && viewItem == feature",
+          "group": "inline"
+        },
+        {
+          "command": "basilisk.profileStop",
+          "when": "view == basilisk.pythonProcesses && viewItem == pythonProcessProfiling",
+          "group": "inline@0"
+        },
+        {
+          "command": "basilisk.profileProcess",
+          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/ && !basilisk.cpuBusy",
+          "group": "inline@1"
+        },
+        {
+          "command": "basilisk.memoryTrackProcess",
+          "when": "view == basilisk.pythonProcesses && viewItem == pythonProcessDebuggee && !basilisk.memoryBusy",
+          "group": "inline@2"
+        },
+        {
+          "command": "basilisk.profileStop",
+          "when": "view == basilisk.pythonProcesses && viewItem == pythonProcessProfiling",
+          "group": "1_profile@0"
+        },
+        {
+          "command": "basilisk.profileProcess",
+          "when": "view == basilisk.pythonProcesses && viewItem =~ /^pythonProcess/ && !basilisk.cpuBusy",
+          "group": "1_profile@1"
+        },
+        {
+          "command": "basilisk.memoryTrackProcess",
+          "when": "view == basilisk.pythonProcesses && viewItem == pythonProcessDebuggee && !basilisk.memoryBusy",
+          "group": "1_profile@2"
+        },
+        {
+          "command": "basilisk.copyProcessPid",
+          "when": "view == basilisk.pythonProcesses && viewItem =~ /^(pythonProcess|blockedPythonProcess)/",
+          "group": "9_copy@1"
+        },
+        {
+          "command": "basilisk.revealProcessScript",
+          "when": "view == basilisk.pythonProcesses && viewItem =~ /^(pythonProcess|blockedPythonProcess)/",
+          "group": "9_copy@2"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "basilisk.fixFile",
+        "key": "ctrl+shift+.",
+        "mac": "cmd+shift+.",
+        "when": "editorLangId == python"
+      },
+      {
+        "command": "basilisk.profileStart",
+        "key": "ctrl+shift+p ctrl+shift+s",
+        "mac": "cmd+shift+p cmd+shift+s",
+        "when": "editorLangId == python"
+      },
+      {
+        "command": "basilisk.profileStop",
+        "key": "ctrl+shift+p ctrl+shift+x",
+        "mac": "cmd+shift+p cmd+shift+x",
+        "when": "basilisk.profiling"
+      }
+    ],
+    "breakpoints": [
+      {
+        "language": "python"
+      }
+    ],
+    "debuggers": [
+      {
+        "type": "basilisk-debug",
+        "label": "Python (Basilisk)",
+        "languages": [
+          "python"
+        ],
+        "configurationAttributes": {
+          "launch": {
+            "required": [
+              "program"
+            ],
+            "properties": {
+              "program": {
+                "type": "string",
+                "description": "Absolute path to the Python file to debug.",
+                "default": "${file}"
+              },
+              "args": {
+                "type": "array",
+                "description": "Command-line arguments passed to the program.",
+                "items": {
+                  "type": "string"
+                },
+                "default": []
+              },
+              "cwd": {
+                "type": "string",
+                "description": "Working directory for the program.",
+                "default": "${workspaceFolder}"
+              },
+              "console": {
+                "type": "string",
+                "enum": [
+                  "internalConsole",
+                  "integratedTerminal",
+                  "externalTerminal"
+                ],
+                "description": "Where to show program output. 'internalConsole' sends stdout/stderr to the Debug Console.",
+                "default": "internalConsole"
+              },
+              "redirectOutput": {
+                "type": "boolean",
+                "description": "Redirect stdout/stderr to the Debug Console.",
+                "default": true
+              },
+              "justMyCode": {
+                "type": "boolean",
+                "default": true
+              },
+              "stopOnEntry": {
+                "type": "boolean",
+                "default": false
+              },
+              "python": {
+                "type": "string",
+                "description": "Path to the Python interpreter. Auto-detected if omitted."
+              }
+            }
+          },
+          "attach": {
+            "properties": {
+              "connect": {
+                "type": "object",
+                "description": "Connect to a running debugpy server.",
+                "properties": {
+                  "host": {
+                    "type": "string",
+                    "default": "localhost"
+                  },
+                  "port": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "port"
+                ]
+              }
+            }
+          }
+        },
+        "configurationSnippets": [
+          {
+            "label": "Basilisk: Launch Current File",
+            "description": "Debug the currently open Python file",
+            "body": {
+              "name": "Python: Current File (Basilisk)",
+              "type": "basilisk-debug",
+              "request": "launch",
+              "program": "^\"\\${file}\"",
+              "console": "internalConsole",
+              "redirectOutput": true,
+              "justMyCode": true
+            }
+          }
+        ],
+        "initialConfigurations": [
+          {
+            "name": "Python: Current File (Basilisk)",
+            "type": "basilisk-debug",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": true
+          }
+        ]
+      }
+    ],
+    "configuration": {
+      "title": "Basilisk",
+      "properties": {
+        "basilisk.python": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the Python interpreter (e.g. .venv/bin/python). If empty, auto-detected from workspace venv or BASILISK_PYTHON env var. Target: Python 3.12."
+        },
+        "basilisk.executablePath": {
+          "type": "string",
+          "default": "",
+          "description": "Explicit path to the basilisk binary. Empty uses the bundled VSIX binary."
+        },
+        "basilisk.binaries.path": {
+          "type": "string",
+          "default": "",
+          "description": "Directory containing Basilisk runtime binaries. Empty uses the bundled VSIX binaries."
+        },
+        "basilisk.binaries.basilisk": {
+          "type": "string",
+          "default": "",
+          "description": "Explicit path to the basilisk language server binary. Empty uses the bundled VSIX binary."
+        },
+        "basilisk.binaries.basilisk-profiler-helper": {
+          "type": "string",
+          "default": "",
+          "description": "Explicit path to the optional macOS profiler helper binary. Empty uses the bundled helper when present."
+        },
+        "basilisk.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable or disable diagnostic publication from both Basilisk check and analyze rule sets."
+        },
+        "basilisk.analyze": {
+          "type": "boolean",
+          "default": true,
+          "description": "Publish analyze-scope diagnostics (configured non-PEP rules) in addition to the always-on PEP check scope. Disable to restrict the editor to check scope; project configuration is unaffected. See LSP-ARCHITECTURE-SPEC.md#LSPARCH-DIAGNOSTIC-SCOPE."
+        },
+        "basilisk.useLsp": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use the LSP server for real-time diagnostics. Disable to fall back to subprocess mode."
+        },
+        "basilisk.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Trace LSP communication for debugging."
+        },
+        "basilisk.inlayHints.parameterNames": {
+          "type": "boolean",
+          "default": true,
+          "description": "Reserved: parameter-name inlay hints are always shown. The language server does not yet read this setting (see EXTENSION-ACTIVITY-PANEL-PLAN.md)."
+        },
+        "basilisk.inlayHints.variableTypes": {
+          "type": "boolean",
+          "default": true,
+          "description": "Reserved: variable-type inlay hints are always shown. The language server does not yet read this setting (see EXTENSION-ACTIVITY-PANEL-PLAN.md)."
+        },
+        "basilisk.formatter": {
+          "type": "string",
+          "enum": ["ruff", "none"],
+          "default": "ruff",
+          "description": "Formatter engine. 'ruff' uses the Ruff formatter embedded in the Basilisk binary (in-process — no external ruff binary is ever required or spawned); 'none' disables formatting. See LSP-FORMATTING-SPEC.md#LSPFMT-CONFIG."
+        },
+        "basilisk.uv.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable uv package manager integration"
+        },
+        "basilisk.uv.executablePath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the uv executable. Auto-detected if empty."
+        },
+        "basilisk.uv.autoSync": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically run 'uv sync' when pyproject.toml changes"
+        },
+        "basilisk.testExplorer.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Python test discovery and execution in Test Explorer."
+        },
+        "basilisk.testExplorer.framework": {
+          "type": "string",
+          "enum": [
+            "pytest",
+            "unittest",
+            "auto"
+          ],
+          "default": "auto",
+          "description": "Test framework to use. 'auto' detects from project config."
+        },
+        "basilisk.testExplorer.pytestPath": {
+          "type": "string",
+          "default": "pytest",
+          "description": "Path to the pytest executable."
+        },
+        "basilisk.testExplorer.args": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Additional arguments passed to the test runner."
+        },
+        "basilisk.testExplorer.autoDiscoverOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Re-discover tests when test files are saved."
+        },
+        "basilisk.testExplorer.useUvRun": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use 'uv run' to execute tests when a uv project is detected. Ensures tests run in the correct environment."
+        },
+        "basilisk.testExplorer.coverageEnabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show coverage gutter decorations after running tests with coverage. Runs pytest with --cov flag."
+        },
+        "basilisk.profiler.sampleRate": {
+          "type": "number",
+          "default": 100,
+          "description": "Sampling rate in Hz for CPU profiling (1-1000)."
+        },
+        "basilisk.profiler.includeNative": {
+          "type": "boolean",
+          "default": false,
+          "description": "Include native C extension frames in profile results."
+        },
+        "basilisk.profiler.lineThreshold": {
+          "type": "number",
+          "default": 1,
+          "description": "Minimum percentage of total samples for a line to appear as a hotspot (0.1-100)."
+        },
+        "basilisk.profiler.functionThreshold": {
+          "type": "number",
+          "default": 2,
+          "description": "Minimum percentage of total samples for a function to appear as a hotspot (0.1-100)."
+        },
+        "basilisk.profiler.maxDiagnosticsPerFile": {
+          "type": "number",
+          "default": 20,
+          "description": "Maximum number of profiling diagnostics per file."
+        },
+        "basilisk.profiler.showInlineHeatMap": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show inline heat map decorations for hot lines after profiling."
+        },
+        "basilisk.profiler.profileOnLaunch": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically start CPU profiling when a debug session launches."
+        },
+        "basilisk.profiler.processRefreshMs": {
+          "type": "number",
+          "default": 2000,
+          "minimum": 250,
+          "description": "Poll interval (ms) for refreshing the Python Processes panel while it is visible."
+        },
+        "basilisk.profiler.preset": {
+          "type": "string",
+          "enum": [
+            "default",
+            "quick",
+            "detailed",
+            "longRunning"
+          ],
+          "enumDescriptions": [
+            "Use the basilisk.profiler.sampleRate / includeNative settings",
+            "Short burst: 10 seconds at 100 Hz, for quick hotspot checks",
+            "Thorough: 60 seconds at 200 Hz, higher-fidelity data",
+            "No time limit at 50 Hz, for long-running servers and batch jobs"
+          ],
+          "default": "default",
+          "description": "Profiling preset that configures sample rate and duration."
+        },
+        "basilisk.profiler.autoSnapshotOnPause": {
+          "type": "boolean",
+          "default": true,
+          "description": "Memory autopilot: while memory tracking is active, automatically take and compare a snapshot every time the debugger pauses (at a breakpoint or step). Lets you hunt leaks by just pressing Continue — leak confidence escalates automatically. Turn off to capture snapshots manually."
+        },
+        "basilisk.profiler.autoSnapshot": {
+          "type": "boolean",
+          "default": false,
+          "description": "Memory autopilot: while memory tracking is active, automatically take a memory snapshot every few seconds (see basilisk.profiler.autoSnapshotInterval), even when the program never pauses. The program is briefly paused for each capture and resumed."
+        },
+        "basilisk.profiler.autoSnapshotInterval": {
+          "type": "number",
+          "default": 30,
+          "minimum": 1,
+          "description": "Seconds between automatic memory snapshots when basilisk.profiler.autoSnapshot is enabled."
+        },
+        "basilisk.analysisMode": {
+          "type": "string",
+          "enum": [
+            "openFilesOnly",
+            "wholeModule",
+            "crossModule"
+          ],
+          "enumDescriptions": [
+            "Analyse only files currently open in the editor. Use for large projects where whole-workspace analysis is too slow.",
+            "Analyse all Python files in the workspace at startup and on file changes. Diagnostics appear in the Problems panel even for closed files. (default)",
+            "Cross-file import graph analysis. Reserved for future use; currently behaves like wholeModule."
+          ],
+          "default": "wholeModule",
+          "description": "Controls which files Basilisk analyses. 'wholeModule' (default) analyses all workspace files; 'openFilesOnly' analyses only open editors; 'crossModule' is reserved for future cross-file import graph analysis."
+        },
+        "basilisk.experimental.fixAll": {
+          "type": "boolean",
+          "default": false,
+          "description": "Experimental: show the 'Fix All in Workspace' action in the Modules toolbar. Off by default until the mass-autofix flow is hardened."
+        }
+      }
+    },
+    "walkthroughs": [
+      {
+        "id": "basilisk.gettingStarted",
+        "title": "Getting Started with Basilisk",
+        "description": "Set up Basilisk as your Python type checker and language server.",
+        "steps": [
+          {
+            "id": "basilisk.installBinary",
+            "title": "Basilisk Binary",
+            "description": "The Basilisk binary is bundled with this extension — no separate install required. To override, set `basilisk.executablePath` or download from GitHub releases.\n[Open Releases](https://github.com/Nimblesite/Basilisk/releases)",
+            "media": {
+              "markdown": "The Basilisk binary ships with this extension. No `cargo install` needed."
+            }
+          },
+          {
+            "id": "basilisk.openPythonProject",
+            "title": "Open a Python Project",
+            "description": "Open a folder containing Python files to start analysis.\n[Open Folder](command:vscode.openFolder)",
+            "media": {
+              "markdown": "Open any folder with `.py` files."
+            }
+          },
+          {
+            "id": "basilisk.exploreModules",
+            "title": "Explore Modules",
+            "description": "Click the Basilisk icon in the activity bar to see your modules with per-module type coverage, errors, and warnings.\n[Open Modules](command:basilisk.moduleExplorer.focus)",
+            "media": {
+              "markdown": "The Modules panel shows your workspace's Python modules with a coverage bar on each, so you can see which need more type annotations at a glance."
+            }
+          }
+        ]
       }
     ]
   },
   "scripts": {
     "licenses:update": "node scripts/update-dependency-licenses.mjs",
     "licenses:check": "node scripts/update-dependency-licenses.mjs --check",
-    "compile": "tsc -p ./",
+    "sync:shipwright": "node scripts/sync-shipwright-manifest.mjs",
+    "stage:attribution": "node scripts/verify-shipwright.mjs stage-attribution",
+    "compile": "tsc -p ./ && node -e \"const fs=require('fs');fs.mkdirSync('out/src/test/fixtures',{recursive:true});fs.readdirSync('src/test/fixtures').forEach(f=>fs.copyFileSync('src/test/fixtures/'+f,'out/src/test/fixtures/'+f));\"",
     "watch": "tsc -watch -p ./",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
+    "pretest": "node scripts/fetch-real-world-repos.mjs",
     "test": "vscode-test --bail",
+    "test:real-world": "npm run compile && node scripts/fetch-real-world-repos.mjs && vscode-test --bail --label real-world-flask --label real-world-rich --label real-world-fastapi",
     "test:shipwright": "node scripts/verify-shipwright.mjs manifest && npm run licenses:check",
-    "vscode:prepublish": "npm run compile",
-    "package": "cd .. && make _release_vsix"
+    "vscode:prepublish": "npm run stage:attribution && npm run sync:shipwright && npm run compile",
+    "package": "cd .. && make _release_vsix",
+    "screenshots:editor": "node scripts/capture-screenshots.mjs"
+  },
+  "dependencies": {
+    "@nimblesite/shipwright-vscode": "^0.10.0",
+    "@preact/signals-core": "^1.14.4",
+    "vscode-languageclient": "^10.1.0"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
@@ -64,6 +1039,7 @@
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
     "eslint": "^10.8.0",
+    "glob": "^13.0.6",
     "mocha": "^11.7.6",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.65.0"

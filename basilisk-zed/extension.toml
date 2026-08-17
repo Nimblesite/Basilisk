@@ -1,18 +1,86 @@
 # Extension manifest. Implements [ZED-EXTTOML]; the placeholder version is
 # stamped only during CI per [ZED-CARGOTOML] / [ZED-MIRROR].
-#
-# This extension states that Basilisk is unlisted and does nothing else
-# ([WITHDRAWAL-SURFACES]). There is deliberately no [language_servers.*] table
-# (the `basilisk` binary is inert and starts no server), no [debug_adapters.*]
-# table, and no themes or grammars. The one slash command prints the statement.
 id = "basilisk"
 name = "Basilisk"
 version = "0.0.0-PLACEHOLDER"
 schema_version = 1
 authors = ["Basilisk Contributors"]
-description = "Basilisk's type checker produced incorrect results. Basilisk is unlisted and is being rebuilt from the ground up as a new product."
+description = "An open-source Python type checker and language server built in Rust: diagnostics, autocomplete, go-to-definition, refactoring, integrated debugging, and profiling. Strictness is configured per rule, so a codebase can adopt type safety incrementally."
 repository = "https://github.com/Nimblesite/Basilisk"
 
-[slash_commands.basilisk]
-description = "Why is Basilisk unlisted?"
+# No [grammars.*] and no languages/ directory: Basilisk attaches to Zed's
+# BUILT-IN Python language by name. Shipping either would register a second
+# language called "Python", and Zed's registry OVERWRITES the existing entry's
+# grammar/matcher/loader on a name collision, so the extension's definition
+# would silently replace the built-in one (bracket auto-close, f-string and
+# docstring pairs, elif/else auto-dedent, shebang detection, `debuggers`, and
+# the far richer highlight/runnable queries all lost). Same shape as the other
+# Python language-server extensions in the registry (ty, pyrefly, pylsp).
+# Implements [ZED-GRAMMAR] and [ZED-TREESITTER] — see docs/specs/ZED-SPEC.md.
+
+# LSP wiring: Zed launches `basilisk lsp` for Python. Implements [ZED-LSP].
+[language_servers.basilisk]
+name = "Basilisk"
+languages = ["Python"]
+
+[language_servers.basilisk.language_ids]
+"Python" = "python"
+
+# Slash commands (profiling, memory, activity-panel, tests). Implements
+# [ZED-PROFILE]; dispatch + output live in src/logic.rs.
+[slash_commands.modules]
+description = "Show workspace module tree"
 requires_argument = false
+
+[slash_commands.symbols]
+description = "Show symbols in a module"
+requires_argument = true
+
+[slash_commands.health]
+description = "Type health statistics"
+requires_argument = false
+
+[slash_commands.basilisk]
+description = "Basilisk server info and commands"
+requires_argument = false
+
+[slash_commands.profile]
+description = "Start CPU profiling (optional: PID)"
+requires_argument = false
+
+[slash_commands.profstop]
+description = "Stop CPU profiling and export results"
+requires_argument = false
+
+[slash_commands.profsnapshot]
+description = "Take a profiling snapshot without stopping"
+requires_argument = false
+
+[slash_commands.memleak]
+description = "Start memory leak tracking via tracemalloc"
+requires_argument = false
+
+[slash_commands.memstop]
+description = "Stop memory tracking and generate leak report"
+requires_argument = false
+
+[slash_commands.memrefs]
+description = "Walk the reference graph for a Python type"
+requires_argument = false
+
+[slash_commands.tests]
+description = "Discover pytest/unittest tests in workspace"
+requires_argument = false
+
+[slash_commands.runtests]
+description = "Run tests by node ID or file"
+requires_argument = false
+
+[slash_commands.testfile]
+description = "Run all tests in the current file"
+requires_argument = false
+
+# DAP adapter registration; the launch/attach schema lives at schema_path.
+# Implements [ZED-DAP].
+[debug_adapters.basilisk-debug]
+schema_path = "debug_adapter_schemas/basilisk-debug.json"

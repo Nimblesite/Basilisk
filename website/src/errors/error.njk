@@ -1,0 +1,81 @@
+---
+# Implements [WEBSITE-ERROR-PAGES-PAGES]: one landing page per diagnostic code,
+# built from the checker source (_data/rules.json) by paginating `rules` (size 1)
+# to emit /errors/{{ code }}/ for every record. Every page resolves the URL the
+# CLI prints — `see: https://www.basilisk-python.dev/errors/BSK-XXXX`. The worked
+# `basilisk check` screenshot is wired in via [WEBSITE-ERROR-PAGES-EXAMPLES].
+# See docs/specs/WEBSITE-ERROR-PAGES-SPEC.md.
+layout: layouts/docs.njk
+pagination:
+  data: rules
+  size: 1
+  alias: rule
+  # Add every code's page (not just the first) to collections.all so they all
+  # land in the generated sitemap.xml for discoverability.
+  addAllPagesToCollections: true
+permalink: "/errors/{{ rule.code }}/"
+eleventyComputed:
+  title: "{{ rule.code }}: {{ rule.summary | safe }} — Basilisk"
+  description: "What Basilisk's {{ rule.code }} ({{ rule.summary | safe }}) Python diagnostic means, why it appears, and how to fix it."
+---
+{% set stem = examples[rule.code] %}
+{% set ruleTag = rule.tags[1] | default('core') %}
+{% set groupUrl = "/docs/rules/" + rule.provenance + "/" + ruleTag + "/" %}
+
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="/docs/rules/">Rules</a> <span aria-hidden="true">/</span>
+  <a href="{{ groupUrl }}">{{ ruleTag | replace('-', ' ') | capitalize }}</a> <span aria-hidden="true">/</span>
+  <span>{{ rule.code }}</span>
+</nav>
+
+<h1 class="error-title">
+  <code>{{ rule.code }}</code>
+  <span class="badge badge--{{ rule.scope }}">{{ rule.scope }}</span>
+</h1>
+
+<p class="error-summary">{{ rule.summaryHtml | safe }}</p>
+
+{% for block in rule.body %}
+  {% if block.type == "code" %}
+<pre class="error-codeblock"><code>{{ block.code }}</code></pre>
+  {% else %}
+<p>{{ block.html | safe }}</p>
+  {% endif %}
+{% endfor %}
+
+{% if stem %}
+<h2>Real <code>basilisk check</code> output</h2>
+<p>What you see when {{ rule.code }} fires on a minimal example:</p>
+<img class="error-screenshot" src="/assets/images/{{ stem }}.png"
+     alt="basilisk check output reporting {{ rule.code }} — {{ rule.summary }}" loading="lazy">
+{% endif %}
+
+{# Implements [WEBSITE-ERROR-PAGES-REFERENCES]: every page deep-links the
+   authoritative typing-spec chapter and canonical PEP(s) for its rule. #}
+{% if rule.references.length %}
+<h2>Canonical documentation</h2>
+<ul class="error-references">
+  {% for ref in rule.references %}
+  <li><a href="{{ ref.url }}" rel="noopener">{{ ref.label }}</a></li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+<h2>How to handle it</h2>
+{% if rule.provenance == "basilisk" %}
+<p>
+  This Basilisk-specific rule is off by default. Enable its <a href="{{ groupUrl }}"><code>{{ ruleTag }}</code> tag</a>
+  when the policy fits your project, then configure its severity globally or per path in
+  <a href="/docs/configuration/"><code>pyproject.toml</code></a>.
+</p>
+{% else %}
+<p>
+  This core typing rule is enabled by default. Fix the reported type error, or adjust
+  {{ rule.code }} for a specific path in the <a href="/docs/configuration/"><code>pyproject.toml</code> configuration</a>.
+  See the <a href="{{ groupUrl }}">{{ ruleTag | replace('-', ' ') }}</a> rule group for related diagnostics.
+</p>
+{% endif %}
+
+<p class="error-perma">
+  Canonical URL: <a href="{{ rule.docsUrl }}"><code>{{ rule.docsUrl }}</code></a>
+</p>

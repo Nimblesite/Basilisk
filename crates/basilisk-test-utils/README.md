@@ -1,12 +1,5 @@
 # basilisk-test-utils
 
-> **A record, not a product claim.** Basilisk is unlisted and its type checker is
-> inert ([WITHDRAWAL](../../docs/specs/DOCS-WITHDRAWAL-MESSAGING-SPEC.md#WITHDRAWAL)).
-> Nothing described below ships in anything a user can install: the `basilisk`
-> binary analyses nothing, and the editor extensions carry no checker. This file
-> is kept as an account of what was built, and nothing in it authorises
-> rebuilding what it describes.
-
 Shared test helpers for Basilisk integration and E2E tests.
 
 ## Role in Basilisk
@@ -27,4 +20,4 @@ This crate provides **reusable test infrastructure** for the entire workspace. I
 
 ## Status
 
-Consumed by the test suites of crates that ship in nothing.
+Complete — consumed by test suites across the workspace.

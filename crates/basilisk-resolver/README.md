@@ -1,12 +1,5 @@
 # basilisk-resolver
 
-> **A record, not a product claim.** Basilisk is unlisted and its type checker is
-> inert ([WITHDRAWAL](../../docs/specs/DOCS-WITHDRAWAL-MESSAGING-SPEC.md#WITHDRAWAL)).
-> Nothing described below ships in anything a user can install: the `basilisk`
-> binary analyses nothing, and the editor extensions carry no checker. This file
-> is kept as an account of what was built, and nothing in it authorises
-> rebuilding what it describes.
-
 Name resolution and scope analysis for Basilisk.
 
 ## Role in Basilisk
@@ -40,4 +33,4 @@ AST ➜ [basilisk-resolver] ➜ scopes + resolved names ➜ checker ➜ diagnost
 
 ## Status
 
-Consumed only by crates that ship in nothing.
+Complete — stable API consumed by `basilisk-checker` and `basilisk-lsp`.

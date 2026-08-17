@@ -1,14 +1,5 @@
 name: Release
 
-# THE FINAL RELEASE ([WITHDRAWAL-UNLIST]).
-# Basilisk is unlisted. This workflow exists to ship ONE last version to every
-# channel — the inert CLI and the notice-only extension — so installations that
-# already exist learn what happened; unlisting a listing does nothing for a copy
-# already on a developer's machine. Immediately after that release is verified
-# live, every channel is unlisted (see delist/) and this workflow is disabled.
-# Do not tag another release. Existing releases stay published: deleting them
-# would destroy the record.
-
 # ⚠️ NEVER STORE CI ARTIFACTS — they cost money even on this PUBLIC repo (compute on standard runners is free; **storage is billed**). 
 # The ONLY artifacts we keep are the **GitHub Releases** (Release assets are free + unlimited). NO `actions/upload-artifact` for coverage HTML, mutation reports, logs, screenshots, or any diagnostic. 
 # The sole permitted upload is a transient in-run cross-job hand-off, and it MUST set `retention-days: 1` (the floor) so it is consumed and deleted within the same run. 
@@ -83,25 +74,29 @@ jobs:
           key: release-${{ matrix.target }}
           cache-on-failure: true
 
-      # Only `basilisk`. The profiler helper existed for the VS Code
-      # profiler, which no longer ships ([WITHDRAWAL-SURFACES]), so nothing
-      # consumes it and a released binary nothing consumes is a claim we would
-      # have to stand behind.
-      - name: Build the inert basilisk binary
+      - name: Build release binaries
         shell: bash
-        run: cargo build --release --target ${{ matrix.target }} --bin basilisk
+        run: |
+          set -euo pipefail
+          cargo build --release --target ${{ matrix.target }} --bin basilisk
+          if [[ "${{ matrix.platform }}" == darwin-* ]]; then
+            cargo build --release --target ${{ matrix.target }} --bin basilisk-profiler-helper
+          fi
 
       - name: Package macOS archive
         if: startsWith(matrix.platform, 'darwin-')
         run: |
           set -euo pipefail
           reldir="target/${{ matrix.target }}/release"
-          # ditto's zip preserves the Unix executable bit, which Homebrew's
-          # `bin.install "basilisk"` needs.
+          # The release archive is the single source of truth for the VSIX job,
+          # so the darwin archive must also carry the profiler helper that ships
+          # inside the macOS VSIX. ditto's zip preserves the Unix executable bit;
+          # Homebrew's `bin.install "basilisk"` ignores the extra helper.
           staging="basilisk-darwin"
           rm -rf "$staging"
           mkdir -p "$staging"
           cp "$reldir/${{ matrix.binary }}" "$staging/"
+          cp "$reldir/basilisk-profiler-helper" "$staging/"
           # [STUBRES-TYPESHED-LICENSE] The embedded Typeshed snapshot makes
           # attribution part of every binary-bearing release artifact.
           cp LICENSE NOTICES THIRD-PARTY-LICENSES RUST-DEPENDENCY-LICENSES "$staging/"
@@ -218,13 +213,21 @@ jobs:
           pattern: basilisk-*
           merge-multiple: true
 
-      # The release body IS the statement ([WITHDRAWAL-SURFACES]), generated
-      # from the messaging spec. Auto-generated "what's changed" notes are NOT
-      # appended: a commit list under a version heading reads as a product
-      # update, and this release is the opposite of one.
-      - name: Generate the release body from the messaging spec
+      # Release notes cannot drift from what actually shipped: the component
+      # block is generated from shipwright.json and the release binary itself
+      # ([LSPFMT-RELEASE-NOTES]), then appended to the auto-generated notes.
+      # Drift-tested against the built binary in
+      # crates/basilisk-cli/tests/e2e_release_notes_block.rs.
+      - name: Generate release-notes component block
         shell: bash
-        run: python3 scripts/gen_release_notes.py "$GITHUB_REF_NAME" > release-notes.md
+        run: |
+          set -euo pipefail
+          # The linux-x64 archive from the build matrix, by its exact name —
+          # the archives are named by target triple, and a glob that matches
+          # nothing fails only at release time (first hit: v0.37.1).
+          tar -xzf artifacts/basilisk-x86_64-unknown-linux-gnu.tar.gz basilisk
+          chmod +x basilisk
+          python3 scripts/gen_release_notes.py ./basilisk "$GITHUB_REF_NAME" > release-notes-block.md
 
       # Create the release up front and attach the platform archives to it.
       # Every downstream job (VSIX, Homebrew, Scoop) pulls its binaries from
@@ -233,8 +236,11 @@ jobs:
       - name: Create release with platform binaries
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
-          generate_release_notes: false
-          body_path: release-notes.md
+          generate_release_notes: true
+          # The generated component block ([LSPFMT-RELEASE-NOTES]) is appended
+          # to the auto-generated notes rather than replacing them.
+          body_path: release-notes-block.md
+          append_body: true
           # Publish immediately — never leave the release as a draft. The action
           # defaults to draft=false, but it only WRITES the fields you give it:
           # on a re-run over a tag whose release already exists as a draft (a
@@ -268,15 +274,42 @@ jobs:
           echo "Release ${GITHUB_REF_NAME} is published (isDraft=false)."
 
   vsix:
-    name: VSIX
+    name: VSIX - ${{ matrix.platform }}-${{ matrix.arch }}
     needs: release
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    # ONE package, not five. The extension is a notice ([WITHDRAWAL-SURFACES]):
-    # it bundles no `basilisk` binary and no vendored debugger, so there is
-    # nothing platform-specific left and no per-target matrix to build. The
-    # release-archive download, the runtime staging, the Shipwright bundle
-    # verification and the debugpy vendoring all went with the checker.
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            platform: darwin
+            arch: arm64
+            npm_config_arch: arm64
+            archive: basilisk-aarch64-apple-darwin.zip
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+            npm_config_arch: x64
+            archive: basilisk-x86_64-unknown-linux-gnu.tar.gz
+          - os: ubuntu-latest
+            platform: linux
+            arch: arm64
+            npm_config_arch: arm64
+            cross: true
+            archive: basilisk-aarch64-unknown-linux-gnu.tar.gz
+          - os: windows-latest
+            platform: win32
+            arch: x64
+            npm_config_arch: x64
+            archive: basilisk-x86_64-pc-windows-msvc.zip
+          - os: windows-latest
+            platform: win32
+            arch: arm64
+            npm_config_arch: arm64
+            cross: true
+            archive: basilisk-aarch64-pc-windows-msvc.zip
+
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -290,18 +323,98 @@ jobs:
           cache: npm
           cache-dependency-path: vscode-extension/package-lock.json
 
+      # Needed to vendor debugpy (pip install --target) into the VSIX bundle.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
       - name: Install dependencies
         working-directory: vscode-extension
         run: npm ci
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          npm_config_arch: ${{ matrix.npm_config_arch }}
 
-      - name: Validate manifest and licences
+      - name: Validate Shipwright manifest
         working-directory: vscode-extension
         run: npm run test:shipwright
 
-      - name: Stage the distribution licence
-        run: cp VSCODE-DISTRIBUTION-LICENSE vscode-extension/LICENSE.txt
+      - name: Set vsce target
+        shell: pwsh
+        run: echo "target=${{ matrix.platform }}-${{ matrix.arch }}" >> $env:GITHUB_ENV
+
+      # Pull the per-platform binary from the release published by the `release`
+      # job — the single source of truth — instead of recompiling here. The
+      # release archives preserve the Unix executable bit, so the staged binary
+      # is runnable (a raw Actions-artifact hand-off would strip it -> EACCES).
+      - name: Download release archive (POSIX)
+        if: matrix.platform != 'win32'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          rm -rf runtime-bin
+          mkdir -p runtime-bin
+          gh release download "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" \
+            --pattern "${{ matrix.archive }}" --dir runtime-bin
+          case "${{ matrix.archive }}" in
+            *.tar.gz) tar -xzf "runtime-bin/${{ matrix.archive }}" -C runtime-bin ;;
+            # ditto zips nest under a top dir; -j flattens, -o preserves perms.
+            *.zip) unzip -j -o "runtime-bin/${{ matrix.archive }}" -d runtime-bin ;;
+          esac
+
+      - name: Download release archive (Windows)
+        if: matrix.platform == 'win32'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          Remove-Item -Recurse -Force runtime-bin -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path runtime-bin | Out-Null
+          gh release download "$env:GITHUB_REF_NAME" --repo "$env:GITHUB_REPOSITORY" --pattern "${{ matrix.archive }}" --dir runtime-bin
+          Expand-Archive -Path "runtime-bin/${{ matrix.archive }}" -DestinationPath runtime-bin -Force
+
+      - name: Stage Shipwright manifest and runtime binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Stage exactly the manifest-declared bundled binaries for this target
+          # via the shared stage-runtime helper — the SAME single-source staging
+          # the Makefile (_release_vsix / _test_vsix) uses, so the published VSIX
+          # and the e2e-tested bundle can never diverge. stage-runtime clears
+          # bin/, copies each bundled binary from the extracted release archive,
+          # and re-asserts the exec bit on POSIX targets (the archives already
+          # carry it; Windows .exe needs no bit). Implements
+          # [VSIX-PACKAGING-PARITY].
+          node vscode-extension/scripts/stage-runtime.mjs runtime-bin "${{ env.target }}"
+          cp shipwright.json vscode-extension/shipwright.json
+          cp VSCODE-DISTRIBUTION-LICENSE vscode-extension/LICENSE.txt
+          cp NOTICES THIRD-PARTY-LICENSES RUST-DEPENDENCY-LICENSES \
+            VSCODE-DEPENDENCY-LICENSES vscode-extension/
+
+      # Skip on cross-compiled targets: the runner's CPU arch can't execute
+      # the produced binary (x64 host -> aarch64 target). The VSIX contents
+      # check below still runs and validates the zipped layout.
+      - name: Verify runtime version contracts
+        if: ${{ !matrix.cross }}
+        working-directory: vscode-extension
+        shell: bash
+        run: |
+          set -euo pipefail
+          exe=""
+          if [ "${{ matrix.platform }}" = "win32" ]; then exe=".exe"; fi
+          args=("bin/${{ env.target }}/basilisk${exe}")
+          if [ "${{ matrix.platform }}" = "darwin" ]; then
+            args+=("bin/${{ env.target }}/basilisk-profiler-helper")
+          fi
+          node scripts/verify-shipwright.mjs versions "${args[@]}"
+
+      - name: Vendor debugpy into the VSIX bundle
+        working-directory: vscode-extension
+        shell: bash
+        run: node scripts/vendor-debugpy.mjs
 
       - name: Package VSIX
         working-directory: vscode-extension
@@ -315,19 +428,33 @@ jobs:
           if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
             flag="--pre-release"
           fi
-          npx vsce package $flag --out "basilisk.vsix"
+          npx vsce package $flag --target "${{ env.target }}" --ignore-other-target-folders --out "basilisk-${{ env.target }}.vsix"
 
-      # The packaged zip is inspected, not trusted: shipping the type checker
-      # again is the one failure that must be impossible.
-      - name: Verify the VSIX ships no checker
-        run: bash scripts/verify-vsix-inert.sh vscode-extension/basilisk.vsix
+      - name: Verify VSIX contents
+        working-directory: vscode-extension
+        shell: bash
+        run: |
+          set -euo pipefail
+          exe=""
+          if [ "${{ matrix.platform }}" = "win32" ]; then exe=".exe"; fi
+          unzip -l "basilisk-${{ env.target }}.vsix" | grep -F "bin/${{ env.target }}/basilisk${exe}"
+          unzip -l "basilisk-${{ env.target }}.vsix" | grep -F "shipwright.json"
+          unzip -l "basilisk-${{ env.target }}.vsix" | grep -F "extension/LICENSE.txt"
+          unzip -l "basilisk-${{ env.target }}.vsix" | grep -F "extension/NOTICES"
+          unzip -l "basilisk-${{ env.target }}.vsix" | grep -F "extension/THIRD-PARTY-LICENSES"
+          unzip -l "basilisk-${{ env.target }}.vsix" | grep -F "extension/RUST-DEPENDENCY-LICENSES"
+          unzip -l "basilisk-${{ env.target }}.vsix" | grep -F "extension/VSCODE-DEPENDENCY-LICENSES"
+          if [ "${{ matrix.platform }}" = "darwin" ]; then
+            unzip -l "basilisk-${{ env.target }}.vsix" | grep -F "bin/${{ env.target }}/basilisk-profiler-helper"
+          fi
+          node scripts/verify-shipwright.mjs vsix "basilisk-${{ env.target }}.vsix" "${{ env.target }}"
 
       # Transient in-run hand-off to `release-assets`, which uploads the VSIX to
       # the GitHub Release (permanent, free). retention-days: 1 (the floor) keeps
       # build output out of billed storage ([GITHUB-NO-ARTIFACTS]).
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: vsix
+          name: ${{ env.target }}
           path: vscode-extension/*.vsix
           retention-days: 1
 
@@ -391,7 +518,10 @@ jobs:
           else
             echo "Detected stable tag ${GITHUB_REF_NAME}; publishing to stable channel"
           fi
-          # One VSIX, published once. The loop and its retry are kept: an
+          # One publish per platform-specific VSIX. vsce requires a separate
+          # publish call for each --target platform; globbing all into one
+          # publish silently uses only the first.
+          # Same hardening as the Open VSX step, for the same reason: an
           # unguarded loop under `set -e` aborts on the first failure and
           # strands every target behind it. Retry with backoff, treat an
           # already-published version as done so re-runs are safe, and try
@@ -489,7 +619,10 @@ jobs:
           else
             echo "Detected stable tag ${GITHUB_REF_NAME}; publishing to stable channel"
           fi
-          # One VSIX, published once. ovsx is version-pinned: a floating `npx ovsx` would fetch and run
+          # One publish per platform-specific VSIX. The target is baked into
+          # each VSIX, so no --target flag is needed, but each must be pushed
+          # separately — a single glob would publish only the first.
+          # ovsx is version-pinned: a floating `npx ovsx` would fetch and run
           # the latest release at publish time, inside the job that holds the
           # token — a supply-chain risk. Bump deliberately.
           # Open VSX returns transient 5xx under load. v0.41.0 published three

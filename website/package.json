@@ -3,11 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Website for Basilisk.",
+  "description": "Website for Basilisk, the open-source Python type checker and language server built in Rust.",
   "scripts": {
     "build": "eleventy",
+    "build:wasm": "npx --yes wasm-pack build ../crates/basilisk-wasm --target web --release --out-dir ../../website/src/assets/wasm --out-name basilisk_wasm",
     "start": "eleventy --serve --watch",
     "clean": "rm -rf _site",
+    "screenshots": "node screenshots/generate.mjs",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
   },
@@ -15,6 +17,11 @@
     "@11ty/eleventy": "^3.1.6",
     "@playwright/test": "^1.62.1",
     "@types/node": "^26.1.2",
-    "eleventy-plugin-techdoc": "^0.2.0"
+    "eleventy-plugin-techdoc": "^0.2.0",
+    "markdown-it": "^15.0.0"
+  },
+  "dependencies": {
+    "lz-string": "^1.5.0",
+    "monaco-editor": "^0.56.0"
   }
 }

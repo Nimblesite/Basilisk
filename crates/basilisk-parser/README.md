@@ -1,12 +1,5 @@
 # basilisk-parser
 
-> **A record, not a product claim.** Basilisk is unlisted and its type checker is
-> inert ([WITHDRAWAL](../../docs/specs/DOCS-WITHDRAWAL-MESSAGING-SPEC.md#WITHDRAWAL)).
-> Nothing described below ships in anything a user can install: the `basilisk`
-> binary analyses nothing, and the editor extensions carry no checker. This file
-> is kept as an account of what was built, and nothing in it authorises
-> rebuilding what it describes.
-
 Python source parser for Basilisk — wraps `ruff_python_parser` to produce a typed AST.
 
 ## Role in Basilisk
@@ -19,7 +12,7 @@ source text ➜ [basilisk-parser] ➜ AST ➜ resolver ➜ checker ➜ diagnosti
 
 ## Key concepts
 
-- **Wraps `ruff_python_parser`** — no custom grammar, no maintenance burden. Ruff's parser is MIT-licensed.
+- **Wraps `ruff_python_parser`** — no custom grammar, no maintenance burden. Ruff's parser is MIT-licensed, battle-tested, and fast.
 - **`ruff_python_ast`** — re-exports AST node types so downstream crates never depend on Ruff internals directly.
 - **Error recovery** — partial ASTs are returned even when the source contains syntax errors, allowing the LSP to provide diagnostics on incomplete code.
 
@@ -33,4 +26,4 @@ source text ➜ [basilisk-parser] ➜ AST ➜ resolver ➜ checker ➜ diagnosti
 
 ## Status
 
-Consumed only by crates that ship in nothing.
+Complete — stable API consumed by `basilisk-resolver`, `basilisk-checker`, and `basilisk-lsp`.

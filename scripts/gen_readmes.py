@@ -2,15 +2,12 @@
 # Implements [README]. See docs/specs/DOCS-README-SPEC.md
 """Render every published README from the single authored source.
 
-Basilisk's front page is published to five storefronts — GitHub, the VS Code
-Marketplace / Open VSX (one VSIX, one file), PyPI, the Zed extension registry,
-and the Neovim plugin listing. They used to be hand-maintained files, so they
-drifted ([README-PURPOSE]). Now
-`docs/readme/README.src.md` is the only authored copy, and every published
-README is generated from it: identical except for one paragraph saying which
-artifact the reader is looking at ([README-IDENTITY]). The statement itself is
-substituted from the messaging spec ([WITHDRAWAL-COPY]), so no storefront can be
-edited into saying something the spec does not.
+Basilisk's front page is published to three storefronts — GitHub, the VS Code
+Marketplace / Open VSX (one VSIX, one file), and PyPI. They used to be three
+hand-maintained files, so they drifted ([README-PURPOSE]). Now
+`docs/readme/README.src.md` (and its Chinese mirror) is the only authored copy,
+and every published README is generated from it: identical except for one
+paragraph saying which artifact the reader is looking at ([README-IDENTITY]).
 
 Usage:
     python3 scripts/gen_readmes.py            # rewrite the generated READMEs
@@ -23,8 +20,6 @@ import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-
-from gen_withdrawal_copy import copy_blocks
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_DIR = ROOT / "docs" / "readme"
@@ -45,6 +40,7 @@ class Target:
 
     key: str
     output: Path
+    alt_lang_href: str
 
 
 @dataclass(frozen=True)
@@ -55,19 +51,27 @@ class Source:
     targets: tuple[Target, ...]
 
 
-# One language. The approved copy exists in English only
-# ([WITHDRAWAL-COPY]); a Chinese README could only be an unapproved translation
-# of a statement about being wrong, so the Chinese front pages are withdrawn
-# rather than left carrying the old marketing.
+VSIX_README_EN = f"{REPO_BLOB}/vscode-extension/README.md"
+VSIX_README_ZH = f"{REPO_BLOB}/vscode-extension/README.zh.md"
+
 SOURCES = (
     Source(
         path=SOURCE_DIR / "README.src.md",
         targets=(
-            Target("github", ROOT / "README.md"),
-            Target("vscode", ROOT / "vscode-extension" / "README.md"),
-            Target("pypi", ROOT / "README-pypi.md"),
-            Target("zed", ROOT / "basilisk-zed" / "README.md"),
-            Target("nvim", ROOT / "basilisk.nvim" / "README.md"),
+            Target("github", ROOT / "README.md", "README.zh.md"),
+            Target("vscode", ROOT / "vscode-extension" / "README.md", VSIX_README_ZH),
+            # The wheel listing is English-only; point its switch at the
+            # repository's Chinese front page rather than a page PyPI lacks.
+            Target("pypi", ROOT / "README-pypi.md", f"{REPO_BLOB}/README.zh.md"),
+        ),
+    ),
+    Source(
+        path=SOURCE_DIR / "README.zh.src.md",
+        targets=(
+            Target("github", ROOT / "README.zh.md", "README.md"),
+            Target(
+                "vscode", ROOT / "vscode-extension" / "README.zh.md", VSIX_README_EN
+            ),
         ),
     ),
 )
@@ -137,34 +141,15 @@ def absolutise_links(text: str) -> str:
     return HTML_ATTR_RE.sub(html, MD_LINK_RE.sub(markdown, text))
 
 
-def withdrawal_tokens() -> dict[str, str]:
-    """`{{withdrawal:…}}` → the approved copy, as markdown.
-
-    Implements [WITHDRAWAL-SURFACES]: a published README carries the statement,
-    and the statement has exactly one author — the messaging spec. Substituting
-    it here means a README cannot be edited into saying something else, and
-    `--check` fails the moment one is.
-    """
-    copy = copy_blocks()
-    return {
-        "{{withdrawal:title}}": copy.title,
-        "{{withdrawal:line}}": copy.line,
-        "{{withdrawal:short}}": "\n\n".join(copy.short),
-        "{{withdrawal:action}}": "\n\n".join(copy.action),
-        "{{withdrawal:full}}": "\n\n".join(copy.full),
-    }
-
-
 def render(source_text: str, source_name: str, target: Target) -> str:
     """Render one target: variants, tokens, then link absolutisation.
 
-    The three [README-RENDER] transforms, in the order the spec fixes.
-    `{{withdrawal:…}}` substitution is transform 2: the approved copy, identical
-    for every target.
+    The three [README-RENDER] transforms, in the order the spec fixes. Token
+    substitution is transform 2; `{{altLangHref}}` is a per-target expression of
+    one statement, not content ([README-IDENTITY]).
     """
     body = apply_variants(source_text, target.key)
-    for token, text in withdrawal_tokens().items():
-        body = body.replace(token, text)
+    body = body.replace("{{altLangHref}}", target.alt_lang_href)
     if target.key != "github":
         body = absolutise_links(body)
     return GENERATED_BANNER.format(source=source_name) + body
@@ -310,7 +295,7 @@ def main(argv: list[str]) -> int:
         listing = ", ".join(str(path.relative_to(ROOT)) for path in stale)
         print(
             f"gen_readmes: stale generated README(s): {listing}\n"
-            "  Edit docs/readme/README.src.md, then run:\n"
+            "  Edit docs/readme/README.src.md (or its .zh source), then run:\n"
             "    python3 scripts/gen_readmes.py",
             file=sys.stderr,
         )

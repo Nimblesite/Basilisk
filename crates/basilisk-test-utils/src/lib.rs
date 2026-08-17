@@ -5,6 +5,7 @@
 //! multiple test crates (`basilisk-lsp`, `basilisk-cli`, `basilisk-resolver`).
 
 mod diagnostics;
+pub mod lsp_stdio;
 mod semantic_tokens;
 mod source;
 
@@ -21,8 +22,9 @@ mod cross_module;
 pub mod salsa_db;
 
 pub use diagnostics::{assert_valid_range, extract_diagnostic};
+pub use lsp_stdio::LspStdioFixture;
 pub use semantic_tokens::{assert_valid_semantic_token_data, parse_semantic_tokens};
-pub use source::line_col;
+pub use source::{basilisk_binary, line_col};
 
 /// Convenient result alias for test functions.
 pub type TestResult<T> = Result<T, Box<dyn std::error::Error>>;

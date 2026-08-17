@@ -1,0 +1,3 @@
+items = []
+data = {}
+empty = None

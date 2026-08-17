@@ -1,0 +1,177 @@
+// Tests for [VSIX]. See docs/specs/VSIX-SPEC.md#VSIX
+import * as path from 'path';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as crypto from 'crypto';
+import { runTests } from '@vscode/test-electron';
+import { execFileSync } from 'child_process';
+
+/**
+ * VS Code listens on a Unix socket inside the user-data dir; macOS caps
+ * AF_UNIX socket paths at 104 bytes ("IPC handle longer than 103 chars").
+ * Deep checkouts (e.g. git worktrees) overflow that and the electron main
+ * process dies with `listen EINVAL`, so fall back to a short per-checkout
+ * dir under tmp — the same policy as .vscode-test.mjs.
+ */
+function resolveUserDataDir(extensionDevelopmentPath: string): string {
+    const defaultDir = path.join(extensionDevelopmentPath, '.vscode-test', 'user-data');
+    if (defaultDir.length <= 80) {
+        return defaultDir;
+    }
+    const checkoutHash = crypto
+        .createHash('sha256')
+        .update(extensionDevelopmentPath)
+        .digest('hex')
+        .slice(0, 8);
+    return path.join(os.tmpdir(), `bsk-vsct-${checkoutHash}`);
+}
+
+/**
+ * Find the system VS Code Electron binary on macOS.
+ * Returns the path to the Electron binary inside the .app bundle,
+ * or undefined if not found.
+ */
+function findSystemVSCodeElectron(): string | undefined {
+    // Check common macOS install locations.
+    const appPaths = [
+        '/Applications/Visual Studio Code.app',
+        path.join(process.env.HOME ?? '', 'Applications/Visual Studio Code.app'),
+    ];
+    for (const appPath of appPaths) {
+        const electron = path.join(appPath, 'Contents/MacOS/Electron');
+        if (fs.existsSync(electron)) {
+            return electron;
+        }
+    }
+
+    // Try resolving from the `code` CLI shim. execFileSync (no shell) keeps
+    // PATH-derived values out of shell parsing — CodeQL
+    // js/shell-command-injection-from-environment.
+    try {
+        const codePath = execFileSync('which', ['code'], { encoding: 'utf8' }).trim();
+        const realPath = fs.realpathSync(codePath);
+        // realPath is like /Applications/Visual Studio Code.app/Contents/Resources/app/bin/code
+        const appRoot = realPath.replace(/\/Contents\/Resources\/app\/bin\/code$/, '');
+        const electron = path.join(appRoot, 'Contents/MacOS/Electron');
+        if (fs.existsSync(electron)) {
+            return electron;
+        }
+    } catch {
+        // Ignore
+    }
+
+    return undefined;
+}
+
+/**
+ * Find the built basilisk binary, preferring `release` over `debug`.
+ *
+ * Cargo names the executable `basilisk.exe` on Windows, so the suffix is not
+ * optional: without it this probe misses a perfectly good binary and `main()`
+ * aborts with "Basilisk binary not found" on every Windows checkout. Mirrors
+ * `findBasiliskBinary()` in suite/test-helpers.ts. Implements
+ * [VSIX-CI-PLATFORM-COVERAGE].
+ */
+function findBinary(): string | undefined {
+    const workspaceRoot = path.resolve(__dirname, '../../..');
+    const exe = process.platform === 'win32' ? '.exe' : '';
+    for (const profile of ['release', 'debug']) {
+        const binary = path.join(workspaceRoot, 'target', profile, `basilisk${exe}`);
+        if (fs.existsSync(binary)) {
+            return binary;
+        }
+    }
+    return undefined;
+}
+
+function syncShipwrightManifest(extensionDevelopmentPath: string): void {
+    const repoRoot = path.resolve(extensionDevelopmentPath, '..');
+    const source = path.join(repoRoot, 'shipwright.json');
+    const target = path.join(extensionDevelopmentPath, 'shipwright.json');
+    if (!fs.existsSync(source)) {
+        throw new Error(`Missing Shipwright manifest: ${source}`);
+    }
+    fs.copyFileSync(source, target);
+}
+
+/**
+ * Stage the runtime binaries through the ONE canonical staging script
+ * (`scripts/stage-runtime.mjs`) — the same path `_test_vsix` and the release
+ * packager use, so this debug runner can never validate a different bundle
+ * shape than what ships ([VSIX-PACKAGING-PARITY], #71). Also vendors the
+ * debugpy asset when it is not already present, so bundle-dependent journeys
+ * (debugging, memory profiling) run against the real layout.
+ */
+function stageBundledRuntime(extensionDevelopmentPath: string, binaryDir: string): void {
+    // execFileSync passes binaryDir (derived from BASILISK_EXECUTABLE_PATH)
+    // as an argv entry — no shell, so no expansion of `$(...)`/backticks from
+    // the environment (CodeQL js/indirect-command-line-injection).
+    execFileSync('node', ['scripts/stage-runtime.mjs', binaryDir], {
+        cwd: extensionDevelopmentPath,
+        stdio: 'inherit',
+    });
+    const debugpyDir = path.join(extensionDevelopmentPath, 'bundled', 'debugpy');
+    const vendored = fs.existsSync(debugpyDir) && fs.readdirSync(debugpyDir).length > 0;
+    if (!vendored) {
+        execFileSync('node', ['scripts/vendor-debugpy.mjs'], {
+            cwd: extensionDevelopmentPath,
+            stdio: 'inherit',
+        });
+    }
+}
+
+async function main(): Promise<void> {
+    try {
+        const extensionDevelopmentPath = path.resolve(__dirname, '../../');
+        const extensionTestsPath = path.resolve(__dirname, './suite/index');
+
+        const systemElectron = findSystemVSCodeElectron();
+
+        const debugBinary = process.env.BASILISK_EXECUTABLE_PATH ?? findBinary();
+        if (debugBinary === undefined || debugBinary === '') {
+            throw new Error(
+                'Basilisk binary not found. Build with: cargo build -p basilisk-cli -p basilisk-profiler-helper'
+            );
+        }
+        syncShipwrightManifest(extensionDevelopmentPath);
+        stageBundledRuntime(extensionDevelopmentPath, path.dirname(debugBinary));
+        delete process.env.BASILISK_EXECUTABLE_PATH;
+        delete process.env.BASILISK_BINARY_DIR;
+
+        // Open the SAME workspace the CI runner (.vscode-test.mjs) opens. The
+        // diagnostics suites depend on its config — the `[tool.basilisk]`
+        // table in `pyproject.toml` turns on the opt-in strict-annotation
+        // rules their fixtures trip, and
+        // `.vscode/settings.json` selects wholeModule analysis — while its
+        // settings carry no binary override, so activation still proves the
+        // bundled VSIX path. A bare temp workspace silently disarms every
+        // diagnostics assertion (no config → house rules off → zero
+        // diagnostics → timeouts).
+        //
+        // That settings file deliberately carries NO `basilisk.enabled` key.
+        // `enabled` defaults to `true`, and `type-checking-toggle.test.ts`
+        // restores it with `cfg.update('enabled', original)` — VS Code DELETES
+        // a workspace setting written back to its default rather than writing
+        // it out, so a committed `"basilisk.enabled": true` is stripped by
+        // every full run and leaves the tree dirty. Absent is the stable
+        // state, and it means exactly the same thing.
+        const workspace = path.join(extensionDevelopmentPath, 'test-fixtures', 'workspace');
+
+        await runTests({
+            extensionDevelopmentPath,
+            extensionTestsPath,
+            ...(systemElectron !== undefined ? { vscodeExecutablePath: systemElectron } : {}),
+            launchArgs: [
+                '--disable-extensions',
+                '--user-data-dir', resolveUserDataDir(extensionDevelopmentPath),
+                workspace,
+            ],
+        });
+    } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('Failed to run tests', err);
+        process.exit(1);
+    }
+}
+
+void main();

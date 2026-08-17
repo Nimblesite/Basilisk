@@ -1,6 +1,6 @@
 [package]
 name        = "basilisk-cli"
-description = "Basilisk's type checker produced incorrect results. Basilisk is unlisted and is being rebuilt from the ground up as a new product."
+description = "Basilisk CLI — an open-source Python type checker and language server built in Rust: diagnostics, refactoring, formatting, integrated debugging, and profiling. Strictness is configured per rule, so a codebase can adopt type safety incrementally."
 version.workspace    = true
 edition.workspace    = true
 license.workspace    = true
@@ -9,17 +9,37 @@ license.workspace    = true
 name = "basilisk"
 path = "src/main.rs"
 
-# The `basilisk` binary is inert ([WITHDRAWAL-INERT]): it prints the approved
-# notice and exits 4. It depends on no Basilisk crate — not the parser, the
-# resolver, the checker, or the LSP — because it runs none of them, and a
-# dependency edge to code that produced incorrect results is exactly what must
-# not ship. `--version` is the sole surface left, so Shipwright is the sole
-# dependency.
 [dependencies]
-shipwright          = "0.10.0"
-shipwright-manifest = "0.10.0"
+basilisk-config.workspace   = true
+basilisk-parser.workspace   = true
+basilisk-resolver.workspace = true
+basilisk-checker.workspace  = true
+basilisk-lsp.workspace      = true
+basilisk-common.workspace   = true
+basilisk-db.workspace       = true
+basilisk-uv.workspace       = true
+basilisk-stubs.workspace    = true
+# The user-invoked download surface ([STUBRES-TYPESHED-DOWNLOAD]); reachable
+# only from `basilisk typeshed download`, never from check/analyze.
+basilisk-typeshed-fetch.workspace = true
+clap.workspace              = true
+# Shipwright `--version` / `--version --json` contract emitter.
+shipwright                  = "0.10.0"
+shipwright-manifest         = "0.10.0"
+colored.workspace           = true
+tower-lsp                   = "0.20"
+walkdir.workspace           = true
+serde.workspace             = true
+serde_json.workspace        = true
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+tracing.workspace            = true
+tracing-subscriber.workspace = true
 
 [dev-dependencies]
+basilisk-test-utils = { workspace = true, features = ["checker"] }
+basilisk-stubs.workspace = true
+# The offline fake-GitHub fixture for the `typeshed download` CLI tests.
+basilisk-typeshed-fetch = { workspace = true, features = ["test-support"] }
 tempfile = "3"
 
 [build-dependencies]

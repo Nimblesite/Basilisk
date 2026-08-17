@@ -7,7 +7,7 @@
 coverage/**
 test-fixtures/**
 src/**
-node_modules/**
+node_modules/.package-lock.json
 out/test/**
 tsconfig.json
 .eslintrc*
@@ -19,16 +19,3 @@ scripts/**
 .gitignore
 package-lock.json
 *.vsix
-resources/**
-# The extension is a notice ([WITHDRAWAL-SURFACES]). It ships no checker, so
-# these must never appear in the package even if a stale working tree still
-# holds them: `bin/` was the bundled `basilisk` binary and `bundled/` was the
-# vendored debugger. Belt and braces beside the packaging change itself —
-# shipping the type checker again is the one failure that must be impossible.
-bin/**
-bundled/**
-shipwright.json
-NOTICES
-THIRD-PARTY-LICENSES
-RUST-DEPENDENCY-LICENSES
-VSCODE-DEPENDENCY-LICENSES

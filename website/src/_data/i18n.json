@@ -1,0 +1,118 @@
+{
+  "en": {
+    "nav": {
+      "docs": "Docs",
+      "rules": "Rules",
+      "blog": "Blog",
+      "discord": "Discord",
+      "github": "GitHub",
+      "getStarted": "Get Started"
+    },
+    "blog": {
+      "title": "Blog",
+      "eyebrow": "The Basilisk Journal",
+      "headline": "Ideas for safer Python.",
+      "subtitle": "Updates, announcements, and deep-dives from the Basilisk project.",
+      "description": "Updates, announcements, and deep-dives from the Basilisk project.",
+      "tags": "Tags",
+      "categories": "Categories",
+      "tagsTitle": "Tags",
+      "tagsDescription": "Browse blog posts by tag.",
+      "categoriesTitle": "Categories",
+      "categoriesDescription": "Browse blog posts by category.",
+      "readMore": "Read more",
+      "publishedOn": "Published on",
+      "browse": "Browse the blog",
+      "allStories": "All stories",
+      "latestEyebrow": "From the project",
+      "latest": "Latest writing",
+      "article": "article",
+      "articles": "articles",
+      "categoryResultsDescription": "Writing collected under this category.",
+      "tagResultsDescription": "Writing collected under this topic.",
+      "noTags": "No tags yet. Check back soon!",
+      "noCategories": "No categories yet. Check back soon!"
+    },
+    "docs": {
+      "onThisPage": "On this page",
+      "editOnGithub": "Edit on GitHub",
+      "nextPage": "Next",
+      "prevPage": "Previous"
+    },
+    "footer": {
+      "madeWith": "Built with",
+      "license": "MIT License",
+      "copyright": "The Basilisk Project",
+      "product": "Product",
+      "community": "Community",
+      "legal": "Legal",
+      "documentation": "Documentation",
+      "rulesReference": "Rules Reference",
+      "blog": "Blog",
+      "authors": "Authors",
+      "github": "GitHub",
+      "issues": "Issues",
+      "discord": "Discord",
+      "discussions": "Discussions",
+      "mit": "MIT"
+    }
+  },
+  "zh": {
+    "nav": {
+      "docs": "文档",
+      "rules": "规则",
+      "blog": "博客",
+      "discord": "Discord",
+      "github": "GitHub",
+      "getStarted": "立即开始"
+    },
+    "blog": {
+      "title": "博客",
+      "eyebrow": "Basilisk 技术期刊",
+      "headline": "探索更安全的 Python。",
+      "subtitle": "来自 Basilisk 项目的更新、公告和深度解析。",
+      "description": "来自 Basilisk 项目的更新、公告和深度解析。",
+      "tags": "标签",
+      "categories": "分类",
+      "tagsTitle": "标签",
+      "tagsDescription": "按标签浏览博客文章。",
+      "categoriesTitle": "分类",
+      "categoriesDescription": "按分类浏览博客文章。",
+      "readMore": "阅读更多",
+      "publishedOn": "发布于",
+      "browse": "浏览博客",
+      "allStories": "全部文章",
+      "latestEyebrow": "项目动态",
+      "latest": "最新文章",
+      "article": "篇文章",
+      "articles": "篇文章",
+      "categoryResultsDescription": "此分类下的全部文章。",
+      "tagResultsDescription": "此主题下的全部文章。",
+      "noTags": "暂无标签。",
+      "noCategories": "暂无分类。"
+    },
+    "docs": {
+      "onThisPage": "本页内容",
+      "editOnGithub": "在 GitHub 上编辑",
+      "nextPage": "下一页",
+      "prevPage": "上一页"
+    },
+    "footer": {
+      "madeWith": "构建于",
+      "license": "MIT 许可证",
+      "copyright": "Basilisk 项目",
+      "product": "产品",
+      "community": "社区",
+      "legal": "法律",
+      "documentation": "文档",
+      "rulesReference": "规则参考",
+      "blog": "博客",
+      "authors": "作者",
+      "github": "GitHub",
+      "issues": "问题",
+      "discord": "Discord",
+      "discussions": "讨论",
+      "mit": "MIT 许可证"
+    }
+  }
+}

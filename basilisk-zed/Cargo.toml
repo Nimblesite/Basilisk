@@ -1,6 +1,7 @@
 # Crate manifest. Implements [ZED-CARGOTOML]: cdylib compiled to wasm32-wasip2.
 # version is 0.0.0-PLACEHOLDER on every monorepo commit and is stamped only
-# during CI — see [ZED-MIRROR].
+# during CI; the registry mirror rewrites the basilisk-common path dep — see
+# [ZED-MIRROR].
 [package]
 name = "basilisk-zed"
 version = "0.0.0-PLACEHOLDER"
@@ -13,9 +14,8 @@ crate-type = ["cdylib"]
 [lints]
 workspace = true
 
-# The extension prints one generated file. It shares no constants with the
-# language server (there is no server to share them with) and serialises
-# nothing, so `basilisk-common` and `serde_json` are both gone — which is also
-# why the registry mirror no longer has to vendor a workspace crate.
 [dependencies]
 zed_extension_api = "0.7.0"
+serde_json = "1"
+# Shared constants with the LSP — zero-dependency, WASM-compatible.
+basilisk-common = { path = "../crates/basilisk-common" }

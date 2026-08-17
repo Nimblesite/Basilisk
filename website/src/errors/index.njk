@@ -1,0 +1,37 @@
+---
+# Implements [WEBSITE-ERROR-PAGES-PAGES]: browsable taxonomy for every
+# diagnostic code. The tag data is generated from the checker's own metadata.
+layout: layouts/docs.njk
+title: "Basilisk Error Reference — Diagnostics Grouped by Rule Tag"
+description: "Browse every Basilisk diagnostic by authoritative rule tag, from default Python typing-spec checks to opt-in strictness, style, dependency, import, and stub rules."
+permalink: "/errors/index.html"
+---
+{% from "components/rules.njk" import groupGrid with context %}
+
+<h1>Error reference</h1>
+
+<p>Every Basilisk diagnostic has a permanent explanation at <code>/errors/CODE/</code>—the same URL printed by the CLI. The {{ rules.length }} current codes are grouped below by the tags the checker itself uses.</p>
+
+<h2>Basilisk rules <span class="error-count">({{ ruleTagGroups.counts.basilisk }} opt-in)</span></h2>
+<p>Rules for stricter project policy, code style, dependencies, imports, and type stubs. They are off by default and activate only through explicit configuration.</p>
+{{ groupGrid(ruleTagGroups.basilisk, "en") }}
+
+<h2>Python typing-spec rules <span class="error-count">({{ ruleTagGroups.counts.pep }} default)</span></h2>
+<p>Core checks enabled by default, grouped by the canonical <code>python/typing</code> category tags. Cross-cutting checks without one category have their own group.</p>
+{{ groupGrid(ruleTagGroups.pep, "en") }}
+
+<details class="rule-directory">
+  <summary>All {{ rules.length }} diagnostic pages</summary>
+  <p>Each rule appears once below under its primary tag. Rules with additional tags remain discoverable from every matching tag page above.</p>
+  {% for group in ruleTagGroups.indexGroups %}
+  <h3 id="directory-{{ group.provenance }}-{{ group.id }}"><a href="{{ group.url }}">{{ group.label }}</a> <span class="error-count">({{ group.count }})</span></h3>
+  <ul class="error-list">
+    {% for rule in group.items %}
+    <li>
+      <a href="/errors/{{ rule.code }}/"><code>{{ rule.code }}</code></a>
+      <span class="error-list__summary">{{ rule.summaryHtml | safe }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endfor %}
+</details>

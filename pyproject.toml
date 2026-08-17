@@ -1,14 +1,11 @@
-# PyPI packaging for the `basilisk` CLI.
+# PyPI packaging for the `basilisk` type checker.
 #
 # This wraps the SAME native `basilisk` binary that ships via GitHub Releases,
-# Homebrew and Scoop into a Python wheel, so the tools that manage Python
-# environments can pull it the way they pull anything else.
-#
-# The binary is inert ([WITHDRAWAL-INERT]): it prints the withdrawal statement
-# and exits 4. This wheel exists for exactly one more release — so an
-# environment that already has Basilisk pinned receives the statement instead of
-# a checker that produced incorrect results. Afterwards every release here is
-# yanked and the project is unlisted (see delist/).
+# Homebrew and Scoop into a Python wheel, so `pip install basilisk-python`
+# lands the executable on PATH. It exists so tools that manage type checkers
+# through Python environments — notably the `python/typing` conformance suite,
+# which installs every checker with `uv sync` — can pull Basilisk the same way
+# they pull ty, pyrefly and zuban (all Rust binaries shipped as wheels).
 #
 # The distribution name is `basilisk-python` because `basilisk` is already
 # taken on PyPI; the installed console script is still `basilisk`.
@@ -24,23 +21,21 @@ build-backend = "maturin"
 
 [project]
 name = "basilisk-python"
-description = "Basilisk's type checker produced incorrect results. Basilisk is unlisted and is being rebuilt from the ground up as a new product."
+description = "Basilisk — an open-source Python type checker and language server built in Rust: diagnostics, refactoring, formatting, integrated debugging, and profiling. Strictness is configured per rule, so a codebase can adopt type safety incrementally."
 readme = "README-pypi.md"
 requires-python = ">=3.8"
-license = "Apache-2.0 AND MIT AND Unicode-3.0"
-# PEP 639 applies this expression to the containing wheel. It covers Basilisk's
-# own MIT code and every license selected for the statically linked runtime
-# recorded in NOTICES. It is far shorter than it used to be because the binary
-# is inert ([WITHDRAWAL-INERT]): no typeshed snapshot, no embedded formatter, no
-# download runtime, so none of their licenses apply to what ships. Release
-# builds replace this expression with the target's locked one. The exact legal
-# files travel in `.dist-info/licenses/` rather than relying on defaults.
+license = "Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND CDDL-1.0 AND CDLA-Permissive-2.0 AND ISC AND MIT AND MPL-2.0 AND Unicode-3.0 AND Unicode-DFS-2016 AND Zlib"
+# PEP 639 applies this expression to the containing wheel. It therefore covers
+# Basilisk's MIT code, the Apache-2.0/MIT Typeshed snapshot, and every license
+# selected for the statically linked runtime recorded in NOTICES. Release builds
+# replace this macOS expression with the target's locked expression. The exact
+# legal files travel in `.dist-info/licenses/` rather than relying on defaults.
 license-files = ["LICENSE", "NOTICES", "THIRD-PARTY-LICENSES", "RUST-DEPENDENCY-LICENSES"]
 authors = [{ name = "Nimblesite", email = "cftools@nimblesite.co" }]
 dynamic = ["version"]
-keywords = ["basilisk"]
+keywords = ["type-checker", "typing", "static-analysis", "lsp", "pep", "python"]
 classifiers = [
-    "Development Status :: 7 - Inactive",
+    "Development Status :: 4 - Beta",
     "Environment :: Console",
     "Intended Audience :: Developers",
     "Programming Language :: Python",
@@ -86,3 +81,8 @@ BSK-0050 = "warning"
 BSK-0061 = "warning"
 BSK-0062 = "warning"
 
+# The examples grade those same rules down to `warning`; that lives in
+# examples/pyproject.toml, because folder-scoped configuration is the
+# nearest-deciding table on the ancestor walk ([CHKARCH-CONFIG-MODEL]) — there
+# is no per-path override table, and a table this file does not define is
+# simply never read.

@@ -213,18 +213,13 @@ def _verify_release_package_metadata(repo_root: Path) -> None:
         raise ValueError(
             "first-party workspace crates leaked into the dependency carrier"
         )
-    # A spot-check that the carrier really carries license TEXT, not just a
-    # crate list. The set is small because the shipped graph is small: the
-    # binary is inert ([WITHDRAWAL-INERT]) and links Shipwright and its serde
-    # stack, nothing else. The crates that used to appear here — the typeshed
-    # download runtime, the embedded formatter, their transitive graph — are not
-    # linked in any more, and listing licenses for code that does not ship would
-    # be a claim about the binary that is not true. The exact carrier is still
-    # pinned by `licenses_sha256` above; this only proves it is not a stub.
     for required_notice in (
-        "Apache License",
-        "MIT License",
+        "Copyright (c) 2015, Nick Fitzgerald",
+        "Copyright (c) 2013, Julien Schmidt",
         "UNICODE LICENSE V3",
+        "COMMON DEVELOPMENT AND DISTRIBUTION LICENSE Version 1.0",
+        "Mozilla Public License Version 2.0",
+        "(C) 2024 Trifecta Tech Foundation",
     ):
         _require_text(runtime_text, required_notice, "RUST-DEPENDENCY-LICENSES")
 

@@ -1,20 +1,20 @@
 //! Implements [CHKARCH-INCREMENTAL-SALSA]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-INCREMENTAL-SALSA
 //! Incremental computation database for Basilisk.
 //!
-//! One layer lives here: the **in-session** Salsa engine
-//! ([CHKARCH-INCREMENTAL-SALSA]). The [`db::SourceFile`] input feeds a
-//! demand-driven query graph whose derived queries (parse → resolve → check,
-//! defined in the upstream crates) re-run only when an input they actually read
-//! changed.
+//! Two complementary layers live here:
 //!
-//! The **cross-session** result cache used to live here too. It persisted
-//! diagnostics keyed by their read-set so a fresh process could skip files that
-//! had not changed on disk — a cold-start optimisation for `basilisk check
-//! --cache`. That command is gone: the CLI is inert ([WITHDRAWAL-INERT]) and
-//! checks nothing, so there are no results to cache and nothing that reads
-//! them. The cache is deleted rather than kept warm for a rebuild that will not
-//! reuse this code.
+//! - [`db`] — the **in-session** Salsa engine ([CHKARCH-INCREMENTAL-SALSA]). The
+//!   [`db::SourceFile`] input feeds a demand-driven query graph whose derived
+//!   queries (parse → resolve → check, defined in the upstream crates) re-run
+//!   only when an input they actually read changed. This is what makes an edit
+//!   recompute one file instead of the whole workspace.
+//! - [`cache`] — the **cross-session** content-addressed result cache
+//!   ([CHKCACHE](../../../docs/specs/CHECKER-CACHE-SPEC.md),
+//!   [CHKARCH-INCREMENTAL-CACHE]). It persists diagnostics keyed by their exact
+//!   read-set so a fresh process skips re-checking files that did not change on
+//!   disk, eliminating cold-start cost.
 
+pub mod cache;
 pub mod db;
 
 pub use db::{BasiliskDatabase, Db, SourceFile};

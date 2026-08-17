@@ -1,0 +1,104 @@
+---
+layout: layouts/base.njk
+---
+
+{% block head %}
+{% set blogAuthor = author | default(site.author) | default('The Basilisk Project') %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": {{ title | dump | safe }},
+  "description": {{ description | default(site.description) | dump | safe }},
+  {% if image %}"image": {
+    "@type": "ImageObject",
+    "url": "{{ site.url }}{{ image }}",
+    "width": "{{ imageWidth | default(1200) }}",
+    "height": "{{ imageHeight | default(675) }}"
+  },
+  {% endif %}"author": {
+    "@type": "{% if blogAuthor == 'The Basilisk Project' or blogAuthor == 'Basilisk 项目' %}Organization{% else %}Person{% endif %}",
+    "name": {{ blogAuthor | dump | safe }}
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": {{ site.organization.name | default(site.title) | dump | safe }}{% if site.organization.logo %},
+    "logo": {
+      "@type": "ImageObject",
+      "url": "{{ site.url }}{{ site.organization.logo }}"
+    }{% endif %}
+  },
+  "datePublished": "{{ date | dateToRfc3339 }}",
+  "dateModified": "{% if dateModified %}{{ dateModified | dateToRfc3339 }}{% else %}{{ date | dateToRfc3339 }}{% endif %}",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "{{ site.url }}{{ page.url }}"
+  },
+  "inLanguage": "{{ lang | default('en') }}"{% if keywords or tags %},
+  "keywords": {{ keywords | default(tags | join(', ')) | dump | safe }}{% endif %}{% if category %},
+  "articleSection": {{ category | dump | safe }}{% endif %}
+}
+</script>
+{% if faq %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {% for item in faq %}{
+      "@type": "Question",
+      "name": {{ item.q | dump | safe }},
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": {{ item.a | dump | safe }}
+      }
+    }{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ]
+}
+</script>
+{% endif %}
+{% endblock %}
+
+{% set langPrefix = "/" + lang if lang and lang != defaultLanguage else "" %}
+
+<article class="blog-post">
+  <div class="blog-container">
+    {% if image %}
+    <img class="blog-hero" src="{{ image }}" alt="{{ imageAlt | default(title) }}" width="{{ imageWidth | default(1200) }}" height="{{ imageHeight | default(675) }}" loading="eager" decoding="async">
+    {% endif %}
+    <header class="blog-post-header">
+      <p class="blog-post-meta">
+        <time datetime="{{ date | isoDate }}">{{ date | dateFormat(lang) }}</time>
+        {% if dateModified %}
+          &middot; {% if lang == 'zh' %}更新于{% else %}Updated{% endif %} <time datetime="{{ dateModified | isoDate }}">{{ dateModified | dateFormat(lang) }}</time>
+        {% endif %}
+        {% if author %}
+          {%- set authorRecord = null -%}
+          {%- for a in authors.authors -%}{%- if a.name == author or a.nameZh == author -%}{%- set authorRecord = a -%}{%- endif -%}{%- endfor -%}
+          &middot;
+          {% if authorRecord %}<a href="/authors/{{ authorRecord.slug }}/" rel="author">{{ author }}</a>{% else %}{{ author }}{% endif %}
+        {% endif %}
+        {% if category %} &middot; <a href="{{ langPrefix }}/blog/categories/{{ category | slugify }}/">{{ category | blogCategoryLabel(lang) }}</a>{% endif %}
+      </p>
+      <h1>{{ title }}</h1>
+      {% if tags %}
+      <div class="blog-post-tags">
+        {% for tag in tags %}
+        {% if tag != 'post' and tag != 'posts' %}
+        <a href="{{ langPrefix }}/blog/tags/{{ tag | slugify }}/" class="tag">{{ tag }}</a>
+        {% endif %}
+        {% endfor %}
+      </div>
+      {% endif %}
+    </header>
+
+    <div class="blog-post-content prose">
+      {{ content | safe }}
+    </div>
+
+    <footer class="blog-post-footer">
+      <a href="{{ langPrefix }}/blog/" class="btn">{{ "blog.back" | t(lang) | default("Back to Blog") }}</a>
+    </footer>
+  </div>
+</article>

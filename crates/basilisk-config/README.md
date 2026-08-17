@@ -1,12 +1,5 @@
 # basilisk-config
 
-> **A record, not a product claim.** Basilisk is unlisted and its type checker is
-> inert ([WITHDRAWAL](../../docs/specs/DOCS-WITHDRAWAL-MESSAGING-SPEC.md#WITHDRAWAL)).
-> Nothing described below ships in anything a user can install: the `basilisk`
-> binary analyses nothing, and the editor extensions carry no checker. This file
-> is kept as an account of what was built, and nothing in it authorises
-> rebuilding what it describes.
-
 Configuration parsing for Basilisk — reads `[tool.basilisk]` from
 `pyproject.toml`, the only configuration source.
 
@@ -76,6 +69,10 @@ analysis modes. Those are separate planned/consumer concerns.
 
 ## Status
 
-Consumed only by crates that ship in nothing. No installed artefact reads
-`[tool.basilisk]` any more — the inert CLI parses no arguments and opens no
-files.
+Parsing is consumed by `basilisk-checker`, `basilisk-cli`, and `basilisk-lsp`.
+Validated mutation, ancestor-walk nearest-first discovery, content revisions, and
+the editor API are implemented; the editor targets `pyproject.toml` only and
+never reports a stray `basilisk.json` at all. Remaining
+provenance, document-version safety, and domain consolidation work is tracked
+in
+[`LSP-CONFIGURATION-EDITOR-PLAN.md`](../../docs/plans/LSP-CONFIGURATION-EDITOR-PLAN.md).

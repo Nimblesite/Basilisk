@@ -4,33 +4,20 @@
 
 | File | Purpose |
 |---|---|
-| [CONTRIBUTING.md](../CONTRIBUTING.md) | Basilisk is unlisted and is not accepting contributions. What the repository is now, and what an issue is still for. |
+| [CONTRIBUTING.md](../CONTRIBUTING.md) | Contribution workflow and human/agent responsibilities. |
 
 ## Specifications
 
 Specifications document shipped contracts. Explicitly planned behavior is labelled and
 linked to an active plan.
 
-**Read them as a record, not as promises.** Basilisk is unlisted, the CLI is inert, and
-the editor extensions ship no checker
-([WITHDRAWAL](specs/DOCS-WITHDRAWAL-MESSAGING-SPEC.md#WITHDRAWAL)). Most of what these
-specs describe no longer runs. They are kept because they are the account of what was
-built and how it went wrong — deleting them would erase that. Nothing here is a current
-product claim, and nothing here authorises rebuilding what it describes.
-
-| Superseded, kept as record | |
-|---|---|
-| [Website error pages](specs/WEBSITE-ERROR-PAGES-SPEC.md) | Per-diagnostic pages the site used to serve; those URLs now redirect to the statement. |
-| [Website screenshots](specs/WEBSITE-SCREENSHOTS-SPEC.md) | The automated CLI screenshot pipeline. There are no product screenshots. |
-
 | File | Purpose |
 |---|---|
-| [Withdrawal messaging](specs/DOCS-WITHDRAWAL-MESSAGING-SPEC.md) | **Single source of truth for everything Basilisk says publicly.** Every README, listing, website page, and the CLI's own output copies from here. No surface writes its own version. Where old copy conflicts, this wins. |
 | [Checker architecture](specs/CHECKER-ARCHITECTURE-SPEC.md) | Configuration, rules, diagnostics, analysis pipeline, CLI, and quality gates — including [CHKARCH-TEXT-MATCHED-LOGIC](specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TEXT-MATCHED-LOGIC), the failing-test → delete → report rule that governs any code deciding from source text. |
 | [Type inference](specs/CHECKER-TYPE-INFERENCE-SPEC.md) | The bidirectional/constraint inference engine — the checker's single type oracle — its narrowing contracts, research grounding, and the condemned legacy mechanisms under demolition. |
 | [Stub resolution](specs/CHECKER-STUB-RESOLUTION-SPEC.md) | Pinned typing-spec import order, custom typeshed, offline pin verification against the store, a PyPI-package wheel pin, the segregated download component, bundled stdlib ZIP, and generation. |
 | [Checker MCP service](specs/CHECKER-MCP-SPEC.md) | Packaged stdio lifecycle and the structured typeshed source/status tool. |
-| [Checker cache](specs/CHECKER-CACHE-SPEC.md) | **Superseded**: the cross-session result cache is deleted with the checking it cached. |
+| [Checker cache](specs/CHECKER-CACHE-SPEC.md) | Opt-in content-addressed cross-session result cache, its `[tool.basilisk]` keys, and how it differs from always-on Salsa memoization. |
 | [Rule tagging](specs/CHECKER-RULE-TAGGING-SPEC.md) | Rule provenance/category/free-form tags and conflict rules. |
 | [LSP architecture](specs/LSP-ARCHITECTURE-SPEC.md) | Shared server protocol, analysis, commands, and capabilities. |
 | [Configuration editor](specs/LSP-CONFIGURATION-EDITOR-SPEC.md) | Typed preview/apply configuration transaction and VS Code shell. |
@@ -44,14 +31,16 @@ product claim, and nothing here authorises rebuilding what it describes.
 | [Refactoring](specs/LSP-REFACTORING-SPEC.md) | Deterministic rename/extract/inline/move/convert actions. |
 | [Test integration](specs/LSP-TEST-INTEGRATION-SPEC.md) | Test discovery, execution, debug, and coverage protocol. |
 | [Activity panel](specs/EXTENSION-ACTIVITY-PANEL-SPEC.md) | Module/health wire data and shipped VS Code views. |
-| [VS Code extension](specs/VSIX-SPEC.md) | VS Code client behavior. **Mostly superseded**: the extension ships no checker ([WITHDRAWAL-SURFACES](specs/DOCS-WITHDRAWAL-MESSAGING-SPEC.md#WITHDRAWAL-SURFACES)). |
+| [VS Code extension](specs/VSIX-SPEC.md) | VS Code client behavior. |
 | [Real-world e2e suites](specs/VSIX-REAL-WORLD-SPEC.md) | Pinned real-repo journeys with memory/CPU budgets. |
 | [Neovim extension](specs/NEOVIM-SPEC.md) | `basilisk.nvim` client behavior. |
 | [Zed extension](specs/ZED-SPEC.md) | Zed WASM client behavior. |
 | [WASM](specs/WASM-SPEC.md) | The checker compiled for the browser: one-shot in-memory checking with no filesystem, network, or threads. |
 | [Editor screenshots](specs/VSIX-EDITOR-SCREENSHOTS-SPEC.md) | Automated real VS Code screenshots. |
-| [Website E2E](specs/WEBSITE-E2E-SPEC.md) | The withdrawal-contract tests: approved copy on the statement page, every retired URL still resolving, and nothing forbidden anywhere in the build. |
-| [READMEs](specs/DOCS-README-SPEC.md) | One authored README, generated to every storefront — GitHub, the VSIX (Marketplace + Open VSX), PyPI, Zed, and Neovim. |
+| [Website E2E](specs/WEBSITE-E2E-SPEC.md) | Navigation and responsive smoke tests. |
+| [Website screenshots](specs/WEBSITE-SCREENSHOTS-SPEC.md) | Verified CLI screenshot generation. |
+| [Website error pages](specs/WEBSITE-ERROR-PAGES-SPEC.md) | Generated per-diagnostic documentation. |
+| [READMEs](specs/DOCS-README-SPEC.md) | One authored README per language, generated to GitHub, the VSIX (Marketplace + Open VSX), and PyPI. |
 | [Repository standards](specs/REPO-STANDARDS-SPEC.md) | Root/`.github` gates: duplication budget, coverage thresholds, committed editor directories, Dependabot, CodeQL, and dependency review. |
 | [Release manual verification](specs/RELEASE-MANUAL-VERIFICATION-SPEC.md) | The manual passes a release person runs before publishing and again after, against the installed artifact: where `/ci-prep` fits, the artifact-provenance gate, the responsiveness smoke test, and the full hands-on test surface. |
 
@@ -85,4 +74,4 @@ Plans contain only unfinished work. Delete a plan when its acceptance gate passe
 
 | File | Contents |
 |---|---|
-| [Conformance integrity audit](CONFORMANCE-INTEGRITY-AUDIT.md#CHKARCH-CONFORMANCE-INTEGRITY-AUDIT) | Phase 1: the fitted alias predicates, measured impact, wider checker scan, remediation status, and process changes found by the 2026-08 audit. The public site no longer carries a conformance page; this audit is the internal record ([WITHDRAWAL-SURFACES](specs/DOCS-WITHDRAWAL-MESSAGING-SPEC.md#WITHDRAWAL-SURFACES)). |
+| [Conformance integrity audit](CONFORMANCE-INTEGRITY-AUDIT.md#CHKARCH-CONFORMANCE-INTEGRITY-AUDIT) | Phase 1: the fitted alias predicates, measured impact, wider checker scan, remediation status, and process changes found by the 2026-08 audit. Linked from the site's [conformance correction](../website/src/docs/conformance.md). |

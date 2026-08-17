@@ -1,6 +1,6 @@
 {
-  "cargo_dependency_graph_sha256": "68e9e4661fd7248e6ce01bf81cd65269f9e501e20484bd250316c78965820998",
-  "licenses_sha256": "b3d9a53b33aaab4bdbbf1e6ed8f5288386ee5ac344f86fb44fde0bda05be2dc9",
+  "cargo_dependency_graph_sha256": "ac5d187729fd8be9be9f709d97c351e717615d9945bceeb1adb0c2c07b0ececd",
+  "licenses_sha256": "3219959622e8d671eff7deddc2376bc0b1ee481385c281dd9c8e7014ec5ebbf6",
   "targets": [
     "x86_64-unknown-linux-gnu",
     "aarch64-unknown-linux-gnu",
@@ -9,10 +9,10 @@
     "aarch64-pc-windows-msvc"
   ],
   "wheel_license_expressions": {
-    "aarch64-apple-darwin": "Apache-2.0 AND MIT AND Unicode-3.0",
-    "aarch64-pc-windows-msvc": "Apache-2.0 AND MIT AND Unicode-3.0",
-    "aarch64-unknown-linux-gnu": "Apache-2.0 AND MIT AND Unicode-3.0",
-    "x86_64-pc-windows-msvc": "Apache-2.0 AND MIT AND Unicode-3.0",
-    "x86_64-unknown-linux-gnu": "Apache-2.0 AND MIT AND Unicode-3.0"
+    "aarch64-apple-darwin": "Apache-2.0 AND BSD-2-Clause AND BSD-3-Clause AND CDDL-1.0 AND CDLA-Permissive-2.0 AND ISC AND MIT AND MPL-2.0 AND Unicode-3.0 AND Unicode-DFS-2016 AND Zlib",
+    "aarch64-pc-windows-msvc": "Apache-2.0 AND BSD-3-Clause AND CDDL-1.0 AND CDLA-Permissive-2.0 AND ISC AND MIT AND MPL-2.0 AND Unicode-3.0 AND Unicode-DFS-2016 AND Zlib",
+    "aarch64-unknown-linux-gnu": "Apache-2.0 AND BSD-3-Clause AND CDDL-1.0 AND CDLA-Permissive-2.0 AND ISC AND MIT AND MPL-2.0 AND Unicode-3.0 AND Unicode-DFS-2016 AND Zlib",
+    "x86_64-pc-windows-msvc": "Apache-2.0 AND BSD-3-Clause AND CDDL-1.0 AND CDLA-Permissive-2.0 AND ISC AND MIT AND MPL-2.0 AND Unicode-3.0 AND Unicode-DFS-2016 AND Zlib",
+    "x86_64-unknown-linux-gnu": "Apache-2.0 AND BSD-3-Clause AND CDDL-1.0 AND CDLA-Permissive-2.0 AND ISC AND MIT AND MPL-2.0 AND Unicode-3.0 AND Unicode-DFS-2016 AND Zlib"
   }
 }
