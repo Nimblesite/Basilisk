@@ -23,12 +23,14 @@ use crate::type_node::{BuiltinClass, LiteralValue, TypeNode};
 #[must_use]
 pub fn assignable(source: &TypeNode, target: &TypeNode) -> Option<bool> {
     match (source, target) {
-        (TypeNode::Any, _) | (_, TypeNode::Any) => Some(true),
-        (TypeNode::Never, _) => Some(true),
-        (_, TypeNode::Builtin(BuiltinClass::Object)) => Some(true),
+        // `Ellipsis`/`Ellipsis` joins the top arm rather than sitting below:
+        // it is disjoint from every arm it moves past (those require an
+        // `Unknown` or `Never` on one side), so the order is preserved.
+        (TypeNode::Any | TypeNode::Never, _)
+        | (_, TypeNode::Any | TypeNode::Builtin(BuiltinClass::Object))
+        | (TypeNode::Ellipsis, TypeNode::Ellipsis) => Some(true),
         (TypeNode::Unknown, _) | (_, TypeNode::Unknown) => None,
         (_, TypeNode::Never) => Some(false),
-        (TypeNode::Ellipsis, TypeNode::Ellipsis) => Some(true),
         (TypeNode::Ellipsis, _) | (_, TypeNode::Ellipsis) => None,
         (TypeNode::Union(members), _) => all3(members.iter().map(|m| assignable(m, target))),
         (_, TypeNode::Union(members)) => any3(members.iter().map(|m| assignable(source, m))),
@@ -85,10 +87,9 @@ fn any3(answers: impl Iterator<Item = Option<bool>>) -> Option<bool> {
 fn none_assignable_to(target: &TypeNode) -> Option<bool> {
     match target {
         TypeNode::NoneType => Some(true),
-        TypeNode::Form(_) | TypeNode::Subscript { .. } => match subscript_base_class(target) {
-            Some(_) => Some(false),
-            None => None,
-        },
+        TypeNode::Form(_) | TypeNode::Subscript { .. } => {
+            subscript_base_class(target).map(|_| false)
+        }
         _ => Some(false),
     }
 }
@@ -117,11 +118,7 @@ fn literal_assignable(value: &LiteralValue, target: &TypeNode) -> Option<bool> {
         TypeNode::Literal(other) => Some(value == other),
         TypeNode::LiteralString => Some(matches!(value, LiteralValue::Str(_))),
         TypeNode::Builtin(class) => Some(class_assignable(value.value_class(), *class)),
-        TypeNode::Subscript { .. } => match subscript_base_class(target) {
-            Some(_) => Some(false),
-            None => None,
-        },
-        TypeNode::Form(_) => None,
+        TypeNode::Subscript { .. } => subscript_base_class(target).map(|_| false),
         _ => None,
     }
 }
@@ -132,11 +129,7 @@ fn literal_string_assignable(target: &TypeNode) -> Option<bool> {
     match target {
         TypeNode::LiteralString | TypeNode::Builtin(BuiltinClass::Str) => Some(true),
         TypeNode::Builtin(_) | TypeNode::Literal(_) => Some(false),
-        TypeNode::Subscript { .. } => match subscript_base_class(target) {
-            Some(_) => Some(false),
-            None => None,
-        },
-        TypeNode::Form(_) => None,
+        TypeNode::Subscript { .. } => subscript_base_class(target).map(|_| false),
         _ => None,
     }
 }
@@ -149,7 +142,6 @@ fn builtin_assignable(class: BuiltinClass, target: &TypeNode) -> Option<bool> {
         TypeNode::Builtin(other) => Some(class_assignable(class, *other)),
         TypeNode::Literal(_) | TypeNode::LiteralString => Some(false),
         TypeNode::Subscript { .. } => subscript_base_class(target).map(|base| base == class),
-        TypeNode::Form(_) => None,
         _ => None,
     }
 }

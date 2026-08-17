@@ -8,6 +8,15 @@
 //! name refers to the builtin exactly while no module-level binding at or
 //! before the use site governs it.
 
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions,
+    missing_docs
+)]
 use basilisk_canonical::{BindingTable, TypingForm};
 use ruff_python_ast::{Expr, ModModule, Stmt};
 

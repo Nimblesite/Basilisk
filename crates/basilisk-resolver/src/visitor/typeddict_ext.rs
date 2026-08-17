@@ -268,7 +268,7 @@ fn subscript_key_literal(slice: &Expr) -> Option<String> {
 /// Collect `isinstance`/`issubclass`-on-`TypedDict` violations from
 /// module-level statements and function bodies.
 ///
-/// PEP 589: "TypedDict type objects cannot be used in `isinstance()` tests
+/// PEP 589: "`TypedDict` type objects cannot be used in `isinstance()` tests
 /// such as `isinstance(d, Movie)`." Both sides of the call resolve through
 /// the module's [`basilisk_canonical::BindingTable`] ([ASTREBUILD-LAW]): the
 /// callee must resolve to the builtin `isinstance`/`issubclass`, and the
@@ -278,8 +278,9 @@ fn subscript_key_literal(slice: &Expr) -> Option<String> {
 /// The second half was REBUILT. It used to test the argument's `Expr::Name.id`
 /// against a `HashSet<&str>` of names of classes DIRECTLY declared with a
 /// `TypedDict` base, which got the question wrong three ways at once: a
-/// TypedDict reached under a second name was not in the set, a subclass of a
-/// TypedDict was not in the set even though it is just as un-checkable, and a
+/// `TypedDict` reached under a second name was not in the set, a subclass of
+/// a `TypedDict` was not in the set even though it is just as un-checkable,
+/// and a
 /// name since rebound to an ordinary class matched the set and was reported
 /// anyway.
 pub(super) fn collect_isinstance_typeddict_violations(

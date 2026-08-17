@@ -44,6 +44,12 @@ fn has_builtin_decorator_form(
         .any(|decorator| bindings.form_of_with_builtins(&decorator.expression) == Some(form))
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "one flat record build: every `FunctionInfo` field is populated from the \
+              resolved `def` node in one place, and splitting it would scatter the \
+              field list across helpers without removing a single decision"
+)]
 pub(super) fn function_info_from(
     bindings: &BindingTable,
     func: &StmtFunctionDef,

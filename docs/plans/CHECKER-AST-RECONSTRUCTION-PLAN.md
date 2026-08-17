@@ -1,24 +1,37 @@
 # Rebuild the checker on the AST {#ASTREBUILD}
 
-> **Status (2026-08-08):** the deletion phase is complete and the rebuild has
-> begun: [Phase 0a](#ASTREBUILD-PHASE-COMPILE-CANONICAL),
-> [0b](#ASTREBUILD-PHASE-COMPILE-OVERLOAD), and the binding-table threading of
-> [0d](#ASTREBUILD-PHASE-COMPILE-MEASURE) are done — `basilisk-canonical`,
-> `basilisk-resolver`, and `basilisk-stubs` compile clean under workspace lints
-> and the build now stops in `basilisk-checker`. The registry-load defect that
-> silently emptied the `TypingForm` index is fixed and pinned by
-> `crates/basilisk-canonical/tests/canonical_registry.rs`. The binding table is
-> now scope- and order-correct (position-aware events, module frame only,
-> star-import materialisation, builtin fallback), pinned by
-> `crates/basilisk-canonical/tests/binding_table.rs`; the [0c](#ASTREBUILD-PHASE-COMPILE-DECORATORS)
-> resolver mechanism landed, so the function-binary failure in the 161 below
-> has since been fixed and its pin passes. Deleted resolver
-> collectors are stubbed to empty vectors (inert, never satisfied), pinned by
-> **161 failing resolver tests** (462 pass; measured per-binary on 2026-08-08:
-> annotation 14, class 8, function 1, misc 11, mutant 31, protocol 25,
-> resolution 1, type_system 36, typeddict 34) —
-> [Phase 2](#ASTREBUILD-PHASE-RESOLVER) owns them all, and none may be deleted
-> or weakened.
+> **Status (2026-08-17): the whole workspace compiles again.**
+> `cargo check --workspace --all-targets` is clean under workspace lints for
+> the first time since the deletion phase — `basilisk-canonical`,
+> `basilisk-stubs`, `basilisk-resolver`, `basilisk-checker`, and the LSP all
+> build. [Phase 0](#ASTREBUILD-PHASE-COMPILE) is **complete**; the checker and
+> LSP error counts recorded below as "unknown" turned out to be **33 dead-code
+> denials in one module** (`assignment_compatibility`), not missing logic.
+>
+> The keystone landed: **the `TypedDict` variable→class association is rebuilt
+> on definition-site identity.** All five `TypedDict`-family panics that sat on
+> the live `visitor::collect` path are gone, replaced by real implementations
+> that resolve each annotation through the module's `BindingTable` to the
+> `class` statement it denotes and key every schema on `ClassInfo::name_span`
+> ([Phase 1](#ASTREBUILD-PHASE-BINDING) / [Phase 2](#ASTREBUILD-PHASE-RESOLVER)).
+> Per-field PEP 655 required-ness and the PEP 484 value-class check were
+> rebuilt on resolved forms at the same time, retiring the last two text
+> mechanisms in that family (`ann_lower.contains("notrequired")` and
+> `typeddict_field_type_compatible`'s `|`-splitting string compare).
+>
+> Resolver tests went from **10 passing / 690 failing** to **565 passing /
+> 149 failing**. The 690 were not 690 distinct defects: four panics on a live
+> path aborted every test binary wholesale. The remaining 149 are the honest
+> map of [Phase 2](#ASTREBUILD-PHASE-RESOLVER)'s outstanding collectors —
+> measured per-binary on 2026-08-17: annotation 14, class 8, function 2,
+> misc 13, mutant 31, protocol 23, resolution 1, type_system 28, typeddict 29.
+> None may be deleted or weakened.
+>
+> 14 new identity pins (`tests/resolver/test_typeddict_identity.rs`) hold the
+> rebuild to meaning over spelling: aliased, quoted, dotted, rebound, and
+> same-name-shadowed annotations, plus abstention when a builtin is shadowed.
+> All pass, and none has an analogue in the conformance suite.
+>
 > Basilisk's former 100% `python/typing` claim is withdrawn, the
 > project is not listed in the [official results](https://github.com/python/typing/blob/main/conformance/results/results.html),
 > and the current conformance level is **unknown**. Nothing in this plan
@@ -80,19 +93,19 @@ conformance claim. Never trade the second for the first.
 Measured against `HEAD` on 2026-08-06. Every count is reproducible from the
 commands given.
 
-### Compile blockers {#ASTREBUILD-INVENTORY-BUILD}
+### Compile blockers — RESOLVED {#ASTREBUILD-INVENTORY-BUILD}
 
-The workspace does not build. As first measured, `cargo check --workspace`
-stopped in `basilisk-stubs`; [Phase 0a/0b](#ASTREBUILD-PHASE-COMPILE) fixed
-that, and the build now stops in `basilisk-resolver` —
-[0d](#ASTREBUILD-PHASE-COMPILE-MEASURE) classifies its 32 errors. The checker
-and LSP have still never been reached, so their error counts remain unknown.
+**`cargo check --workspace --all-targets` is clean** as of 2026-08-17. The
+build walked forward one crate at a time as each blocker fell:
+`basilisk-stubs` → `basilisk-resolver` → `basilisk-checker` → clean.
 
 | Site | Break | Status |
 |---|---|---|
 | `basilisk-stubs` `pyi_parser` | `StubFunction::is_overload` was read and matched but never populated — the decorator recognition that set it was deleted. | Fixed in [0b](#ASTREBUILD-PHASE-COMPILE-OVERLOAD) |
-| `crates/basilisk-checker/src/rules/missing_parameter_annotation.rs:191,195` | Calls `shared::decorator_spelled`, which no longer exists. | Open — [0c](#ASTREBUILD-PHASE-COMPILE-DECORATORS) |
-| `crates/basilisk-checker/src/rules/calls_argument_count/method_binding.rs:135` | Same. | Open — [0c](#ASTREBUILD-PHASE-COMPILE-DECORATORS) |
+| `crates/basilisk-checker/src/rules/missing_parameter_annotation.rs:189,193` | Called `shared::decorator_spelled`, which no longer exists. | Fixed — now reads `FunctionInfo::{is_staticmethod,is_classmethod}` ([0c](#ASTREBUILD-PHASE-COMPILE-DECORATORS)) |
+| `crates/basilisk-checker/src/rules/calls_argument_count/method_binding.rs:128,141,145` | Same. | Fixed — same resolved flags |
+| `basilisk-resolver` `visitor::collect` | 5 panics on the live path (4 `TypedDict`-family + `typed_dict_class_names`) aborted every module analysed. | Fixed — rebuilt on definition-site identity |
+| `basilisk-checker` `assignment_compatibility` | 33 `dead_code` denials: every reader of 24 functions was deleted for spelling dependence, leaving them orphaned. | Fixed — each carries `#[expect(dead_code)]` naming the rebuild that will consume it; no body was restored, no verdict path re-enabled |
 
 ### Resolver {#ASTREBUILD-INVENTORY-RESOLVER}
 
@@ -155,6 +168,33 @@ together once its form resolves.
 Two further rules are **partially** live and keep their resolver-derived half:
 `dataclasses_slots` lost `self.`-attribute discovery and `__slots__` access
 detection; `generics_type_erasure` lost its class-attribute scanner.
+
+### The nominal leaf is now the single blocking defect {#ASTREBUILD-INVENTORY-NOMINAL}
+
+Measured 2026-08-17, once the workspace compiled and the checker suite could
+run for the first time: **344 checker tests pass, 3,628 fail — and 3,503 of
+those failures are two panics on live paths**, not 3,503 defects.
+
+| Panic site | Failures | What it needs |
+|---|---|---|
+| `assignment_compatibility/skip_names.rs:95` (`collect_typeddict_names`) | 1,765 | the nominal leaf's definition site |
+| `annotation/mod.rs:168` (`AnnotationResolver::is_structural_target`) | 1,738 | the nominal leaf's definition site |
+| `types_parsing.rs:51` (`InferredType::from_annotation`) | 51 | callers to carry the `Expr` |
+| everything else (13 sites) | 74 | per-rule, [Phase 4](#ASTREBUILD-PHASE-RULES) |
+
+Both dominant banners prescribe the identical rebuild, in the same words:
+*nominal leaves must carry their resolved definition site*. `is_structural_target`
+has **7 live callers in 5 rules** (`returns_compatibility`,
+`returns_compatibility_2`, `narrowing_typeis_2`, `shared/judge.rs` ×2,
+`assignment_compatibility`), so every one of them is dead until the leaf
+carries identity. This is [Phase 5](#ASTREBUILD-PHASE-TYPEEXPR)'s first bullet
+and it is now the highest-value item in the plan by a wide margin.
+
+Sized for the rebuild: `InferredType::Named(String)` has **101 references — 51
+constructions, 31 match sites**, plus the `Display` impl. The lawful shape is a
+nominal reference carrying both the definition `Span` (identity, the only thing
+a verdict may read) and the rendering (diagnostic **message** text only), which
+is exactly the split `TdSchema` already uses in the resolver.
 
 ### The annotation-text layer {#ASTREBUILD-INVENTORY-TEXT}
 
@@ -436,46 +476,76 @@ Three callers reference a helper that no longer exists:
       `abc.abstractmethod` landed alongside). Pinned by
       `tests/resolver/test_decorators.rs::builtin_decorator_flags_do_not_depend_on_spelling`
       and `tests/binding_table.rs::builtin_fallback_respects_module_rebinds`.
-- [ ] Swap the three call sites (`missing_parameter_annotation.rs:191,195`,
-      `calls_argument_count/method_binding.rs:135`) onto those flags. They were
-      deliberately left referencing the deleted helper rather than converted
-      into invisible no-ops; the swap is now mechanical.
+- [x] Swap the three call sites onto those flags. Done:
+      `missing_parameter_annotation.rs:189,193` and
+      `calls_argument_count/method_binding.rs:128,141,145` now read
+      `FunctionInfo::{is_staticmethod,is_classmethod}`, which the collection
+      walk populates from the resolved decorator node. No call site names a
+      decorator spelling.
 
 #### 0d — measured: what Phase 0 uncovered {#ASTREBUILD-PHASE-COMPILE-MEASURE}
 
-Done. `basilisk-canonical` and `basilisk-stubs` compile, so the build now
-reaches `basilisk-resolver` and stops there with **32 errors**. Nothing
-downstream of the resolver has been compiled yet, so the checker and LSP counts
-remain unknown.
+**Done — the workspace compiles.** The resolver's 32 errors were cleared, the
+build then reached `basilisk-checker` for the first time and stopped with 33
+errors there, and those are cleared too. The LSP had no errors of its own.
 
-**Phase 0 cannot finish inside Phase 0.** The resolver does not fail on
-diagnostics it can no longer emit; it fails to *compile*, because the deleted
-collectors are load-bearing for `visitor::collect`. Restoring the build
-therefore requires the front half of Phase 1 and most of Phase 2:
+The 33 checker errors were **not** missing logic: every one was a `dead_code`
+denial in `assignment_compatibility`, where deleting the spelling-keyed
+`check_vars` verdict pipeline orphaned 24 functions that nothing calls any
+more. They are the rebuild map the deletion protocol asks to be kept, so each
+now carries an `#[expect(dead_code)]` naming the phase that will consume it.
+No deleted body was restored and no verdict path was re-enabled.
 
-| Cause | Count | Phase that owns it |
+**Phase 0 could not finish inside Phase 0**, as predicted: the resolver failed
+to *compile* because deleted collectors were load-bearing for
+`visitor::collect`, so restoring the build required the front half of Phase 1
+and part of Phase 2. Both landed.
+
+| Cause | Count | Resolution |
 |---|---|---|
-| Deleted collectors and helpers still referenced (`E0425`/`E0432`) | 17 | [Phase 2](#ASTREBUILD-PHASE-RESOLVER) |
-| Callers not passing `&BindingTable` to already-migrated predicates | 7 | [Phase 1](#ASTREBUILD-PHASE-BINDING) |
-| Signature drift in `typeddict`/`core`/`final_readonly` helpers | 6 | [Phase 2](#ASTREBUILD-PHASE-RESOLVER) |
-| `ClassInfo` initializer missing 13 declared-nature fields | 1 | [Phase 3](#ASTREBUILD-PHASE-CLASSINFO) |
-| Unused import left behind by the deletions | 1 | [Phase 2](#ASTREBUILD-PHASE-RESOLVER) |
+| Callers not passing `&BindingTable` to already-migrated predicates | 7 | Fixed — threading landed |
+| Deleted collectors and helpers still referenced (`E0425`/`E0432`) | 17 | Fixed — signatures rebuilt; the `TypedDict` family has real bodies, the rest still return empty (tracked below) |
+| Signature drift in `typeddict`/`core`/`final_readonly` helpers | 6 | Fixed by the identity-keyed rebuild |
+| `ClassInfo` initializer missing 13 declared-nature fields | 1 | Fixed — see [Phase 3](#ASTREBUILD-PHASE-CLASSINFO) |
+| Unused import left behind by the deletions | 1 | Fixed |
+| `assignment_compatibility` orphaned readers | 33 | Fixed — `#[expect(dead_code)]`, bodies untouched |
 
-**Phase 1 is already part-built**, which the inventory did not record: 13 leaf
+**Phase 1 was already part-built**, which the inventory did not record: 13 leaf
 predicates across `visitor/{annotations,class_info,dataclass,final_readonly}.rs`
-already take `&BindingTable` and decide through `form_of`. They are correct and
-they are unreachable — nothing constructs a table or passes one. Threading it is
-what makes them live, and it is the cheapest way to shrink the error count.
+already took `&BindingTable` and decided through `form_of`. They were correct
+and unreachable — nothing constructed a table or passed one.
 
 - [x] Thread `&BindingTable` from `visitor::collect` to the 13 migrated
       predicates, closing the 7 arity errors. `visitor::collect` builds one
       table and passes it through `core::collect_from_body` (via
       `CollectSinks`), the typevar collector, and the `Final` violation walk;
       the resolver compiles clean under workspace lints.
-- [ ] Rebuild the 17 collectors ([Phase 2](#ASTREBUILD-PHASE-RESOLVER)); only
+- [x] Clear the 33 `basilisk-checker` errors without restoring any deleted
+      body — `#[expect(dead_code)]` on each orphaned reader, and the three
+      genuinely-unused imports in `typeform_check.rs` removed.
+- [ ] Rebuild the remaining collectors ([Phase 2](#ASTREBUILD-PHASE-RESOLVER));
+      the `TypedDict` family is done, and of the rest only
       `collect_typevar_calls` is recoverable from history, and only its
       traversal — see [ASTREBUILD-SALVAGE-COLLECTORS](#ASTREBUILD-SALVAGE-COLLECTORS).
-- [ ] `make lint` and `make fmt` clean.
+- [x] `cargo fmt --all --check` clean workspace-wide.
+- [x] `basilisk-canonical` and `basilisk-resolver` clippy-clean under
+      `-D pedantic`. Fixed along the way: 8 pre-existing lints in
+      `relation.rs`/`binding.rs`, 6 test files missing the standard lint
+      header, and `registry_health.rs`'s `assert!(health.is_ok())` — which
+      discarded the error — replaced with an `assert_eq!` that prints it.
+      The two `narrowing.rs` "identical arms" were **not** collapsed: those
+      `None` arms are tracked abstentions naming the deleted reader, and
+      merging them into the wildcard would erase the rebuild map, so they
+      carry an `#[expect]` saying exactly that.
+- [ ] `basilisk-checker` clippy: **140 errors, and 113 of them are the
+      deletion protocol colliding with the workspace lint** — 101
+      `clippy::panic` denials on deleted bodies plus 12 missing `# Panics`
+      sections. [CLAUDE.md](../../CLAUDE.md) *mandates* those panics; the
+      workspace *denies* `panic!` in production code. Both rules are right,
+      so each deleted body needs an `#[expect(clippy::panic, reason = …)]`
+      naming the phase that will delete the panic by implementing the rule.
+      Mechanical, 101 sites, and it must not be done by weakening the lint
+      workspace-wide. The remaining 27 are ordinary pre-existing nits.
 
 #### 0e — a spelling heuristic found and deleted {#ASTREBUILD-PHASE-COMPILE-DELETION}
 
@@ -530,9 +600,46 @@ The keystone. Every later phase depends only on this.
 
 ### Phase 2 — rebuild resolver collectors {#ASTREBUILD-PHASE-RESOLVER}
 
-- [ ] Rebuild the ~13 deleted collectors on `form_of`: type-parameter factory
+- [x] **The `TypedDict` family is rebuilt on definition-site identity.** Five
+      panics on the live `visitor::collect` path are gone, replaced by real
+      implementations — not defaults, not empty returns:
+      - `typeddict::td_var_type_from_stmts` and
+        `final_readonly::build_var_type_map` resolve each annotation through
+        `BindingTable` (via the new `annotation_local_class`, which follows
+        subscripts, assignment aliases, and PEP 484 quoted forward references
+        through the new `BindingTable::local_class_of_quoted_annotation`) and
+        key on `ClassInfo::name_span`.
+      - `final_readonly::build_typeddict_readonly_map` and the schema map in
+        `collect_typeddict_key_violations` are keyed by `Span`, so
+        `TdSchema::class_name` survives only as diagnostic **message** text.
+      - `typeddict_ext::td_check_ann_assign` validates `m: Movie = {...}`
+        against the schema the ANNOTATION denotes.
+      - `typed_dict_class_names` was **removed outright** rather than stubbed:
+        its own banner proves no lawful caller can exist, and nothing called it.
+      - Both walks now recurse into function bodies with parameters and PEP 692
+        `**kwargs: Unpack[TD]` seeded from resolved annotations.
+- [x] **Two further text mechanisms in that family deleted and rebuilt**, which
+      the inventory had not recorded:
+      - per-field PEP 655 required-ness was `ann_lower.contains("notrequired")`
+        on the rendered annotation — a field typed `NotRequiredData` was
+        silently optional. Now `AttributeInfo::required` resolved through the
+        bindings across the `Annotated`/`ReadOnly` interleavings, merged in
+        `EffectiveField` so an inherited field keeps its DECLARING class's
+        `total=` as PEP 655 requires.
+      - the value-class check was `typeddict_field_type_compatible`, comparing
+        rendered annotation text and splitting it on `|`. Now
+        `AttributeInfo::accepted_primitives` resolved via
+        `form_of_with_builtins`, compared against the literal's own AST node
+        kind, with the PEP 484 numeric tower. A shadowed `class int:` makes the
+        field unjudgeable and the rule abstains.
+- [x] 14 identity pins in `tests/resolver/test_typeddict_identity.rs`, all
+      passing, none with a conformance-suite analogue: alias, quoted, dotted,
+      rebound, same-name-shadow, aliased `Unpack`, aliased `Required`,
+      inherited totality, aliased builtin, shadowed builtin, `int | None`.
+- [ ] Rebuild the remaining collectors on `form_of`: type-parameter factory
       calls, functional `TypedDict`/`NamedTuple`/`NewType` calls, `TypeAliasType`
-      construction, protocol bases, and enum member classification.
+      construction, protocol bases, and enum member classification. These own
+      the 149 remaining resolver failures.
 - [ ] Delete `protocol_ext::base_type_name` and `unqualified_base`; base classes
       are `Expr` nodes with exact spans, and splitting their rendered text on
       `[` and `.` is the defect this plan exists to remove.
@@ -540,8 +647,16 @@ The keystone. Every later phase depends only on this.
 
 ### Phase 3 — rebuild `ClassInfo` {#ASTREBUILD-PHASE-CLASSINFO}
 
-- [ ] Repopulate the declared-nature flags in `visitor/class_info_ext.rs` from
-      resolved bases and decorators.
+- [x] Repopulate the declared-nature flags from resolved bases and decorators.
+      Done ahead of this plan's last revision and confirmed on 2026-08-17:
+      `ClassInfo` carries `resolved_bases: Vec<BaseRef>` (each a `ResolvedBase::
+      {LocalClass(Span),Form,Unknown}`), and `is_typed_dict` / `is_protocol` /
+      `is_enum` / `is_final` / the dataclass flags are all set from resolved
+      nodes. `ClassGraph` indexes them by `name_span` and answers membership
+      transitively with an explicit `Ancestry::complete` flag, so a rule may
+      only make a negative claim about a hierarchy it fully resolved.
+      `AttributeInfo` gained `required` and `accepted_primitives` in
+      [Phase 2](#ASTREBUILD-PHASE-RESOLVER), both resolved the same way.
 - [ ] Rebuild `extract_generic_params` from `StmtClassDef::type_params` (PEP 695)
       and from resolved `Generic[...]`/`Protocol[...]` bases (PEP 484).
 - [ ] Rebuild `parse_dataclass_transform_decorator` from the decorator's resolved
@@ -576,9 +691,26 @@ the fixture regression moves.
 The largest and last structural item; it is why `InferredType::Named(String)`
 exists at all.
 
+**This phase is now the critical path, not the tail.** The measurement in
+[ASTREBUILD-INVENTORY-NOMINAL](#ASTREBUILD-INVENTORY-NOMINAL) shows its first
+bullet alone gates **3,503 of the checker's 3,628 failing tests** and 5 rules'
+entire verdict paths. Do it before any further Phase 4 rule work: those rules
+call `is_structural_target`, so they cannot be tested until the leaf carries
+identity.
+
 - [ ] Replace `InferredType::Named(String)` with a resolved reference to a
       declaration, so a type is identified by what it *is* rather than by how it
-      was spelled.
+      was spelled. **Sized:** 101 references — 51 constructions, 31 match sites,
+      plus `Display`. The leaf must carry the definition `Span` (identity, the
+      only thing a verdict may read) alongside the rendering (diagnostic
+      **message** text only) — the same split `TdSchema` already uses in the
+      resolver, so the shape is proven.
+- [ ] With the leaf carrying identity, rebuild the two functions that gate
+      everything downstream, both of whose banners ask for exactly this:
+      `AnnotationResolver::is_structural_target` (Protocol/`TypedDict`-ness read
+      from the resolved definition's `ClassInfo`, not a name set) and
+      `assignment_compatibility::skip_names`'s two collectors (`SkipNames`
+      holding `HashSet<Span>`, joined on identity).
 - [ ] Delete `types_parsing::from_annotation` and its 36 call sites; annotations
       become type expressions evaluated through
       [TYPEINF-ANNOTATION-RESOLUTION](../specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-ANNOTATION-RESOLUTION).

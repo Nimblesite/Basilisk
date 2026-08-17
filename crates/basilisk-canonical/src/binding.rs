@@ -350,7 +350,7 @@ impl BindingTable {
     /// BINDS its local names, so each becomes a local-definition event.
     fn bind_from_import(&mut self, offset: TextSize, import: &ruff_python_ast::StmtImportFrom) {
         let module = (import.level == 0)
-            .then(|| import.module.as_ref())
+            .then_some(import.module.as_ref())
             .flatten()
             .map(ruff_python_ast::Identifier::as_str);
         for alias in &import.names {

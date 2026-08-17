@@ -183,6 +183,10 @@ fn extract_guard_from_test(
 /// The callee is recognised by what it RESOLVES to ([ASTREBUILD-LAW]), via
 /// [`BindingTable::form_of_with_builtins`]: an aliased import of the builtin
 /// still guards, a module-level rebinding of its name never does.
+#[expect(
+    clippy::match_same_arms,
+    reason = "the deleted-collector arms return `None` like the wildcard, but they are TRACKED ABSTENTIONS naming the form whose reader was deleted ([ASTREBUILD-PHASE-RESOLVER]); collapsing them into the wildcard would erase the map of what must be rebuilt"
+)]
 fn extract_call_guard(
     bindings: &BindingTable,
     call: &ruff_python_ast::ExprCall,
@@ -218,6 +222,10 @@ fn extract_call_guard(
 
 /// Extract a guard from a single comparison: `is None`, `== <literal>`,
 /// `in (<literals>)`, or `"key" in td`.
+#[expect(
+    clippy::match_same_arms,
+    reason = "the deleted-collector arms return `None` like the wildcard, but they are TRACKED ABSTENTIONS naming the form whose reader was deleted ([ASTREBUILD-PHASE-RESOLVER]); collapsing them into the wildcard would erase the map of what must be rebuilt"
+)]
 fn extract_compare_guard(
     bindings: &BindingTable,
     cmp: &ruff_python_ast::ExprCompare,

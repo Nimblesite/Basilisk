@@ -23,6 +23,15 @@
 //! Every fixture here is authored in vocabulary the python/typing conformance
 //! suite does not contain.
 
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions,
+    missing_docs
+)]
 use basilisk_canonical::BindingTable;
 use ruff_python_ast::{ModModule, Stmt};
 use ruff_text_size::{Ranged as _, TextRange};

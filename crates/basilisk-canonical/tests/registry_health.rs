@@ -30,5 +30,10 @@ fn health_failure_carries_the_load_error() {
     // CONTRACT: health is a `Result`, not a log line — a failed load is a
     // value a caller can branch on, not a side effect the process outlives.
     let health: Result<(), String> = basilisk_canonical::registry_health();
-    assert!(health.is_ok());
+    assert_eq!(
+        health,
+        Ok(()),
+        "registry_health must return a branchable `Result`, and the bundled \
+         registry must load"
+    );
 }

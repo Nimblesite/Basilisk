@@ -108,8 +108,8 @@ fn rebound_typeddict_name_stops_carrying_the_schema() -> Result<(), Box<dyn std:
 // definitions denotes the TypedDict; the one after the ordinary class does
 // not.
 #[test]
-fn same_named_ordinary_class_does_not_inherit_the_schema(
-) -> Result<(), Box<dyn std::error::Error>> {
+fn same_named_ordinary_class_does_not_inherit_the_schema() -> Result<(), Box<dyn std::error::Error>>
+{
     let src = concat!(
         "from typing import TypedDict\n",
         "class Movie(TypedDict):\n",
@@ -143,8 +143,7 @@ fn same_named_ordinary_class_does_not_inherit_the_schema(
 // A class in another module is not a class this module defines; the honest
 // answer is abstention, never a schema borrowed from a same-spelled local.
 #[test]
-fn dotted_annotation_from_another_module_is_abstention() -> Result<(), Box<dyn std::error::Error>>
-{
+fn dotted_annotation_from_another_module_is_abstention() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "import other\n",
         "m: other.Movie = {'anything': 1}\n",
@@ -231,8 +230,7 @@ fn readonly_field_reached_through_alias_is_flagged() -> Result<(), Box<dyn std::
 
 // PEP 655: `NotRequired` in a total TypedDict lifts the requiredness.
 #[test]
-fn notrequired_field_is_not_missing_in_total_typeddict() -> Result<(), Box<dyn std::error::Error>>
-{
+fn notrequired_field_is_not_missing_in_total_typeddict() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "from typing import TypedDict, NotRequired\n",
         "class Config(TypedDict):\n",
@@ -325,8 +323,7 @@ fn value_class_check_survives_aliased_builtin_import() -> Result<(), Box<dyn std
 // the BUILTIN `int` anyway would be a spelling verdict. Abstention is the
 // only honest answer.
 #[test]
-fn value_class_check_abstains_when_builtin_is_shadowed() -> Result<(), Box<dyn std::error::Error>>
-{
+fn value_class_check_abstains_when_builtin_is_shadowed() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "from typing import TypedDict\n",
         "class int:\n",

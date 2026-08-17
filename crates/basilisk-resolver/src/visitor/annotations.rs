@@ -84,10 +84,7 @@ pub(super) fn annotation_requiredness(bindings: &BindingTable, ann: &Expr) -> Op
 /// [`annotation_requiredness`]'s wrapper-unwrapping walk, parameterised over
 /// positional (in-tree annotation) and final-namespace (parsed forward
 /// reference) resolution.
-fn requiredness_walk(
-    form_of: &dyn Fn(&Expr) -> Option<TypingForm>,
-    expr: &Expr,
-) -> Option<bool> {
+fn requiredness_walk(form_of: &dyn Fn(&Expr) -> Option<TypingForm>, expr: &Expr) -> Option<bool> {
     let Expr::Subscript(sub) = expr else {
         return None;
     };

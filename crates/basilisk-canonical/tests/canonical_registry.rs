@@ -10,6 +10,15 @@
 //! canonical lookup in the workspace returns `None` — recognition dies while
 //! the build stays green.
 
+#![allow(
+    clippy::allow_attributes,
+    clippy::indexing_slicing,
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::as_conversions,
+    missing_docs
+)]
 use std::collections::BTreeMap;
 
 use basilisk_canonical::{form_at, CanonicalSymbol, TypingForm};
