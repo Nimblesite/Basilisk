@@ -181,41 +181,10 @@ impl<'a> ClassGraph<'a> {
     }
 }
 
-// ##########################################################################
-// # DELETED BODY — `typed_dict_class_names`. DO NOT RESTORE IT AND DO NOT   #
-// # RETURN AN EMPTY SET.                                                    #
-// #                                                                         #
-// #   ClassGraph::new(classes).typed_dicts()                                #
-// #       .map(|class| class.name.as_str()).collect()                       #
-// #                                                                         #
-// # A FUNCTION WHOSE ENTIRE PURPOSE WAS TO DESTROY IDENTITY. Everything     #
-// # above this line answers `TypedDict` membership on definition sites,     #
-// # precisely so a class reached under an alias is the same node and two    #
-// # classes spelled alike are two nodes. This projected that answer back    #
-// # onto `ClassInfo::name` so a name-keyed caller could join on the         #
-// # spelling — re-introducing both collisions the graph exists to prevent,  #
-// # one line after preventing them.                                         #
-// #                                                                         #
-// # There is no lawful caller for a set of class names. A caller that       #
-// # cannot hold a `Span` has an identity problem of its own, and handing it #
-// # a spelling hides that problem instead of forcing it. Its one consumer,  #
-// # `assignment_compatibility::skip_names`, was deleted for the same        #
-// # defect and is kept as the map of what has to be rebuilt.                #
-// #                                                                         #
-// # Callers that need membership: use `ClassGraph::typed_dicts`, which      #
-// # yields the class definitions, and key on `ClassInfo::name_span`.        #
-// ##########################################################################
-
-/// DELETED — panics; see the banner above.
-#[must_use]
-pub fn typed_dict_class_names(_classes: &[ClassInfo]) -> HashSet<&str> {
-    panic!(
-        "basilisk-resolver: `typed_dict_class_names` was DELETED because it resolved \
-         `TypedDict` membership on the definition-site class graph and then reduced each \
-         class to its NAME, handing callers a spelling to join on and re-introducing the \
-         alias misses and same-name collisions the graph exists to prevent. It panics \
-         because there is no lawful replacement returning names: use \
-         `ClassGraph::typed_dicts` and key on `ClassInfo::name_span`. Do not restore the \
-         projection and do not return an empty set in its place."
-    )
-}
+// `typed_dict_class_names` — a projection of `typed_dicts()` back onto
+// `ClassInfo::name` — was REMOVED OUTRIGHT, not stubbed: there is no lawful
+// caller for a set of class names. A caller that cannot hold a `Span` has an
+// identity problem of its own, and handing it a spelling would hide that
+// problem instead of forcing it. Callers that need membership use
+// `ClassGraph::typed_dicts` and key on `ClassInfo::name_span`. Do not
+// reintroduce the projection under any name.

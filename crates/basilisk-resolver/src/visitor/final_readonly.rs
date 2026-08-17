@@ -4,86 +4,110 @@
 use ruff_python_ast::{Expr, Stmt};
 use ruff_text_size::Ranged;
 
-use crate::scope::{ClassInfo, ReadOnlyViolationInfo, ReadOnlyViolationKind};
+use crate::scope::{ClassGraph, ClassInfo, ReadOnlyViolationInfo, ReadOnlyViolationKind, Span};
 
 use crate::canonical::BindingTable;
 
 use super::annotations::annotation_is_final;
 use super::core::text_range_to_span;
+use super::typeddict::{annotation_local_class, kwargs_unpacked_local_class};
 
-// ##########################################################################
-// # DELETED BODIES — `build_typeddict_readonly_map` and                     #
-// # `build_var_type_map`. DO NOT RESTORE THEM AND DO NOT RETURN AN EMPTY    #
-// # MAP.                                                                    #
-// #                                                                         #
-// #   Some((cls.name.as_str(), fields))                                     #
-// #   td_readonly_fields.get_key_value(type_name.id.as_str())               #
-// #                                                                         #
-// # A `ReadOnly` VIOLATION DECIDED BY MATCHING AN ANNOTATION'S SPELLING     #
-// # AGAINST A CLASS'S SPELLING. The `TypedDict` chain and the effective     #
-// # field set were both computed on the definition-site class graph, and    #
-// # then the class was reduced to `ClassInfo::name` so an annotation's      #
-// # `Expr::Name` could be looked up by its characters. So:                  #
-// #                                                                         #
-// #   * `Alias = Album; a: Alias` never matches, and every `a["x"] = ...`   #
-// #     assignment to a read-only field goes unreported;                    #
-// #   * `import other; a: other.Album` is not an `Expr::Name` at all and    #
-// #     falls out silently;                                                 #
-// #   * an ordinary class and a `TypedDict` sharing one name in the same    #
-// #     module collapse onto one entry, so a plain `a["x"] = 1` is          #
-// #     REPORTED against a class that has no read-only anything.            #
-// #                                                                         #
-// # The annotation and the target are both `Expr` nodes with real offsets   #
-// # at the point they are read here. The rebuild resolves each through the  #
-// # module's binding table to the `class` statement it denotes and keys the #
-// # map on `ClassInfo::name_span`. `collect_readonly_violations` is kept as #
-// # the map of what has to be rebuilt.                                      #
-// ##########################################################################
-
-/// DELETED — panics; see the banner above.
-pub(super) fn build_typeddict_readonly_map<'a>(
-    _classes: &'a [ClassInfo],
-    _source: &'a str,
-) -> std::collections::HashMap<&'a str, std::collections::HashSet<&'a str>> {
-    panic!(
-        "basilisk-resolver: `build_typeddict_readonly_map` was DELETED because it resolved \
-         the `TypedDict` chain on the definition-site class graph and then keyed the \
-         read-only field sets by CLASS NAME, so an annotation was matched to a class by \
-         its characters. It panics because the real implementation — the annotation \
-         expression resolved through the module's binding table, keyed on \
-         `ClassInfo::name_span` — DOES NOT EXIST YET. Do not restore the name key and do \
-         not return an empty map in its place."
-    )
+/// The `ReadOnly` field names of every `TypedDict` that has any, keyed by the
+/// class's DEFINITION SITE ([`ClassInfo::name_span`]).
+///
+/// The predecessor of this function was deleted for keying the same field
+/// sets by `ClassInfo::name`, so an annotation was matched to a class by its
+/// characters: an aliased annotation missed, a dotted one fell out, and an
+/// ordinary class sharing a `TypedDict`'s name collapsed onto its entry. The
+/// effective (post-inheritance) field set is unchanged: a subclass that does
+/// NOT redeclare an inherited `ReadOnly` field keeps it read-only, while a
+/// subclass that redeclares it as mutable drops the status (the most-derived
+/// declaration wins). [`super::typeddict_schema::EffectiveField::readonly`]
+/// is computed from `AttributeInfo::is_readonly`, which the collection walk
+/// resolved through the bindings — no text is read here.
+fn build_typeddict_readonly_map<'a>(
+    graph: &ClassGraph<'a>,
+    source: &'a str,
+) -> std::collections::HashMap<Span, std::collections::HashSet<&'a str>> {
+    graph
+        .typed_dicts()
+        .into_iter()
+        .filter_map(|cls| {
+            let fields: std::collections::HashSet<&str> =
+                super::typeddict_schema::effective_fields(cls, graph, source)
+                    .into_iter()
+                    .filter(|f| f.readonly)
+                    .map(|f| f.name)
+                    .collect();
+            if fields.is_empty() {
+                None
+            } else {
+                Some((cls.name_span, fields))
+            }
+        })
+        .collect()
 }
 
-/// DELETED — panics; see the banner above.
-fn build_var_type_map<'a>(
-    _stmts: &'a [Stmt],
-    _td_readonly_fields: &std::collections::HashMap<&'a str, std::collections::HashSet<&'a str>>,
-) -> std::collections::HashMap<&'a str, &'a str> {
-    panic!(
-        "basilisk-resolver: `build_var_type_map` was DELETED because it decided which \
-         `TypedDict` a variable was annotated with by looking the ANNOTATION'S SPELLING up \
-         in a map keyed by CLASS SPELLING, so an aliased or dotted annotation was invisible \
-         and a same-named ordinary class inherited another class's read-only fields. It \
-         panics because the real implementation — both expressions resolved through the \
-         binding table at their own offsets — DOES NOT EXIST YET. Do not restore the name \
-         lookup and do not return an empty map in its place."
-    )
+/// Associate each annotated variable in `stmts` with the definition site of
+/// the read-only-bearing `TypedDict` its annotation denotes.
+///
+/// The predecessor of this function was deleted for looking the annotation's
+/// SPELLING up in a map keyed by class SPELLING. Here the annotation
+/// expression resolves through the module's bindings —
+/// [`annotation_local_class`] follows assignment aliases, subscripts, and
+/// quoted forward references — and only an annotation that resolves to a
+/// class in `td_readonly_fields` is recorded; everything else is abstention.
+fn build_var_type_map(
+    bindings: &BindingTable,
+    stmts: &[Stmt],
+    td_readonly_fields: &std::collections::HashMap<Span, std::collections::HashSet<&str>>,
+) -> std::collections::HashMap<String, Span> {
+    let mut map = std::collections::HashMap::new();
+    for stmt in stmts {
+        let Stmt::AnnAssign(ann) = stmt else { continue };
+        let Expr::Name(var_name) = ann.target.as_ref() else {
+            continue;
+        };
+        let Some(site) = annotation_local_class(bindings, &ann.annotation) else {
+            continue;
+        };
+        let span = text_range_to_span(site);
+        if td_readonly_fields.contains_key(&span) {
+            let _ = map.insert(var_name.id.to_string(), span);
+        }
+    }
+    map
 }
 
-/// Build a map from variable name to its declared `TypedDict` type name.
+/// Collect writes to `ReadOnly` `TypedDict` fields (PEP 705), from
+/// module-level statements and function bodies.
 pub(super) fn collect_readonly_violations(
+    bindings: &BindingTable,
     stmts: &[Stmt],
     classes: &[ClassInfo],
     source: &str,
 ) -> Vec<ReadOnlyViolationInfo> {
-    let td_readonly_fields = build_typeddict_readonly_map(classes, source);
+    let graph = ClassGraph::new(classes);
+    let td_readonly_fields = build_typeddict_readonly_map(&graph, source);
     if td_readonly_fields.is_empty() {
         return Vec::new();
     }
-    let var_type = build_var_type_map(stmts, &td_readonly_fields);
+    let var_type = build_var_type_map(bindings, stmts, &td_readonly_fields);
     let mut out = Vec::new();
+    check_readonly_stmts(bindings, &td_readonly_fields, &var_type, stmts, &mut out);
+    out
+}
+
+/// The walk behind [`collect_readonly_violations`]: flat over `stmts`, and
+/// into each function body with the parameters — `p: Album` and PEP 692's
+/// `**kwargs: Unpack[Album]` — added to the scope's variable associations.
+fn check_readonly_stmts(
+    bindings: &BindingTable,
+    td_readonly_fields: &std::collections::HashMap<Span, std::collections::HashSet<&str>>,
+    var_type: &std::collections::HashMap<String, Span>,
+    stmts: &[Stmt],
+    out: &mut Vec<ReadOnlyViolationInfo>,
+) {
     for stmt in stmts {
         match stmt {
             Stmt::Assign(assign) => {
@@ -94,10 +118,10 @@ pub(super) fn collect_readonly_violations(
                     let Expr::Name(var_name) = sub.value.as_ref() else {
                         continue;
                     };
-                    let Some(&class_name) = var_type.get(var_name.id.as_str()) else {
-                        continue;
-                    };
-                    let Some(fields) = td_readonly_fields.get(class_name) else {
+                    let Some(fields) = var_type
+                        .get(var_name.id.as_str())
+                        .and_then(|site| td_readonly_fields.get(site))
+                    else {
                         continue;
                     };
                     let Expr::StringLiteral(key_str) = sub.slice.as_ref() else {
@@ -136,10 +160,34 @@ pub(super) fn collect_readonly_violations(
                     });
                 }
             }
+            Stmt::FunctionDef(func) => {
+                let mut local_vars = var_type.clone();
+                local_vars.extend(build_var_type_map(bindings, &func.body, td_readonly_fields));
+                for param in super::walks::iter_all_params(&func.parameters) {
+                    if let Some(ann) = &param.parameter.annotation {
+                        if let Some(site) = annotation_local_class(bindings, ann) {
+                            let span = text_range_to_span(site);
+                            if td_readonly_fields.contains_key(&span) {
+                                let _ = local_vars.insert(param.parameter.name.to_string(), span);
+                            }
+                        }
+                    }
+                }
+                if let Some(kwargs) = func.parameters.kwarg.as_deref() {
+                    if let Some(ann) = &kwargs.annotation {
+                        if let Some(site) = kwargs_unpacked_local_class(bindings, ann) {
+                            let span = text_range_to_span(site);
+                            if td_readonly_fields.contains_key(&span) {
+                                let _ = local_vars.insert(kwargs.name.to_string(), span);
+                            }
+                        }
+                    }
+                }
+                check_readonly_stmts(bindings, td_readonly_fields, &local_vars, &func.body, out);
+            }
             _ => {}
         }
     }
-    out
 }
 
 // ---------------------------------------------------------------------------

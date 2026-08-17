@@ -250,8 +250,9 @@ pub(super) fn source_slice_span(source: &str, span: Span) -> Option<&str> {
 }
 
 pub(super) fn check_td_stmts(
+    bindings: &BindingTable,
     fields: &TdFieldMap<'_>,
-    var_type: &std::collections::HashMap<String, String>,
+    var_type: &std::collections::HashMap<String, Span>,
     stmts: &[Stmt],
     out: &mut Vec<TypedDictKeyViolation>,
 ) {
@@ -264,7 +265,7 @@ pub(super) fn check_td_stmts(
                 td_check_expr_reads(&node.value, var_type, fields, out);
             }
             Stmt::AnnAssign(node) => {
-                td_check_ann_assign(node, fields, out);
+                td_check_ann_assign(bindings, node, fields, out);
                 if let Some(val) = &node.value {
                     td_check_expr_reads(val, var_type, fields, out);
                 }
@@ -274,25 +275,23 @@ pub(super) fn check_td_stmts(
                 if let Expr::Call(call) = expr_stmt.value.as_ref() {
                     if let Expr::Attribute(attr) = call.func.as_ref() {
                         if let Some(var_name) = expr_simple_name(&attr.value) {
-                            if let Some(class_name) = var_type.get(&var_name) {
-                                // A TypedDict with `extra_items` (PEP 728) behaves
-                                // like `dict[str, VT]`, so the mutating dict methods
-                                // become available and must not be flagged.
-                                if let Some((_, _, _, has_extra_items)) =
-                                    fields.get(class_name.as_str())
-                                {
-                                    const DISALLOWED: &[&str] =
-                                        &["clear", "pop", "popitem", "setdefault", "update"];
-                                    let method = attr.attr.as_str();
-                                    if !has_extra_items && DISALLOWED.contains(&method) {
-                                        out.push(TypedDictKeyViolation {
-                                            span: text_range_to_span(expr_stmt.value.range()),
-                                            class_name: class_name.clone(),
-                                            kind: TypedDictKeyViolationKind::DisallowedMethodCall {
-                                                method: method.to_owned(),
-                                            },
-                                        });
-                                    }
+                            // A TypedDict with `extra_items` (PEP 728) behaves
+                            // like `dict[str, VT]`, so the mutating dict methods
+                            // become available and must not be flagged.
+                            if let Some(schema) =
+                                var_type.get(&var_name).and_then(|site| fields.get(site))
+                            {
+                                const DISALLOWED: &[&str] =
+                                    &["clear", "pop", "popitem", "setdefault", "update"];
+                                let method = attr.attr.as_str();
+                                if !schema.has_extra_items && DISALLOWED.contains(&method) {
+                                    out.push(TypedDictKeyViolation {
+                                        span: text_range_to_span(expr_stmt.value.range()),
+                                        class_name: schema.class_name.to_owned(),
+                                        kind: TypedDictKeyViolationKind::DisallowedMethodCall {
+                                            method: method.to_owned(),
+                                        },
+                                    });
                                 }
                             }
                         }
@@ -312,11 +311,7 @@ pub(super) fn check_td_stmts(
                     let Some(var_name) = expr_simple_name(&sub.value) else {
                         continue;
                     };
-                    let Some(class_name) = var_type.get(&var_name) else {
-                        continue;
-                    };
-                    let Some((all_fields, field_types, is_total, _)) =
-                        fields.get(class_name.as_str())
+                    let Some(schema) = var_type.get(&var_name).and_then(|site| fields.get(site))
                     else {
                         continue;
                     };
@@ -324,34 +319,58 @@ pub(super) fn check_td_stmts(
                         continue;
                     };
                     let key = key_str.value.to_str();
-                    if all_fields.contains(&key)
-                        && super::typeddict_ext::is_field_required(key, field_types, *is_total)
+                    if schema.all_fields.contains(&key)
+                        && super::typeddict_ext::is_field_required(
+                            key,
+                            &schema.field_types,
+                            schema.is_total,
+                        )
                     {
                         out.push(TypedDictKeyViolation {
                             span: text_range_to_span(del.range()),
-                            class_name: class_name.clone(),
+                            class_name: schema.class_name.to_owned(),
                             kind: TypedDictKeyViolationKind::DeleteSubscript,
                         });
                     }
                 }
             }
             Stmt::FunctionDef(func) => {
-                // Recurse with a local var_type that includes function-level annotated vars
-                // and function parameter types.
+                // Recurse with a local var_type that includes function-level
+                // annotated vars and function parameter types.
                 let mut local_vars = var_type.clone();
-                local_vars.extend(td_var_type_from_stmts(&func.body, fields));
-                // Add parameter types that are TypedDict classes.
+                local_vars.extend(td_var_type_from_stmts(bindings, &func.body, fields));
+                // A parameter whose annotation RESOLVES to a `TypedDict` this
+                // module defines carries that schema. The deleted predecessor
+                // joined the annotation's rendered name against the schema
+                // keys, so `p: MovieAlias` was invisible and a parameter
+                // annotated with a same-named ordinary class was validated
+                // against a schema it does not have.
                 for param in super::walks::iter_all_params(&func.parameters) {
                     if let Some(ann) = &param.parameter.annotation {
-                        if let Some(type_name) = expr_simple_name(ann) {
-                            if fields.contains_key(type_name.as_str()) {
-                                let _ =
-                                    local_vars.insert(param.parameter.name.to_string(), type_name);
+                        if let Some(site) = super::typeddict::annotation_local_class(bindings, ann)
+                        {
+                            let span = text_range_to_span(site);
+                            if fields.contains_key(&span) {
+                                let _ = local_vars.insert(param.parameter.name.to_string(), span);
                             }
                         }
                     }
                 }
-                check_td_stmts(fields, &local_vars, &func.body, out);
+                // PEP 692: `**kwargs: Unpack[Movie]` types the keyword mapping
+                // with `Movie`'s schema.
+                if let Some(kwargs) = func.parameters.kwarg.as_deref() {
+                    if let Some(ann) = &kwargs.annotation {
+                        if let Some(site) =
+                            super::typeddict::kwargs_unpacked_local_class(bindings, ann)
+                        {
+                            let span = text_range_to_span(site);
+                            if fields.contains_key(&span) {
+                                let _ = local_vars.insert(kwargs.name.to_string(), span);
+                            }
+                        }
+                    }
+                }
+                check_td_stmts(bindings, fields, &local_vars, &func.body, out);
             }
             _ => {}
         }

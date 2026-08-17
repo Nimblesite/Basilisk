@@ -28,7 +28,7 @@ pub use visitor::walrus::{collect_walrus_targets, Reach};
 
 pub use scope::{
     collect_name_set, collect_name_set_where, collect_names, collect_names_where, name_lookup,
-    typed_dict_class_names, Ancestry, AnnotatedTooFewArgs, AssertTypeCallInfo, AttrAccess,
+    Ancestry, AnnotatedTooFewArgs, AssertTypeCallInfo, AttrAccess,
     AttributeInfo, BaseRef, BaseSubscriptEntry, BoundedTypeVarAttrViolation, CallSite, ClassGraph,
     ClassInfo, CompareOp, DecoratorRef, DescriptorKind, EnumValueTypeViolationInfo,
     EnumValueTypeViolationKind, FinalViolationInfo, FinalViolationKind, FloatParamIntAttrAccess,

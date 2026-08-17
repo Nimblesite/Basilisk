@@ -26,16 +26,9 @@ pub(super) struct EffectiveField<'a> {
     pub annotation: Option<&'a str>,
     /// `true` when the most-derived declaration wraps the field in `ReadOnly`.
     ///
-    /// ORPHANED BY A DELETION, NOT UNUSED. Its only reader,
-    /// `final_readonly::build_typeddict_readonly_map`, was deleted for keying
-    /// the resulting field sets by CLASS NAME. The flag itself is computed
-    /// lawfully from `AttributeInfo::is_readonly` over the definition-site
-    /// ancestry, and it is the input the rebuild consumes.
-    #[expect(
-        dead_code,
-        reason = "its only reader was deleted for keying read-only field sets by class name; \
-                  this flag is the lawful input the identity-keyed rebuild consumes"
-    )]
+    /// Computed from `AttributeInfo::is_readonly` over the definition-site
+    /// ancestry; consumed by `final_readonly::build_typeddict_readonly_map`,
+    /// whose field sets are keyed by [`ClassInfo::name_span`].
     pub readonly: bool,
 }
 

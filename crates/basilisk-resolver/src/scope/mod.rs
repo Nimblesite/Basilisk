@@ -16,7 +16,7 @@ mod span;
 mod variable_types;
 mod violations;
 
-pub use class_graph::{typed_dict_class_names, Ancestry, ClassGraph};
+pub use class_graph::{Ancestry, ClassGraph};
 pub use class_types::{
     BaseRef, BaseSubscriptEntry, ClassInfo, GenericParamInfo, ResolvedBase, TypeArg,
 };

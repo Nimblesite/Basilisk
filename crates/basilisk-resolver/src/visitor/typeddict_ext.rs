@@ -7,7 +7,7 @@ use crate::scope::{ClassGraph, Span, TypedDictKeyViolation, TypedDictKeyViolatio
 
 use super::class_info_ext::expr_simple_name;
 use super::core::text_range_to_span;
-use super::typeddict::TdFieldMap;
+use super::typeddict::{annotation_local_class, TdFieldMap};
 
 /// Determine whether a `TypedDict` field is required.
 ///
@@ -107,7 +107,7 @@ fn check_dict_against_typeddict(
 
 pub(super) fn td_check_regular_assign(
     node: &StmtAssign,
-    var_type: &std::collections::HashMap<String, String>,
+    var_type: &std::collections::HashMap<String, Span>,
     fields: &TdFieldMap<'_>,
     out: &mut Vec<TypedDictKeyViolation>,
 ) {
@@ -116,12 +116,10 @@ pub(super) fn td_check_regular_assign(
         let Some(var_name) = expr_simple_name(target) else {
             continue;
         };
-        let Some(class_name) = var_type.get(&var_name) else {
+        let Some(site) = var_type.get(&var_name) else {
             continue;
         };
-        let Some((all_fields, field_types, is_total, has_extra_items)) =
-            fields.get(class_name.as_str())
-        else {
+        let Some(schema) = fields.get(site) else {
             continue;
         };
         let Expr::Dict(dict) = node.value.as_ref() else {
@@ -130,11 +128,11 @@ pub(super) fn td_check_regular_assign(
         check_dict_against_typeddict(
             dict,
             &TdSpec {
-                class_name,
-                all_fields,
-                field_types,
-                is_total: *is_total,
-                has_extra_items: *has_extra_items,
+                class_name: schema.class_name,
+                all_fields: &schema.all_fields,
+                field_types: &schema.field_types,
+                is_total: schema.is_total,
+                has_extra_items: schema.has_extra_items,
             },
             node.range(),
             out,
@@ -142,54 +140,55 @@ pub(super) fn td_check_regular_assign(
     }
 }
 
-// ##########################################################################
-// # DELETED BODY — `td_check_ann_assign`. DO NOT RESTORE IT AND DO NOT      #
-// # RETURN WITHOUT DIAGNOSING.                                             #
-// #                                                                         #
-// #   let class_name = ann_name.id.as_str();                                #
-// #   let Some(..) = fields.get(class_name) else { return };                #
-// #                                                                         #
-// # THE SAME SPELLING JOIN AS `td_var_type_from_stmts`, REACHING THE        #
-// # SCHEMA DIRECTLY. `m: Movie = {"titel": "x"}` is validated against a     #
-// # schema found by matching the annotation's CHARACTERS to a class's       #
-// # CHARACTERS, so:                                                         #
-// #                                                                         #
-// #   * `Alias = Movie; m: Alias = {"titel": "x"}` finds no schema and the  #
-// #     misspelled key is accepted silently;                                #
-// #   * `m: other.Movie = {...}` is not an `Expr::Name` and is likewise     #
-// #     never checked;                                                      #
-// #   * an ordinary `class Movie` sharing the name of a `TypedDict` gets    #
-// #     that `TypedDict`'s required-key and invalid-key errors reported     #
-// #     against a plain dict assignment that is entirely correct.           #
-// #                                                                         #
-// # The annotation is an `Expr` at its own offset here. The rebuild         #
-// # resolves it through the module's binding table to the `class` statement #
-// # it denotes and keys the schema on `ClassInfo::name_span`.               #
-// # `check_td_stmts` is kept as the map of what reads this.                 #
-// ##########################################################################
-
-/// DELETED — panics; see the banner above.
+/// Validate `var: Movie = {...}` against the schema of the class the
+/// ANNOTATION denotes.
+///
+/// The predecessor of this function was deleted for finding the schema by
+/// matching the annotation's characters against a class-name key, so an
+/// aliased or dotted annotation was never validated and an ordinary class
+/// sharing a `TypedDict`'s name had that schema's errors reported against it.
+/// Here the annotation resolves through the module's bindings —
+/// [`annotation_local_class`] follows assignment aliases and quoted forward
+/// references — and the schema lookup is the definition-site key
+/// ([RESOLV-CANONICAL-BINDING]). An annotation that resolves to no local
+/// `TypedDict` is abstention: nothing is validated and nothing is invented.
 pub(super) fn td_check_ann_assign(
-    _node: &StmtAnnAssign,
-    _fields: &TdFieldMap<'_>,
-    _out: &mut Vec<TypedDictKeyViolation>,
+    bindings: &basilisk_canonical::BindingTable,
+    node: &StmtAnnAssign,
+    fields: &TdFieldMap<'_>,
+    out: &mut Vec<TypedDictKeyViolation>,
 ) {
-    panic!(
-        "basilisk-resolver: `td_check_ann_assign` was DELETED because it found the \
-         `TypedDict` schema for `var: Movie = {{...}}` by matching the ANNOTATION'S \
-         SPELLING against a map keyed by CLASS SPELLING, so an aliased or dotted \
-         annotation was never validated and an ordinary class sharing a `TypedDict`'s name \
-         had that schema's errors reported against it. It panics because the real \
-         implementation — the annotation expression resolved through the binding table, \
-         keyed on `ClassInfo::name_span` — DOES NOT EXIST YET. Do not restore the name \
-         lookup and do not return without diagnosing in its place."
-    )
+    use ruff_text_size::Ranged as _;
+    let Some(value) = node.value.as_deref() else {
+        return;
+    };
+    let Expr::Dict(dict) = value else {
+        return;
+    };
+    let Some(site) = annotation_local_class(bindings, &node.annotation) else {
+        return;
+    };
+    let Some(schema) = fields.get(&text_range_to_span(site)) else {
+        return;
+    };
+    check_dict_against_typeddict(
+        dict,
+        &TdSpec {
+            class_name: schema.class_name,
+            all_fields: &schema.all_fields,
+            field_types: &schema.field_types,
+            is_total: schema.is_total,
+            has_extra_items: schema.has_extra_items,
+        },
+        node.range(),
+        out,
+    );
 }
 
 /// Walk an expression and report subscript reads with invalid `TypedDict` keys.
 pub(super) fn td_check_expr_reads(
     expr: &Expr,
-    var_type: &std::collections::HashMap<String, String>,
+    var_type: &std::collections::HashMap<String, Span>,
     fields: &TdFieldMap<'_>,
     out: &mut Vec<TypedDictKeyViolation>,
 ) {
@@ -197,27 +196,23 @@ pub(super) fn td_check_expr_reads(
     match expr {
         Expr::Subscript(sub) => {
             if let Some(var_name) = expr_simple_name(&sub.value) {
-                if let Some(class_name) = var_type.get(&var_name) {
-                    if let Some((all_fields, _, _, _)) = fields.get(class_name.as_str()) {
-                        // A string literal is a statically-known key; anything else is not.
-                        if let Some(key) = subscript_key_literal(&sub.slice) {
-                            if !all_fields.contains(&key.as_str()) {
-                                out.push(TypedDictKeyViolation {
-                                    span: text_range_to_span(sub.range()),
-                                    class_name: class_name.clone(),
-                                    kind: TypedDictKeyViolationKind::SubscriptReadInvalidKey {
-                                        key,
-                                    },
-                                });
-                            }
-                        } else {
-                            // Non-literal key access on a TypedDict
+                if let Some(schema) = var_type.get(&var_name).and_then(|site| fields.get(site)) {
+                    // A string literal is a statically-known key; anything else is not.
+                    if let Some(key) = subscript_key_literal(&sub.slice) {
+                        if !schema.all_fields.contains(&key.as_str()) {
                             out.push(TypedDictKeyViolation {
                                 span: text_range_to_span(sub.range()),
-                                class_name: class_name.clone(),
-                                kind: TypedDictKeyViolationKind::NonLiteralDictKey,
+                                class_name: schema.class_name.to_owned(),
+                                kind: TypedDictKeyViolationKind::SubscriptReadInvalidKey { key },
                             });
                         }
+                    } else {
+                        // Non-literal key access on a TypedDict
+                        out.push(TypedDictKeyViolation {
+                            span: text_range_to_span(sub.range()),
+                            class_name: schema.class_name.to_owned(),
+                            kind: TypedDictKeyViolationKind::NonLiteralDictKey,
+                        });
                     }
                 }
             }

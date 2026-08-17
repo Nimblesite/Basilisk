@@ -645,6 +645,20 @@ impl BindingTable {
         self.follow_to_class_final(name.id.as_str())
     }
 
+    /// [`Self::deferred_local_class`] for a quoted annotation's contents.
+    ///
+    /// `x: "Movie"` is a forward reference evaluated lazily
+    /// (<https://peps.python.org/pep-0484/#forward-references>), so the class
+    /// it denotes is decided by each name's FINAL binding. The contents are
+    /// parsed with `ruff_python_parser` — never inspected as text — and the
+    /// parsed expression's own offsets are relative to the string and never
+    /// consulted.
+    #[must_use]
+    pub fn local_class_of_quoted_annotation(&self, source: &str) -> Option<TextRange> {
+        let parsed = ruff_python_parser::parse_expression(source).ok()?;
+        self.deferred_local_class(&parsed.into_syntax().body)
+    }
+
     /// [`Self::follow_to_class`] entered through a name's LAST binding.
     ///
     /// Only the FIRST lookup is deferred, and only because the name being
