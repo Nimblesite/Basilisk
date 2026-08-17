@@ -239,16 +239,6 @@ pub(super) fn source_slice_range(source: &str, range: TextRange) -> Option<&str>
     source.get(start..end)
 }
 
-/// Slice `source` using a [`Span`] without `as` conversions.
-///
-/// Returns `None` if the span is out of bounds.
-#[must_use]
-pub(super) fn source_slice_span(source: &str, span: Span) -> Option<&str> {
-    let start = usize::try_from(span.start).ok()?;
-    let end = usize::try_from(span.end).ok()?;
-    source.get(start..end)
-}
-
 pub(super) fn check_td_stmts(
     bindings: &BindingTable,
     fields: &TdFieldMap<'_>,
@@ -319,13 +309,7 @@ pub(super) fn check_td_stmts(
                         continue;
                     };
                     let key = key_str.value.to_str();
-                    if schema.all_fields.contains(&key)
-                        && super::typeddict_ext::is_field_required(
-                            key,
-                            &schema.field_types,
-                            schema.is_total,
-                        )
-                    {
+                    if schema.required_fields.contains(&key) {
                         out.push(TypedDictKeyViolation {
                             span: text_range_to_span(del.range()),
                             class_name: schema.class_name.to_owned(),

@@ -9,13 +9,10 @@
 //! Reference: <https://typing.readthedocs.io/en/latest/spec/type-forms.html>
 
 use crate::annotation::AnnotationResolver;
-use crate::diagnostic::{error_diagnostic_owned, Diagnostic};
-use crate::span_util::slice_span;
+use crate::diagnostic::Diagnostic;
 use crate::types::InferredType;
 
 use basilisk_resolver::{FunctionInfo, ResolvedModule, VariableInfo};
-
-use super::CODE;
 
 // DELETED — `BUILTIN_TYPE_CONSTRUCTORS`, a table of builtin SPELLINGS matched
 // against a lowercased callee. Its only reader panics; see the banner below.
@@ -35,6 +32,10 @@ use super::CODE;
 // ##########################################################################
 
 /// DELETED — panics; callers must provide the RHS expression node.
+#[expect(
+    dead_code,
+    reason = "orphaned by the deletion of the spelling-keyed `check_vars` pipeline; retained as the map for the identity-keyed rebuild ([ASTREBUILD-PHASE-TYPEEXPR])"
+)]
 pub(super) fn is_valid_typeform_assignment(
     _var: &VariableInfo,
     _source: &str,
@@ -65,6 +66,10 @@ pub(super) fn is_valid_typeform_assignment(
 // #
 // # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
 // ##########################################################################
+#[expect(
+    dead_code,
+    reason = "orphaned by the deletion of the spelling-keyed `check_vars` pipeline; retained as the map for the identity-keyed rebuild ([ASTREBUILD-PHASE-TYPEEXPR])"
+)]
 fn is_valid_call_typeform(
     _rhs_text: &str,
     _inner: &InferredType,
@@ -117,6 +122,10 @@ fn callee_return_typeform(
 // ##########################################################################
 
 /// DELETED — panics; quoted type expressions must come from the AST node.
+#[expect(
+    dead_code,
+    reason = "orphaned by the deletion of the spelling-keyed `check_vars` pipeline; retained as the map for the identity-keyed rebuild ([ASTREBUILD-PHASE-TYPEEXPR])"
+)]
 fn is_valid_string_typeform(
     _rhs_text: &str,
     _inner: &InferredType,
@@ -189,6 +198,10 @@ fn type_subscript_inner(_annotation: &str) -> Option<&str> {
 
 /// DELETED — panics. The signature survives only so its callers stay visible
 /// as the rebuild map; see the banner above.
+#[expect(
+    dead_code,
+    reason = "orphaned by the deletion of the spelling-keyed `check_vars` pipeline; retained as the map for the identity-keyed rebuild ([ASTREBUILD-PHASE-TYPEEXPR])"
+)]
 fn is_parseable_type_expression(_text: &str) -> bool {
     panic!(
         "basilisk-checker: `is_parseable_type_expression` was DELETED because it \
@@ -202,6 +215,10 @@ fn is_parseable_type_expression(_text: &str) -> bool {
 
 /// Check if a non-string, non-literal RHS is a valid type expression
 /// assignable to the `TypeForm`'s inner type.
+#[expect(
+    dead_code,
+    reason = "orphaned by the deletion of the spelling-keyed `check_vars` pipeline; retained as the map for the identity-keyed rebuild ([ASTREBUILD-PHASE-TYPEEXPR])"
+)]
 fn is_valid_rhs_type_expression(
     _rhs_text: &str,
     _inner: &InferredType,

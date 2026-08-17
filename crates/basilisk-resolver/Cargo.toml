@@ -10,6 +10,7 @@ basilisk-canonical.workspace = true
 basilisk-parser.workspace = true
 basilisk-stubs.workspace  = true
 ruff_python_ast.workspace = true
+ruff_python_parser.workspace = true
 ruff_text_size.workspace  = true
 serde.workspace           = true
 thiserror                 = "2.0"

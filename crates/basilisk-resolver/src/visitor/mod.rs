@@ -211,15 +211,11 @@ fn collect_analysis_results(
         final_issues: final_readonly_ext::collect_final_violations(bindings, stmts, classes),
         float_param_int_attr_accesses: Vec::new(),
         literal_string_enum_mismatches: Vec::new(),
-        readonly_issues: final_readonly::collect_readonly_violations(
-            bindings, stmts, classes, source,
-        ),
+        readonly_issues: final_readonly::collect_readonly_violations(bindings, stmts, classes),
         protocol_self_issues: Vec::new(),
         protocol_instantiation_issues: Vec::new(),
         isinstance_typeddict_spans,
-        typeddict_key_issues: typeddict::collect_typeddict_key_violations(
-            bindings, stmts, classes, source,
-        ),
+        typeddict_key_issues: typeddict::collect_typeddict_key_violations(bindings, stmts, classes),
         generic_subscript_sites: generics::collect_generic_subscript_sites(stmts),
         type_alias_defs: type_alias::collect_type_alias_defs(stmts),
         unhashable_hash_calls: unhashable::collect_unhashable_hash_calls(stmts, classes),

@@ -61,6 +61,10 @@ pub(super) fn build_index(module: &ResolvedModule) -> CallIndex {
 /// callable form this module resolves" — the caller keeps the diagnostic its
 /// own evidence produced.  Both sides are judged as AST nodes; no verdict
 /// depends on how either annotation is spelled ([ASTREBUILD-LAW]).
+#[expect(
+    dead_code,
+    reason = "orphaned by the deletion of the spelling-keyed `check_vars` pipeline; retained as the map for the identity-keyed rebuild ([ASTREBUILD-PHASE-TYPEEXPR])"
+)]
 pub(super) fn assignment_compatible(declared: &Expr, rhs: &Expr, index: &CallIndex) -> bool {
     if index.classes.is_empty() {
         return false;
@@ -100,6 +104,10 @@ pub(super) fn sigs_compatible(source: &TypeSigs, target: &TypeSigs) -> bool {
 /// the caller keeps its own judgment.  The class is found by its AST
 /// identifier, never by slicing or re-parsing source text
 /// ([ASTREBUILD-LAW]).
+#[expect(
+    dead_code,
+    reason = "orphaned by the deletion of the spelling-keyed `check_vars` pipeline; retained as the map for the identity-keyed rebuild ([ASTREBUILD-PHASE-TYPEEXPR])"
+)]
 fn resolve(expr: &Expr, index: &CallIndex) -> Option<TypeSigs> {
     let (base, subscripted) = match expr {
         Expr::Name(name) => (name.id.as_str(), false),

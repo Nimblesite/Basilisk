@@ -48,7 +48,7 @@ pub use pep695_scoping::{
 pub use resolved_module::{LazyAst, ModuleBindings, ResolvedModule};
 pub use rhs::RhsKind;
 pub use span::Span;
-pub use variable_types::{AttributeInfo, DescriptorKind, VariableInfo};
+pub use variable_types::{AttributeInfo, DescriptorKind, PrimitiveKind, VariableInfo};
 pub use violations::{
     BoundedTypeVarAttrViolation, EnumValueTypeViolationInfo, EnumValueTypeViolationKind,
     FinalViolationInfo, FinalViolationKind, GeneratorViolation, GeneratorViolationKind,

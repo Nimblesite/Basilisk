@@ -143,6 +143,10 @@ impl Rule for AssignmentTypeMismatch {
 /// The engine's answer for the RHS expression, `Unknown` when the module did
 /// not parse or the span names no expression — an unresolved right-hand side
 /// never manufactures a diagnostic ([CHKARCH-CONFORMANCE-MODE]).
+#[expect(
+    dead_code,
+    reason = "orphaned by the deletion of the spelling-keyed `check_vars` pipeline; retained as the map for the identity-keyed rebuild ([ASTREBUILD-PHASE-TYPEEXPR])"
+)]
 fn rhs_inferred(oracle: Option<&ModuleOracle<'_>>, var: &VariableInfo) -> InferredType {
     oracle
         .zip(var.rhs_span)
@@ -158,6 +162,10 @@ fn rhs_inferred(oracle: Option<&ModuleOracle<'_>>, var: &VariableInfo) -> Inferr
 /// `d: dict[str, str] = {"k": x}` would fire while the identical
 /// `return {"k": x}` stays clean (GitHub #332). A genuine element mismatch
 /// still falls through to the alias check, then to the diagnostic.
+#[expect(
+    dead_code,
+    reason = "orphaned by the deletion of the spelling-keyed `check_vars` pipeline; retained as the map for the identity-keyed rebuild ([ASTREBUILD-PHASE-TYPEEXPR])"
+)]
 fn literal_collection_assignable(
     var: &VariableInfo,
     oracle: Option<&ModuleOracle<'_>>,
@@ -193,6 +201,10 @@ fn literal_collection_assignable(
 /// with no annotation in scope) only became visible through the engine, and
 /// the grounded-target abstention applies there so wider sight never turns
 /// into a new false positive ([CHKARCH-CONFORMANCE-MODE]).
+#[expect(
+    dead_code,
+    reason = "orphaned by the deletion of the spelling-keyed `check_vars` pipeline; retained as the map for the identity-keyed rebuild ([ASTREBUILD-PHASE-TYPEEXPR])"
+)]
 fn legacy_inference_surface(
     var: &VariableInfo,
     oracle: Option<&ModuleOracle<'_>>,
@@ -224,6 +236,10 @@ fn legacy_inference_surface(
 /// leaf the module cannot ground (an unresolvable import, a `TypeVar` spelled
 /// as a name) is a question, not an answer. Firing on either would be a false
 /// positive on spec-valid code ([CHKARCH-CONFORMANCE-MODE]).
+#[expect(
+    dead_code,
+    reason = "orphaned by the deletion of the spelling-keyed `check_vars` pipeline; retained as the map for the identity-keyed rebuild ([ASTREBUILD-PHASE-TYPEEXPR])"
+)]
 fn declared_target_judgeable(resolver: &AnnotationResolver<'_>, declared: &InferredType) -> bool {
     !resolver.is_structural_target(declared) && declared_target_grounded(resolver, declared)
 }
@@ -240,6 +256,10 @@ fn declared_target_judgeable(resolver: &AnnotationResolver<'_>, declared: &Infer
 // ##########################################################################
 
 /// DELETED — panics; nominal leaves must carry their resolved identity.
+#[expect(
+    dead_code,
+    reason = "orphaned by the deletion of the spelling-keyed `check_vars` pipeline; retained as the map for the identity-keyed rebuild ([ASTREBUILD-PHASE-TYPEEXPR])"
+)]
 fn declared_target_grounded(_resolver: &AnnotationResolver<'_>, _declared: &InferredType) -> bool {
     panic!(
         "basilisk-checker: `declared_target_grounded` was DELETED because it \
@@ -320,6 +340,10 @@ fn check_vars(
 /// annotation NODE, compared against the declared annotation NODE, passes
 /// the callable subtype check. Both annotations are judged as resolved AST
 /// nodes, never as source text ([ASTREBUILD-LAW]).
+#[expect(
+    dead_code,
+    reason = "orphaned by the deletion of the spelling-keyed `check_vars` pipeline; retained as the map for the identity-keyed rebuild ([ASTREBUILD-PHASE-TYPEEXPR])"
+)]
 fn callable_rescue(
     var: &VariableInfo,
     params: &ParamMaps,
@@ -405,6 +429,10 @@ fn build_param_maps(params: &[basilisk_resolver::ParameterInfo]) -> ParamMaps {
 // ##########################################################################
 
 /// DELETED — panics; see the banner above.
+#[expect(
+    dead_code,
+    reason = "orphaned by the deletion of the spelling-keyed `check_vars` pipeline; retained as the map for the identity-keyed rebuild ([ASTREBUILD-PHASE-TYPEEXPR])"
+)]
 fn nominal_name(_ty: &InferredType) -> Option<String> {
     panic!(
         "basilisk-checker: `nominal_name` was DELETED because it lowercased a \
@@ -415,6 +443,10 @@ fn nominal_name(_ty: &InferredType) -> Option<String> {
 }
 
 /// DELETED — panics; see the banner above.
+#[expect(
+    dead_code,
+    reason = "orphaned by the deletion of the spelling-keyed `check_vars` pipeline; retained as the map for the identity-keyed rebuild ([ASTREBUILD-PHASE-TYPEEXPR])"
+)]
 fn nominal_key(_ty: &InferredType) -> Option<String> {
     panic!(
         "basilisk-checker: `nominal_key` was DELETED because it extracted a type's \
@@ -427,6 +459,10 @@ fn nominal_key(_ty: &InferredType) -> Option<String> {
 /// `true` when a dict-literal assignment to a `TypedDict` annotation should
 /// be skipped (field-level checking is E0093's job). The RHS is judged by its
 /// AST node, never by sniffing source text.
+#[expect(
+    dead_code,
+    reason = "orphaned by the deletion of the spelling-keyed `check_vars` pipeline; retained as the map for the identity-keyed rebuild ([ASTREBUILD-PHASE-TYPEEXPR])"
+)]
 fn typeddict_literal_skipped(
     _var: &VariableInfo,
     _oracle: Option<&ModuleOracle<'_>>,
@@ -445,6 +481,10 @@ fn typeddict_literal_skipped(
 /// `true` when an `extra_items=` `TypedDict` is assigned to a `dict[...]`
 /// annotation — assignability depends on PEP 728 value types, which the
 /// name-level comparison cannot evaluate.
+#[expect(
+    dead_code,
+    reason = "orphaned by the deletion of the spelling-keyed `check_vars` pipeline; retained as the map for the identity-keyed rebuild ([ASTREBUILD-PHASE-TYPEEXPR])"
+)]
 fn extra_items_dict_skipped(
     _declared_type: &InferredType,
     _inferred_type: &InferredType,
@@ -460,6 +500,10 @@ fn extra_items_dict_skipped(
 }
 
 /// Create diagnostic for inference-based type mismatch.
+#[expect(
+    dead_code,
+    reason = "orphaned by the deletion of the spelling-keyed `check_vars` pipeline; retained as the map for the identity-keyed rebuild ([ASTREBUILD-PHASE-TYPEEXPR])"
+)]
 fn make_diagnostic(
     var: &VariableInfo,
     annotation: &str,
@@ -495,6 +539,10 @@ fn make_diagnostic(
 // ##########################################################################
 
 /// DELETED — panics; callers must retain the original annotation `Expr`.
+#[expect(
+    dead_code,
+    reason = "orphaned by the deletion of the spelling-keyed `check_vars` pipeline; retained as the map for the identity-keyed rebuild ([ASTREBUILD-PHASE-TYPEEXPR])"
+)]
 pub(super) fn extract_annotation(_source: &str, _name_span: Span) -> Option<&str> {
     panic!(
         "basilisk-checker: `assignment_compatibility::extract_annotation` was \

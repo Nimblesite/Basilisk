@@ -9,24 +9,16 @@ use super::class_info_ext::expr_simple_name;
 use super::core::text_range_to_span;
 use super::typeddict::{annotation_local_class, TdFieldMap};
 
-/// Determine whether a `TypedDict` field is required.
-///
-/// - `is_total=true` (default):  all fields are required.
-/// - `is_total=false`:  all fields are not-required.
-pub(super) fn is_field_required(
-    _field_name: &str,
-    _field_types: &std::collections::HashMap<&str, String>,
-    is_total: bool,
-) -> bool {
-    is_total
-}
-
 /// Resolved `TypedDict` class metadata used to validate a dict literal.
 struct TdSpec<'a> {
     class_name: &'a str,
     all_fields: &'a [&'a str],
-    field_types: &'a std::collections::HashMap<&'a str, String>,
-    is_total: bool,
+    /// The fields that must be present — per-field required-ness resolved by
+    /// the schema build (explicit qualifier, else declaring class's `total=`;
+    /// PEP 655).
+    required_fields: &'a std::collections::HashSet<&'a str>,
+    /// Field name → accepted primitive classes, for the judgeable fields.
+    field_accepts: &'a std::collections::HashMap<&'a str, &'a [crate::scope::PrimitiveKind]>,
     has_extra_items: bool,
 }
 
@@ -45,8 +37,8 @@ fn check_dict_against_typeddict(
     let TdSpec {
         class_name,
         all_fields,
-        field_types,
-        is_total,
+        required_fields,
+        field_accepts,
         has_extra_items,
     } = *spec;
     // Flag any non-literal (variable) key in the dict — if found, return early
@@ -89,7 +81,7 @@ fn check_dict_against_typeddict(
     let missing_keys: Vec<String> = all_fields
         .iter()
         .filter(|&&f| !literal_keys.iter().any(|k| k == f))
-        .filter(|&&f| is_field_required(f, field_types, is_total))
+        .filter(|&&f| required_fields.contains(f))
         .map(|s| (*s).to_owned())
         .collect();
 
@@ -102,6 +94,33 @@ fn check_dict_against_typeddict(
                 missing_keys,
             },
         });
+    }
+
+    // Value-class check per literal item: the field's accepted classes were
+    // resolved through the bindings, the value's class comes from its own
+    // node kind, so both sides are judged — never guessed. A field absent
+    // from `field_accepts` or a non-literal value is abstention.
+    for item in &dict.items {
+        let Some(Expr::StringLiteral(key)) = item.key.as_ref() else {
+            continue;
+        };
+        let key = key.value.to_string();
+        let Some(accepts) = field_accepts.get(key.as_str()) else {
+            continue;
+        };
+        let Some(value_kind) = super::typeddict::literal_primitive(&item.value) else {
+            continue;
+        };
+        if !value_kind.accepted_by(accepts) {
+            out.push(TypedDictKeyViolation {
+                span: text_range_to_span(span_range),
+                class_name: class_name.to_owned(),
+                kind: TypedDictKeyViolationKind::WrongSubscriptValueType {
+                    key,
+                    expected: super::typeddict::render_accepts(accepts),
+                },
+            });
+        }
     }
 }
 
@@ -130,8 +149,8 @@ pub(super) fn td_check_regular_assign(
             &TdSpec {
                 class_name: schema.class_name,
                 all_fields: &schema.all_fields,
-                field_types: &schema.field_types,
-                is_total: schema.is_total,
+                required_fields: &schema.required_fields,
+                field_accepts: &schema.field_accepts,
                 has_extra_items: schema.has_extra_items,
             },
             node.range(),
@@ -176,8 +195,8 @@ pub(super) fn td_check_ann_assign(
         &TdSpec {
             class_name: schema.class_name,
             all_fields: &schema.all_fields,
-            field_types: &schema.field_types,
-            is_total: schema.is_total,
+            required_fields: &schema.required_fields,
+            field_accepts: &schema.field_accepts,
             has_extra_items: schema.has_extra_items,
         },
         node.range(),

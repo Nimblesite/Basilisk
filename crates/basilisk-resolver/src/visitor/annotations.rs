@@ -6,7 +6,8 @@ use ruff_text_size::Ranged;
 
 use crate::canonical::{BindingTable, TypingForm};
 use crate::scope::{
-    InvalidStringAnnotation, InvalidStringAnnotationKind, RhsKind, Span, VariableInfo,
+    InvalidStringAnnotation, InvalidStringAnnotationKind, PrimitiveKind, RhsKind, Span,
+    VariableInfo,
 };
 
 use super::class_info_ext::expr_simple_name;
@@ -53,6 +54,154 @@ pub(super) fn annotation_is_final(bindings: &BindingTable, ann: &Expr) -> bool {
 /// Whether an annotation is the `ClassVar` qualifier, bare or subscripted.
 pub(super) fn annotation_is_class_var(bindings: &BindingTable, ann: &Expr) -> bool {
     annotation_form_is(bindings, ann, TypingForm::ClassVar)
+}
+
+/// The explicit `Required`/`NotRequired` marking of a `TypedDict` field
+/// annotation: `Some(true)` for `Required[...]`, `Some(false)` for
+/// `NotRequired[...]`, `None` when neither is written (the declaring class's
+/// `total=` then decides, PEP 655).
+///
+/// The qualifier may interleave with the other wrappers PEP 655 and PEP 705
+/// permit — `Annotated[NotRequired[int], meta]`, `ReadOnly[Required[str]]` —
+/// so the walk unwraps exactly those, resolving every head through the
+/// module's bindings. A quoted annotation is parsed and resolved against the
+/// module's final namespace (PEP 484 forward references), never inspected as
+/// text. The predecessor of this predicate case-folded the rendered
+/// annotation and searched it for `"notrequired"`, so a field annotated with
+/// a user-defined `NotRequiredData` class was silently optional and an
+/// aliased qualifier was invisible.
+pub(super) fn annotation_requiredness(bindings: &BindingTable, ann: &Expr) -> Option<bool> {
+    if let Expr::StringLiteral(lit) = ann {
+        let parsed = ruff_python_parser::parse_expression(lit.value.to_str()).ok()?;
+        return requiredness_walk(
+            &|expr| bindings.deferred_form_of(expr),
+            &parsed.into_syntax().body,
+        );
+    }
+    requiredness_walk(&|expr| bindings.form_of(expr), ann)
+}
+
+/// [`annotation_requiredness`]'s wrapper-unwrapping walk, parameterised over
+/// positional (in-tree annotation) and final-namespace (parsed forward
+/// reference) resolution.
+fn requiredness_walk(
+    form_of: &dyn Fn(&Expr) -> Option<TypingForm>,
+    expr: &Expr,
+) -> Option<bool> {
+    let Expr::Subscript(sub) = expr else {
+        return None;
+    };
+    match form_of(&sub.value)? {
+        TypingForm::Required => Some(true),
+        TypingForm::NotRequired => Some(false),
+        TypingForm::ReadOnly => requiredness_walk(form_of, &sub.slice),
+        TypingForm::Annotated => {
+            // `Annotated[T, metadata...]`: the type is the first element.
+            let first = match sub.slice.as_ref() {
+                Expr::Tuple(tuple) => tuple.elts.first()?,
+                other => other,
+            };
+            requiredness_walk(form_of, first)
+        }
+        _ => None,
+    }
+}
+
+/// The primitive classes an annotation accepts, when every member of the
+/// (possibly union) type resolves to one — `None` is abstention.
+///
+/// Each member resolves through the module's bindings with the builtin
+/// fallback, so `int`, `builtins.int`, and an aliased import answer alike and
+/// a module-local `class int` answers not at all. The walk unwraps the
+/// `Required`/`NotRequired`/`ReadOnly`/`Annotated` qualifier interleavings,
+/// descends `X | Y` unions, `Optional[T]`, and `Union[...]`, and reads `None`
+/// from its own AST node. A quoted annotation is parsed and resolved against
+/// the module's final namespace (PEP 484), never inspected as text.
+pub(super) fn annotation_accepted_primitives(
+    bindings: &BindingTable,
+    ann: &Expr,
+) -> Option<Vec<PrimitiveKind>> {
+    let mut out = Vec::new();
+    let complete = if let Expr::StringLiteral(lit) = ann {
+        let parsed = ruff_python_parser::parse_expression(lit.value.to_str()).ok()?;
+        accepted_primitives_walk(
+            &|expr| bindings.deferred_form_of(expr),
+            &parsed.into_syntax().body,
+            &mut out,
+        )
+    } else {
+        accepted_primitives_walk(&|expr| bindings.form_of_with_builtins(expr), ann, &mut out)
+    };
+    complete.then_some(out)
+}
+
+/// [`annotation_accepted_primitives`]'s member walk. Returns `false` — the
+/// caller then abstains — the moment any member fails to resolve to a
+/// judgeable primitive.
+fn accepted_primitives_walk(
+    form_of: &dyn Fn(&Expr) -> Option<TypingForm>,
+    expr: &Expr,
+    out: &mut Vec<PrimitiveKind>,
+) -> bool {
+    if let Expr::NoneLiteral(_) = expr {
+        out.push(PrimitiveKind::NoneType);
+        return true;
+    }
+    if let Expr::BinOp(bin) = expr {
+        if bin.op == ruff_python_ast::Operator::BitOr {
+            return accepted_primitives_walk(form_of, &bin.left, out)
+                && accepted_primitives_walk(form_of, &bin.right, out);
+        }
+        return false;
+    }
+    if let Expr::Subscript(sub) = expr {
+        return match form_of(&sub.value) {
+            Some(TypingForm::Required | TypingForm::NotRequired | TypingForm::ReadOnly) => {
+                accepted_primitives_walk(form_of, &sub.slice, out)
+            }
+            Some(TypingForm::Optional) => {
+                out.push(PrimitiveKind::NoneType);
+                accepted_primitives_walk(form_of, &sub.slice, out)
+            }
+            Some(TypingForm::Annotated) => {
+                // `Annotated[T, metadata...]`: the type is the first element.
+                let Expr::Tuple(tuple) = sub.slice.as_ref() else {
+                    return accepted_primitives_walk(form_of, &sub.slice, out);
+                };
+                let Some(first) = tuple.elts.first() else {
+                    return false;
+                };
+                accepted_primitives_walk(form_of, first, out)
+            }
+            Some(TypingForm::Union) => match sub.slice.as_ref() {
+                Expr::Tuple(tuple) => tuple
+                    .elts
+                    .iter()
+                    .all(|member| accepted_primitives_walk(form_of, member, out)),
+                single => accepted_primitives_walk(form_of, single, out),
+            },
+            _ => false,
+        };
+    }
+    let Some(kind) = form_of(expr).and_then(primitive_of_form) else {
+        return false;
+    };
+    out.push(kind);
+    true
+}
+
+/// The judgeable primitive a resolved form denotes, if any.
+fn primitive_of_form(form: TypingForm) -> Option<PrimitiveKind> {
+    match form {
+        TypingForm::StrClass => Some(PrimitiveKind::Str),
+        TypingForm::BytesClass => Some(PrimitiveKind::Bytes),
+        TypingForm::IntClass => Some(PrimitiveKind::Int),
+        TypingForm::FloatClass => Some(PrimitiveKind::Float),
+        TypingForm::ComplexClass => Some(PrimitiveKind::Complex),
+        TypingForm::BoolClass => Some(PrimitiveKind::Bool),
+        TypingForm::NoneTypeClass => Some(PrimitiveKind::NoneType),
+        _ => None,
+    }
 }
 
 /// Whether a `ReadOnly` qualifier appears anywhere within an annotation.

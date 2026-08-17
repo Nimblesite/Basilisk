@@ -217,6 +217,10 @@ pub(super) fn collect_generic_aliases(module: &ResolvedModule) -> HashMap<String
 /// `Some(true)` when `value` positively matches it and `Some(false)` otherwise.
 /// Returns `None` when the name is not a value alias, so the caller can fall
 /// back to its ordinary assignability check.
+#[expect(
+    dead_code,
+    reason = "orphaned by the deletion of the spelling-keyed `check_vars` pipeline; retained as the map for the identity-keyed rebuild ([ASTREBUILD-PHASE-TYPEEXPR])"
+)]
 pub(super) fn alias_value_assignable(
     value: &InferredType,
     declared_name: &str,
@@ -259,6 +263,10 @@ fn is_type_alias_type_call(var: &VariableInfo, module: &ResolvedModule) -> bool 
 
 /// Returns `true` when `value` positively matches the (possibly recursive)
 /// alias `target`. See the module docs for the positive-match contract.
+#[expect(
+    dead_code,
+    reason = "orphaned by the deletion of the spelling-keyed `check_vars` pipeline; retained as the map for the identity-keyed rebuild ([ASTREBUILD-PHASE-TYPEEXPR])"
+)]
 pub(super) fn alias_assignable(
     value: &InferredType,
     target: &InferredType,
@@ -310,6 +318,10 @@ pub(super) fn alias_assignable(
 
 /// Match a value against a `Named` target, resolving union aliases and generic
 /// alias specialisations.
+#[expect(
+    dead_code,
+    reason = "orphaned by the deletion of the spelling-keyed `check_vars` pipeline; retained as the map for the identity-keyed rebuild ([ASTREBUILD-PHASE-TYPEEXPR])"
+)]
 fn match_named_target(value: &InferredType, name: &str, ctx: &AliasCtx<'_>, depth: u32) -> bool {
     let base = alias_base(name);
     if let Some(def) = ctx.union.get(base) {
@@ -343,6 +355,10 @@ fn match_named_target(value: &InferredType, name: &str, ctx: &AliasCtx<'_>, dept
 /// alias tables in [NARROWPLAN-INTEGRATION] Step 7. A parameterless
 /// specialisation (`S = G[str]` collected as its own entry) expands its
 /// stored definition directly.
+#[expect(
+    dead_code,
+    reason = "orphaned by the deletion of the spelling-keyed `check_vars` pipeline; retained as the map for the identity-keyed rebuild ([ASTREBUILD-PHASE-TYPEEXPR])"
+)]
 fn resolve_generic(alias: &GenericAlias) -> Option<InferredType> {
     if !alias.params.is_empty() {
         return None;
@@ -352,6 +368,10 @@ fn resolve_generic(alias: &GenericAlias) -> Option<InferredType> {
 
 /// Match a value against a tuple target, handling the homogeneous
 /// `tuple[X, ...]` form (the parser stores the `...` terminator as `Named`).
+#[expect(
+    dead_code,
+    reason = "orphaned by the deletion of the spelling-keyed `check_vars` pipeline; retained as the map for the identity-keyed rebuild ([ASTREBUILD-PHASE-TYPEEXPR])"
+)]
 fn match_tuple_target(
     value: &InferredType,
     target_elems: &[InferredType],
@@ -377,6 +397,10 @@ fn match_tuple_target(
 
 /// Positive structural match for primitive base types. Notably `Unknown`/`Any`
 /// values do NOT match a concrete base type — the checker cannot prove it.
+#[expect(
+    dead_code,
+    reason = "orphaned by the deletion of the spelling-keyed `check_vars` pipeline; retained as the map for the identity-keyed rebuild ([ASTREBUILD-PHASE-TYPEEXPR])"
+)]
 fn positive_base_match(value: &InferredType, target: &InferredType) -> bool {
     use crate::types::LiteralValue;
     use InferredType::{Bool, Bytes, Float, Int, Literal, LiteralString, None_, Str};

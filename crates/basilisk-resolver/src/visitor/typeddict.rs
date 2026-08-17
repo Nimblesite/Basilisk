@@ -18,10 +18,41 @@ use ruff_text_size::TextRange;
 
 use basilisk_canonical::{BindingTable, TypingForm};
 
-use crate::scope::{ClassInfo, Span, TypedDictKeyViolation, TypedDictKeyViolationKind};
+use crate::scope::{
+    ClassInfo, PrimitiveKind, Span, TypedDictKeyViolation, TypedDictKeyViolationKind,
+};
 
 use super::class_info_ext::expr_simple_name;
 use super::core::{check_td_stmts, text_range_to_span};
+
+/// The primitive class a literal expression is an instance of, read from the
+/// AST node kind itself — a string literal IS a `str`, a number literal
+/// carries its numeric class in its syntax. Anything non-literal is `None`:
+/// its class is not knowable here and no verdict may guess it.
+pub(super) fn literal_primitive(expr: &Expr) -> Option<PrimitiveKind> {
+    match expr {
+        Expr::StringLiteral(_) | Expr::FString(_) => Some(PrimitiveKind::Str),
+        Expr::BytesLiteral(_) => Some(PrimitiveKind::Bytes),
+        Expr::NumberLiteral(n) => Some(match n.value {
+            ruff_python_ast::Number::Int(_) => PrimitiveKind::Int,
+            ruff_python_ast::Number::Float(_) => PrimitiveKind::Float,
+            ruff_python_ast::Number::Complex { .. } => PrimitiveKind::Complex,
+        }),
+        Expr::BooleanLiteral(_) => Some(PrimitiveKind::Bool),
+        Expr::NoneLiteral(_) => Some(PrimitiveKind::NoneType),
+        _ => None,
+    }
+}
+
+/// Render an accepted-primitives list for a diagnostic **message** — never an
+/// input to a verdict.
+pub(super) fn render_accepts(accepts: &[PrimitiveKind]) -> String {
+    accepts
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(" | ")
+}
 
 /// The effective (post-inheritance) schema of one `TypedDict` class.
 ///
@@ -33,10 +64,15 @@ pub(super) struct TdSchema<'a> {
     pub class_name: &'a str,
     /// Every field of the effective schema, most-derived declaration first.
     pub all_fields: Vec<&'a str>,
-    /// Field name → raw annotation text of the most-derived declaration.
-    pub field_types: std::collections::HashMap<&'a str, String>,
-    /// `total=` in force at the class's own definition.
-    pub is_total: bool,
+    /// The fields that must be present: each field's explicit
+    /// `Required`/`NotRequired` qualifier, or its declaring class's `total=`
+    /// when unqualified (PEP 655) — resolved per field by
+    /// [`super::typeddict_schema::effective_fields`].
+    pub required_fields: std::collections::HashSet<&'a str>,
+    /// Field name → the primitive classes its annotation accepts, for the
+    /// fields whose whole annotation is judgeable. Absence is abstention:
+    /// no value-type verdict is ever emitted for an absent field.
+    pub field_accepts: std::collections::HashMap<&'a str, &'a [PrimitiveKind]>,
     /// PEP 728 `extra_items=` anywhere in the resolved chain.
     pub has_extra_items: bool,
 }
@@ -93,7 +129,6 @@ pub(super) fn collect_typeddict_key_violations<'a>(
     bindings: &BindingTable,
     stmts: &[Stmt],
     classes: &'a [ClassInfo],
-    source: &'a str,
 ) -> Vec<TypedDictKeyViolation> {
     // Membership and inheritance come from the resolved hierarchy — bases
     // resolved through the module's bindings, keyed on definition site — and
@@ -108,11 +143,16 @@ pub(super) fn collect_typeddict_key_violations<'a>(
             // Merge own + inherited fields so transitive subclasses
             // (`class Album(NamedDict): ...`) carry the full schema and the
             // most-derived declaration of each redeclared field.
-            let effective = super::typeddict_schema::effective_fields(c, &graph, source);
+            let effective = super::typeddict_schema::effective_fields(c, &graph);
             let all_fields: Vec<&str> = effective.iter().map(|f| f.name).collect();
-            let field_types: std::collections::HashMap<&str, String> = effective
+            let required_fields: std::collections::HashSet<&str> = effective
                 .iter()
-                .filter_map(|f| f.annotation.map(|ann| (f.name, ann.to_owned())))
+                .filter(|f| f.required)
+                .map(|f| f.name)
+                .collect();
+            let field_accepts: std::collections::HashMap<&str, &[PrimitiveKind]> = effective
+                .iter()
+                .filter_map(|f| f.accepts.map(|accepts| (f.name, accepts)))
                 .collect();
             let has_extra_items = graph.has_extra_items(c);
             (
@@ -120,8 +160,8 @@ pub(super) fn collect_typeddict_key_violations<'a>(
                 TdSchema {
                     class_name: c.name.as_str(),
                     all_fields,
-                    field_types,
-                    is_total: c.is_typeddict_total,
+                    required_fields,
+                    field_accepts,
                     has_extra_items,
                 },
             )
@@ -198,6 +238,23 @@ pub(super) fn td_check_subscript_assign(
                 class_name: schema.class_name.to_owned(),
                 kind: TypedDictKeyViolationKind::InvalidSubscriptKey { key },
             });
+        } else if let (Some(accepts), Some(value_kind)) = (
+            schema.field_accepts.get(key.as_str()),
+            literal_primitive(&node.value),
+        ) {
+            // Both sides are resolved — the field's accepted classes through
+            // the bindings, the literal's class from its own node — so a
+            // mismatch is a verdict, and anything unresolved was abstention.
+            if !value_kind.accepted_by(accepts) {
+                out.push(TypedDictKeyViolation {
+                    span: text_range_to_span(node.range()),
+                    class_name: schema.class_name.to_owned(),
+                    kind: TypedDictKeyViolationKind::WrongSubscriptValueType {
+                        key,
+                        expected: render_accepts(accepts),
+                    },
+                });
+            }
         }
     }
 }

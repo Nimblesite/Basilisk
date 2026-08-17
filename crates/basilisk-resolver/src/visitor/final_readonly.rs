@@ -27,14 +27,13 @@ use super::typeddict::{annotation_local_class, kwargs_unpacked_local_class};
 /// resolved through the bindings — no text is read here.
 fn build_typeddict_readonly_map<'a>(
     graph: &ClassGraph<'a>,
-    source: &'a str,
 ) -> std::collections::HashMap<Span, std::collections::HashSet<&'a str>> {
     graph
         .typed_dicts()
         .into_iter()
         .filter_map(|cls| {
             let fields: std::collections::HashSet<&str> =
-                super::typeddict_schema::effective_fields(cls, graph, source)
+                super::typeddict_schema::effective_fields(cls, graph)
                     .into_iter()
                     .filter(|f| f.readonly)
                     .map(|f| f.name)
@@ -85,10 +84,9 @@ pub(super) fn collect_readonly_violations(
     bindings: &BindingTable,
     stmts: &[Stmt],
     classes: &[ClassInfo],
-    source: &str,
 ) -> Vec<ReadOnlyViolationInfo> {
     let graph = ClassGraph::new(classes);
-    let td_readonly_fields = build_typeddict_readonly_map(&graph, source);
+    let td_readonly_fields = build_typeddict_readonly_map(&graph);
     if td_readonly_fields.is_empty() {
         return Vec::new();
     }

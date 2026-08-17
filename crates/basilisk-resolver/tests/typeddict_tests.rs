@@ -20,6 +20,9 @@ mod test_typeddict_keys_01;
 #[path = "resolver/test_typeddict_keys_02.rs"]
 mod test_typeddict_keys_02;
 
+#[path = "resolver/test_typeddict_identity.rs"]
+mod test_typeddict_identity;
+
 #[path = "resolver/test_namedtuple.rs"]
 mod test_namedtuple;
 

@@ -54,6 +54,10 @@ fn is_enum_member(attr: &AttributeInfo) -> bool {
 
 /// Returns `true` when `inferred` is an enum type and `declared` is a literal
 /// union naming EVERY member of that enum.
+#[expect(
+    dead_code,
+    reason = "orphaned by the deletion of the spelling-keyed `check_vars` pipeline; retained as the map for the identity-keyed rebuild ([ASTREBUILD-PHASE-TYPEEXPR])"
+)]
 pub(super) fn enum_expansion_assignable(
     inferred: &InferredType,
     declared: &InferredType,
