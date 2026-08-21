@@ -102,9 +102,66 @@ impl<'m> Tables<'m> {
         );
     }
 
-    /// Every class declares a type the cascade can name.
-    fn insert_class(&mut self, class: &'m StmtClassDef) {
-        let _ = self.nominal.insert(class.name.to_string());
+    // ######################################################################
+    // # DELETED BODY — `insert_class`. THIS IS THE ROOT OF THE NOMINAL-LEAF #
+    // # DEFECT. DO NOT RESTORE IT AND DO NOT INSERT AN EMPTY TABLE.         #
+    // #                                                                     #
+    // #   self.nominal.insert(class.name.to_string())                       #
+    // #                                                                     #
+    // # A `class` STATEMENT — a definition with a unique site — REDUCED TO  #
+    // # ITS NAME AND PUT IN A `HashSet<String>`. This one line is where the #
+    // # checker throws class identity away, and every downstream defect is  #
+    // # a consequence of it, not a separate bug:                            #
+    // #                                                                     #
+    // #   * `AnnotationResolver::name` answers "is this a class?" by        #
+    // #     `nominal.contains(spelling)`, then returns                      #
+    // #     `InferredType::Named(spelling)` — so the TYPE ITSELF is a       #
+    // #     rendering from birth;                                           #
+    // #   * two classes spelled alike in one module collapse to ONE set     #
+    // #     entry and therefore one type;                                   #
+    // #   * a class reached under an alias is not in the set at all and     #
+    // #     resolves to `Unknown`;                                          #
+    // #   * `import typing as tp; class Sequence: ...` makes `tp.Sequence`  #
+    // #     resolve to the LOCAL class, because `attribute` reduces the     #
+    // #     dotted name to its member spelling and asks this same set.      #
+    // #                                                                     #
+    // # Everything that panics downstream — `is_structural_target`,         #
+    // # `skip_names`'s TypedDict sets, `types.rs`'s `(Named, Named)`        #
+    // # comparison, `nominal.rs::definition_site` — panics because it is    #
+    // # handed the spelling this line produced. Fixing them individually is #
+    // # impossible; they are one defect with one cause, and it is here.     #
+    // #                                                                     #
+    // # The rebuild: `nominal` becomes a map from the class's DEFINITION    #
+    // # SITE (`StmtClassDef::name.range()`, matching                        #
+    // # `ClassInfo::name_span`) to its declaration, and the leaf carries    #
+    // # that `Span`. The name survives only as diagnostic MESSAGE text.     #
+    // # `BindingTable::local_class_definition` already resolves a use site  #
+    // # to exactly that span — the resolver's `TypedDict` schemas were      #
+    // # rebuilt on it and are the working precedent.                        #
+    // #                                                                     #
+    // # Pinned by: tests/nominal_leaf_identity_tests.rs                     #
+    // #            tests/nominal_spelling_surgery_pin_tests.rs              #
+    // ######################################################################
+
+    /// DELETED — panics; see the banner above.
+    #[expect(
+        clippy::panic,
+        reason = "mandatory under CLAUDE.md: this body was deleted for reducing a class \
+                  DEFINITION to its spelling, and no verdict may come from the name set it \
+                  built until the leaf carries a definition site"
+    )]
+    fn insert_class(&mut self, _class: &'m StmtClassDef) {
+        panic!(
+            "basilisk-checker: `annotation::tables::insert_class` was DELETED because it \
+             reduced a `class` STATEMENT to `class.name.to_string()` and stored it in a \
+             `HashSet<String>`, making every nominal type a RENDERING from the moment it \
+             was created. Two classes spelled alike collapsed into one type, a class \
+             reached under an alias resolved to nothing, and `tp.Sequence` resolved to a \
+             local class spelled `Sequence`. It panics because the real implementation — \
+             `nominal` keyed by the class's definition site, and `InferredType`'s nominal \
+             leaf carrying that site — DOES NOT EXIST YET. Do not restore the name set and \
+             do not leave the table empty in its place."
+        )
     }
 
     /// `import X`, `import X.Y`, `import X as Y`.

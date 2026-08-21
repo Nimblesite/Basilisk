@@ -37,7 +37,7 @@ Basilisk was **removed from the python/typing conformance results** on 2026-08-0
 In this order — **do not fix it in place, do not leave a TODO**:
 
 1. **Write a test that fails** because of the incorrect code — pin the real defect: an aliased import, a reformatted source, a shape the conformance suite never contains.
-2. **Delete the offending code.** Delete the text-matching function body, not its call site: the call sites are the map of what has to be rebuilt. The deleted body **MUST** be replaced with a loud `panic!` and nothing else — never a default, `None`, `false`, or empty result — with a comment stating plainly that it panics because the real implementation does not exist yet.
+2. **Delete the offending code.** Delete the text-matching function body at the root, not its call site: the call sites are the map of what has to be rebuilt. The deleted body **MUST** be replaced with a loud `panic!` and nothing else — never a default, `None`, `false`, or empty result — with a comment stating plainly that it panics because the real implementation does not exist yet.
 3. **Report what you deleted, why, and which tests now fail.**
 4. **STOP**
 

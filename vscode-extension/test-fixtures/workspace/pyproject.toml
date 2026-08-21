@@ -1,4 +1,0 @@
-[tool.basilisk.rules]
-"BSK-0001" = "error"
-"BSK-0002" = "error"
-"BSK-0050" = "warning"

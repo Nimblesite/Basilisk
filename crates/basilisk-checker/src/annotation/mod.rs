@@ -349,6 +349,11 @@ impl<'m> AnnotationResolver<'m> {
     /// A bare name, in cascade order: alias parameters bound by an enclosing
     /// expansion, then aliases, classes, imports, and builtins last — a
     /// module-level declaration shadows a builtin exactly as Python does.
+    #[expect(
+        clippy::panic,
+        reason = "the nominal leaf is built from a SPELLING; `nominal_leaf` panics until it \
+                  carries a resolved definition site ([ASTREBUILD-PHASE-TYPEEXPR])"
+    )]
     fn name(&self, name: &str, frame: &Frame) -> InferredType {
         if let Some((_, bound)) = frame.bindings.iter().find(|(param, _)| param == name) {
             return bound.clone();
