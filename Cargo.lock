@@ -428,7 +428,7 @@ version = "0.0.0-PLACEHOLDER"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.4",
+ "syn 3.0.5",
 ]
 
 [[package]]
@@ -1171,7 +1171,7 @@ checksum = "9fb9654ba8355388abeb8dcb4fc62f511300867002afc858860463bdd9fe0c44"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.4",
+ "syn 3.0.5",
 ]
 
 [[package]]
@@ -2916,7 +2916,7 @@ checksum = "445be2bfbb2f67cb663225ecd7bc5a25370c0250fca30f9d8cbad9a913650370"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.4",
+ "syn 3.0.5",
 ]
 
 [[package]]
@@ -2997,7 +2997,7 @@ checksum = "e7a5d71263a5a7d47b41f6b3f06ba276f10cc18b0931f1799f710578e2309348"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.4",
+ "syn 3.0.5",
 ]
 
 [[package]]
@@ -3225,9 +3225,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "3.0.4"
+version = "3.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6275cddf4610d1775e6d1fe9469b2e77d0f39fd98fb7450901b821e0c53649f"
+checksum = "12df2e0110f65b775f769bb17ef989067a1d931b2eb822bd4346631eeada89f9"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3318,7 +3318,7 @@ checksum = "bc04cd3e1236dd4a98afca4569f2deb3f120e5422a4023be2cb683f8486292af"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.4",
+ "syn 3.0.5",
 ]
 
 [[package]]
@@ -3703,9 +3703,9 @@ checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
 name = "ureq"
-version = "3.4.0"
+version = "3.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "972d7902c8735f2695410b8aed7df6ed12a47394aa1c8d7af49f0497b731a94d"
+checksum = "af5546be8f5378d5414f83733f5c9a2526f4645829edbc1c41790aeef1b38e8b"
 dependencies = [
  "base64",
  "log",
@@ -3719,9 +3719,9 @@ dependencies = [
 
 [[package]]
 name = "ureq-proto"
-version = "0.6.1"
+version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da5f78b09e6941e1a0f2e30e695e4b120377b54d5e0aec11b594bb57b3971613"
+checksum = "5b0809a01d1ca5a51ca70db32bb2a19157582a526505ef3c19e3b343a59aa5ad"
 dependencies = [
  "base64",
  "http",
