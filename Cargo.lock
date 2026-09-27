@@ -240,7 +240,7 @@ dependencies = [
  "ruff_python_ast",
  "ruff_python_parser",
  "ruff_text_size",
- "salsa 0.28.2",
+ "salsa 0.28.5",
  "serde",
  "serde_json",
  "tempfile",
@@ -309,7 +309,7 @@ version = "0.0.0-PLACEHOLDER"
 dependencies = [
  "basilisk-common",
  "basilisk-test-utils",
- "salsa 0.28.2",
+ "salsa 0.28.5",
  "serde",
  "serde_json",
 ]
@@ -338,7 +338,7 @@ dependencies = [
  "ruff_python_parser",
  "ruff_python_stdlib",
  "ruff_text_size",
- "salsa 0.28.2",
+ "salsa 0.28.5",
  "serde",
  "serde_json",
  "sysinfo",
@@ -440,7 +440,7 @@ dependencies = [
  "basilisk-db",
  "basilisk-parser",
  "basilisk-resolver",
- "salsa 0.28.2",
+ "salsa 0.28.5",
  "serde_json",
 ]
 
@@ -2860,9 +2860,9 @@ dependencies = [
 
 [[package]]
 name = "salsa"
-version = "0.28.2"
+version = "0.28.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf0e374215cd2db2b5c75d7b3a99cb0cc052c0595335dfdefc03d4eb08f4aa81"
+checksum = "27d2e6e19e39591cd99c01ac4141544b4d012cfd0831348629b8187fa9fe6d34"
 dependencies = [
  "boxcar",
  "crossbeam-queue",
@@ -2876,8 +2876,8 @@ dependencies = [
  "portable-atomic",
  "rayon",
  "rustc-hash 2.1.1",
- "salsa-macro-rules 0.28.2",
- "salsa-macros 0.28.2",
+ "salsa-macro-rules 0.28.5",
+ "salsa-macros 0.28.5",
  "smallvec",
  "thin-vec",
  "tracing",
@@ -2892,9 +2892,9 @@ checksum = "de6872462ac73d39969a836273c24163e6a26a4e08f5114fcd80e25af30ea9c6"
 
 [[package]]
 name = "salsa-macro-rules"
-version = "0.28.2"
+version = "0.28.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85f4b7d4405540bbd6d4ffa52d4322d983f3781954d3073067ac1bdb028459b3"
+checksum = "baf90a551c38f25ed8489111d3d5827aa18e1b85963f5e6a298505b1d1e2cb7e"
 
 [[package]]
 name = "salsa-macros"
@@ -2910,9 +2910,9 @@ dependencies = [
 
 [[package]]
 name = "salsa-macros"
-version = "0.28.2"
+version = "0.28.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "445be2bfbb2f67cb663225ecd7bc5a25370c0250fca30f9d8cbad9a913650370"
+checksum = "69dd77f86ec10e72e314f4ddf7c44c8d349e73cdff1aad524ba9668603fb0549"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3303,18 +3303,18 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "2.0.20"
+version = "2.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec86235f5fcc2a73650310756d2ac5b138a5780bbbdfae3eeccec992c435ba4f"
+checksum = "09e52cb86a36cede5cb101bf8908837b3e4c6e5e59fe7fd85c23fb56200d189e"
 dependencies = [
  "thiserror-impl",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "2.0.20"
+version = "2.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc04cd3e1236dd4a98afca4569f2deb3f120e5422a4023be2cb683f8486292af"
+checksum = "fe5197923287db20a58125f0bc85c062f7f2c892de97b18c356f9efb14b28524"
 dependencies = [
  "proc-macro2",
  "quote",
