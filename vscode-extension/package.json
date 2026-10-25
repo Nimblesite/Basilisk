@@ -1027,7 +1027,7 @@
   "dependencies": {
     "@nimblesite/shipwright-vscode": "^0.11.0",
     "@preact/signals-core": "^1.14.4",
-    "vscode-languageclient": "^10.1.0"
+    "vscode-languageclient": "^11.0.0"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
