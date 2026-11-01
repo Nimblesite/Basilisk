@@ -37,7 +37,7 @@ dashmap           = "6"
 tracing.workspace = true
 py-spy            = "0.4"
 inferno           = { version = "0.12", default-features = false }
-sysinfo           = { version = "0.39.3", default-features = false, features = ["system", "user"] }
+sysinfo           = { version = "0.40.0", default-features = false, features = ["system", "user"] }
 
 [build-dependencies]
 # Cargo.lock parsing for the embedded-formatter provenance constant
