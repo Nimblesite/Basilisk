@@ -1026,25 +1026,25 @@
   },
   "dependencies": {
     "@nimblesite/shipwright-vscode": "^0.11.0",
-    "@preact/signals-core": "^1.14.4",
+    "@preact/signals-core": "^1.14.5",
     "vscode-languageclient": "^11.0.0"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
-    "@types/node": "^26.6.5",
-    "@types/vscode": "^1.137.0",
-    "@typescript-eslint/eslint-plugin": "^8.70.1",
-    "@typescript-eslint/parser": "^8.70.1",
+    "@types/node": "^26.6.6",
+    "@types/vscode": "^1.144.0",
+    "@typescript-eslint/eslint-plugin": "^8.72.1",
+    "@typescript-eslint/parser": "^8.72.1",
     "@vscode/test-cli": "^0.0.15",
     "@vscode/test-electron": "^3.1.0",
-    "@vscode/vsce": "^4.0.0",
+    "@vscode/vsce": "^4.1.0",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
     "eslint": "^10.11.0",
-    "glob": "^13.0.6",
+    "glob": "^14.0.3",
     "mocha": "^12.0.0",
     "typescript": "^7.0.2",
-    "typescript-eslint": "^8.70.1"
+    "typescript-eslint": "^8.72.1"
   },
   "overrides": {
     "serialize-javascript": "^7.0.6"
