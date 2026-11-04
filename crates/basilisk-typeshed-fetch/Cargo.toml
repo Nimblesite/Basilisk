@@ -20,6 +20,10 @@ test-support = ["dep:zip"]
 
 [dependencies]
 basilisk-stubs.workspace = true
+# The single parser/validator for a `typeshed-package` pin. Depending on it here
+# means the URL-building adapter enforces the SAME distribution-name grammar the
+# config layer enforces, instead of carrying a second copy of the alphabet.
+basilisk-config.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
