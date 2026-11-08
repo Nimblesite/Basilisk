@@ -1032,7 +1032,7 @@
   "devDependencies": {
     "@types/mocha": "^10.0.10",
     "@types/node": "^26.6.6",
-    "@types/vscode": "^1.144.0",
+    "@types/vscode": "^1.145.0",
     "@typescript-eslint/eslint-plugin": "^8.72.1",
     "@typescript-eslint/parser": "^8.72.1",
     "@vscode/test-cli": "^0.0.15",
@@ -1040,7 +1040,7 @@
     "@vscode/vsce": "^4.1.0",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
-    "eslint": "^10.11.0",
+    "eslint": "^10.14.0",
     "glob": "^14.0.3",
     "mocha": "^12.0.0",
     "typescript": "^7.0.2",
