@@ -13,8 +13,10 @@ eleventyNavigation:
 
 # Migration Guide
 
-Basilisk's unconfigured default enables its complete core PEP rule set. Extra
-Basilisk rules—required annotations, explicit-`Any` policy, required
+Basilisk's unconfigured default enables every currently registered PEP-tagged
+rule. That is a configuration property, not a claim that the implementation is
+complete or conformant; the current level is temporarily unknown during the
+[integrity remediation](/docs/conformance/). Extra Basilisk rules—required annotations, explicit-`Any` policy, required
 `@override`, style, redundancy, dependency hygiene, and stub hygiene—are opt-in.
 Migration therefore means choosing the policy you want, checking the project,
 and recording narrow exceptions for the debt you cannot resolve yet.

@@ -172,44 +172,28 @@ impl LowerCtx<'_> {
     /// A subscript `base[args]`: builtin containers get their dedicated
     /// constructors, module aliases become applications, and any other
     /// base is a [`TypeTerm::Named`] constructor head.
-    ///
-    /// `Union[..]`, `Optional[..]`, and `Annotated[..]` (bare or
-    /// `typing.`-qualified) are *transparent* type operators — semantically
-    /// identical to their `|`-spellings — so they lower to [`TypeTerm::Union`]
-    /// (or the underlying type), NEVER to a `Named` constructor: they must
-    /// not guard recursion (`type X = Union[int, X]` is as circular as
-    /// `type X = int | X`).
     fn lower_subscript(&self, sub: &ExprSubscript) -> TypeTerm {
         let args = self.lower_subscript_args(sub);
         let Some(base_name) = dotted_text(&sub.value) else {
             return TypeTerm::Ground(InferredType::Unknown);
         };
         match (base_name.as_str(), args.len()) {
-            ("Union" | "typing.Union", _) => TypeTerm::Union(args),
-            ("Optional" | "typing.Optional", 1) => match args.into_iter().next() {
-                Some(inner) => TypeTerm::Union(vec![inner, TypeTerm::Ground(InferredType::None_)]),
-                None => TypeTerm::Ground(InferredType::Unknown),
-            },
-            ("Annotated" | "typing.Annotated", _) => args
-                .into_iter()
-                .next()
-                .unwrap_or(TypeTerm::Ground(InferredType::Unknown)),
-            ("list" | "List", 1) => match args.into_iter().next() {
+            ("list", 1) => match args.into_iter().next() {
                 Some(element) => TypeTerm::List(Box::new(element)),
                 None => TypeTerm::Ground(InferredType::Unknown),
             },
-            ("set" | "frozenset" | "Set" | "FrozenSet", 1) => match args.into_iter().next() {
+            ("set" | "frozenset", 1) => match args.into_iter().next() {
                 Some(element) => TypeTerm::Set(Box::new(element)),
                 None => TypeTerm::Ground(InferredType::Unknown),
             },
-            ("dict" | "Dict", 2) => {
+            ("dict", 2) => {
                 let mut iter = args.into_iter();
                 match (iter.next(), iter.next()) {
                     (Some(key), Some(value)) => TypeTerm::Dict(Box::new(key), Box::new(value)),
                     _ => TypeTerm::Ground(InferredType::Unknown),
                 }
             }
-            ("tuple" | "Tuple", _) => TypeTerm::Tuple(args),
+            ("tuple", _) => TypeTerm::Tuple(args),
             (name, _) if self.aliases.contains(name) => TypeTerm::Alias(name.to_owned(), args),
             (name, _) => TypeTerm::Named(name.to_owned(), args),
         }

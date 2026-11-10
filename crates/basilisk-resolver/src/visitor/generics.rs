@@ -1,54 +1,13 @@
 //! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
 //! Generics visitor functions.
 
-use ruff_python_ast::{Expr, Stmt, StmtClassDef, TypeParam};
-use ruff_text_size::Ranged;
+use ruff_python_ast::{Expr, Stmt, TypeParam};
 
-use crate::scope::{GenericParamInfo, GenericSubscriptSite, Pep695BoundViolation, Span};
+use crate::scope::{GenericSubscriptSite, Pep695BoundViolation, Span};
 
 use super::class_info_ext::expr_simple_name;
-use super::core::text_range_to_span;
 use super::type_alias::type_param_name;
 use super::typevar::check_typevar_bound_expr;
-
-pub(super) fn extract_generic_params(class: &StmtClassDef) -> (Vec<GenericParamInfo>, Vec<Span>) {
-    let args = match class.arguments.as_ref() {
-        Some(a) => &a.args,
-        None => return (Vec::new(), Vec::new()),
-    };
-    for base in args {
-        let Expr::Subscript(sub) = base else { continue };
-        let is_generic_or_protocol = matches!(sub.value.as_ref(), Expr::Name(n) if n.id.as_str() == "Generic" || n.id.as_str() == "Protocol")
-            || matches!(sub.value.as_ref(), Expr::Attribute(a) if a.attr.as_str() == "Generic" || a.attr.as_str() == "Protocol");
-        if !is_generic_or_protocol {
-            continue;
-        }
-        let elts: &[Expr] = match sub.slice.as_ref() {
-            Expr::Tuple(tuple) => &tuple.elts,
-            other => std::slice::from_ref(other),
-        };
-        let mut params = Vec::new();
-        let mut non_typevar = Vec::new();
-        for e in elts {
-            // A starred expression like `*Ts` is a valid TypeVarTuple unpack.
-            let (name_opt, is_typevartuple) = if let Expr::Starred(starred) = e {
-                (expr_simple_name(&starred.value), true)
-            } else {
-                (expr_simple_name(e), false)
-            };
-            match name_opt {
-                Some(name) => params.push(GenericParamInfo {
-                    span: text_range_to_span(e.range()),
-                    name,
-                    is_typevartuple,
-                }),
-                None => non_typevar.push(text_range_to_span(e.range())),
-            }
-        }
-        return (params, non_typevar);
-    }
-    (Vec::new(), Vec::new())
-}
 
 pub(super) fn collect_pep695_bound_violations(stmts: &[Stmt]) -> Vec<Pep695BoundViolation> {
     let bare_names: std::collections::HashSet<String> = stmts

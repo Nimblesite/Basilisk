@@ -21,13 +21,13 @@ dateModified: 2026-03-31
 
 打开一个 Python 文件，Basilisk 会自动激活——诊断、自动补全、悬停、跳转到定义、重命名、重构、格式化、调试（F5）和性能分析。
 
-![Basilisk 在 VS Code 中——符合 PEP 规范的类型错误以红色波浪线内联显示，并列在问题面板中](/assets/images/vscode-diagnostics.png)
+![Basilisk 在 VS Code 中——类型诊断以红色波浪线内联显示，并列在问题面板中](/assets/images/vscode-diagnostics.png)
 
-*打开文件的瞬间即可获得符合 PEP 规范的诊断——无需任何配置。*
+*打开文件时即可看到类型诊断，无需额外配置严格模式。*
 
 ## Basilisk 是适合您的最佳 Python VS Code 扩展吗？
 
-没有哪个 Python 扩展适合所有项目。Basilisk 面向的开发者，是希望用一个开源扩展同时获得符合类型规范的检查、自动补全、导航、重构、格式化、调试和性能分析——并且在 VS Code 之外也能使用同一个语言服务器的人。如果您的项目依赖成熟的 mypy 框架插件，或者您更偏好 Pylance 已经成型的、仅限 VS Code 的工作流，请在切换前阅读[Python 类型检查器对比](/zh/docs/comparison/)。
+没有哪个 Python 扩展适合所有项目。Basilisk 面向的开发者，是希望用一个开源扩展同时获得类型规范规则、自动补全、导航、重构、格式化、调试和性能分析——并且在 VS Code 之外也能使用同一个语言服务器的人。在[完整性审查](/zh/docs/conformance/)期间，其当前符合性百分比暂时未知。如果您的项目依赖成熟的 mypy 框架插件，或者您更偏好 Pylance 已经成型的、仅限 VS Code 的工作流，请在切换前阅读[Python 类型检查器对比](/zh/docs/comparison/)。
 
 ## 二进制文件已捆绑——无需单独安装
 

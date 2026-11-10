@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-# Implements [CHKARCH-CONFORMANCE]. The conformance GATE: fail unless every file
-# the REAL python/typing harness graded is a Pass with zero false positives. It
-# reads the harness's OWN `results/basilisk/*.toml` — it does NO scoring of its
-# own. conformance/run_conformance.py invokes it after running the suite against
-# the compiled binary; the release workflow invokes it against the pip-installed
-# wheel. Either way the verdict is the upstream harness's, never ours.
-"""Fail unless every scored file the upstream harness graded is a Pass.
+# Implements [CHKARCH-CONFORMANCE]. The pristine-fixture regression gate: fail
+# unless every file the frozen python/typing harness graded is a Pass with zero
+# false positives. It reads the harness's OWN `results/basilisk/*.toml` and does
+# no scoring of its own. conformance/run_conformance.py invokes it after running
+# the suite against the compiled binary; the release workflow also invokes it
+# against the pip-installed wheel. Passing is internal regression evidence only;
+# [CHKARCH-CONFORMANCE-MUTATION] and off-suite tests cover fixture fitting.
+"""Fail unless every scored file in the frozen upstream fixture set is a Pass.
 
-Reads the `results/basilisk/*.toml` files written by `src/main.py` (upstream's
-harness) after it ran against the installed wheel, and enforces:
+Reads the `results/basilisk/*.toml` files written by `src/main.py` at
+python/typing's last Basilisk-adapter revision after it ran against a binary or
+installed wheel, and enforces:
 
   * conformance_automated == "Pass" for every scored file (empty errors_diff),
   * zero unexpected diagnostics (false positives) across the suite,
@@ -17,6 +19,9 @@ harness) after it ran against the installed wheel, and enforces:
 
 Thresholds default to the repo ratchet in coverage-thresholds.json
 (conformance.threshold = 100%, conformance.max_false_positives = 0).
+
+The percentage here is an internal threshold over frozen fixtures. It is not a
+current official conformance score and must not be published as one.
 
 Usage:
     python3 conformance/assert_wheel_conformance.py <results/basilisk dir>
@@ -115,10 +120,10 @@ def main(argv: list[str]) -> int:
             version = ""
 
     print("=" * 64)
-    print("  WHEEL CONFORMANCE GATE — pip-installed basilisk vs python/typing")
+    print("  PRISTINE FIXTURE REGRESSION GATE — frozen python/typing fixtures")
     print(f"  version:  {version or '(unknown)'}")
     print(f"  files:    {total} graded | {passed} pass | {total - passed} fail")
-    print(f"  score:    {pct}%   false positives: {false_positives}")
+    print(f"  fixture pass rate: {pct}%   false positives: {false_positives}")
     print("=" * 64)
 
     ok = True
@@ -141,7 +146,8 @@ def main(argv: list[str]) -> int:
         )
     if ok:
         print(
-            f"✓ wheel passes {passed}/{total} ({pct}%), {false_positives} false positives — gate PASS"
+            f"✓ fixture regression passes: {passed}/{total}, "
+            f"{false_positives} false positives — gate PASS"
         )
     return 0 if ok else 1
 

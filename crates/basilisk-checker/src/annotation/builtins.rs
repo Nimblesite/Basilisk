@@ -1,15 +1,24 @@
-//! Implements [TYPEINF-ANNOTATION-RESOLUTION] step 4 — builtin and typeshed
-//! leaves. See
+//! Implements [TYPEINF-ANNOTATION-RESOLUTION] step 4 — builtin leaves. See
 //! docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-ANNOTATION-RESOLUTION
 //!
-//! The last step of the cascade before a name is declared unresolved. Only
-//! names whose meaning is fixed by the language or the typing spec live here;
-//! everything else resolves through the module's own tables or becomes the
-//! gradual `Unknown` ([TYPEINF-EXCEEDS-NOUNKNOWN]).
+//! The last step of the cascade before a name is declared unresolved. ONLY
+//! names the language itself provides without an import live here; everything
+//! else resolves through the module's own tables or becomes the gradual
+//! `Unknown` ([TYPEINF-EXCEEDS-NOUNKNOWN]). A leaf that Python code must
+//! import to use MUST NOT be added: naming one here is the symbol-naming
+//! cheat, whatever the surrounding machinery.
 
-use crate::types::{CallableInfo, InferredType};
+use crate::types::InferredType;
 
-/// Resolve a bare (already lower-cased, `typing.`-stripped) leaf name.
+/// Resolve a bare leaf name, EXACTLY as spelled.
+///
+/// The spelling is never case-folded before it reaches this table. Folding it
+/// used to make typing's deprecated capitalised aliases (`List`, `Dict`,
+/// `Set`, `FrozenSet`, `Tuple`, `Type`) collide with the builtin spellings
+/// below and so resolve as those builtins — recognising an import-requiring
+/// symbol from the characters at its use site, which is the symbol-naming
+/// cheat wearing a `to_ascii_lowercase` disguise. It is deleted; do not
+/// reintroduce a normalisation step here.
 ///
 /// `None` means "not a builtin" — the caller continues the cascade.
 pub(super) fn leaf(name: &str) -> Option<InferredType> {
@@ -21,10 +30,8 @@ pub(super) fn leaf(name: &str) -> Option<InferredType> {
         "float" | "complex" => Some(InferredType::Float),
         "bool" => Some(InferredType::Bool),
         "bytes" => Some(InferredType::Bytes),
-        "none" => Some(InferredType::None_),
-        // [TYPEINF-SPECIAL-ANY] — `Any` and the bare gradual forms are the
-        // escape hatch for assignment purposes.
-        "any" | "final" | "tuple" => Some(InferredType::Any),
+        // A bare `tuple` constrains nothing about its elements.
+        "tuple" => Some(InferredType::Any),
         // Bare `type` means `type[Any]`: SOME class object. Which class is
         // gradual, but class-object-ness is not — a value positively known to
         // be an instance (`None`, `3`, `"x"`) can never be one, and the
@@ -39,27 +46,6 @@ pub(super) fn leaf(name: &str) -> Option<InferredType> {
         // ([TYPEINF-NARROWING-TYPEIS]), while `list[Any]` is consistent with
         // anything.
         "object" => Some(InferredType::Named("object".to_owned())),
-        // [TYPEINF-SPECIAL-NEVER] — the bottom type; `NoReturn` is its spelling
-        // in return position.
-        "never" | "noreturn" => Some(InferredType::Never),
-        // [TYPEINF-SPECIAL-LITERALSTRING].
-        "literalstring" => Some(InferredType::LiteralString),
-        // A bare `Callable` is `Callable[..., Any]` (PEP 484): the gradual-tail
-        // marker is the arbitrary-parameter form.
-        "callable" => Some(InferredType::Callable(CallableInfo {
-            param_types: crate::types::gradual_params(Vec::new()),
-            return_type: Box::new(InferredType::Any),
-        })),
-        // A bare `TypeForm` is `TypeForm[Any]` (PEP 747), for the same reason a
-        // bare `Callable` is `Callable[..., Any]`. Left as a plain name it
-        // stopped denoting a type form at all, and the RHS of
-        // `x: TypeForm = <expr>` was then never validated as a type expression.
-        "typeform" => Some(InferredType::TypeForm(Box::new(InferredType::Any))),
-        "generator" => Some(InferredType::Generator(
-            Box::new(InferredType::Any),
-            Box::new(InferredType::None_),
-            Box::new(InferredType::None_),
-        )),
         // Bare generics are implicitly parameterised with `Any`.
         "list" => Some(InferredType::List(Box::new(InferredType::Any))),
         "dict" => Some(InferredType::Dict(
@@ -77,8 +63,9 @@ pub(super) fn is_builtin_type_name(name: &str) -> bool {
     leaf(name).is_some()
 }
 
-/// Modules whose members are typing special forms, so `t.Sequence` and
-/// `Sequence` resolve identically once `t` is known to bind one of them.
+/// Does this dotted path name one of the typing modules? Used only to decide
+/// whether an attribute's head is a module binding worth stripping, never to
+/// decide what a MEMBER of that module means.
 pub(super) fn is_typing_module(module: &str) -> bool {
     matches!(module, "typing" | "typing_extensions")
 }

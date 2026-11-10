@@ -2,304 +2,268 @@
 //! Shared guard predicates used across multiple rules.
 //!
 //! These predicates identify Python typing patterns where strict annotation
-//! enforcement should be suspended because the construct has well-defined PEP
-//! semantics that legitimately omit annotations.
+//! enforcement is suspended because the construct has well-defined PEP
+//! semantics that legitimately omit annotations. Every verdict reads the
+//! resolver's binding-resolved flags — never a decorator's or base's spelling.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
-use basilisk_resolver::{ClassInfo, FunctionInfo, ResolvedModule};
+use basilisk_resolver::{ClassInfo, FunctionInfo, ResolvedModule, TypingForm};
+use ruff_python_ast::{Arguments, Decorator, Expr, Stmt, StmtClassDef};
 
 /// Returns `true` when a function is in a "stub context" — a context where
-/// annotation enforcement (BSK-0001, BSK-0002, BSK-0004) should be skipped.
+/// annotation enforcement (BSK-0001, BSK-0002, BSK-0004) is skipped.
 ///
-/// Implements the exemption side of [TYPEINF-FUNC-PARAMS] / [TYPEINF-FUNC-OVERLOADS]:
-/// Protocol/abstract/stub bodies legitimately omit annotations, but `@overload`
-/// variants are explicitly NOT exempt (their signatures drive resolution).
+/// Implements the exemption side of [TYPEINF-FUNC-PARAMS] /
+/// [TYPEINF-FUNC-OVERLOADS]:
 ///
-/// A stub context is any of:
-/// - A non-`@overload` function whose body is a pure stub (only `...`, `pass`,
-///   or a docstring): Protocol method stubs, abstract placeholders, `.pyi`-style
-///   inline stubs.  **`@overload` variants are excluded** — they must carry
-///   annotations because their signatures drive overload resolution.
-/// - A function decorated with `@abstractmethod` (even with a non-stub body).
-/// - A method inside a `Protocol` class (interface contract, not implementation).
+/// - A pure stub body (only `...`, `pass`, or a docstring) legitimately omits
+///   annotations: Protocol method stubs and abstract placeholders.
+/// - `@abstractmethod` bodies are exempt even when non-stub; the flag resolves
+///   through the module's bindings (`abc.abstractmethod`, aliased or not).
+/// - Methods of a `Protocol` class are interface contracts, not
+///   implementations; `is_protocol` comes from resolved base forms.
+/// - `@overload` variants are explicitly NOT exempt — the typing spec's
+///   overloads chapter makes their signatures drive resolution, so they must
+///   be annotated. The flag resolves through the bindings.
 pub(crate) fn is_stub_context(func: &FunctionInfo, classes: &[ClassInfo]) -> bool {
-    // @overload variants MUST be annotated — their signatures drive type resolution.
-    if super::shared::decorator_spelled(&func.decorators, "overload") {
+    if func.is_overload {
         return false;
     }
-    // Pure stub bodies (only `...` / `pass`) are exempt — covers Protocol stubs
-    // and abstract placeholders that legitimately omit annotations.
-    if func.is_stub_body {
+    if func.is_stub_body || func.is_abstractmethod {
         return true;
     }
-    // Non-stub abstractmethod bodies are also exempt.
-    if super::shared::decorator_spelled(&func.decorators, "abstractmethod") {
-        return true;
-    }
-    // Protocol methods are interface contracts, not implementations.
-    func.class_name.as_ref().is_some_and(|cls_name| {
+    func.class_name.as_ref().is_some_and(|class_name| {
         classes
             .iter()
-            .find(|c| &c.name == cls_name)
-            .is_some_and(is_protocol_class)
+            .find(|class| &class.name == class_name)
+            .is_some_and(|class| class.is_protocol)
     })
 }
 
 /// Returns `true` when a function is decorated with `@no_type_check`.
 ///
-/// PEP 484 / `typing.no_type_check` directs checkers to suppress *body* type
-/// checks for the function, so return-value/assignment diagnostics (E0011) must
-/// not fire. Argument-count (E0041) and similar signature checks still apply.
+/// The typing spec's directives chapter: a checker supporting the decorator
+/// "should suppress all type errors for the `def` statement and its body" and
+/// "ignore all parameter and return type annotations and treat the function
+/// as if it were unannotated". The flag resolves through the module's
+/// bindings, so `typing.no_type_check`, an alias, and a shadowing local
+/// definition all answer correctly.
 pub(crate) fn is_no_type_check(func: &FunctionInfo) -> bool {
-    super::shared::decorator_spelled(&func.decorators, "no_type_check")
+    func.is_no_type_check
 }
 
-/// Returns `true` when a class is an Enum subclass, in either the bare
-/// (`class C(Enum)`) or module-qualified (`class C(enum.Enum)`) spelling.
-///
-/// Enum members are unannotated by design — their type is `Literal[EnumClass.member]`,
-/// synthesised by the Enum metaclass.  Firing BSK-0005 on them is a false positive.
-pub(crate) fn is_enum_class(class: &ClassInfo) -> bool {
-    class.bases.iter().any(|b| {
-        matches!(
-            b.strip_prefix("enum.").unwrap_or(b),
-            "Enum" | "IntEnum" | "StrEnum" | "Flag" | "IntFlag" | "ReprEnum"
-        )
+// ---------------------------------------------------------------------------
+// PEP 681 `dataclass_transform`
+// ---------------------------------------------------------------------------
+
+/// Effective dataclass-transform settings for a governed class (PEP 681).
+pub(crate) struct TransformClassInfo {
+    /// Whether the class is effectively frozen: the application-site or
+    /// class-definition `frozen=` keyword, else the provider's
+    /// `frozen_default` (spec default `False`).
+    pub(crate) frozen: bool,
+}
+
+/// PEP 681 transform providers declared at module level: decorator functions
+/// and base/metaclass classes carrying `@dataclass_transform(...)`, each with
+/// its `frozen_default`, plus a name map of every module-level class.
+struct TransformProviders<'ast> {
+    functions: HashMap<&'ast str, bool>,
+    classes: HashMap<&'ast str, bool>,
+    class_defs: HashMap<&'ast str, &'ast StmtClassDef>,
+}
+
+/// The bool value of a literal `name=True/False` keyword argument.
+fn keyword_bool(arguments: &Arguments, name: &str) -> Option<bool> {
+    arguments
+        .keywords
+        .iter()
+        .find(|keyword| keyword.arg.as_ref().is_some_and(|arg| arg.as_str() == name))
+        .and_then(|keyword| match &keyword.value {
+            Expr::BooleanLiteral(literal) => Some(literal.value),
+            _ => None,
+        })
+}
+
+/// `Some(frozen_default)` when any decorator resolves to
+/// `typing.dataclass_transform` through the module's bindings — aliased and
+/// module-qualified spellings included, module-local shadows excluded.
+fn transform_frozen_default(module: &ResolvedModule, decorators: &[Decorator]) -> Option<bool> {
+    decorators.iter().find_map(|decorator| match &decorator.expression {
+        Expr::Call(call) if module.bindings.is_form(&call.func, TypingForm::DataclassTransform) => {
+            Some(keyword_bool(&call.arguments, "frozen_default").unwrap_or(false))
+        }
+        expr if module.bindings.is_form(expr, TypingForm::DataclassTransform) => Some(false),
+        _ => None,
     })
 }
 
-/// Returns `true` when a class is a `Protocol` subclass.
-///
-/// Protocol attributes are interface specifications, not concrete class variables.
-/// Unannotated names in a Protocol body are structural members, not bugs.
-///
-/// Implements the gating predicate for [TYPEINF-SUBTYPING-PROTOCOL] — identifies
-/// the structural-subtyping target class. The member-by-member conformance check
-/// itself lives in the out-of-scope `protocols_subtyping` rule (see the map).
-pub(crate) fn is_protocol_class(class: &ClassInfo) -> bool {
-    class.bases.iter().any(|b| b == "Protocol")
-}
-
-/// Returns `true` when a class is a `NamedTuple` subclass.
-///
-/// `NamedTuple` fields are declared as bare annotations and synthesised into a
-/// tuple by the metaclass, so strict attribute-annotation enforcement must be
-/// suspended for them.
-pub(crate) fn is_namedtuple_class(class: &ClassInfo) -> bool {
-    class.bases.iter().any(|b| b == "NamedTuple")
-}
-
-/// Returns `true` when a class gets a synthesized `__init__` from a
-/// class-applied or metaclass-applied `@dataclass_transform`.
-///
-/// Covers both PEP 681 application forms that don't go through a decorator
-/// function: a transitive base class decorated with `@dataclass_transform`,
-/// or a transitive base whose metaclass (or one of its bases) carries the
-/// decorator.
-pub(crate) fn inherits_dataclass_transform(
-    class: &ClassInfo,
-    class_map: &HashMap<&str, &ClassInfo>,
-) -> bool {
-    let resolve = |base: &str| {
-        class_map
-            .get(base.split('[').next().unwrap_or(base))
-            .copied()
-    };
-    let directly_decorated = |c: &ClassInfo| {
-        c.decorator_spans
-            .iter()
-            .any(|(name, _)| name == "dataclass_transform")
-    };
-    let metaclass_is_transform = |c: &ClassInfo| {
-        c.metaclass_name.as_deref().is_some_and(|meta| {
-            class_map.get(meta).is_some_and(|m| {
-                super::shared::class_or_base_matches(m, &resolve, &directly_decorated)
-            })
-        })
-    };
-
-    // A transform metaclass on this class or any transitive base…
-    super::shared::class_or_base_matches(class, &resolve, &metaclass_is_transform)
-        // …or a directly-decorated transitive base. The class's OWN decorator
-        // is the decorator-function form and intentionally does not count.
-        || class.bases.iter().any(|base| {
-            resolve(base).is_some_and(|b| {
-                super::shared::class_or_base_matches(b, &resolve, &directly_decorated)
-            })
-        })
-}
-
-// ---------------------------------------------------------------------------
-// dataclass_transform detection
-// ---------------------------------------------------------------------------
-
-/// Default settings extracted from a `@dataclass_transform(...)` decorator.
-#[derive(Debug, Clone)]
-pub(crate) struct TransformDefaults {
-    /// Default value of `frozen` for classes using this transform function.
-    pub frozen: bool,
-    /// Default value of `order` for classes using this transform function.
-    pub order: bool,
-}
-
-/// Effective dataclass-transform settings for a class.
-#[derive(Debug, Clone)]
-pub(crate) struct TransformClassInfo {
-    /// Whether the class is effectively frozen.
-    pub frozen: bool,
-    /// Whether the class has ordering comparisons enabled.
-    pub order: bool,
-}
-
-/// Extracts a boolean kwarg value from a parenthesised argument string.
-///
-/// Given `"frozen_default=True, order_default=True"` and key `"frozen_default"`,
-/// returns `Some(true)`.
-fn extract_bool_kwarg(args_text: &str, key: &str) -> Option<bool> {
-    let pattern = format!("{key}=");
-    let idx = args_text.find(&pattern)?;
-    let after = args_text.get(idx + pattern.len()..)?.trim_start();
-    if after.starts_with("True") {
-        Some(true)
-    } else if after.starts_with("False") {
-        Some(false)
-    } else {
-        None
-    }
-}
-
-/// Extracts the parenthesised argument text from a decorator call.
-///
-/// Given source text and a position where the decorator name starts,
-/// finds the matching `(...)` and returns the inner text.
-fn extract_decorator_args(source: &str, decorator_name_end: usize) -> Option<&str> {
-    let rest = source.get(decorator_name_end..)?;
-    let open = rest.find('(')?;
-    let after_open = decorator_name_end + open + 1;
-    // Find matching close paren (simple: no nested parens in kwargs)
-    let close = source.get(after_open..)?.find(')')?;
-    source.get(after_open..after_open + close)
-}
-
-/// Scans functions for `@dataclass_transform(...)` decorators and returns
-/// a map from function name to its default settings.
-pub(crate) fn collect_transform_functions(
+/// Collect the module's transform providers and class definitions in one walk
+/// of the module-level statements.
+fn transform_providers<'ast>(
     module: &ResolvedModule,
-) -> HashMap<String, TransformDefaults> {
-    let mut result = HashMap::new();
-
-    for func in &module.functions {
-        if !super::shared::decorator_spelled(&func.decorators, "dataclass_transform") {
-            continue;
-        }
-
-        // Extract the source region covering decorators + def line
-        let func_source_start = func.def_span.start_usize();
-        // Look at source from the function start to find @dataclass_transform(...)
-        let Some(search_region) = module.source.get(func_source_start..) else {
-            continue;
-        };
-
-        let marker = "@dataclass_transform";
-        let Some(marker_pos) = search_region.find(marker) else {
-            continue;
-        };
-
-        let name_end = func_source_start + marker_pos + marker.len();
-        let mut defaults = TransformDefaults {
-            frozen: false,
-            order: false,
-        };
-
-        if let Some(args_text) = extract_decorator_args(&module.source, name_end) {
-            if let Some(val) = extract_bool_kwarg(args_text, "frozen_default") {
-                defaults.frozen = val;
+    body: &'ast [Stmt],
+) -> TransformProviders<'ast> {
+    let mut providers = TransformProviders {
+        functions: HashMap::new(),
+        classes: HashMap::new(),
+        class_defs: HashMap::new(),
+    };
+    for stmt in body {
+        match stmt {
+            Stmt::FunctionDef(function) => {
+                if let Some(default) = transform_frozen_default(module, &function.decorator_list) {
+                    let _ = providers.functions.insert(function.name.as_str(), default);
+                }
             }
-            if let Some(val) = extract_bool_kwarg(args_text, "order_default") {
-                defaults.order = val;
+            Stmt::ClassDef(class) => {
+                let _ = providers.class_defs.insert(class.name.as_str(), class);
+                if let Some(default) = transform_frozen_default(module, &class.decorator_list) {
+                    let _ = providers.classes.insert(class.name.as_str(), default);
+                }
             }
+            _ => {}
         }
-
-        let _ = result.insert(func.name.clone(), defaults);
     }
-
-    result
+    providers
 }
 
-/// For each class, checks if it is decorated by a `dataclass_transform` function
-/// and returns its effective settings (defaults overridden by class-level kwargs).
+/// The simple name a base-class expression denotes: `Base` or `Base[...]`.
+fn base_name(expr: &Expr) -> Option<&str> {
+    match expr {
+        Expr::Name(name) => Some(name.id.as_str()),
+        Expr::Subscript(subscript) => base_name(&subscript.value),
+        _ => None,
+    }
+}
+
+/// The class's own `metaclass=` keyword when it (or a metaclass ancestor)
+/// is a transform provider.
+fn metaclass_transform_default(
+    class: &StmtClassDef,
+    providers: &TransformProviders<'_>,
+) -> Option<bool> {
+    let name = class
+        .keywords()
+        .iter()
+        .find(|keyword| {
+            keyword
+                .arg
+                .as_ref()
+                .is_some_and(|arg| arg.as_str() == "metaclass")
+        })
+        .and_then(|keyword| base_name(&keyword.value))?;
+    if let Some(default) = providers.classes.get(name) {
+        return Some(*default);
+    }
+    let metaclass = providers.class_defs.get(name)?;
+    transform_via_bases_or_metaclass(metaclass, providers)
+}
+
+/// The `frozen_default` reaching this class through PEP 681's base-class or
+/// metaclass application forms: a transform class in the transitive
+/// same-module base chain, or a transform metaclass on the class or any
+/// transitive base. Iterative with a visited set (the same termination
+/// guards as `shared::class_walks`).
+fn transform_via_bases_or_metaclass(
+    class: &StmtClassDef,
+    providers: &TransformProviders<'_>,
+) -> Option<bool> {
+    let mut visited: HashSet<&str> = HashSet::new();
+    let _ = visited.insert(class.name.as_str());
+    let mut worklist: Vec<&StmtClassDef> = vec![class];
+    while let Some(current) = worklist.pop() {
+        if let Some(default) = metaclass_transform_default(current, providers) {
+            return Some(default);
+        }
+        for base in current.bases() {
+            let Some(name) = base_name(base) else {
+                continue;
+            };
+            if let Some(default) = providers.classes.get(name) {
+                return Some(*default);
+            }
+            if visited.insert(name) {
+                worklist.extend(providers.class_defs.get(name));
+            }
+        }
+    }
+    None
+}
+
+/// The effective `frozen` when the class is decorated by a module-level
+/// transform decorator function: the application-site `frozen=` keyword wins
+/// over the provider's `frozen_default`.
+fn applied_transform_frozen(
+    class: &StmtClassDef,
+    providers: &TransformProviders<'_>,
+) -> Option<bool> {
+    class
+        .decorator_list
+        .iter()
+        .find_map(|decorator| match &decorator.expression {
+            Expr::Name(name) => providers.functions.get(name.id.as_str()).copied(),
+            Expr::Call(call) => match call.func.as_ref() {
+                Expr::Name(name) => providers
+                    .functions
+                    .get(name.id.as_str())
+                    .map(|default| keyword_bool(&call.arguments, "frozen").unwrap_or(*default)),
+                _ => None,
+            },
+            _ => None,
+        })
+}
+
+/// The class's effective `frozen` under whichever PEP 681 application form
+/// governs it, `None` when none does. For the base/metaclass forms the
+/// class-definition `frozen=` keyword overrides the provider default.
+fn governed_frozen(class: &StmtClassDef, providers: &TransformProviders<'_>) -> Option<bool> {
+    if let Some(frozen) = applied_transform_frozen(class, providers) {
+        return Some(frozen);
+    }
+    let default = transform_via_bases_or_metaclass(class, providers)?;
+    Some(
+        class
+            .arguments
+            .as_deref()
+            .and_then(|arguments| keyword_bool(arguments, "frozen"))
+            .unwrap_or(default),
+    )
+}
+
+/// PEP 681: every class in the module governed by a `dataclass_transform`
+/// provider — via a transform decorator function, a transform base class, or
+/// a transform metaclass — mapped to its effective settings.
 pub(crate) fn collect_transform_classes(
     module: &ResolvedModule,
 ) -> HashMap<String, TransformClassInfo> {
-    let transform_funcs = collect_transform_functions(module);
-    if transform_funcs.is_empty() {
+    let Some(parsed) = super::shared::parse_module(module) else {
         return HashMap::new();
-    }
+    };
+    let providers = transform_providers(module, &parsed.ast.body);
+    providers
+        .class_defs
+        .values()
+        .filter_map(|class| {
+            governed_frozen(class, &providers)
+                .map(|frozen| (class.name.to_string(), TransformClassInfo { frozen }))
+        })
+        .collect()
+}
 
-    let mut result = HashMap::new();
-
-    for cls in &module.classes {
-        // Already recognized as a standard dataclass — skip
-        if cls.is_dataclass {
-            continue;
-        }
-
-        // Look at source before the class definition to find decorators.
-        // cls.def_span covers the entire class including decorators.
-        let cls_start = cls.def_span.start_usize();
-        // Find the `class` keyword to delimit the decorator region
-        let Some(class_kw_offset) = module
-            .source
-            .get(cls_start..)
-            .and_then(|s| s.find("class "))
-        else {
-            continue;
-        };
-
-        let Some(decorator_region) = module.source.get(cls_start..cls_start + class_kw_offset)
-        else {
-            continue;
-        };
-
-        // Check each transform function name against the decorator region
-        for (func_name, defaults) in &transform_funcs {
-            let at_name = format!("@{func_name}");
-            let Some(at_pos) = decorator_region.find(&at_name) else {
-                continue;
-            };
-
-            // Check character after decorator name to distinguish @create_model from @create_model_frozen
-            let after_at_name = cls_start + at_pos + at_name.len();
-            let next_char = module
-                .source
-                .as_bytes()
-                .get(after_at_name)
-                .copied()
-                .map_or(b'\n', |c| c);
-            if next_char.is_ascii_alphanumeric() || next_char == b'_' {
-                continue;
-            }
-
-            let mut info = TransformClassInfo {
-                frozen: defaults.frozen,
-                order: defaults.order,
-            };
-
-            // Check for overriding kwargs in the class decorator call
-            if let Some(args_text) = extract_decorator_args(&module.source, after_at_name) {
-                if let Some(val) = extract_bool_kwarg(args_text, "frozen") {
-                    info.frozen = val;
-                }
-                if let Some(val) = extract_bool_kwarg(args_text, "order") {
-                    info.order = val;
-                }
-            }
-
-            let _ = result.insert(cls.name.clone(), info);
-            break;
-        }
-    }
-
-    result
+/// PEP 681's base-class and metaclass application forms: `true` when the
+/// class derives from a transform base or uses a transform metaclass
+/// (directly or through a transitive base), so a synthesized `__init__`
+/// accepts field arguments. The decorator-function form is deliberately
+/// excluded — the caller handles decorator-built classes separately.
+pub(crate) fn inherits_dataclass_transform(module: &ResolvedModule, class_info: &ClassInfo) -> bool {
+    let Some(parsed) = super::shared::parse_module(module) else {
+        return false;
+    };
+    let providers = transform_providers(module, &parsed.ast.body);
+    providers
+        .class_defs
+        .get(class_info.name.as_str())
+        .is_some_and(|class| transform_via_bases_or_metaclass(class, &providers).is_some())
 }

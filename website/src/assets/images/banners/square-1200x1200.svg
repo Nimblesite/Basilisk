@@ -11,10 +11,10 @@
   </defs>
   <rect width="1200" height="1200" rx="32" fill="url(#glow)"/>
   <rect x="3" y="3" width="1194" height="1194" rx="29" fill="none" stroke="#263b57" stroke-width="6"/>
-  <image href="../../images/basilisk-logo.png" x="330" y="90" width="540" height="540"/>
-  <text x="600" y="725" text-anchor="middle" fill="#f7f9fc" font-family="Arial, Helvetica, sans-serif" font-size="96" font-weight="700">100% PEP</text>
-  <text x="600" y="825" text-anchor="middle" fill="#f7f9fc" font-family="Arial, Helvetica, sans-serif" font-size="96" font-weight="700">conformance.</text>
-  <text x="600" y="902" text-anchor="middle" fill="#aab5c8" font-family="Arial, Helvetica, sans-serif" font-size="38" font-weight="600">Python type checking, built in Rust.</text>
+  <image href="../favicon.png" x="330" y="90" width="540" height="540"/>
+  <text x="600" y="725" text-anchor="middle" fill="#f7f9fc" font-family="Arial, Helvetica, sans-serif" font-size="96" font-weight="700">Python type</text>
+  <text x="600" y="825" text-anchor="middle" fill="#f7f9fc" font-family="Arial, Helvetica, sans-serif" font-size="96" font-weight="700">checking.</text>
+  <text x="600" y="902" text-anchor="middle" fill="#aab5c8" font-family="Arial, Helvetica, sans-serif" font-size="38" font-weight="600">Built in Rust. Results under review.</text>
   <rect x="365" y="965" width="470" height="94" rx="47" fill="url(#accent)"/>
   <text x="600" y="1027" text-anchor="middle" fill="#07101b" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700">basilisk-python.dev</text>
 </svg>

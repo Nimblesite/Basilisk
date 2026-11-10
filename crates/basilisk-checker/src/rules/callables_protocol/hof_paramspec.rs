@@ -2,10 +2,7 @@
 //! Higher-order `ParamSpec` argument validation (PEP 612).
 //! Implements [TYPEINF-GENERICS-PARAMSPEC].
 //!
-//! A function parameter annotated `Callable[Concatenate[T1, ..., P], R]`
-//! requires arguments (including decorator applications) whose leading
-//! positional parameters accept `T1, ...`.  When several parameters share one
-//! `ParamSpec` (`def f(x: Callable[P, int], y: Callable[P, int])`), the
+//! When several parameters of a function bind the same `ParamSpec`, the
 //! argument callables must have identical signatures.
 
 use std::collections::{HashMap, HashSet};
@@ -23,7 +20,7 @@ use super::CODE;
 /// A function parameter that binds a `ParamSpec`.
 struct PBindParam {
     position: usize,
-    /// `Concatenate` prefix types (empty for bare `Callable[P, R]`).
+    /// Prefix types required ahead of the bound `ParamSpec`.
     prefix: Vec<String>,
     /// The bound `ParamSpec` name.
     paramspec: String,
@@ -141,7 +138,7 @@ pub(super) fn check_hof_paramspec_args(
     }
 }
 
-/// Parameters of `func` that bind a `ParamSpec` through a `Callable` annotation.
+/// Parameters of `func` that bind a `ParamSpec` through their annotation.
 fn collect_pbind_params(
     func: &ruff_python_ast::StmtFunctionDef,
     paramspec_names: &HashSet<&str>,
@@ -164,7 +161,8 @@ fn collect_pbind_params(
         .collect()
 }
 
-/// Parse `Callable[P, R]` or `Callable[Concatenate[T.., P], R]`.
+/// Parse a subscripted annotation whose parameter position is one of
+/// `paramspec_names`, yielding its prefix types and the bound `ParamSpec` name.
 pub(super) fn parse_callable_pbind(
     ann: &Expr,
     paramspec_names: &HashSet<&str>,
@@ -172,9 +170,6 @@ pub(super) fn parse_callable_pbind(
     let Expr::Subscript(sub) = ann else {
         return None;
     };
-    if ann_str(&sub.value) != "Callable" {
-        return None;
-    }
     let Expr::Tuple(tup) = sub.slice.as_ref() else {
         return None;
     };
@@ -184,20 +179,6 @@ pub(super) fn parse_callable_pbind(
     match params_part {
         Expr::Name(n) if paramspec_names.contains(n.id.as_str()) => {
             Some((Vec::new(), n.id.to_string()))
-        }
-        Expr::Subscript(concat) if ann_str(&concat.value) == "Concatenate" => {
-            let Expr::Tuple(args) = concat.slice.as_ref() else {
-                return None;
-            };
-            let (last, prefix_elts) = args.elts.split_last()?;
-            let Expr::Name(ps) = last else {
-                return None;
-            };
-            if !paramspec_names.contains(ps.id.as_str()) {
-                return None;
-            }
-            let prefix = prefix_elts.iter().map(ann_str).collect();
-            Some((prefix, ps.id.to_string()))
         }
         _ => None,
     }

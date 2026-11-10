@@ -17,15 +17,6 @@ use basilisk_resolver::{FunctionInfo, ResolvedModule, VariableInfo};
 
 use super::CODE;
 
-/// Special forms that are NOT valid type expressions in a `TypeForm` context.
-///
-/// Per PEP 747, `Self`, `ClassVar`, `Final`, `Unpack`, and bare `Optional`
-/// (without type argument) are not valid type form objects.
-const INVALID_TYPE_FORMS: &[&str] = &["Self", "ClassVar", "Final", "Unpack"];
-
-/// Forms that are only valid as type expressions when parameterised (with `[T]`).
-const REQUIRES_PARAMETERISATION: &[&str] = &["Optional"];
-
 /// Builtin type constructors — calling these creates an instance, not a type form.
 const BUILTIN_TYPE_CONSTRUCTORS: &[&str] = &[
     "tuple",
@@ -232,49 +223,16 @@ fn is_valid_rhs_type_expression(
     inner: &InferredType,
     resolver: &AnnotationResolver<'_>,
 ) -> bool {
-    let rhs_text = rhs_text.trim();
-
-    let base_name = rhs_text.split('[').next().unwrap_or(rhs_text).trim();
-
-    // Reject forms that are never valid as type expressions
-    if INVALID_TYPE_FORMS.contains(&base_name) {
-        return false;
-    }
-
-    // Forms that need parameterisation (e.g. bare `Optional` without `[T]`)
-    if REQUIRES_PARAMETERISATION.contains(&base_name) && !rhs_text.contains('[') {
-        return false;
-    }
-
-    // Reject `Final[...]` and `Unpack[...]` even when parameterised
-    if rhs_text.starts_with("Final[") || rhs_text.starts_with("Unpack[") {
-        return false;
-    }
-
-    // Handle `Annotated[T, metadata]` — the type form is just `T`
-    if rhs_text.starts_with("Annotated[") && rhs_text.ends_with(']') {
-        let params = &rhs_text["Annotated[".len()..rhs_text.len() - 1];
-        // First param before comma is the actual type
-        let type_part = params.split(',').next().unwrap_or("").trim();
-        if type_part.is_empty() {
-            return false;
-        }
-        return resolver
-            .resolve_text(type_part)
-            .is_some_and(|represented| represented.is_assignable_to(inner));
-    }
-
     // The RHS *is* a type expression — evaluate it through the cascade.
     resolver
-        .resolve_text(rhs_text)
+        .resolve_text(rhs_text.trim())
         .is_some_and(|represented| represented.is_assignable_to(inner))
 }
 
-/// Check `TypeForm` constructor calls and function calls with `TypeForm` parameters.
+/// Check function calls with `TypeForm` parameters.
 ///
-/// This catches:
-/// - `TypeForm("type(1)")` — invalid type expression as `TypeForm` constructor arg
-/// - `func1("not a type")` — invalid type expression passed to `TypeForm` param
+/// This catches `func1("not a type")` — an invalid type expression passed to a
+/// parameter whose annotation resolves to `TypeForm`.
 pub(super) fn check_typeform_calls(
     module: &ResolvedModule,
     resolver: &AnnotationResolver<'_>,
@@ -283,13 +241,6 @@ pub(super) fn check_typeform_calls(
     let source = &module.source;
 
     for call in &module.calls {
-        // Check `TypeForm()` constructor calls
-        if call.callee == "TypeForm" {
-            check_typeform_constructor(call, source, &module.path, resolver, diagnostics);
-            continue;
-        }
-
-        // Check function calls where parameters have `TypeForm` annotations
         check_typeform_param_args(
             call,
             &module.functions,
@@ -298,62 +249,6 @@ pub(super) fn check_typeform_calls(
             resolver,
             diagnostics,
         );
-    }
-}
-
-/// Validate a `TypeForm(arg)` constructor call.
-fn check_typeform_constructor(
-    call: &basilisk_resolver::CallSite,
-    source: &str,
-    path: &str,
-    resolver: &AnnotationResolver<'_>,
-    diagnostics: &mut Vec<Diagnostic>,
-) {
-    // `TypeForm()` takes exactly one argument
-    let Some((ref rhs_kind, arg_span)) = call.args.first() else {
-        return;
-    };
-    if call.args.len() != 1 {
-        return;
-    }
-
-    let Some(arg_text) = slice_span(source, *arg_span) else {
-        return;
-    };
-    let arg_text = arg_text.trim();
-
-    let is_invalid = match rhs_kind {
-        basilisk_resolver::RhsKind::StrLiteral => {
-            !is_valid_string_typeform(arg_text, &InferredType::Any, resolver)
-        }
-        basilisk_resolver::RhsKind::CallExpr
-        | basilisk_resolver::RhsKind::TypeCall
-        | basilisk_resolver::RhsKind::IntLiteral
-        | basilisk_resolver::RhsKind::FloatLiteral
-        | basilisk_resolver::RhsKind::BoolLiteral
-        | basilisk_resolver::RhsKind::BytesLiteral
-        | basilisk_resolver::RhsKind::Tuple(_) => true,
-        _ => false,
-    };
-
-    if is_invalid {
-        diagnostics.push(error_diagnostic_owned(
-            CODE.clone(),
-            format!(
-                "Invalid TypeForm argument: `{arg_text}` is not a valid type expression"
-            ),
-            call.span,
-            path,
-            Some(
-                "TypeForm() requires a valid type expression such as `int`, `str | None`, \
-                 or `list[int]`"
-                    .to_owned(),
-            ),
-            Some(
-                "TypeForm acts as a function that can be called with a single valid type expression"
-                    .to_owned(),
-            ),
-        ));
     }
 }
 

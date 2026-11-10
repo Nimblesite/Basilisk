@@ -150,23 +150,8 @@ impl AnnotationSpans {
         }
     }
 
-    /// Recurse into a subscript's arguments, honouring the two special forms
-    /// whose arguments are not all types.
     fn collect_subscript(&mut self, subscript: &ruff_python_ast::ExprSubscript) {
-        match qualified_tail(&subscript.value) {
-            // Every argument is a value.
-            Some("Literal") => {}
-            // Only the first argument is a type; the rest is metadata.
-            Some("Annotated") => match subscript.slice.as_ref() {
-                Expr::Tuple(tuple) => {
-                    if let Some(first) = tuple.elts.first() {
-                        self.collect_type_strings(first);
-                    }
-                }
-                other => self.collect_type_strings(other),
-            },
-            _ => self.collect_type_strings(&subscript.slice),
-        }
+        self.collect_type_strings(&subscript.slice);
     }
 
     fn collect_each(&mut self, elements: &[Expr]) {

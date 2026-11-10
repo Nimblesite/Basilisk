@@ -1,8 +1,8 @@
 //! Implements [BSK-0004] from [CHKARCH-DIAG-MISSING]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-MISSING
 //! BSK-0004: Missing `*args` / `**kwargs` type annotation.
 //!
-//! This house rule is off by default — the default configuration is pure PEP
-//! conformance. When a project enables it, every variadic positional parameter
+//! This house rule is off by default — the default configuration contains only
+//! PEP-tagged rules. When a project enables it, every variadic positional parameter
 //! (`*args`) and variadic keyword parameter (`**kwargs`) must carry an explicit
 //! type annotation.
 

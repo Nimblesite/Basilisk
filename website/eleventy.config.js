@@ -135,7 +135,7 @@ export default function (eleventyConfig) {
       name: "Basilisk",
       url: "https://www.basilisk-python.dev",
       description:
-        "Open-source Python type checker and language server built in Rust, scoring 100% on the official python/typing conformance suite, with published cold-check benchmarks.",
+        "Open-source Python type checker and language server built in Rust. Conformance and benchmark results are withdrawn during an integrity review.",
       author: "The Basilisk Project",
       themeColor: "#e8500a",
       stylesheet: "/assets/css/styles.css",

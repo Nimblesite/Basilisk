@@ -236,7 +236,9 @@ lookup: the source is present and verifies, or it is missing/corrupt and the
 checker **fails hard** — it refuses to analyse, names the SHA it needed, and
 never substitutes another source or degrades to an untyped stdlib. That failure
 is service status (CLI stderr, LSP `showMessage` + Service Info, MCP), never a
-Python diagnostic, so it can never create a conformance false positive.
+Python diagnostic — because "your typeshed pin is broken" is a fact about the
+environment, not about the user's code. The channel is chosen by what the message
+*is*, never by what it would cost a measurement.
 
 #### A pin is a verification {#STUBRES-TYPESHED-PIN}
 
@@ -528,12 +530,15 @@ prints a rustc-style banner (`<severity>[<code>]: <message>` then `= see:
 fields on a separate `debug` telemetry channel — the human banner is not
 `key="VALUE"` telemetry. The LSP surfaces them through `window/showMessage`
 plus persistent Service Info, never `publishDiagnostics`. MCP returns them as
-structured `{code, message, docs_url}` fields. **Conformance invariant:** no
-advisory ever enters the stdout JSON / `publishDiagnostics` stream a conformance
-run scores, so it can NEVER create a false positive. The default bundled run
-emits exactly one advisory — the `typeshed_source_unpinned` reproducibility
-notice — on stderr, which the `python/typing` harness never reads; the 100 % /
-0-FP score is unaffected ([§CHKARCH-CONFORMANCE](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE)).
+structured `{code, message, docs_url}` fields. **Channel invariant:** an advisory
+describes the *environment*, not the user's code, so it never enters the stdout
+JSON / `publishDiagnostics` stream. That is a statement about what a diagnostic
+means, not a device for keeping a measurement clean — routing a message about
+Python code away from the diagnostic stream to protect a number would be exactly
+the failure this repo is removing
+([§CHKARCH-CONFORMANCE](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE)). The
+default bundled run emits exactly one advisory — the `typeshed_source_unpinned`
+reproducibility notice — on stderr.
 
 **Severity is configured exactly like any Basilisk rule.** Each advisory carries
 the `basilisk` provenance tag, so it resolves severity through the same
@@ -627,6 +632,23 @@ callables; and early termination for special `__call__` or non-instance
 For #288, bound `str.join` removes the displayed receiver while using it to
 specialize every overload and return type, preserves `LiteralString` and `/`,
 and drives call checking from the same declaration—never a hand table.
+
+**A `.pyi` file is Python, and it is parsed as Python.** Stub indexing runs on
+the Ruff AST and resolves decorators, bases, and aliases through binding
+resolution ([RESOLV-CANONICAL](CHECKER-ARCHITECTURE-SPEC.md#RESOLV-CANONICAL)),
+exactly as `.py` source does. The recognition rules in
+[CHKARCH-RECOGNITION](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-RECOGNITION) apply
+here without relaxation: a stub may alias what it imports
+(`from typing import overload as _overload`), re-export under a different name,
+or reach a symbol through a module attribute, and a spelling comparison gets
+every one of those wrong. Typeshed does all three.
+
+This is the mandate that makes properties such as `StubFunction::is_overload`
+meaningful — the flag records that a decorator **resolved** to the
+specification's overload declaration, not that its characters matched. As of
+2026-08-06 that flag is unpopulated and `basilisk-stubs` does not compile; it is
+the first item of
+[ASTREBUILD-PHASE-COMPILE](../plans/CHECKER-AST-RECONSTRUCTION-PLAN.md#ASTREBUILD-PHASE-COMPILE).
 
 #### Re-exports {#STUBRES-PYI-REEXPORTS}
 

@@ -59,9 +59,6 @@ pub(crate) fn organize_imports(uri: &Url, source: &str) -> Option<CodeAction> {
 /// uses, or `None` if there is no unambiguous wildcard to expand
 /// ([LSPFMT-IMPORTS]).
 pub(crate) fn expand_wildcard_imports(uri: &Url, source: &str) -> Option<CodeAction> {
-    if !source.contains("import *") {
-        return None;
-    }
     let new_source = crate::import_hygiene::expand_wildcard_source(source)?;
     Some(full_file_replacement_action(
         uri,
@@ -78,9 +75,6 @@ pub(crate) fn expand_wildcard_imports(uri: &Url, source: &str) -> Option<CodeAct
 /// Split `import a, b` statements into one import per module (Ruff E401 fix
 /// parity), or `None` if no statement needs splitting ([LSPFMT-IMPORTS]).
 pub(crate) fn convert_import_style(uri: &Url, source: &str) -> Option<CodeAction> {
-    if !source.contains("import ") {
-        return None;
-    }
     let new_source = crate::import_hygiene::split_multi_imports(source)?;
     Some(full_file_replacement_action(
         uri,
@@ -90,88 +84,4 @@ pub(crate) fn convert_import_style(uri: &Url, source: &str) -> Option<CodeAction
         CodeActionKind::QUICKFIX,
         false,
     ))
-}
-
-// ── Add __all__ declaration ───────────────────────────────────────────────────
-
-/// Offer to add an `__all__` declaration listing all public names in the module.
-/// Only offered when `__all__` is not already defined.
-pub(crate) fn add_dunder_all(uri: &Url, source: &str) -> Option<CodeAction> {
-    if source.contains("__all__") {
-        return None;
-    }
-
-    let public_names = collect_public_names(source);
-    if public_names.is_empty() {
-        return None;
-    }
-
-    let names_str = public_names
-        .iter()
-        .map(|n| format!("    \"{n}\","))
-        .collect::<Vec<_>>()
-        .join("\n");
-    let all_text = format!("__all__ = [\n{names_str}\n]\n\n");
-
-    let insert_line = super::last_import_line(source);
-    let insert_pos = Position {
-        line: insert_line,
-        character: 0,
-    };
-
-    let mut changes = HashMap::new();
-    let _ = changes.insert(
-        uri.clone(),
-        vec![TextEdit {
-            range: Range {
-                start: insert_pos,
-                end: insert_pos,
-            },
-            new_text: all_text,
-        }],
-    );
-    Some(super::code_action_with_changes(
-        "Add __all__ declaration (basilisk)".to_owned(),
-        CodeActionKind::SOURCE,
-        changes,
-        false,
-    ))
-}
-
-/// Collect public (non-underscore-prefixed) top-level names from source text.
-fn collect_public_names(source: &str) -> Vec<&str> {
-    let mut public_names: Vec<&str> = Vec::new();
-    for line in source.lines() {
-        let trimmed = line.trim();
-        if let Some(rest) = trimmed.strip_prefix("def ") {
-            if let Some(name) = rest.split('(').next() {
-                let name = name.trim();
-                if !name.starts_with('_') {
-                    public_names.push(name);
-                }
-            }
-        } else if let Some(rest) = trimmed.strip_prefix("class ") {
-            if let Some(name) = rest.split(['(', ':']).next() {
-                let name = name.trim();
-                if !name.starts_with('_') {
-                    public_names.push(name);
-                }
-            }
-        } else if !trimmed.starts_with('#')
-            && !trimmed.starts_with("import ")
-            && !trimmed.starts_with("from ")
-            && !trimmed.is_empty()
-        {
-            if let Some(name) = trimmed.split('=').next() {
-                let name = name.split(':').next().unwrap_or("").trim();
-                if !name.is_empty()
-                    && !name.starts_with('_')
-                    && name.chars().all(|c| c.is_alphanumeric() || c == '_')
-                {
-                    public_names.push(name);
-                }
-            }
-        }
-    }
-    public_names
 }

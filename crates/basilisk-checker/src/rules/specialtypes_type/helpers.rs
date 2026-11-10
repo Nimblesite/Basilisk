@@ -3,31 +3,6 @@
 
 use ruff_python_ast::Expr;
 
-/// Special-form names that are not valid class objects for `type[T]`.
-pub(super) const SPECIAL_FORMS: &[&str] = &[
-    "Callable",
-    "Union",
-    "Optional",
-    "ClassVar",
-    "Final",
-    "Literal",
-    "Annotated",
-    "TypeGuard",
-    "TypeIs",
-    "Never",
-    "NoReturn",
-    "LiteralString",
-    "Self",
-    "Unpack",
-    "TypeVarTuple",
-    "ParamSpec",
-    "Concatenate",
-    "Required",
-    "NotRequired",
-    "ReadOnly",
-    "TypeAlias",
-];
-
 /// Known attributes on `type` / `object` (the metaclass API) that are always
 /// legal to access on `type[object]` or a plain `type` annotation.
 pub(super) const KNOWN_TYPE_ATTRS: &[&str] = &[
@@ -59,39 +34,25 @@ pub(super) const KNOWN_TYPE_ATTRS: &[&str] = &[
     "__subclasshook__",
 ];
 
-/// Returns `true` if `ann` is a `type[…]` or `Type[…]` annotation of any form.
-pub(super) fn is_any_type_annotation(ann: &str) -> bool {
-    strip_type_bracket(ann).is_some()
-}
-
-/// Strip the `type[` / `Type[` prefix + `]` suffix and return the inner text,
+/// Strip the builtin `type[` prefix + `]` suffix and return the inner text,
 /// or `None` if the annotation is not of this form.
 pub(super) fn strip_type_bracket(ann: &str) -> Option<&str> {
     let ann = ann.trim();
-    let inner = ann
-        .strip_prefix("type[")
-        .or_else(|| ann.strip_prefix("Type["))?;
+    let inner = ann.strip_prefix("type[")?;
     inner.strip_suffix(']')
 }
 
-/// Returns `true` if `ann` is a `type[X]` where `X` is a **concrete** (non-Any,
-/// non-TypeVar) type — e.g. `type[object]`, `Type[object]`, `type[int]`.
+/// Returns `true` if `ann` is a `type[X]` where `X` is a **concrete**
+/// (non-TypeVar) type — e.g. `type[object]`, `type[int]`.
 pub(super) fn is_concrete_type_annotation(ann: &str) -> bool {
     let Some(inner) = strip_type_bracket(ann) else {
         return false;
     };
     let inner = inner.trim();
-    if inner == "Any" || inner.len() == 1 && inner.chars().next().is_some_and(char::is_uppercase) {
+    if inner.len() == 1 && inner.chars().next().is_some_and(char::is_uppercase) {
         return false;
     }
     matches!(inner, "object" | "int" | "str" | "float" | "bool" | "bytes")
-}
-
-/// Returns `true` if `rhs` (the right-hand side of a `TypeAlias`) is a
-/// `type` or `Type` annotation (bare or parameterised).
-pub(super) fn is_type_annotation(rhs: &str) -> bool {
-    let rhs = rhs.trim();
-    matches!(rhs, "type" | "Type") || rhs.starts_with("type[") || rhs.starts_with("Type[")
 }
 
 /// Returns `true` if `attr` is a well-known attribute on the `type` metaclass.
@@ -105,15 +66,6 @@ pub(super) fn expr_simple_name(expr: &Expr) -> Option<&str> {
         Expr::Name(n) => Some(n.id.as_str()),
         _ => None,
     }
-}
-
-/// Returns `true` if the expression is a `TypeVar(...)` call.
-pub(super) fn is_typevar_call(expr: &Expr) -> bool {
-    matches!(
-        expr,
-        Expr::Call(call)
-            if matches!(call.func.as_ref(), Expr::Name(n) if n.id.as_str() == "TypeVar")
-    )
 }
 
 /// Convert an expression to a readable annotation string (best-effort).

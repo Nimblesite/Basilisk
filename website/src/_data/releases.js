@@ -23,6 +23,32 @@ const RELEASES_URL = `https://github.com/${OWNER}/${REPO}/releases`;
 // allowed. `breaks: true` matches how GitHub itself renders release bodies.
 const md = markdownIt({ html: true, linkify: true, breaks: true });
 
+// Withdrawn-claim redaction. Release notes arrive verbatim from GitHub, and some
+// historical entries quote the conformance result that has since been retracted.
+// [CHKARCH-CONFORMANCE] forbids publishing, quoting, or marketing any conformance
+// figure, so rendering those lines unchanged would keep republishing a claim we
+// have withdrawn. Any line pairing a conformance subject with a figure is replaced
+// by a visible marker — nothing is silently dropped, the marker links to the
+// correction, and every release heading still links to the unmodified GitHub
+// release so the original wording stays one click away.
+const CLAIM_SUBJECT = /conformance|conformant/i;
+const CLAIM_FIGURE = /\d+(?:\.\d+)?\s*%|\b\d{1,4}\s*\/\s*\d{1,4}\b|\b\d+\s+false\s+positives?\b/i;
+const LIST_MARKER = /^(\s*(?:[-*+]|\d+\.)\s+)/;
+const REDACTION = "*[withdrawn conformance claim redacted — see the correction](/docs/conformance/)*";
+
+// Replace each claim-bearing line with the marker, preserving its list marker so
+// the surrounding changelog structure still renders.
+function redactWithdrawnClaims(markdown) {
+  return markdown
+    .split(/\r?\n/)
+    .map((line) => {
+      if (!CLAIM_SUBJECT.test(line) || !CLAIM_FIGURE.test(line)) return line;
+      const marker = line.match(LIST_MARKER);
+      return `${marker ? marker[1] : ""}${REDACTION}`;
+    })
+    .join("\n");
+}
+
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 // "2026-06-23T10:16:43Z" -> "Jun 23, 2026". UTC getters keep the output
@@ -88,7 +114,7 @@ function toRecord(release) {
     date: formatDate(release.published_at || release.created_at),
     dateIso: release.published_at || release.created_at,
     prerelease: release.prerelease === true,
-    bodyHtml: release.body ? md.render(release.body) : "",
+    bodyHtml: release.body ? md.render(redactWithdrawnClaims(release.body)) : "",
     assets: (release.assets || []).map((asset) => ({
       name: asset.name,
       url: asset.browser_download_url,

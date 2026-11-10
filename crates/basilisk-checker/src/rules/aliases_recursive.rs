@@ -78,31 +78,13 @@ fn has_cycle(start: &str, graph: &HashMap<&str, Vec<&str>>) -> bool {
     false
 }
 
-/// Known container types that make recursive type aliases valid when they
-/// wrap the self-reference (e.g. `list["Json"]` inside a Union).
-const CONTAINER_TYPES: &[&str] = &[
-    "list",
-    "dict",
-    "set",
-    "frozenset",
-    "tuple",
-    "List",
-    "Dict",
-    "Set",
-    "FrozenSet",
-    "Tuple",
-    "Mapping",
-    "MutableMapping",
-    "Sequence",
-    "MutableSequence",
-    "Iterable",
-    "Iterator",
-    "Deque",
-    "DefaultDict",
-    "OrderedDict",
-    "ChainMap",
-    "Counter",
-];
+/// Builtin container types that make recursive type aliases valid when they
+/// wrap the self-reference (e.g. `list["Json"]` inside a Union). Only the
+/// builtins are listed: they are in scope without an import, so recognising
+/// them by name is not import resolution. Their `typing` and
+/// `collections.abc` counterparts must be resolved through the annotation
+/// cascade ([TYPEINF-ANNOTATION-RESOLUTION]) rather than matched by spelling.
+const CONTAINER_TYPES: &[&str] = &["list", "dict", "set", "frozenset", "tuple"];
 
 /// Returns `true` if the alias's RHS references any known container type,
 /// indicating the recursive reference is likely wrapped in a container

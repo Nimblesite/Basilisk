@@ -79,17 +79,7 @@ impl ModuleContext {
         let mut namedtuple_classes: HashMap<String, usize> = HashMap::new();
         let mut var_to_nt_class: HashMap<String, String> = HashMap::new();
 
-        // First pass: collect direct NamedTuple class definitions.
-        for stmt in stmts {
-            if let Stmt::ClassDef(cls) = stmt {
-                if is_namedtuple_class(cls) {
-                    let field_count = count_annotated_fields(cls);
-                    let _ = namedtuple_classes.insert(cls.name.to_string(), field_count);
-                }
-            }
-        }
-
-        // Second pass: collect subclasses of known NamedTuple classes.
+        // Collect subclasses of known NamedTuple classes.
         //
         // Per the typing spec, "any fields added by the subclass are not
         // considered part of the named tuple type" — so a NamedTuple subclass
@@ -105,7 +95,7 @@ impl ModuleContext {
             }
         }
 
-        // Third pass: map variables to their NamedTuple class via constructor calls.
+        // Map variables to their NamedTuple class via constructor calls.
         for stmt in stmts {
             if let Stmt::Assign(assign) = stmt {
                 if assign.targets.len() == 1 {
@@ -132,24 +122,6 @@ impl ModuleContext {
         let class_name = self.var_to_nt_class.get(var_name)?;
         self.namedtuple_classes.get(class_name).copied()
     }
-}
-
-/// Returns true if the class directly inherits from `NamedTuple`.
-fn is_namedtuple_class(cls: &ast::StmtClassDef) -> bool {
-    cls.arguments.as_ref().is_some_and(|args| {
-        args.args.iter().any(|base| {
-            matches!(base, Expr::Name(n) if n.id.as_str() == "NamedTuple")
-                || matches!(base, Expr::Attribute(a) if a.attr.as_str() == "NamedTuple")
-        })
-    })
-}
-
-/// Count annotated field definitions (`x: T` or `x: T = default`) in a class body.
-fn count_annotated_fields(cls: &ast::StmtClassDef) -> usize {
-    cls.body
-        .iter()
-        .filter(|stmt| matches!(stmt, Stmt::AnnAssign(_)))
-        .count()
 }
 
 /// If `cls` inherits from a known `NamedTuple` class, return that base class's field count.

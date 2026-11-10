@@ -328,11 +328,17 @@ fn concrete_target_selects_one_version_and_platform_branch() {
 
 #[test]
 fn type_checking_boolean_and_negation_guards_are_selected_statically() {
+    // `TYPE_CHECKING` is "assumed to be True by type checkers" (typing spec,
+    // directives). Recognition is by resolved binding — the import is part of
+    // the fixture, and an alias must behave identically to the plain spelling.
     let stub = parse_stub(
-        "import typing\nimport typing_extensions\n\
+        "from typing import TYPE_CHECKING\n\
+from typing_extensions import TYPE_CHECKING as TC\n\
+import typing\nimport typing_extensions\n\
 if TYPE_CHECKING:\n    direct: int\nelse:\n    direct_runtime: int\n\
-if typing.TYPE_CHECKING:\n    typing_attr: int\n\
+if typing.TYPE_CHECKING:\n    typing_attr: int\nelse:\n    typing_attr_runtime: int\n\
 if typing_extensions.TYPE_CHECKING:\n    extensions_attr: int\n\
+if TC:\n    aliased: int\nelse:\n    aliased_runtime: int\n\
 if True and not False:\n    conjunction: int\n\
 if False or True:\n    disjunction: int\n",
     );
@@ -341,12 +347,89 @@ if False or True:\n    disjunction: int\n",
         "direct",
         "typing_attr",
         "extensions_attr",
+        "aliased",
         "conjunction",
         "disjunction",
     ] {
         assert!(stub.variables.contains_key(name), "missing `{name}`");
     }
-    assert!(!stub.variables.contains_key("direct_runtime"));
+    for name in ["direct_runtime", "typing_attr_runtime", "aliased_runtime"] {
+        assert!(!stub.variables.contains_key(name), "dead branch `{name}`");
+    }
+}
+
+#[test]
+fn unresolved_type_checking_names_intersect_branches() {
+    // The deleted recognizer decided `TYPE_CHECKING` from its spelling, so an
+    // unimported bare name, a fake module bound over `typing`, and a rebound
+    // flag all selected the guarded branch. None of them refers to
+    // `typing.TYPE_CHECKING`, so none may decide the guard: both branches stay
+    // feasible and only declarations common to both survive.
+    let stub = parse_stub(
+        "import settings as typing\n\
+if TYPE_CHECKING:\n    bare_common: int\n    bare_only: int\nelse:\n    bare_common: int\n    bare_else: int\n\
+if typing.TYPE_CHECKING:\n    fake_common: int\n    fake_only: int\nelse:\n    fake_common: int\n    fake_else: int\n",
+    );
+    for name in ["bare_common", "fake_common"] {
+        assert!(stub.variables.contains_key(name), "missing `{name}`");
+    }
+    for name in ["bare_only", "bare_else", "fake_only", "fake_else"] {
+        assert!(!stub.variables.contains_key(name), "undecidable guard decided `{name}`");
+    }
+
+    let shadowed = parse_stub(
+        "from typing import TYPE_CHECKING\n\
+TYPE_CHECKING = False\n\
+if TYPE_CHECKING:\n    shadow_only: int\nelse:\n    shadow_else: int\n",
+    );
+    for name in ["shadow_only", "shadow_else"] {
+        assert!(!shadowed.variables.contains_key(name), "rebound flag decided `{name}`");
+    }
+}
+
+#[test]
+fn aliased_sys_import_guards_are_respected() {
+    let target = StubTarget {
+        python_version: (3, 12),
+        platform: StubTargetPlatform::Concrete("linux".to_owned()),
+    };
+    // `import sys as system` and `from sys import version_info` both refer to
+    // `sys.version_info`; the guard must evaluate exactly as the plain form.
+    let stub = parse_stub_for_target(
+        "import sys as system\nfrom sys import version_info\n\
+if system.version_info >= (3, 12):\n    aliased_modern: int\nelse:\n    aliased_legacy: int\n\
+if version_info >= (3, 12):\n    from_import_modern: int\nelse:\n    from_import_legacy: int\n",
+        &target,
+    );
+    for name in ["aliased_modern", "from_import_modern"] {
+        assert!(stub.variables.contains_key(name), "missing `{name}`");
+    }
+    for name in ["aliased_legacy", "from_import_legacy"] {
+        assert!(!stub.variables.contains_key(name), "dead branch `{name}`");
+    }
+}
+
+#[test]
+fn fake_sys_module_does_not_decide_version_guards() {
+    let target = StubTarget {
+        python_version: (3, 12),
+        platform: StubTargetPlatform::Concrete("linux".to_owned()),
+    };
+    // `sys` here is a rebinding of another module. Its `version_info` and
+    // `platform` are not the interpreter's, so neither guard is statically
+    // decidable: both branches stay feasible and only common names survive.
+    let stub = parse_stub_for_target(
+        "import fake as sys\n\
+if sys.version_info >= (3, 99):\n    version_common: int\n    version_only: int\nelse:\n    version_common: int\n    version_else: int\n\
+if sys.platform == \"linux\":\n    platform_common: int\n    platform_only: int\nelse:\n    platform_common: int\n    platform_else: int\n",
+        &target,
+    );
+    for name in ["version_common", "platform_common"] {
+        assert!(stub.variables.contains_key(name), "missing `{name}`");
+    }
+    for name in ["version_only", "version_else", "platform_only", "platform_else"] {
+        assert!(!stub.variables.contains_key(name), "fake `sys` decided `{name}`");
+    }
 }
 
 #[test]

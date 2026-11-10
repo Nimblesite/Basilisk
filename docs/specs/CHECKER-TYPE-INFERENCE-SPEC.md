@@ -12,6 +12,14 @@ require or discourage annotations without changing PEP behavior (see
 >
 > **Implementation**: the engine is `crates/basilisk-checker/src/bidir/` (synthesis, checking, constraints, solver, generics), `src/narrow/` (flow-sensitive narrowing and inference-driven reachability), and `src/subtyping.rs` (`SubtypingContext`). The pre-engine remnants (`inference.rs`, `collection_inference.rs`, `types_parsing.rs`, per-rule text matching) are **legacy under demolition** — see [TYPEINF-LEGACY](#TYPEINF-LEGACY); nothing in this spec licenses new code against them.
 
+> **Integrity status (2026-08-06):** Basilisk's former conformance result and
+> every Basilisk-generated benchmark, scorecard, and competitor ranking in this
+> document are withdrawn historical research notes. The current conformance
+> level is temporarily unknown while fitted logic is deleted and rebuilt from
+> the specification. External figures remain attributed vendor or third-party
+> claims, not Basilisk measurements. No figure here may be republished until its
+> methodology and robustness have been independently reviewed.
+
 ---
 
 ## [TYPEINF-REDUNDANT] Redundant Annotation Principle {#TYPEINF-REDUNDANT}
@@ -108,14 +116,37 @@ and no new code may be written against any of them:
   the annotation as a type expression through the resolution cascade
   ([TYPEINF-ANNOTATION-RESOLUTION](#TYPEINF-ANNOTATION-RESOLUTION)) into the
   engine.
+- `InferredType::Named(String)` — identifying a type by the characters it was
+  spelled with rather than by the declaration it resolves to. This is the root
+  the two entries above grow from: while a type *is* a string, comparing types
+  can only ever be comparing strings.
 - `RhsKind` shape dispatch in rules — superseded by synthesized types.
 - Rule-local subtype/text helpers — superseded by
   `subtyping::SubtypingContext` as the **single** subtyping judgment.
 
+**This is the same defect as the symbol-naming ban, one level down.** The names
+these paths match on are true builtins, so
+[CHKARCH-RECOGNITION-PERMITTED](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-RECOGNITION-PERMITTED)
+allows naming them — but the *mechanism* is string matching on code, and it
+produces the same failure: a verdict that depends on how the file was written
+instead of on what it means. `slice_span(src, span).starts_with("tuple[")` is
+banned by
+[CHKARCH-RECOGNITION-BANNED](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-RECOGNITION-BANNED)
+whatever the name inside the brackets is.
+
+As of 2026-08-06 this layer is roughly 130 sites — 94 `slice_span` and 36
+`from_annotation` in `crates/basilisk-checker/src`. Because it is the checker's
+entire type representation, it comes out by scheduled demolition, not by ad-hoc
+edits: [ASTREBUILD-PHASE-TYPEEXPR](../plans/CHECKER-AST-RECONSTRUCTION-PLAN.md#ASTREBUILD-PHASE-TYPEEXPR).
+
 While a legacy path still exists in the tree it is an implementation debt, not
-a design. Deleting it must never delete a rule, drop a diagnostic, or cost a
-required conformance error ([CHKARCH-CONFORMANCE](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE));
-if the engine cannot yet carry a rule, the engine gets fixed first.
+a design. Removing it must not silently drop a diagnostic from a rule that
+genuinely analyses code — if the engine cannot yet carry such a rule, the engine
+gets fixed first. A rule whose verdict came from the text all along is a
+different case: it is deleted, with a failing test left behind and the loss
+reported ([CHKARCH-TEXT-MATCHED-LOGIC](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TEXT-MATCHED-LOGIC)).
+Neither case is decided by what it costs a conformance run
+([CHKARCH-CONFORMANCE](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE)).
 
 ### [TYPEINF-ANNOTATION-RESOLUTION] Annotation name resolution {#TYPEINF-ANNOTATION-RESOLUTION}
 
@@ -977,7 +1008,9 @@ Subtyping is decided by `InferredType::is_assignable_to(&self, other)` in `crate
 
 Module-context equivalences that `is_assignable_to` cannot see run as ordered rescues in `rules/assignment_compatibility` after it returns false: expected-type literal-collection checking, the enum literal expansion (`enum_expand.rs`, needing the module's enum-member environment), then callable-signature rescue — all over the skip/alias/schema environment built once per module by `skip_names::SkipNames::collect`.
 
-`Named` types (user classes and unparameterised imports) compare by base name before `[`: `Foo[int]` and `Foo[float]` are treated as compatible. This is deliberate — without whole-program generic variance analysis, stricter matching would emit false positives, and the conformance gate holds `max_false_positives` at zero.
+`Named` types (user classes and unparameterised imports) compare **by the source text before the `[`**: `Foo[int]` and `Foo[float]` are treated as compatible. Stated plainly, that is not a subtyping judgment — it is a string prefix comparison over a rendered type, and generic argument compatibility is **unimplemented**. It is a `_ => true` in different clothing: every mismatch inside the brackets is accepted, so `list[int]` assigned from `list[str]` passes.
+
+Two things about it are on the record. First, it is text matching by [CHKARCH-TEXT-MATCHED-LOGIC](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TEXT-MATCHED-LOGIC): the verdict follows the spelling of the type, and an alias or a re-export changes it. Second, the justification previously given here — that stricter matching would raise false positives against a zero-false-positive conformance gate — is not a reason to leave a check unimplemented; it is a reason the gate was the wrong instrument. Whole-program variance analysis is the real fix, and until it exists this comparison must be described as missing rather than as deliberate conservatism.
 
 Nominal MRO walking and structural Protocol/TypedDict compatibility are decided today by the per-conformance-area rule modules (`rules/protocols_*`, `rules/typeddicts_*`, and the class-bases-walking `is_subtype_of` helper in `rules/generics_basic_3/helpers.rs`). The shared home now exists — `crates/basilisk-checker/src/subtyping.rs` (`SubtypingContext`: cycle-guarded nominal walk, structural Protocol satisfaction, `TypedDict` schemas, declared variance, `Callable` kinds) — and the rule modules migrate onto it behind the parity pins in `tests/subtyping_context_tests.rs` and the in-module `helper_parity_tests` at the Integration stage ([NARROWPLAN-SUBTYPING](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-SUBTYPING)).
 

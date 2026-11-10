@@ -117,8 +117,8 @@ benchmarks/results/.warmcache/
 benchmarks/results/.carry/
 # Raw per-fixture hyperfine output: ~9.6k lines rewritten on EVERY `make bench`,
 # which buried real changes in diff noise. The published record of a run is
-# benchmarks/status/<machine>.csv (the regression gate reads it from git) plus
-# the summary.md / coverage.tsv highlights, all still tracked.
+# benchmarks/status/<machine>.csv (the historical measurement record) plus the
+# summary.md / coverage.tsv highlights, all still tracked for auditability.
 benchmarks/results/*.json
 
 

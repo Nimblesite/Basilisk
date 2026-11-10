@@ -136,6 +136,15 @@ The unoptimised release artefact measures **7.2 MB**, most of it the embedded
 typeshed. Size work (`opt-level="z"`, `wasm-opt`, lazy loading) and the ratchet
 that holds it are in [WASM-PLAN.md](../plans/WASM-PLAN.md).
 
+The engine is a **separate build step from the site**. `npm run build` is
+Eleventy alone and has no Rust dependency; `npm run build:wasm` compiles this
+crate into `website/src/assets/wasm`. The site is otherwise generated from
+committed data, so a checker that does not compile must not be able to take
+every page down with it — it can only cost the playground its engine. CI and
+the release deploy run `build:wasm` as their own explicit step, and a site
+served without one reports the missing engine on the playground page instead of
+hanging on a spinner.
+
 ## Testing {#WASM-TESTING}
 
 Because the engine is an `rlib`, every test runs on the host under the normal

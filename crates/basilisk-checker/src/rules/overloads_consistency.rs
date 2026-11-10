@@ -15,7 +15,6 @@ use basilisk_resolver::{FunctionInfo, ResolvedModule};
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
-use super::shared::overload_decorated;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
@@ -44,16 +43,15 @@ impl Rule for OverlappingOverloads {
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        // Whether a decorator IS `typing.overload` is answered by the
-        // resolver's binding tables ([#380]), shared with every overload rule.
-        let Some(resolver) = types.annotations() else {
+        // Bail on parse errors — those are reported separately as BSK-0000.
+        if types.annotations().is_none() {
             return;
-        };
+        }
         // Group overloaded functions by (class_name, function_name) so overloads
         // in different classes with the same method name don't cross-contaminate.
         let mut groups: HashMap<(Option<&str>, &str), Vec<&FunctionInfo>> = HashMap::new();
         for func in &module.functions {
-            if overload_decorated(resolver, &func.decorators) {
+            if func.is_overload {
                 groups
                     .entry((func.class_name.as_deref(), &func.name))
                     .or_default()

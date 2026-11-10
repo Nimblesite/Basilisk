@@ -33,18 +33,6 @@ pub(crate) fn full_document_range(source: &str) -> Range {
     }
 }
 
-/// Return the 0-based line number after the last import statement.
-pub(super) fn last_import_line(source: &str) -> u32 {
-    let mut insert_line: u32 = 0;
-    for (idx, line) in source.lines().enumerate() {
-        let trimmed = line.trim();
-        if trimmed.starts_with("import ") || trimmed.starts_with("from ") {
-            insert_line = u32::try_from(idx + 1).unwrap_or(u32::MAX);
-        }
-    }
-    insert_line
-}
-
 /// Construct a [`CodeAction`] whose edit is a precomputed `changes` map.
 ///
 /// Many code-action builders construct a `HashMap<Url, Vec<TextEdit>>` and
@@ -204,9 +192,6 @@ pub fn code_actions(
         if let Some(action) = imports::convert_import_style(uri, source) {
             actions.push(CodeActionOrCommand::CodeAction(action));
         }
-        if let Some(action) = imports::add_dunder_all(uri, source) {
-            actions.push(CodeActionOrCommand::CodeAction(action));
-        }
     }
 
     collect_refactoring_actions(uri, source, range, resolved, &mut actions);
@@ -225,19 +210,7 @@ fn collect_refactoring_actions(
     for action in refactor::extract_variable(uri, source, range) {
         actions.push(CodeActionOrCommand::CodeAction(action));
     }
-    if let Some(action) = refactor::extract_constant(uri, source, range) {
-        actions.push(CodeActionOrCommand::CodeAction(action));
-    }
-    if let Some(action) = refactor::extract_function(uri, source, range) {
-        actions.push(CodeActionOrCommand::CodeAction(action));
-    }
     if let Some(action) = refactor::inline_variable(uri, source, range) {
-        actions.push(CodeActionOrCommand::CodeAction(action));
-    }
-    for action in refactor::convert_union_syntax(uri, source, range) {
-        actions.push(CodeActionOrCommand::CodeAction(action));
-    }
-    for action in refactor::convert_optional_syntax(uri, source, range) {
         actions.push(CodeActionOrCommand::CodeAction(action));
     }
     for action in refactor::convert_fstring(uri, source, range) {
@@ -249,16 +222,7 @@ fn collect_refactoring_actions(
     for action in refactor::convert_ternary(uri, source, range) {
         actions.push(CodeActionOrCommand::CodeAction(action));
     }
-    for action in refactor::convert_namedtuple(uri, source, range) {
-        actions.push(CodeActionOrCommand::CodeAction(action));
-    }
     if let Some(action) = refactor::inline_function_call(uri, source, range) {
-        actions.push(CodeActionOrCommand::CodeAction(action));
-    }
-    if let Some(action) = refactor::move_symbol_to_new_file(uri, source, range) {
-        actions.push(CodeActionOrCommand::CodeAction(action));
-    }
-    if let Some(action) = refactor::move_symbol_to_existing_file(uri, source, range) {
         actions.push(CodeActionOrCommand::CodeAction(action));
     }
     if let Some(resolved) = resolved {

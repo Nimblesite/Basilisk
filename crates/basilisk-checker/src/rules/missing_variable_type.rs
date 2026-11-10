@@ -2,7 +2,7 @@
 //! BSK-0003: Missing variable type annotation.
 //!
 //! Fires when a module-level variable has no type annotation.  This house rule
-//! is off by default — the default configuration is pure PEP conformance — and
+//! is off by default — the default configuration contains only PEP-tagged rules — and
 //! a project opts in via configuration. When enabled, every module-level
 //! binding must carry an explicit annotation so that Basilisk can verify
 //! downstream usage and generate accurate stubs.

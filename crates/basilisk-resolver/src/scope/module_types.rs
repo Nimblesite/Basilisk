@@ -381,7 +381,7 @@ pub struct TypeAliasDefInfo {
     pub name: String,
     /// All simple names referenced in the RHS expression (includes both `TypeVar`s and non-`TypeVar`s).
     pub rhs_names: Vec<String>,
-    /// The base name of the RHS expression, if it is a subscript (e.g. `"Generic"` from `Generic[T]`).
+    /// The base name of the RHS expression, if it is a subscript.
     pub rhs_base_name: Option<String>,
     /// Type argument names from the RHS subscript expression.
     pub rhs_type_arg_names: Vec<String>,

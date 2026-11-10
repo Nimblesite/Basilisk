@@ -5,7 +5,7 @@ name = "Basilisk"
 version = "0.0.0-PLACEHOLDER"
 schema_version = 1
 authors = ["Basilisk Contributors"]
-description = "The only Python type checker scoring 100% on the official python/typing conformance suite (https://github.com/python/typing/blob/main/conformance/results/results.html) — and the fastest we've measured. Complete open-source Python dev environment in Rust: type checker, language server, debugger, profiler, plus VS Code, Cursor, Zed & Neovim extensions. Strict by default."
+description = "An open-source Python type checker and language server built in Rust: diagnostics, autocomplete, go-to-definition, refactoring, integrated debugging, and profiling. Strictness is configured per rule, so a codebase can adopt type safety incrementally."
 repository = "https://github.com/Nimblesite/Basilisk"
 
 # No [grammars.*] and no languages/ directory: Basilisk attaches to Zed's

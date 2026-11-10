@@ -119,15 +119,15 @@ impl SubtypingContext {
     /// The central entry: is annotation text `sub` usable where `sup` is
     /// expected, under this context?
     ///
-    /// Gradual posture first ([TYPEINF-SUBTYPING-UNION]): `Any` either side
-    /// and the `object` top accept. Then the tower, union decomposition,
-    /// the nominal walk, structural Protocol satisfaction, and `TypedDict`
-    /// schemas ([TYPEINF-SUBTYPING-NOMINAL/-PROTOCOL/-TYPEDDICT]).
+    /// The `object` top accepts ([TYPEINF-SUBTYPING-UNION]). Then the tower,
+    /// union decomposition, the nominal walk, structural Protocol
+    /// satisfaction, and `TypedDict` schemas
+    /// ([TYPEINF-SUBTYPING-NOMINAL/-PROTOCOL/-TYPEDDICT]).
     #[must_use]
     pub fn is_subtype(&self, sub: &str, sup: &str) -> bool {
         let sub = sub.trim();
         let sup = sup.trim();
-        if sub == "Any" || sup == "Any" || sup == "object" || name_subtype(sub, sup) {
+        if sup == "object" || name_subtype(sub, sup) {
             return true;
         }
         if sub.contains('|') {

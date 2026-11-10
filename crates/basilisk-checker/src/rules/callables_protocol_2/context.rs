@@ -1,7 +1,7 @@
 //! Implements [`callables_protocol_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! Module context, function signatures, and protocol info for `callables_protocol_2`.
 
-use ruff_python_ast::{self as ast, Expr, Stmt};
+use ruff_python_ast::{self as ast, Stmt};
 
 // Re-export shared helpers so sibling modules can use `context::ann_str` etc.
 pub(super) use crate::rules::shared::{ann_str, expr_name};
@@ -42,12 +42,8 @@ pub(super) struct FuncSig {
     pub(super) kw_only_params: Vec<ParamInfo>,
     /// Return type annotation text (empty if unannotated).
     pub(super) return_type: String,
-    /// `true` if this signature originally declared `**kwargs: Unpack[TypedDict]`
-    /// that has since been expanded into `kw_only_params`. Distinguishes a
-    /// callable that genuinely accepts the `TypedDict`'s keys via `**kwargs` from
-    /// one with only fixed parameters: per the typing spec a destination
-    /// `**kwargs: Unpack[TD]` requires the source to also provide `**kwargs`.
-    /// [`callables_protocol_2`]
+    /// `true` when the signature's `**kwargs` were expanded into
+    /// `kw_only_params`. [`callables_protocol_2`]
     pub(super) had_unpack_kwargs: bool,
 }
 
@@ -84,26 +80,6 @@ const _: () = {
     }
 };
 
-/// A field in a `TypedDict` class.
-#[derive(Debug, Clone)]
-pub(super) struct TypedDictField {
-    /// Field name.
-    pub(super) name: String,
-    /// Inner type annotation (unwrapped from Required/NotRequired).
-    pub(super) type_ann: String,
-    /// Whether the field is required.
-    pub(super) is_required: bool,
-}
-
-/// Collected `TypedDict` definition.
-#[derive(Debug, Clone)]
-pub(super) struct TypedDictDef {
-    /// `TypedDict` class name.
-    pub(super) name: String,
-    /// All fields (including inherited ones).
-    pub(super) fields: Vec<TypedDictField>,
-}
-
 /// Module-level context: collected functions and protocols.
 pub(super) struct ModuleContext {
     /// Top-level function signatures.
@@ -118,31 +94,21 @@ impl ModuleContext {
     /// Build a [`ModuleContext`] by scanning the top-level AST statements.
     pub(super) fn from_ast(stmts: &[Stmt]) -> Self {
         let mut functions = Vec::new();
-        let mut protocols = Vec::new();
+        let protocols = Vec::new();
         let mut non_protocol_classes = Vec::new();
-        let mut typeddicts = Vec::new();
         for stmt in stmts {
             match stmt {
                 Stmt::FunctionDef(func) => {
                     functions.push(extract_func_sig(func, false));
                 }
                 Stmt::ClassDef(cls) => {
-                    if is_protocol_class(cls) {
-                        protocols.push(extract_protocol_info(cls));
-                    } else if is_typeddict_class(cls, &typeddicts) {
-                        typeddicts.push(extract_typeddict(cls, &typeddicts));
-                    } else if has_call_method(cls) {
+                    if has_call_method(cls) {
                         non_protocol_classes.push(cls.name.to_string());
                     }
                 }
                 _ => {}
             }
         }
-        // Expand Unpack[TypedDict] kwargs into effective kw-only params, for both
-        // top-level functions and protocol `__call__` signatures, so the two
-        // compare structurally regardless of which side declared `Unpack`.
-        expand_unpack_kwargs(&mut functions, &typeddicts);
-        expand_unpack_kwargs_in_protocols(&mut protocols, &typeddicts);
         Self {
             functions,
             protocols,
@@ -170,78 +136,11 @@ impl ModuleContext {
 // AST extraction helpers
 // ---------------------------------------------------------------------------
 
-/// Returns `true` if the class inherits from `Protocol` (directly or generically).
-pub(super) fn is_protocol_class(cls: &ast::StmtClassDef) -> bool {
-    cls.arguments.as_ref().is_some_and(|args| {
-        args.args.iter().any(|arg| match arg {
-            Expr::Name(name) => name.id.as_str() == "Protocol",
-            Expr::Subscript(sub) => {
-                matches!(sub.value.as_ref(), Expr::Name(n) if n.id.as_str() == "Protocol")
-            }
-            _ => false,
-        })
-    })
-}
-
 /// Returns `true` if the class body contains a `__call__` method.
 pub(super) fn has_call_method(cls: &ast::StmtClassDef) -> bool {
     cls.body
         .iter()
         .any(|stmt| matches!(stmt, Stmt::FunctionDef(f) if f.name.as_str() == "__call__"))
-}
-
-/// Extract a [`ProtocolInfo`] from a protocol class definition.
-pub(super) fn extract_protocol_info(cls: &ast::StmtClassDef) -> ProtocolInfo {
-    let mut call_sig = None;
-    let mut overload_sigs = Vec::new();
-    let mut has_extra_attrs = false;
-    let mut attrs = Vec::new();
-    for body_stmt in &cls.body {
-        match body_stmt {
-            Stmt::FunctionDef(func) if func.name.as_str() == "__call__" => {
-                if is_overload_decorated(func) {
-                    overload_sigs.push(extract_func_sig(func, true));
-                } else {
-                    call_sig = Some(extract_func_sig(func, true));
-                }
-            }
-            Stmt::AnnAssign(ann) => {
-                if let Some(attr_name) = expr_name(&ann.target) {
-                    let is_dunder = is_standard_dunder(attr_name);
-                    if !is_dunder {
-                        has_extra_attrs = true;
-                    }
-                    attrs.push(ProtocolAttr {
-                        name: attr_name.to_owned(),
-                        ann: ann_str(&ann.annotation),
-                    });
-                }
-            }
-            _ => {}
-        }
-    }
-    ProtocolInfo {
-        name: cls.name.to_string(),
-        call_sig,
-        has_extra_attrs,
-        overload_sigs,
-        attrs,
-    }
-}
-
-/// Returns `true` for standard dunder attributes that all functions/objects have.
-fn is_standard_dunder(name: &str) -> bool {
-    matches!(
-        name,
-        "__name__" | "__module__" | "__qualname__" | "__annotations__" | "__doc__"
-    )
-}
-
-/// Returns `true` if the function is decorated with `@overload`.
-fn is_overload_decorated(func: &ast::StmtFunctionDef) -> bool {
-    func.decorator_list
-        .iter()
-        .any(|dec| matches!(&dec.expression, Expr::Name(n) if n.id.as_str() == "overload"))
 }
 
 /// Extract a [`FuncSig`] from a function definition.
@@ -319,127 +218,4 @@ fn mk_param(param: &ast::ParameterWithDefault, is_pos_only: bool) -> ParamInfo {
 pub(super) fn extract_base_name(s: &str) -> String {
     s.find('[')
         .map_or_else(|| s.trim().to_owned(), |i| s[..i].trim().to_owned())
-}
-
-// ---------------------------------------------------------------------------
-// TypedDict support
-// ---------------------------------------------------------------------------
-
-/// Returns `true` if the class is a `TypedDict` (directly or via inheritance).
-fn is_typeddict_class(cls: &ast::StmtClassDef, known: &[TypedDictDef]) -> bool {
-    cls.arguments.as_ref().is_some_and(|args| {
-        args.args.iter().any(|arg| {
-            if let Expr::Name(n) = arg {
-                let name = n.id.as_str();
-                name == "TypedDict" || known.iter().any(|td| td.name == name)
-            } else {
-                false
-            }
-        })
-    })
-}
-
-/// Extract a [`TypedDictDef`] from a `TypedDict` class definition.
-fn extract_typeddict(cls: &ast::StmtClassDef, known: &[TypedDictDef]) -> TypedDictDef {
-    let mut fields = Vec::new();
-    // Collect inherited fields from base TypedDicts
-    if let Some(args) = &cls.arguments {
-        for base in &args.args {
-            if let Expr::Name(n) = base {
-                if let Some(base_td) = known.iter().find(|td| td.name == n.id.as_str()) {
-                    fields.extend(base_td.fields.iter().cloned());
-                }
-            }
-        }
-    }
-    // Collect own fields
-    for stmt in &cls.body {
-        if let Stmt::AnnAssign(ann) = stmt {
-            if let Some(field_name) = expr_name(&ann.target) {
-                let (type_ann, is_required) = unwrap_required_annotation(&ann.annotation);
-                fields.push(TypedDictField {
-                    name: field_name.to_owned(),
-                    type_ann,
-                    is_required,
-                });
-            }
-        }
-    }
-    TypedDictDef {
-        name: cls.name.to_string(),
-        fields,
-    }
-}
-
-/// Unwrap `Required` / `NotRequired` / `ReadOnly` qualifiers, returning the inner
-/// type text and whether the field is required. `ReadOnly` (PEP 705) has no effect
-/// on a `**kwargs: Unpack[TD]` signature, so it is stripped transparently. Total
-/// `TypedDicts` default to required. [`callables_protocol_2`]
-fn unwrap_required_annotation(expr: &Expr) -> (String, bool) {
-    if let Expr::Subscript(sub) = expr {
-        if let Expr::Name(n) = sub.value.as_ref() {
-            match n.id.as_str() {
-                "Required" => return (unwrap_required_annotation(&sub.slice).0, true),
-                "NotRequired" => return (unwrap_required_annotation(&sub.slice).0, false),
-                "ReadOnly" => return unwrap_required_annotation(&sub.slice),
-                _ => {}
-            }
-        }
-    }
-    // Default: Required (total=True)
-    (ann_str(expr), true)
-}
-
-/// Expand `**kwargs: Unpack[TD]` into effective kw-only params for every function.
-fn expand_unpack_kwargs(functions: &mut [FuncSig], typeddicts: &[TypedDictDef]) {
-    for func in functions.iter_mut() {
-        expand_unpack_in_sig(func, typeddicts);
-    }
-}
-
-/// Expand `**kwargs: Unpack[TD]` in protocol `__call__` and overload signatures,
-/// mirroring [`expand_unpack_kwargs`] so a protocol target compares structurally
-/// against a function whose kwargs were already expanded. [`callables_protocol_2`]
-fn expand_unpack_kwargs_in_protocols(protocols: &mut [ProtocolInfo], typeddicts: &[TypedDictDef]) {
-    for proto in protocols.iter_mut() {
-        if let Some(call_sig) = proto.call_sig.as_mut() {
-            expand_unpack_in_sig(call_sig, typeddicts);
-        }
-        for overload_sig in &mut proto.overload_sigs {
-            expand_unpack_in_sig(overload_sig, typeddicts);
-        }
-    }
-}
-
-/// Expand a single signature's `**kwargs: Unpack[TD]` into kw-only params and record
-/// [`FuncSig::had_unpack_kwargs`]. No-op when the signature has no `**kwargs` or the
-/// annotation is not `Unpack[TypedDict]`. [`callables_protocol_2`]
-fn expand_unpack_in_sig(sig: &mut FuncSig, typeddicts: &[TypedDictDef]) {
-    if !sig.has_kwargs {
-        return;
-    }
-    let Some(td_name) = extract_unpack_type(&sig.kwargs_type) else {
-        return;
-    };
-    let Some(td) = typeddicts.iter().find(|td| td.name == td_name) else {
-        return;
-    };
-    // Replace kwargs with expanded kw-only params from the TypedDict.
-    sig.has_kwargs = false;
-    sig.kwargs_type = String::new();
-    sig.had_unpack_kwargs = true;
-    for field in &td.fields {
-        sig.kw_only_params.push(ParamInfo {
-            name: field.name.clone(),
-            type_annotation: field.type_ann.clone(),
-            has_default: !field.is_required,
-            is_positional_only: false,
-        });
-    }
-}
-
-/// Extract the `TypedDict` name from an `Unpack[TD]` annotation string.
-fn extract_unpack_type(ann: &str) -> Option<&str> {
-    let inner = ann.strip_prefix("Unpack[")?.strip_suffix(']')?;
-    Some(inner.trim())
 }

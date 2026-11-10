@@ -35,7 +35,7 @@ Python's typing tools took the opposite approach. [Four modes in Pyright](https:
 
 ## What every other tool gets wrong
 
-The problem isn't technical capability. Pyright, at [~99% PEP conformance](https://github.com/python/typing/blob/main/conformance/results/results.html), is genuinely excellent at finding type errors when configured correctly. The problem is the default.
+The problem isn't technical capability. Pyright is genuinely excellent at finding type errors when configured correctly. The problem is the default.
 
 When strictness is opt-in:
 - New projects start without it because there's no immediate pressure to add it
@@ -48,9 +48,9 @@ The result is a codebase that *appears* to be using type checking but is actuall
 
 ## Basilisk's position
 
-Basilisk's default *is* the Python typing spec — full PEP conformance, with no `--strict` flag to forget. And when you want more than the spec, it's one config change away: opt-in Basilisk rules require a type on every parameter, declare every return, and make `Any` explicit.
+Basilisk enables its PEP-derived rules by default, with no `--strict` flag to forget. Its actual conformance is currently under integrity review after withdrawal of the former result. When you want checks beyond the spec, opt-in Basilisk rules can require a type on every parameter, declare every return, and make `Any` explicit.
 
-This is not about making Python developers' lives harder. It's about making the safe path easy to reach. The spec-conformant baseline is the default; stricter checking is there the moment a team decides they want it — switched on in config, scoped per-project or per-path, never forced.
+This is not about making Python developers' lives harder. It's about making the safe path easy to reach. The spec-derived rule set is the default; stricter checking is there the moment a team decides they want it — switched on in config, scoped per-project or per-path, never forced.
 
 Turning that stricter checking on for an existing codebase does require work — but it's work that surfaces real bugs. With Basilisk's annotation rules switched on, every BSK-0001 is a function where the type contract was never defined. A non-exhaustive `match` is a case silently ignored. These are not false positives — they are places where the type system was not being used.
 

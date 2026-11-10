@@ -57,44 +57,6 @@ pub fn transitive_typeddict_names(classes: &[ClassInfo]) -> HashSet<&str> {
         .collect()
 }
 
-/// Strip `Required[...]`, `NotRequired[...]`, `ReadOnly[...]`, and
-/// `Annotated[..., meta]` wrappers from a `TypedDict` field annotation, leaving
-/// the underlying type text. Shared by the resolver's value-type compatibility
-/// checks and the checker's redeclaration-legality rule (E0038) so both agree
-/// on what a field's "core" type is.
-#[must_use]
-pub fn strip_typeddict_qualifiers(annotation: &str) -> &str {
-    let mut result = annotation.trim();
-    loop {
-        let lower = result.to_ascii_lowercase();
-        if let Some(inner) = try_strip_wrapper(&lower, result, "required[")
-            .or_else(|| try_strip_wrapper(&lower, result, "notrequired["))
-            .or_else(|| try_strip_wrapper(&lower, result, "readonly["))
-        {
-            result = inner.trim();
-            continue;
-        }
-        // Annotated[T, ...] — keep only the first type arg.
-        if let Some(inner) = try_strip_wrapper(&lower, result, "annotated[") {
-            result = inner
-                .find(',')
-                .map_or(inner, |comma| &inner[..comma])
-                .trim();
-            continue;
-        }
-        break;
-    }
-    result
-}
-
-/// Try to strip a wrapper prefix (case-insensitive) and its matching `]`.
-fn try_strip_wrapper<'a>(lower: &str, original: &'a str, prefix: &str) -> Option<&'a str> {
-    if !lower.starts_with(prefix) || !original.ends_with(']') {
-        return None;
-    }
-    Some(&original[prefix.len()..original.len() - 1])
-}
-
 /// Walk `name` and its transitive bases, returning `true` as soon as
 /// `predicate` holds for any class in the chain.
 ///

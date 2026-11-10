@@ -93,35 +93,14 @@ impl Rule for DataclassFieldDefaultFactoryMismatch {
     }
 }
 
-/// Extract the type name from `field(default_factory=TypeName)`.
+/// Extract the type name from a `dataclasses.field(default_factory=TypeName)`
+/// initializer.
 ///
-/// Returns `Some("TypeName")` for `field(default_factory=str)`,
-/// `field(default_factory=int)`, etc.  Returns `None` for anything more
-/// complex (lambdas, attribute accesses, calls, etc.).
-fn extract_default_factory_type(rhs_text: &str) -> Option<&str> {
-    let inner = rhs_text.trim().strip_prefix("field(")?.trim_start();
-
-    // Find "default_factory="
-    let factory_idx = inner.find("default_factory=")?;
-    let after = inner.get(factory_idx + "default_factory=".len()..)?;
-
-    // Extract value until the first comma or closing paren.
-    let end = after
-        .find(',')
-        .or_else(|| after.find(')'))
-        .unwrap_or(after.len());
-    let factory_val = after.get(..end)?.trim();
-
-    // Only accept simple identifiers (no dots, brackets, parens, spaces).
-    if factory_val.is_empty()
-        || factory_val
-            .chars()
-            .any(|c| !c.is_alphanumeric() && c != '_')
-    {
-        return None;
-    }
-
-    Some(factory_val)
+/// `field` requires an import from `dataclasses`, so recognising the call by
+/// its source spelling is not import resolution. Deleted pending a
+/// cascade-based recogniser ([TYPEINF-ANNOTATION-RESOLUTION]).
+fn extract_default_factory_type(_rhs_text: &str) -> Option<&str> {
+    None
 }
 
 /// Returns `true` when calling `factory_type()` yields a value that is

@@ -25,13 +25,13 @@ The extension is published to the **[VS Code Marketplace](https://marketplace.vi
 
 Open a Python file and Basilisk activates automatically — diagnostics, completions, hover, go-to-definition, rename, refactoring, formatting, debugging (F5), and profiling.
 
-![Basilisk in VS Code — PEP-conformant type errors shown inline with red squiggles and listed in the Problems panel](/assets/images/vscode-diagnostics.png)
+![Basilisk in VS Code — type diagnostics shown inline with red squiggles and listed in the Problems panel](/assets/images/vscode-diagnostics.png)
 
-*PEP-conformant diagnostics the moment you open a file — no configuration.*
+*Type diagnostics appear when you open a file, with no additional strictness configuration.*
 
 ## Is Basilisk the best Python VS Code extension for you?
 
-No Python extension is best for every project. Basilisk is designed for developers who want one open-source extension for typing-spec-conformant checking, completions, navigation, refactoring, formatting, debugging, and profiling — with the same language server available outside VS Code. If your project depends on mature mypy framework plugins or you prefer Pylance's established VS Code-only workflow, review the [Python type checker comparison](/docs/comparison/) before switching.
+No Python extension is best for every project. Basilisk is designed for developers who want one open-source extension for typing-spec rules, completions, navigation, refactoring, formatting, debugging, and profiling — with the same language server available outside VS Code. Its current conformance percentage is temporarily unknown during the [integrity review](/docs/conformance/). If your project depends on mature mypy framework plugins or you prefer Pylance's established VS Code-only workflow, review the [Python type checker comparison](/docs/comparison/) before switching.
 
 ## The binary is bundled — no separate install
 

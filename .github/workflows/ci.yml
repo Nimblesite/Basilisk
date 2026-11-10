@@ -78,8 +78,31 @@ jobs:
           ACTOR: ${{ github.actor }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
         run: |
           set -euo pipefail
+          # ── `docs-only` label: explicit, per-PR opt-out ────────────────────
+          # A human adds this label when a PR carries nothing the code matrix
+          # would meaningfully exercise. It is deliberately a LABEL and not a
+          # path rule: the decision is visible on the PR, attributable to the
+          # person who made it, and removed by removing the label. No PR without
+          # it is affected, so no gate is weakened for anybody else.
+          # NOT for a PR that changes checker behaviour — a green tick here means
+          # "nobody looked", and the deletion work ahead needs the matrix to run.
+          case ",$LABELS," in
+            *,docs-only,*)
+              {
+                echo "core=false"
+                echo "vscode=false"
+                echo "nvim=false"
+                echo "zed=false"
+                echo "code=false"
+                echo "website=false"
+              } >> "$GITHUB_OUTPUT"
+              echo "docs-only label present — skipping every code and website job."
+              exit 0
+              ;;
+          esac
           # Dependabot PRs are swept into `dependabot-upgrades` by
           # dependabot-automerge.yml and never merge into main directly, so the
           # heavy matrix would only burn minutes on a bump we discard. CI runs
@@ -187,9 +210,9 @@ jobs:
     # 16 MiB. The check and the deploy now build the same thing.
     env:
       RUSTFLAGS: "-D warnings -C link-arg=-zstack-size=16777216"
-    # 20, not 10: `npm run build` now compiles the checker to WebAssembly for
-    # the playground ([WASM-BUILD]) before Eleventy runs, and a cold wasm build
-    # of the parser + typeshed does not fit the old budget.
+    # 20, not 10: this job compiles the checker to WebAssembly for the
+    # playground ([WASM-BUILD]) before Eleventy runs, and a cold wasm build of
+    # the parser + typeshed does not fit the old budget.
     timeout-minutes: 20
     steps:
       # fetch-depth: 0 — mirrors deploy-pages.yml so the conformance over-time
@@ -240,6 +263,15 @@ jobs:
       # AND Open VSX), and PyPI cannot drift apart or be edited in place.
       - name: Check stamped conformance references and generated READMEs
         run: python3 scripts/gen_conformance_reference.py --check
+
+      # Separate from `npm run build` ON PURPOSE. The Eleventy build has no Rust
+      # dependency — every page but the playground renders from committed data —
+      # so a checker that does not compile can no longer take the whole site
+      # down, locally or here. The playground e2e below drives the real engine,
+      # so this job still builds it explicitly.
+      - name: Build playground engine (wasm)
+        working-directory: website
+        run: npm run build:wasm
 
       - name: Build site
         working-directory: website
@@ -369,6 +401,16 @@ jobs:
           scripts/render-zed-mirror.sh "${RUNNER_TEMP}/zed-mirror" 0.0.0-ci
           ( cd "${RUNNER_TEMP}/zed-mirror" && cargo build --release --target wasm32-wasip2 )
 
+      # The registry listing edits a ~1400-entry file in a repo we do not own,
+      # and it only ever runs during a tagged release — so it gets its proof
+      # here, on the PR, rather than the first time it touches upstream. Pure
+      # text-editing functions only; no network ([ZED-MIRROR]).
+      - name: Test the zed-industries listing edit
+        run: |
+          set -euo pipefail
+          pip install pytest==9.1.1
+          python3 -m pytest scripts/test_publish_zed_registry.py -q
+
   # ── Rust coverage + thresholds (runs in parallel) ──────────────────────────
   test-rust:
     name: Rust Tests & Coverage
@@ -379,15 +421,14 @@ jobs:
     # the opt-in contract). Falls back to the standard runner when unset.
     runs-on: ${{ vars.BIG_RUNNER || 'ubuntu-24.04' }}
     # Two full workspace compiles dominate this job: the instrumented `ci`-profile
-    # build (~8m) and the clean `--release` build the conformance gate demands
-    # (~5m). Tests and the gate itself are the cheap part. At 20 the job was
-    # killed 30 SECONDS into the conformance gate with every test already green —
-    # a budget that stops the prime-directive gate from running is worse than no
-    # budget at all, because a red gate and a gate that never ran look identical.
+    # build (~8m) and the clean `--release` build the pristine fixture regression
+    # requires (~5m). Tests and the fixture run itself are the cheap part. The
+    # timeout must leave enough room for that internal regression evidence to run;
+    # it is not a current official conformance result.
     timeout-minutes: 35
     steps:
       # cargo-llvm-cov instruments and RE-compiles the entire workspace, and the
-      # conformance gate clones python/typing fresh — together they exhausted the
+      # pristine fixture regression clones its pinned python/typing snapshot fresh — together they exhausted the
       # runner's ~14 GB root disk ("No space left on device" mid-build). Reclaim
       # the ~25 GB of preinstalled toolchains this job never touches
       # (dotnet/android/ghc/CodeQL/boost) up front so the instrumented artifacts
@@ -426,9 +467,10 @@ jobs:
         uses: taiki-e/install-action@81ee9698f20724138a785d788c7567d40f14cd2d # cargo-llvm-cov
 
       # NO fixture cache and NO vendored calculator, by design ([CHKARCH-CONFORMANCE]).
-      # test-rust.sh clones python/typing@main FRESH every run via
-      # conformance/run_conformance.py and scores the binary with the suite's OWN
-      # harness — the conformance number can never ride on a stale/cached artifact.
+      # test-rust.sh freshly clones the declared historical python/typing
+      # snapshot that still carries the removed Basilisk adapter and scores the
+      # binary with that snapshot's OWN harness. This is a pristine-fixture
+      # regression guard, not a current official conformance result.
       - name: Run Rust tests with coverage
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -943,6 +985,50 @@ jobs:
           # score regresses against the committed baseline. The HTML report is
           # not uploaded as an artifact ([GITHUB-NO-ARTIFACTS]) — it is
           # reproducible locally via `make mutation-test`.
+
+  # ── Mutated-suite conformance ratchet ──────────────────────────────────────
+  # The 2026-08 integrity audit (docs/CONFORMANCE-INTEGRITY-AUDIT.md) found
+  # checker verdicts fitted to the conformance fixtures' exact spellings. This
+  # job scores the SAME official harness on an AST-preserving MUTATION of the
+  # suite (consistent typing-import renames + whitespace reformatting —
+  # sharkdp's harness, vendored verbatim in
+  # conformance/mutate_typing_conformance.py). Semantics, line numbers, and
+  # expected-error markers are untouched, so a structural checker must hold
+  # its verdicts. The pass rate is a RATCHET
+  # (conformance/mutation_conformance_baseline.json): it may only rise.
+  mutation-conformance:
+    name: Mutated Conformance Ratchet
+    needs: changes
+    if: needs.changes.outputs.core == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          cache-on-failure: true
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      # The REAL python/typing harness's own runtime deps, same as test-rust.
+      - name: Install harness dependencies
+        run: pip install jinja2 markdown tomlkit
+
+      - name: Install lld
+        run: sudo apt-get update && sudo apt-get install -y lld
+
+      - name: Build release binary
+        run: cargo build --release -p basilisk-cli --bin basilisk
+
+      - name: Score the mutated suite against the ratchet
+        run: >-
+          python3 conformance/run_mutation_conformance.py
+          --bin target/release/basilisk
 
   # ── Build gate (standard job name per repo standards) ──────────────────────
   # `needs` is deliberately NARROW. This job consumes nothing from the test jobs

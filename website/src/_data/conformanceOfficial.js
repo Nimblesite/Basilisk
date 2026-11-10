@@ -1,31 +1,24 @@
-// Eleventy global data: the OFFICIAL python/typing conformance results — the
-// same single run that grades every listed type checker, Basilisk included.
-// Implements [CHKARCH-CONFORMANCE]; complements _data/conformance.js.
+// Historical python/typing leaderboard snapshot retained only for the public
+// record of Basilisk's withdrawn announcement. Basilisk is no longer listed in
+// the live official results, and its row below is invalid as evidence of actual
+// conformance because the implementation was fitted to exact fixtures.
 //
-//   _data/conformance.js  -> Basilisk's OWN, reproducible, per-release score
-//                            (we re-run the unmodified scorer every ship).
+//   _data/conformance.js  -> historical outputs from Basilisk's withdrawn run.
 //   _data/conformanceOfficial.js (this file)
-//                         -> a dated, transcribed SNAPSHOT of the upstream
-//                            results.html leaderboard, so the comparison table
-//                            can show every tool graded on ONE identical run.
+//                         -> the dated snapshot used in the retracted post.
 //
-// Honesty contract (see CLAUDE.md "Documentation Honesty"): competitor scores
-// drift as those tools improve, so this snapshot is (a) pinned to the exact
-// upstream commit that produced it, (b) labelled with that date wherever it
-// renders, and (c) every cell links to that tool's LIVE results folder so a
-// reader can check the current figure. The numbers are transcribed verbatim
-// from the leaderboard totals — never approximated — and `pct` is DERIVED from
-// pass/total here so a typo can never desync the percentage from its fraction.
+// The snapshot is pinned so the retraction can show exactly what was published.
+// It must never be described as current. The live source is linked separately.
 //
 // Source of every value below:
 //   https://github.com/python/typing/blob/main/conformance/results/results.html
 // as published in python/typing@3410759355c3018063d3a446102f88621fc43eb5,
-// 2026-07-31. PR #2316 originally added Basilisk to the board. Re-transcribe
-// (and bump `snapshot`) when upstream re-runs the suite.
+// 2026-07-31. PR #2316 originally added Basilisk to the board. This snapshot is
+// intentionally frozen; do not refresh it from the live leaderboard.
 
 const SNAPSHOT = {
   source: "https://github.com/python/typing/blob/main/conformance/results/results.html",
-  resultsDir: "https://github.com/python/typing/tree/main/conformance/results",
+  resultsDir: "https://github.com/python/typing/tree/3410759355c3018063d3a446102f88621fc43eb5/conformance/results",
   snapshotUrl: "https://github.com/python/typing/blob/3410759355c3018063d3a446102f88621fc43eb5/conformance/results/results.html",
   commitUrl: "https://github.com/python/typing/commit/3410759355c3018063d3a446102f88621fc43eb5",
   addedPrUrl: "https://github.com/python/typing/pull/2316",
@@ -34,9 +27,8 @@ const SNAPSHOT = {
   dateLabel: "Jul 31, 2026",
 };
 
-// Leaderboard grand-total row, verbatim from results.html. `org` names the
-// backer for the honest "beat Meta/Microsoft/Astral" framing; null = independent.
-// Half-points are the suite's own scoring for partially-conformant test files.
+// Historical leaderboard grand-total row, verbatim from that snapshot.
+// Basilisk's row and comparisons derived from it are withdrawn.
 const TOOLS = [
   { id: "basilisk", name: "Basilisk", version: "0.27.0", org: null, pass: 141, total: 141 },
   { id: "pyright", name: "Pyright", version: "1.1.410", org: "Microsoft", pass: 136.5, total: 141 },
@@ -69,14 +61,18 @@ export default function () {
 
   return {
     hasData: true,
-    snapshot: SNAPSHOT,
-    tools,
-    byId,
-    ranked,
-    basilisk,
-    // Basilisk's standing on the board, computed — never asserted by hand.
-    basiliskRank: ranked.find((t) => t.id === "basilisk").rank,
-    perfectCount: perfect.length,
-    basiliskIsSolePerfect: perfect.length === 1 && perfect[0].id === "basilisk",
+    withdrawn: true,
+    publicationStatus: "historical-withdrawn",
+    historical: {
+      snapshot: SNAPSHOT,
+      tools,
+      byId,
+      ranked,
+      basilisk,
+      basiliskRankAtSnapshot: ranked.find((t) => t.id === "basilisk").rank,
+      perfectCountAtSnapshot: perfect.length,
+      basiliskWasSolePerfectAtSnapshot:
+        perfect.length === 1 && perfect[0].id === "basilisk",
+    },
   };
 }

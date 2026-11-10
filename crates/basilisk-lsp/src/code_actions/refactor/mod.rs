@@ -7,29 +7,21 @@
 mod abstract_methods;
 mod change_signature;
 mod extract;
-mod extract_function;
 mod fstring;
 mod helpers;
 mod inline;
 mod inline_function;
 mod literals;
-mod move_symbol;
-mod namedtuple;
 mod ternary;
-mod type_syntax;
 
 pub(super) use abstract_methods::implement_abstract_methods;
 pub(super) use change_signature::{add_parameter, remove_parameter, reorder_parameters};
-pub(super) use extract::{extract_constant, extract_variable};
-pub(super) use extract_function::extract_function;
+pub(super) use extract::extract_variable;
 pub(super) use fstring::convert_fstring;
 pub(super) use inline::inline_variable;
 pub(super) use inline_function::inline_function_call;
 pub(super) use literals::convert_literals;
-pub(super) use move_symbol::{move_symbol_to_existing_file, move_symbol_to_new_file};
-pub(super) use namedtuple::convert_namedtuple;
 pub(super) use ternary::convert_ternary;
-pub(super) use type_syntax::{convert_optional_syntax, convert_union_syntax};
 
 #[cfg(test)]
 #[expect(

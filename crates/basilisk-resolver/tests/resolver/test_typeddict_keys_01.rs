@@ -169,6 +169,46 @@ fn typeddict_wrong_value_type_subscript_assign() -> Result<(), Box<dyn std::erro
 }
 
 #[test]
+fn typeddict_value_type_check_does_not_depend_on_builtin_spelling(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let bare = concat!(
+        "from typing import TypedDict\n",
+        "class Movie(TypedDict):\n",
+        "    year: int\n",
+        "movie: Movie = {'year': 2024}\n",
+        "movie['year'] = 'wrong'\n",
+    )
+    .to_owned();
+    let qualified = concat!(
+        "import builtins\n",
+        "from typing import TypedDict\n",
+        "class Movie(TypedDict):\n",
+        "    year: builtins.int\n",
+        "movie: Movie = {'year': 2024}\n",
+        "movie['year'] = 'wrong'\n",
+    )
+    .to_owned();
+    let bare_resolved = resolve_src(&bare)?;
+    let qualified_resolved = resolve_src(&qualified)?;
+    assert!(
+        bare_resolved
+            .typeddict_key_violations
+            .iter()
+            .any(|violation| matches!(
+                violation.kind,
+                basilisk_resolver::TypedDictKeyViolationKind::WrongSubscriptValueType { .. }
+            )),
+        "the test fixture must exercise the wrong-value diagnostic"
+    );
+    assert_eq!(
+        qualified_resolved.typeddict_key_violations.len(),
+        bare_resolved.typeddict_key_violations.len(),
+        "equivalent builtin spellings must produce identical TypedDict assignment diagnostics"
+    );
+    Ok(())
+}
+
+#[test]
 fn typeddict_wrong_value_type_regular_assign() -> Result<(), Box<dyn std::error::Error>> {
     let src = concat!(
         "from typing import TypedDict\n",

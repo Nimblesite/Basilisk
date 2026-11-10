@@ -328,7 +328,11 @@ Zed has no upload API. Extensions are listed in [`zed-industries/extensions`](ht
 
 `scripts/render-zed-mirror.sh` resolves both: vendors `basilisk-common` (zero-dependency, WASM-safe) under `vendor/basilisk-common`, rewrites the path dependency, stamps the release version, makes the mirror its own workspace root, and drops the workspace-only `[lints]` inheritance. The `publish-zed` job in `release.yml` renders the tree, **gates the push on a real `cargo build --release --target wasm32-wasip2`**, then pushes to [`Nimblesite/basilisk-zed`](https://github.com/Nimblesite/basilisk-zed) and tags it with the monorepo tag — same clone-replace-commit-push convention as `publish-nvim`, using the `BREW_SCOOP_PAT` org secret.
 
-The mirror version equals the monorepo tag (`v1.2.3` → `1.2.3`); the binary [ZED-DIST](#ZED-DIST) updates independently at runtime. The first listing is a one-time human-reviewed PR adding the submodule to `zed-industries/extensions`; subsequent bumps amend that pointer.
+The mirror version equals the monorepo tag (`v1.2.3` → `1.2.3`); the binary [ZED-DIST](#ZED-DIST) updates independently at runtime.
+
+**Pushing the mirror publishes nothing.** Zed installs only what `zed-industries/extensions` lists, so the mirror push is a prerequisite, not the release. `scripts/publish_zed_registry.py`, run by `publish-zed` immediately after the mirror is tagged, performs the listing itself: it forks the registry, resets a `listing-basilisk` branch to upstream's head, adds or re-pins the `extensions/basilisk` submodule to the release tag, sets `[basilisk] version` in `extensions.toml`, re-sorts `.gitmodules`, and opens the PR — or, once that PR is open, moves the pointer on the same branch. Every release therefore proposes its own bump; upstream maintainers still merge it.
+
+The registry is a repository Basilisk does not own, and its `extensions.toml` holds ~1400 entries, so the edit is **surgical, not a rewrite**: the entry is spliced into alphabetical position and every other entry stays byte-identical, since a reformatting diff across someone else's registry is a rejected PR. `scripts/test_publish_zed_registry.py` proves both properties — placement, non-disturbance, bump-not-duplicate, and idempotence — in the `zed` CI job, because the real thing runs only during a tagged release.
 
 ## Zed Settings {#ZED-CONFIG}
 

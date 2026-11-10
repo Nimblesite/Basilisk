@@ -186,14 +186,11 @@ fn parameter_inferable(inferred: Option<&InferredParameters>, name: &str) -> boo
 }
 
 fn is_implicit_receiver(func: &FunctionInfo, index: usize, param: &ParameterInfo) -> bool {
-    if index != 0
-        || func.class_name.is_none()
-        || super::shared::decorator_spelled(&func.decorators, "staticmethod")
-    {
+    if index != 0 || func.class_name.is_none() || func.is_staticmethod {
         return false;
     }
-    let class_receiver = super::shared::decorator_spelled(&func.decorators, "classmethod")
-        || matches!(func.name.as_str(), "__new__" | "__init_subclass__");
+    let class_receiver =
+        func.is_classmethod || matches!(func.name.as_str(), "__new__" | "__init_subclass__");
     param.name == if class_receiver { "cls" } else { "self" }
 }
 

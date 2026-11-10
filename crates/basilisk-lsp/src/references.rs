@@ -106,12 +106,6 @@ pub fn rename_symbol(
         ranges.extend(doc_ranges);
     }
 
-    // If renaming a class attribute, find `self.attr` references in all methods.
-    if let Some(SymbolHit::Attribute { class, .. }) = &hit {
-        let attr_ranges = find_self_attr_references(source, &class.name, &name, resolved, &mask);
-        ranges.extend(attr_ranges);
-    }
-
     // If renaming a module-level symbol, update __all__ entries.
     if matches!(
         &hit,
@@ -309,78 +303,6 @@ fn find_google_numpy_param_refs(
         // Advance past this line plus the newline character.
         byte_pos += line.len() + 1;
     }
-}
-
-/// Find `self.attr_name` and `cls.attr_name` references across all methods of a class.
-///
-/// For each method belonging to `class_name`, searches within its `def_span` for
-/// `self.attr_name` and `cls.attr_name` patterns. Returns ranges covering only the
-/// attribute name portion (after `self.`/`cls.`).
-fn find_self_attr_references(
-    source: &str,
-    class_name: &str,
-    attr_name: &str,
-    resolved: &ResolvedModule,
-    mask: &SourceMask<'_>,
-) -> Vec<Range> {
-    let methods = class_methods(resolved, class_name);
-
-    ["self.", "cls."]
-        .iter()
-        .flat_map(|prefix| {
-            let pattern = format!("{prefix}{attr_name}");
-            methods
-                .iter()
-                .flat_map(move |func| {
-                    find_attr_in_span(
-                        source,
-                        func.def_span,
-                        &pattern,
-                        prefix.len(),
-                        attr_name,
-                        mask,
-                    )
-                })
-                .collect::<Vec<_>>()
-        })
-        .collect()
-}
-
-/// Collect all methods belonging to a class by matching `class_name`.
-fn class_methods<'a>(resolved: &'a ResolvedModule, class_name: &str) -> Vec<&'a FunctionInfo> {
-    resolved
-        .functions
-        .iter()
-        .filter(|f| f.class_name.as_deref() == Some(class_name))
-        .collect()
-}
-
-/// Search for `pattern` within a span, returning ranges for the attr name only.
-fn find_attr_in_span(
-    source: &str,
-    span: basilisk_resolver::Span,
-    pattern: &str,
-    prefix_len: usize,
-    attr_name: &str,
-    mask: &SourceMask<'_>,
-) -> Vec<Range> {
-    let start = span.start_usize();
-    let end = span.end_usize().min(source.len());
-    let slice = source.get(start..end).unwrap_or("");
-    let mut results = Vec::new();
-    let mut search_pos = 0;
-
-    while let Some(rel) = slice.get(search_pos..).and_then(|s| s.find(pattern)) {
-        let abs = start + search_pos + rel;
-        let name_start = abs + prefix_len;
-        let name_end = name_start + attr_name.len();
-
-        if has_word_boundary_after(source, name_end) && !mask.is_masked(abs) {
-            push_name_range(&mut results, source, name_start, name_end);
-        }
-        search_pos += rel + pattern.len().max(1);
-    }
-    results
 }
 
 /// Check that the byte after `pos` is not an identifier character (word boundary).

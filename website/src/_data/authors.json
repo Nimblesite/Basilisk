@@ -8,7 +8,7 @@
       "shortName": "Basilisk Team",
       "role": "The team behind Basilisk",
       "avatar": "/assets/images/authors/basilisk-team.png",
-      "bio": "The Basilisk Project is the team voice for everyone who contributes to Basilisk, the open-source, strict-by-default Python type checker and language server built in Rust. Basilisk is built by Nimblesite as a human and AI partnership: humans own the direction, review, auditing, and testing, and nothing ships until the conformance suite, the tests, and a human all agree it is done.",
+      "bio": "The Basilisk Project is the team voice for everyone who contributes to Basilisk, an open-source Python type checker and language server built in Rust. Basilisk is built by Nimblesite through a human and AI development process. The project is currently strengthening its review, auditing, and robustness-testing practices after withdrawing its former conformance result.",
       "links": [
         { "label": "GitHub", "url": "https://github.com/Nimblesite/Basilisk" },
         { "label": "Discord", "url": "https://discord.gg/4wBDSGEZQd" },
@@ -26,7 +26,7 @@
       "shortName": "Christian Findlay",
       "role": "Director, Nimblesite",
       "avatar": "/assets/images/authors/christian-findlay.png",
-      "bio": "Christian Findlay is the director of Nimblesite and the person behind Basilisk. He has spent more than two decades building software across .NET, Dart, Flutter, and now Rust, and he writes regularly about type systems, developer experience, and building software with AI. Basilisk is his answer to a long-standing gap in Python tooling: a type checker whose default judgment you can actually trust, proven against the official conformance suite rather than asserted.",
+      "bio": "Christian Findlay is the director of Nimblesite and the person behind Basilisk. He has spent more than two decades building software across .NET, Dart, Flutter, and Rust, and writes about type systems, developer experience, and building software with AI. He is leading the project's current conformance remediation and review-process changes.",
       "links": [
         { "label": "Website", "url": "https://www.christianfindlay.com" },
         { "label": "GitHub", "url": "https://github.com/MelbourneDeveloper" },

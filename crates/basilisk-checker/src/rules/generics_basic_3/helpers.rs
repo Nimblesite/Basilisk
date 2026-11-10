@@ -111,23 +111,10 @@ pub(super) struct ModuleContext {
 impl ModuleContext {
     /// Build a `ModuleContext` from the top-level AST statements.
     pub(super) fn from_ast(stmts: &[Stmt]) -> Self {
-        let mut constrained_tvars: HashMap<String, ConstrainedTypeVar> = HashMap::new();
+        let constrained_tvars: HashMap<String, ConstrainedTypeVar> = HashMap::new();
         let mut constrained_funcs: Vec<ConstrainedFunc> = Vec::new();
         let mut var_types: HashMap<String, String> = HashMap::new();
         let mut mapping_vars: HashMap<String, (String, String)> = HashMap::new();
-
-        // Pass 1: collect TypeVar definitions.
-        for stmt in stmts {
-            if let Stmt::Assign(assign) = stmt {
-                if assign.targets.len() == 1 {
-                    if let Some(lhs_name) = assign.targets.first().and_then(expr_name) {
-                        if let Some(ctv) = try_parse_constrained_typevar(lhs_name, &assign.value) {
-                            let _ = constrained_tvars.insert(lhs_name.to_owned(), ctv);
-                        }
-                    }
-                }
-            }
-        }
 
         // Pass 2: collect function signatures and variable annotations.
         for stmt in stmts {
@@ -210,7 +197,7 @@ impl<'a> ScopeContext<'a> {
         {
             if let Some(ann) = &param.parameter.annotation {
                 let ann_text = ann_str(ann);
-                if let Some(pair) = resolve_mapping_annotation(&ann_text, &module.class_bases) {
+                if let Some(pair) = resolve_mapping_annotation(&ann_text) {
                     let _ = local_mappings.insert(param.parameter.name.to_string(), pair);
                 }
                 let _ = local_types.insert(param.parameter.name.to_string(), ann_text);
@@ -244,35 +231,6 @@ impl<'a> ScopeContext<'a> {
 // ---------------------------------------------------------------------------
 // TypeVar constraint parsing
 // ---------------------------------------------------------------------------
-
-/// Try to parse `name = TypeVar("name", str, bytes)` into a `ConstrainedTypeVar`.
-fn try_parse_constrained_typevar(lhs_name: &str, expr: &Expr) -> Option<ConstrainedTypeVar> {
-    let Expr::Call(call) = expr else {
-        return None;
-    };
-    let callee = expr_name(&call.func)?;
-    if callee != "TypeVar" {
-        return None;
-    }
-    if call.arguments.args.len() < 3 {
-        return None;
-    }
-    let constraints: Vec<String> = call
-        .arguments
-        .args
-        .get(1..)
-        .unwrap_or_default()
-        .iter()
-        .map(ann_str)
-        .collect();
-    if constraints.len() < 2 {
-        return None;
-    }
-    Some(ConstrainedTypeVar {
-        name: lhs_name.to_owned(),
-        constraints,
-    })
-}
 
 /// Try to extract constrained-TypeVar parameter info from a function definition.
 fn try_parse_constrained_func(
@@ -333,70 +291,18 @@ pub(super) fn parse_mapping_annotation(ann: &str) -> Option<(String, String)> {
     Some((key_ty, val_ty))
 }
 
-/// Resolve a `Mapping` annotation, handling custom subclasses with reordered `Generic` params.
+/// Resolve a `dict[K, V]` annotation to its key/value types.
 ///
-/// For `MyMap2[int, str]` where `MyMap2(Mapping[K, V], Generic[V, K])`,
-/// resolves `Generic[V, K]` specialization order (`V=int, K=str`) then maps
-/// `Mapping[K, V]` to `key=K=str, value=V=int`. Returns `(key_type, value_type)`.
-pub(super) fn resolve_mapping_annotation(
-    ann: &str,
-    class_bases: &HashMap<String, Vec<String>>,
-) -> Option<(String, String)> {
-    // First try direct Mapping/dict annotation.
+/// Returns `(key_type, value_type)` for the builtin `dict` only.
+pub(super) fn resolve_mapping_annotation(ann: &str) -> Option<(String, String)> {
     let bracket = ann.find('[')?;
     let class_name = ann.get(..bracket)?.trim();
 
-    // Direct Mapping/dict — use first two args directly.
-    if matches!(
-        class_name,
-        "Mapping" | "Dict" | "dict" | "MutableMapping" | "OrderedDict" | "DefaultDict"
-    ) {
+    if class_name == "dict" {
         return parse_mapping_annotation(ann);
     }
 
-    // Custom class — check if it inherits from Mapping via class_bases.
-    let bases = class_bases.get(class_name)?;
-    let mapping_base = bases
-        .iter()
-        .find(|b| b.starts_with("Mapping[") || b.starts_with("MutableMapping["))?;
-    let generic_base = bases.iter().find(|b| b.starts_with("Generic["));
-
-    // Parse the specialization args from the annotation.
-    let inner = ann.get(bracket + 1..ann.rfind(']')?)?;
-    let spec_args: Vec<String> = split_top_level_commas(inner)
-        .into_iter()
-        .map(|s| s.trim().to_owned())
-        .collect();
-
-    // Parse Generic param order if available.
-    if let Some(generic) = generic_base {
-        let gb = generic.find('[')?;
-        let generic_inner = generic.get(gb + 1..generic.rfind(']')?)?;
-        let generic_params: Vec<&str> = generic_inner.split(',').map(str::trim).collect();
-
-        // Build substitution map: generic_param → specialized_arg
-        let mut subs: HashMap<&str, &str> = HashMap::new();
-        for (idx, param) in generic_params.iter().enumerate() {
-            if let Some(arg) = spec_args.get(idx) {
-                let _ = subs.insert(param, arg.as_str());
-            }
-        }
-
-        // Parse Mapping[K, V] to find key/value param names.
-        let mb = mapping_base.find('[')?;
-        let mapping_inner = mapping_base.get(mb + 1..mapping_base.rfind(']')?)?;
-        let mapping_params: Vec<&str> = mapping_inner.split(',').map(str::trim).collect();
-        let key_param = mapping_params.first()?;
-        let val_param = mapping_params.get(1)?;
-
-        // Substitute.
-        let key_ty = subs.get(key_param).unwrap_or(key_param);
-        let val_ty = subs.get(val_param).unwrap_or(val_param);
-        return Some(((*key_ty).to_owned(), (*val_ty).to_owned()));
-    }
-
-    // No Generic base — assume direct parameter order matches Mapping.
-    parse_mapping_annotation(ann)
+    None
 }
 
 // ---------------------------------------------------------------------------
@@ -430,9 +336,6 @@ pub(super) fn check_call(
         let Some(arg_type_str) = infer_arg_type(arg, scope) else {
             continue;
         };
-        if arg_type_str == "Any" {
-            continue;
-        }
         let Some(group) = constrained_tv.group_of(&arg_type_str, &ctx.class_bases) else {
             continue;
         };

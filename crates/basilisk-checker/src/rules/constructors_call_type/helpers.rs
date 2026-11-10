@@ -42,16 +42,9 @@ pub(super) fn build_typevar_bound_map<'src>(
         if !typevar_names.contains(&var_name) {
             continue;
         }
-        // Look for TypeVar(..., bound=X) call.
         let Expr::Call(call) = assign.value.as_ref() else {
             continue;
         };
-        let Some(callee_name) = expr_simple_name(&call.func) else {
-            continue;
-        };
-        if callee_name != "TypeVar" {
-            continue;
-        }
         // Find `bound=` keyword.
         for kw in &call.arguments.keywords {
             if kw.arg.as_deref() == Some("bound") {
@@ -105,7 +98,7 @@ pub(super) fn resolve_constructor_sig(
 
     // 4. Walk base classes (simplified MRO).
     for base_name in class_bases(class_info) {
-        if matches!(base_name, "object" | "Generic" | "Protocol") {
+        if base_name == "object" {
             continue;
         }
         if let Some(base_class) = class_map.get(base_name) {
@@ -138,11 +131,7 @@ fn check_metaclass_call(
 
 /// Derive a `ConstructorSig` from one or more `FunctionInfo` entries.
 pub(super) fn sig_from_funcs(funcs: &[&basilisk_resolver::FunctionInfo]) -> ConstructorSig {
-    // Pick the first non-overload function.
-    for func in funcs {
-        if crate::rules::shared::decorator_spelled(&func.decorators, "overload") {
-            continue;
-        }
+    if let Some(func) = funcs.first() {
         // If it has *args or **kwargs, we can't know the exact arity.
         if func.vararg.is_some() || func.kwarg.is_some() {
             return ConstructorSig::Unknown;
@@ -290,18 +279,17 @@ pub(super) fn check_positional_arg_types(
     }
 }
 
-/// Find the primary (non-overload) constructor function for a class.
+/// Find the primary constructor function for a class.
 pub(super) fn find_constructor_func<'a>(
     class_name: &str,
     method_map: &'a HashMap<(&str, &str), Vec<&'a basilisk_resolver::FunctionInfo>>,
 ) -> Option<&'a basilisk_resolver::FunctionInfo> {
     for method in &["__new__", "__init__"] {
-        if let Some(funcs) = method_map.get(&(class_name, method)) {
-            for func in funcs {
-                if !crate::rules::shared::decorator_spelled(&func.decorators, "overload") {
-                    return Some(func);
-                }
-            }
+        if let Some(func) = method_map
+            .get(&(class_name, method))
+            .and_then(|funcs| funcs.first())
+        {
+            return Some(func);
         }
     }
     None

@@ -1,10 +1,9 @@
 //! Implements [`callables_protocol`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `callables_protocol`: Callable call-site arity and argument validation.
 //!
-//! When a parameter is annotated as `Callable[[int, str], T]`, calls to that
-//! parameter must match the expected argument count. Additionally, `Callable`
-//! parameters are implicitly positional-only, so keyword arguments are not
-//! allowed.
+//! Calls to a callable member of a `ParamSpec`-generic class specialization must
+//! match the parameter list the class was specialized with. Such members are
+//! implicitly positional-only, so keyword arguments are not allowed.
 
 use ruff_python_ast::{self as ast, Expr, Stmt};
 use ruff_text_size::Ranged;
@@ -49,7 +48,7 @@ impl Rule for CallableCallSiteViolation {
 /// Index of `ParamSpec`-generic classes with callable attributes.
 #[derive(Default)]
 struct AttrCallables {
-    /// Class name → `Callable[P, R]`-annotated attribute names.
+    /// Class name → `ParamSpec`-binding attribute names.
     classes: std::collections::HashMap<String, Vec<String>>,
     /// Declared `ParamSpec` names in the module.
     paramspec_names: std::collections::HashSet<String>,
@@ -84,34 +83,15 @@ fn check_function(
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let mut callable_params = collect_callable_params(func);
-    callable_params.extend(collect_paramspec_member_params(func, attr_callables));
+    let callable_params = collect_paramspec_member_params(func, attr_callables);
     if callable_params.is_empty() {
         return;
     }
     check_body_calls(&func.body, &callable_params, path, diagnostics);
 }
 
-fn collect_callable_params(func: &ast::StmtFunctionDef) -> Vec<CallableParam> {
-    let mut result = Vec::new();
-    let params = &func.parameters;
-    let all_params = params
-        .posonlyargs
-        .iter()
-        .chain(params.args.iter())
-        .chain(params.kwonlyargs.iter());
-    for param in all_params {
-        if let Some(annotation) = &param.parameter.annotation {
-            if let Some(cp) = parse_callable_annotation(param.parameter.name.as_str(), annotation) {
-                result.push(cp);
-            }
-        }
-    }
-    result
-}
-
 /// Find classes generic over exactly one `ParamSpec` and collect their
-/// `Callable[P, R]`-annotated attributes.
+/// callable attributes.
 fn collect_paramspec_attr_callables(module: &ResolvedModule, stmts: &[Stmt]) -> AttrCallables {
     let mut result = AttrCallables {
         classes: std::collections::HashMap::new(),
@@ -147,7 +127,7 @@ fn collect_paramspec_attr_callables(module: &ResolvedModule, stmts: &[Stmt]) -> 
     result
 }
 
-/// Name of an attribute annotated `Callable[P, R]` for `ParamSpec` `P`, if any.
+/// Name of an attribute whose annotation binds `ParamSpec` `P`, if any.
 fn paramspec_callable_attr(stmt: &Stmt, paramspec: &str) -> Option<String> {
     let Stmt::AnnAssign(ann) = stmt else {
         return None;
@@ -158,9 +138,6 @@ fn paramspec_callable_attr(stmt: &Stmt, paramspec: &str) -> Option<String> {
     let Expr::Subscript(sub) = ann.annotation.as_ref() else {
         return None;
     };
-    if !basilisk_resolver::is_name_or_attr_named(sub.value.as_ref(), "Callable") {
-        return None;
-    }
     let Expr::Tuple(tup) = sub.slice.as_ref() else {
         return None;
     };
@@ -217,16 +194,13 @@ fn collect_paramspec_member_params(
 
 /// The parameter list a ParamSpec-generic class is specialized with:
 /// `C[[int, str]]` (explicit list) or `C[int, str]` (implicit shorthand).
-/// `None` for non-concrete forms (`...`, a bare `ParamSpec`, `Concatenate[...]`).
+/// `None` for non-concrete forms (`...`, a bare `ParamSpec`).
 fn paramspec_specialization_args<'a>(
     slice: &'a Expr,
     paramspec_names: &std::collections::HashSet<String>,
 ) -> Option<Vec<&'a Expr>> {
     let is_concrete_type = |e: &Expr| match e {
         Expr::Name(n) => !paramspec_names.contains(n.id.as_str()),
-        Expr::Subscript(sub) => {
-            !basilisk_resolver::is_name_or_attr_named(sub.value.as_ref(), "Concatenate")
-        }
         Expr::NoneLiteral(_) | Expr::BinOp(_) => true,
         _ => false,
     };
@@ -240,46 +214,6 @@ fn paramspec_specialization_args<'a>(
         Expr::Name(_) | Expr::Subscript(_) => is_concrete_type(slice).then(|| vec![slice]),
         _ => None,
     }
-}
-
-fn parse_callable_annotation(param_name: &str, annotation: &Expr) -> Option<CallableParam> {
-    let Expr::Subscript(subscript) = annotation else {
-        return None;
-    };
-    let is_callable =
-        basilisk_resolver::is_name_or_attr_named(subscript.value.as_ref(), "Callable");
-    if !is_callable {
-        return None;
-    }
-    let tuple_elts = match subscript.slice.as_ref() {
-        Expr::Tuple(tup) => &tup.elts,
-        _ => return None,
-    };
-    if tuple_elts.len() != 2 {
-        return None;
-    }
-    let first_arg = tuple_elts.first()?;
-    if matches!(first_arg, Expr::EllipsisLiteral(_)) {
-        return Some(CallableParam {
-            name: param_name.to_owned(),
-            expected_args: None,
-            arg_types: Vec::new(),
-        });
-    }
-    if matches!(first_arg, Expr::Subscript(sub) if matches!(sub.value.as_ref(), Expr::Name(n) if n.id.as_str() == "Concatenate"))
-    {
-        return None;
-    }
-    let arg_list = match first_arg {
-        Expr::List(list) => &list.elts,
-        _ => return None,
-    };
-    let arg_types: Vec<String> = arg_list.iter().map(annotation_to_string).collect();
-    Some(CallableParam {
-        name: param_name.to_owned(),
-        expected_args: Some(arg_list.len()),
-        arg_types,
-    })
 }
 
 fn annotation_to_string(expr: &Expr) -> String {

@@ -137,3 +137,39 @@ fn pep695_outer_typevar_nested_class() -> Result<(), Box<dyn std::error::Error>>
     assert!(!resolved.pep695_bound_violations.is_empty());
     Ok(())
 }
+
+// A PEP 695 bound that names a real, module-level CLASS is legal. Deciding
+// otherwise from the spelling of the name — treating any single uppercase
+// letter as an outer type parameter — is the banned mechanism: `T` here is a
+// class, and `Key` below is a genuine type parameter, so a rule keyed to name
+// SHAPE gets both backwards.
+//
+// Both tests fail while recognition guesses from spelling, and pass once the
+// bound is resolved through the module's bindings to what the name actually
+// refers to.
+#[test]
+fn pep695_bound_naming_a_real_class_is_not_an_outer_typeparam(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let src = "class T:\n    pass\n\nclass Box[U: T]:\n    pass\n".to_owned();
+    let resolved = resolve_src(&src)?;
+    assert!(
+        resolved.pep695_bound_violations.is_empty(),
+        "`T` is a class defined in this module, so `class Box[U: T]` is a legal \
+         bound; treating it as an outer type parameter because it is one \
+         uppercase letter decides meaning from spelling"
+    );
+    Ok(())
+}
+
+#[test]
+fn pep695_bound_referencing_an_outer_multiletter_typeparam_is_a_violation(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let src = "class Outer[Key]:\n    class Inner[V: Key]:\n        pass\n".to_owned();
+    let resolved = resolve_src(&src)?;
+    assert!(
+        !resolved.pep695_bound_violations.is_empty(),
+        "`Key` is an outer class's type parameter, so `Inner[V: Key]` references \
+         it illegally; a single-letter-uppercase heuristic cannot see it"
+    );
+    Ok(())
+}

@@ -241,11 +241,19 @@ def baseline_for_scope(score_book: dict[str, Any], scope: str) -> MutationScore 
 
 
 # Hard floor for every crate's kill rate, independent of the moving baseline.
-# The mutation run mutates the WHOLE crate (no code excluded), so `missed` is a
-# large absolute number that DROPS as tests improve — the opposite of the old
-# hidden-pool regime where any missed mutant was a scandal. The binding ratchet
-# is therefore `kill_rate`, which must never drop AND never fall below this
-# floor. Raise the floor as coverage climbs; never lower it.
+#
+# READ THE DENOMINATOR BEFORE READING THE RATE. The run does NOT mutate the whole
+# crate: `scripts/mutation_examine_re.py` builds a cargo-mutants `--re` pattern from
+# the `#[mutation_safe]` annotations, so only annotated files and functions are
+# examined. The pool is therefore self-selected, and a high `kill_rate` describes the
+# annotated sliver alone — it says nothing about the unannotated remainder, which is
+# UNVERIFIED. Widening scope is the only way to make the rate mean more; never narrow
+# it to protect the number. See [CHKARCH-TESTING-MUTATION-RATCHET] for the three
+# corrections this regime still owes (scope denominator, timeout-as-kill, survivor
+# enumeration).
+#
+# `kill_rate` must never drop AND never fall below this floor. Raise the floor as
+# scope climbs; never lower it.
 MIN_KILL_RATE = 20.0
 
 

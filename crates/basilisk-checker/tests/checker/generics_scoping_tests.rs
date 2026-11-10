@@ -71,3 +71,24 @@ class Bar(Generic[T]):
     let _ = codes(&diags);
     Ok(())
 }
+
+#[test]
+fn unrelated_attribute_named_like_typevar_is_not_a_typevar_use(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let source = r#"
+from typing import TypeVar
+
+T = TypeVar("T")
+
+class Namespace:
+    T = int
+
+value: Namespace.T
+"#;
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"generics_scoping"),
+        "the resolved Namespace.T attribute is not the module TypeVar named T"
+    );
+    Ok(())
+}

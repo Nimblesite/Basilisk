@@ -43,9 +43,7 @@ impl Inventory {
     fn record(&mut self, code: &str, severity: basilisk_checker::Severity) {
         *self.counts.entry(code.to_owned()).or_insert(0) += 1;
         match severity {
-            basilisk_checker::Severity::Error | basilisk_checker::Severity::SafetyViolation => {
-                self.errors += 1;
-            }
+            basilisk_checker::Severity::Error => self.errors += 1,
             basilisk_checker::Severity::Warning => self.warnings += 1,
             basilisk_checker::Severity::Info => self.infos += 1,
         }

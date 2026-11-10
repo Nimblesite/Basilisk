@@ -12,6 +12,7 @@ publish = false
 
 [dependencies]
 basilisk-common = { path = "../basilisk-common" }
+basilisk-canonical.workspace = true
 basilisk-parser.workspace = true
 ruff_python_ast.workspace = true
 ruff_text_size.workspace = true

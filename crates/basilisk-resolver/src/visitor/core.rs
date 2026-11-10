@@ -4,6 +4,7 @@
 use ruff_python_ast::{ElifElseClause, ExceptHandler, Expr, Stmt};
 use ruff_text_size::TextRange;
 
+use crate::canonical::BindingTable;
 use crate::scope::{
     ClassInfo, FunctionInfo, ImportInfo, MatchStmtInfo, RhsKind, Span, TypedDictKeyViolation,
     TypedDictKeyViolationKind, VariableInfo,
@@ -16,198 +17,107 @@ use super::class_info_ext::{
     match_stmt_info_from,
 };
 use super::function_info::function_info_from;
-use super::typeddict::{
-    canonicalize_type_str, td_check_subscript_assign, td_var_type_from_stmts, TdFieldMap,
+use super::typeddict::{td_check_subscript_assign, td_var_type_from_stmts, TdFieldMap,
 };
 use super::typeddict_ext::{td_check_ann_assign, td_check_expr_reads, td_check_regular_assign};
 
+/// The record vectors a collection walk appends into, grouped so every walk
+/// function passes one sink set instead of five parallel parameters.
+pub(super) struct CollectSinks<'a> {
+    pub(super) functions: &'a mut Vec<FunctionInfo>,
+    pub(super) classes: &'a mut Vec<ClassInfo>,
+    pub(super) module_vars: &'a mut Vec<VariableInfo>,
+    pub(super) imports: &'a mut Vec<ImportInfo>,
+    pub(super) match_stmts: &'a mut Vec<MatchStmtInfo>,
+}
+
 pub(super) fn collect_from_body(
+    bindings: &BindingTable,
     stmts: &[Stmt],
-    functions: &mut Vec<FunctionInfo>,
-    classes: &mut Vec<ClassInfo>,
-    module_vars: &mut Vec<VariableInfo>,
-    imports: &mut Vec<ImportInfo>,
-    match_stmts: &mut Vec<MatchStmtInfo>,
+    sinks: &mut CollectSinks<'_>,
     is_module_level: bool,
 ) {
     for stmt in stmts {
-        collect_from_stmt(
-            stmt,
-            functions,
-            classes,
-            module_vars,
-            imports,
-            match_stmts,
-            is_module_level,
-        );
+        collect_from_stmt(bindings, stmt, sinks, is_module_level);
     }
 }
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "AST visitor covers many statement types"
-)]
-pub(super) fn collect_from_stmt(
-    stmt: &Stmt,
+/// Walk a function body, keeping only the records that escape a function
+/// scope — nested functions and match statements. Classes, variables, and
+/// imports declared inside a function are local to it and are discarded.
+pub(super) fn collect_function_scope(
+    bindings: &BindingTable,
+    body: &[Stmt],
     functions: &mut Vec<FunctionInfo>,
-    classes: &mut Vec<ClassInfo>,
-    module_vars: &mut Vec<VariableInfo>,
-    imports: &mut Vec<ImportInfo>,
     match_stmts: &mut Vec<MatchStmtInfo>,
+) {
+    let mut local_classes = Vec::new();
+    let mut local_vars = Vec::new();
+    let mut local_imports = Vec::new();
+    let mut sinks = CollectSinks {
+        functions,
+        classes: &mut local_classes,
+        module_vars: &mut local_vars,
+        imports: &mut local_imports,
+        match_stmts,
+    };
+    collect_from_body(bindings, body, &mut sinks, false);
+}
+
+pub(super) fn collect_from_stmt(
+    bindings: &BindingTable,
+    stmt: &Stmt,
+    sinks: &mut CollectSinks<'_>,
     is_module_level: bool,
 ) {
     match stmt {
         Stmt::FunctionDef(func) => {
-            functions.push(function_info_from(func, None));
-            collect_from_body(
-                &func.body,
-                functions,
-                &mut Vec::new(),
-                &mut Vec::new(),
-                &mut Vec::new(),
-                match_stmts,
-                false,
-            );
+            sinks.functions.push(function_info_from(bindings, func, None));
+            collect_function_scope(bindings, &func.body, sinks.functions, sinks.match_stmts);
         }
         Stmt::ClassDef(class) => {
-            let class_info = class_info_from(class, functions, match_stmts);
-            classes.push(class_info);
+            let class_info = class_info_from(bindings, class, sinks.functions, sinks.match_stmts);
+            sinks.classes.push(class_info);
         }
         Stmt::If(node) => {
-            collect_from_body(
-                &node.body,
-                functions,
-                classes,
-                module_vars,
-                imports,
-                match_stmts,
-                is_module_level,
-            );
-            collect_from_elif_else(
-                &node.elif_else_clauses,
-                functions,
-                classes,
-                module_vars,
-                imports,
-                match_stmts,
-                is_module_level,
-            );
+            collect_from_body(bindings, &node.body, sinks, is_module_level);
+            collect_from_elif_else(bindings, &node.elif_else_clauses, sinks, is_module_level);
         }
         Stmt::For(node) => {
-            collect_from_body(
-                &node.body,
-                functions,
-                classes,
-                module_vars,
-                imports,
-                match_stmts,
-                is_module_level,
-            );
-            collect_from_body(
-                &node.orelse,
-                functions,
-                classes,
-                module_vars,
-                imports,
-                match_stmts,
-                is_module_level,
-            );
+            collect_from_body(bindings, &node.body, sinks, is_module_level);
+            collect_from_body(bindings, &node.orelse, sinks, is_module_level);
         }
         Stmt::While(node) => {
-            collect_from_body(
-                &node.body,
-                functions,
-                classes,
-                module_vars,
-                imports,
-                match_stmts,
-                is_module_level,
-            );
-            collect_from_body(
-                &node.orelse,
-                functions,
-                classes,
-                module_vars,
-                imports,
-                match_stmts,
-                is_module_level,
-            );
+            collect_from_body(bindings, &node.body, sinks, is_module_level);
+            collect_from_body(bindings, &node.orelse, sinks, is_module_level);
         }
         Stmt::With(node) => {
-            collect_from_body(
-                &node.body,
-                functions,
-                classes,
-                module_vars,
-                imports,
-                match_stmts,
-                is_module_level,
-            );
+            collect_from_body(bindings, &node.body, sinks, is_module_level);
         }
         Stmt::Try(node) => {
-            collect_from_body(
-                &node.body,
-                functions,
-                classes,
-                module_vars,
-                imports,
-                match_stmts,
-                is_module_level,
-            );
-            collect_from_handlers(
-                &node.handlers,
-                functions,
-                classes,
-                module_vars,
-                imports,
-                match_stmts,
-                is_module_level,
-            );
-            collect_from_body(
-                &node.orelse,
-                functions,
-                classes,
-                module_vars,
-                imports,
-                match_stmts,
-                is_module_level,
-            );
-            collect_from_body(
-                &node.finalbody,
-                functions,
-                classes,
-                module_vars,
-                imports,
-                match_stmts,
-                is_module_level,
-            );
+            collect_from_body(bindings, &node.body, sinks, is_module_level);
+            collect_from_handlers(bindings, &node.handlers, sinks, is_module_level);
+            collect_from_body(bindings, &node.orelse, sinks, is_module_level);
+            collect_from_body(bindings, &node.finalbody, sinks, is_module_level);
         }
         Stmt::Import(node) if is_module_level => {
-            imports.extend(import_infos_from(node));
+            sinks.imports.extend(import_infos_from(node));
         }
         Stmt::ImportFrom(node) if is_module_level => {
-            imports.extend(import_from_infos_from(node));
+            sinks.imports.extend(import_from_infos_from(node));
         }
         Stmt::Assign(node) if is_module_level => {
-            module_vars.extend(assign_infos_from(node));
+            sinks.module_vars.extend(assign_infos_from(node));
         }
         Stmt::AnnAssign(node) if is_module_level => {
             if let Some(var) = ann_assign_info_from(node) {
-                module_vars.push(var);
+                sinks.module_vars.push(var);
             }
         }
         Stmt::Match(node) => {
-            match_stmts.push(match_stmt_info_from(node));
+            sinks.match_stmts.push(match_stmt_info_from(node));
             for case in &node.cases {
-                collect_from_body(
-                    &case.body,
-                    functions,
-                    classes,
-                    module_vars,
-                    imports,
-                    match_stmts,
-                    is_module_level,
-                );
+                collect_from_body(bindings, &case.body, sinks, is_module_level);
             }
         }
         _ => {}
@@ -215,47 +125,25 @@ pub(super) fn collect_from_stmt(
 }
 
 pub(super) fn collect_from_elif_else(
+    bindings: &BindingTable,
     clauses: &[ElifElseClause],
-    functions: &mut Vec<FunctionInfo>,
-    class_defs: &mut Vec<ClassInfo>,
-    module_vars: &mut Vec<VariableInfo>,
-    imports: &mut Vec<ImportInfo>,
-    match_stmts: &mut Vec<MatchStmtInfo>,
+    sinks: &mut CollectSinks<'_>,
     is_module_level: bool,
 ) {
     for clause in clauses {
-        collect_from_body(
-            &clause.body,
-            functions,
-            class_defs,
-            module_vars,
-            imports,
-            match_stmts,
-            is_module_level,
-        );
+        collect_from_body(bindings, &clause.body, sinks, is_module_level);
     }
 }
 
 pub(super) fn collect_from_handlers(
+    bindings: &BindingTable,
     handlers: &[ExceptHandler],
-    functions: &mut Vec<FunctionInfo>,
-    classes: &mut Vec<ClassInfo>,
-    module_vars: &mut Vec<VariableInfo>,
-    imports: &mut Vec<ImportInfo>,
-    match_stmts: &mut Vec<MatchStmtInfo>,
+    sinks: &mut CollectSinks<'_>,
     is_module_level: bool,
 ) {
     for handler in handlers {
         let ExceptHandler::ExceptHandler(h) = handler;
-        collect_from_body(
-            &h.body,
-            functions,
-            classes,
-            module_vars,
-            imports,
-            match_stmts,
-            is_module_level,
-        );
+        collect_from_body(bindings, &h.body, sinks, is_module_level);
     }
 }
 
@@ -360,105 +248,9 @@ pub(super) fn source_slice_span(source: &str, span: Span) -> Option<&str> {
     source.get(start..end)
 }
 
-// ---------------------------------------------------------------------------
-// PEP 695 type parameter bound violation detection (for BSK-0087)
-// ---------------------------------------------------------------------------
-
-/// Walk all statements and collect PEP 695 type parameter bound violations.
-///
-/// Detects invalid `TypeVar` bound/constraint forms in PEP 695 `class Foo[T: ...]` syntax:
-/// - List literal as bound: `class Foo[T: [str, int]]`
-/// - Empty constraint tuple: `class Foo[T: ()]`
-/// - Single-element constraint tuple: `class Foo[T: (str,)]`
-/// - Non-literal (variable) constraint: `class Foo[T: t1]` where `t1 = (str, bytes)`
-/// - Invalid constraint element: `class Foo[T: (3, bytes)]` (integer literal in tuple)
-pub(super) fn types_match(actual: &str, expected: &str) -> bool {
-    let actual = actual.trim();
-    let expected = expected.trim();
-
-    if actual == expected {
-        return true;
-    }
-
-    // Handle quoted forward references: `"ClassA"` == `ClassA`
-    let actual_unquoted = if (actual.starts_with('"') && actual.ends_with('"'))
-        || (actual.starts_with('\'') && actual.ends_with('\''))
-    {
-        &actual[1..actual.len() - 1]
-    } else {
-        actual
-    };
-    if actual_unquoted != actual && actual_unquoted == expected {
-        return true;
-    }
-
-    // Handle bare generic == specialized with All-Any params.
-    // e.g. `list` == `list[Any]`, `type` == `type[Any]`, `dict` == `dict[Any, Any]`
-    if !actual.contains('[') && !actual.contains('|') {
-        if let Some(rest) = expected.strip_prefix(actual) {
-            if let Some(inner) = rest.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
-                let all_any = inner
-                    .split(',')
-                    .all(|p| matches!(p.trim(), "Any" | "..." | "*tuple[Any, ...]"));
-                if all_any {
-                    return true;
-                }
-            }
-        }
-    }
-
-    // Equivalent-spelling fallback: `Union[a, b]` == `a | b`, and fixed unpacked
-    // tuples flatten (`tuple[int, *tuple[bool, bool], str]` == `tuple[int, bool, bool, str]`).
-    // Order is preserved, so genuinely different types (e.g. `int` vs `int | str`)
-    // stay distinct. See [directives_assert_type_2].
-    canonicalize_type_str(actual) == canonicalize_type_str(expected)
-}
-
-/// Recursively check if an expression contains `ReadOnly`.
-/// Whether a disallowed `TypedDict` mutator call should be flagged. Every method in
-/// the disallowed set is always rejected except `update`, which is an error only when
-/// the target declares a `ReadOnly` item whose key the argument `TypedDict` declares
-/// with a non-`Never` value type. A `Never`-typed source key cannot supply a value,
-/// so that update is sound (PEP 705). `typeddicts_operations`
-fn disallowed_mutator_flagged(
-    method: &str,
-    call: &ruff_python_ast::ExprCall,
-    target_field_types: &std::collections::HashMap<&str, String>,
-    var_type: &std::collections::HashMap<String, String>,
-    fields: &TdFieldMap<'_>,
-) -> bool {
-    if method != "update" {
-        return true;
-    }
-    // Resolve the update argument to a known `TypedDict` variable, if it is one.
-    let arg_entry = call
-        .arguments
-        .args
-        .first()
-        .and_then(expr_simple_name)
-        .and_then(|name| var_type.get(&name))
-        .and_then(|cls| fields.get(cls.as_str()));
-    let Some((_, arg_field_types, _, _)) = arg_entry else {
-        // A dict literal or otherwise-unresolved argument cannot prove read-only
-        // soundness, so the strict `TypedDict` mutation ban still applies.
-        return true;
-    };
-    // The argument is a known `TypedDict`: the update is sound unless the target has
-    // a `ReadOnly` key for which the argument supplies an actual (non-`Never`) value.
-    target_field_types
-        .iter()
-        .filter(|(_, ann)| ann.to_ascii_lowercase().contains("readonly"))
-        .any(|(key, _)| {
-            arg_field_types
-                .get(*key)
-                .is_some_and(|ann| crate::scope::strip_typeddict_qualifiers(ann).trim() != "Never")
-        })
-}
-
 pub(super) fn check_td_stmts(
     fields: &TdFieldMap<'_>,
     var_type: &std::collections::HashMap<String, String>,
-    final_consts: &std::collections::HashMap<String, String>,
     stmts: &[Stmt],
     out: &mut Vec<TypedDictKeyViolation>,
 ) {
@@ -468,12 +260,12 @@ pub(super) fn check_td_stmts(
             Stmt::Assign(node) => {
                 td_check_subscript_assign(node, var_type, fields, out);
                 td_check_regular_assign(node, var_type, fields, out);
-                td_check_expr_reads(&node.value, var_type, fields, final_consts, out);
+                td_check_expr_reads(&node.value, var_type, fields, out);
             }
             Stmt::AnnAssign(node) => {
                 td_check_ann_assign(node, fields, out);
                 if let Some(val) = &node.value {
-                    td_check_expr_reads(val, var_type, fields, final_consts, out);
+                    td_check_expr_reads(val, var_type, fields, out);
                 }
             }
             Stmt::Expr(expr_stmt) => {
@@ -485,22 +277,13 @@ pub(super) fn check_td_stmts(
                                 // A TypedDict with `extra_items` (PEP 728) behaves
                                 // like `dict[str, VT]`, so the mutating dict methods
                                 // become available and must not be flagged.
-                                if let Some((_, field_types, _, has_extra_items)) =
+                                if let Some((_, _, _, has_extra_items)) =
                                     fields.get(class_name.as_str())
                                 {
                                     const DISALLOWED: &[&str] =
                                         &["clear", "pop", "popitem", "setdefault", "update"];
                                     let method = attr.attr.as_str();
-                                    if !has_extra_items
-                                        && DISALLOWED.contains(&method)
-                                        && disallowed_mutator_flagged(
-                                            method,
-                                            call,
-                                            field_types,
-                                            var_type,
-                                            fields,
-                                        )
-                                    {
+                                    if !has_extra_items && DISALLOWED.contains(&method) {
                                         out.push(TypedDictKeyViolation {
                                             span: text_range_to_span(expr_stmt.value.range()),
                                             class_name: class_name.clone(),
@@ -514,7 +297,7 @@ pub(super) fn check_td_stmts(
                         }
                     }
                 }
-                td_check_expr_reads(&expr_stmt.value, var_type, fields, final_consts, out);
+                td_check_expr_reads(&expr_stmt.value, var_type, fields, out);
             }
             Stmt::Delete(del) => {
                 // `del td[k]` is only an error when `k` is a literal naming a
@@ -567,7 +350,7 @@ pub(super) fn check_td_stmts(
                         }
                     }
                 }
-                check_td_stmts(fields, &local_vars, final_consts, &func.body, out);
+                check_td_stmts(fields, &local_vars, &func.body, out);
             }
             _ => {}
         }

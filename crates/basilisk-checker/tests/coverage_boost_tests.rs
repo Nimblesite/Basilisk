@@ -106,24 +106,3 @@ mod coverage_boost_30;
 
 #[path = "checker/coverage_boost_31_tests.rs"]
 mod coverage_boost_31;
-
-#[path = "checker/coverage_boost_32_tests.rs"]
-mod coverage_boost_32;
-
-#[path = "checker/coverage_boost_33_tests.rs"]
-mod coverage_boost_33;
-
-#[path = "checker/coverage_boost_34_tests.rs"]
-mod coverage_boost_34;
-
-#[path = "checker/coverage_boost_35_tests.rs"]
-mod coverage_boost_35;
-
-#[path = "checker/coverage_boost_36_tests.rs"]
-mod coverage_boost_36;
-
-#[path = "checker/coverage_boost_37_tests.rs"]
-mod coverage_boost_37;
-
-#[path = "checker/coverage_boost_38_tests.rs"]
-mod coverage_boost_38;

@@ -7,6 +7,7 @@ use ruff_python_ast::{
 };
 use ruff_text_size::Ranged;
 
+use crate::canonical::{BindingTable, TypingForm};
 use crate::scope::{
     BaseSubscriptEntry, ClassInfo, FunctionInfo, ImportInfo, ImportKind, ImportResolution,
     MatchStmtInfo, Span, TypeArg,
@@ -15,39 +16,107 @@ use crate::scope::{
 use super::calls_and_reveal::expr_to_type_arg;
 use super::class_info::collect_class_body;
 use super::core::text_range_to_span;
-use super::dataclass::{dataclass_bool_flag_is_false, dataclass_flag};
+use super::dataclass::keyword_bool;
 use super::function_info::collect_name_refs_from_expr;
-use super::generics::extract_generic_params;
 use super::type_alias::type_param_name;
-use super::ENUM_BASES;
+
+/// The [`TypingForm`]s this class's declared bases resolve to, in order.
+///
+/// Each base expression — bare, subscripted, or module-qualified — resolves
+/// through the module's bindings; bases the registry does not describe simply
+/// contribute nothing. Implements [RESOLV-CANONICAL-BINDING].
+fn base_forms(bindings: &BindingTable, class: &StmtClassDef) -> Vec<TypingForm> {
+    class
+        .arguments
+        .as_ref()
+        .map(|args| {
+            args.args
+                .iter()
+                .filter_map(|base| bindings.form_of(base))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// The literal boolean value of a class keyword, e.g. `total` in
+/// `class Movie(TypedDict, total=False)`.
+///
+/// Keyword names at a definition site need no import and decide nothing about
+/// typing on their own, so reading one is permitted.
+fn class_keyword_bool(class: &StmtClassDef, name: &str) -> Option<bool> {
+    class
+        .arguments
+        .as_ref()?
+        .keywords
+        .iter()
+        .find(|kw| kw.arg.as_ref().is_some_and(|arg| arg.as_str() == name))
+        .and_then(|kw| match &kw.value {
+            Expr::BooleanLiteral(literal) => Some(literal.value),
+            _ => None,
+        })
+}
+
+/// Behaviour flags carried by a resolved `@dataclass` decoration.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "`@dataclass(...)` takes many independent boolean keywords"
+)]
+struct DataclassDecoration {
+    frozen: bool,
+    kw_only: bool,
+    match_args_false: bool,
+    order: bool,
+    unsafe_hash: bool,
+    eq_false: bool,
+    init_false: bool,
+    slots: bool,
+}
+
+/// The `@dataclass` / `@dataclass(...)` decoration on this class, if one of its
+/// decorators resolves to `dataclasses.dataclass` through the module's
+/// bindings. Implements [RESOLV-CANONICAL-BINDING].
+fn dataclass_decoration(
+    bindings: &BindingTable,
+    class: &StmtClassDef,
+) -> Option<DataclassDecoration> {
+    let decorator = class
+        .decorator_list
+        .iter()
+        .find(|dec| bindings.is_form(&dec.expression, TypingForm::Dataclass))?;
+    let keyword = |name: &str| match &decorator.expression {
+        Expr::Call(call) => keyword_bool(call, name),
+        _ => None,
+    };
+    Some(DataclassDecoration {
+        frozen: keyword("frozen") == Some(true),
+        kw_only: keyword("kw_only") == Some(true),
+        match_args_false: keyword("match_args") == Some(false),
+        order: keyword("order") == Some(true),
+        unsafe_hash: keyword("unsafe_hash") == Some(true),
+        eq_false: keyword("eq") == Some(false),
+        init_false: keyword("init") == Some(false),
+        slots: keyword("slots") == Some(true),
+    })
+}
 
 pub(super) fn class_info_from(
+    bindings: &BindingTable,
     class: &StmtClassDef,
     functions: &mut Vec<FunctionInfo>,
     match_stmts: &mut Vec<MatchStmtInfo>,
 ) -> ClassInfo {
     let bases = extract_class_bases(class);
-
-    let pre_is_dataclass = class.decorator_list.iter().any(
-        |d| matches!(decorator_name(d), Some(n) if n == "dataclass" || n.ends_with(".dataclass")),
-    );
-    let pre_is_dataclass_kw_only = pre_is_dataclass && dataclass_flag(class, "kw_only");
+    let forms = base_forms(bindings, class);
+    let dataclass = dataclass_decoration(bindings, class);
 
     let (attributes, method_names, method_decorators) =
-        collect_class_body(class, functions, match_stmts, pre_is_dataclass_kw_only);
+        collect_class_body(bindings, class, functions, match_stmts);
 
-    let (generic_params, generic_non_typevar_args) = extract_generic_params(class);
-    mark_protocol_stubs(class, &bases, functions);
-
-    let class_decorators: Vec<String> = class
-        .decorator_list
-        .iter()
-        .filter_map(decorator_name)
-        .collect();
-
-    let is_dataclass = class_decorators
-        .iter()
-        .any(|d| d == "dataclass" || d.ends_with(".dataclass"));
+    // The `Generic[...]` / `Protocol[...]` base-name scanner that produced this
+    // pair was deleted as text-matched logic. PEP 695 parameters are still read
+    // from the AST below; the legacy subscripted-base form is inert pending
+    // [ASTREBUILD-PHASE-RESOLVER].
+    let (generic_params, generic_non_typevar_args) = (Vec::new(), Vec::new());
 
     let (base_expression_names, has_subscript_base) = extract_base_refs(class);
 
@@ -65,22 +134,7 @@ pub(super) fn class_info_from(
             .filter_map(decorator_name_and_span)
             .collect(),
         generic_params,
-        is_typed_dict: extract_is_typed_dict(class),
-        is_typeddict_total: extract_is_typeddict_total(class),
         class_keywords: extract_class_keywords(class),
-        is_dataclass,
-        is_dataclass_frozen: is_dataclass && dataclass_flag(class, "frozen"),
-        is_dataclass_kw_only: pre_is_dataclass_kw_only,
-        is_dataclass_match_args_false: is_dataclass
-            && dataclass_bool_flag_is_false(class, "match_args"),
-        is_dataclass_order: is_dataclass && dataclass_flag(class, "order"),
-        is_dataclass_unsafe_hash: is_dataclass && dataclass_flag(class, "unsafe_hash"),
-        is_dataclass_eq_false: is_dataclass && dataclass_bool_flag_is_false(class, "eq"),
-        is_dataclass_init_false: is_dataclass && dataclass_bool_flag_is_false(class, "init"),
-        is_final: class_decorators
-            .iter()
-            .any(|d| d == "final" || d.rsplit('.').next() == Some("final")),
-        is_enum: extract_is_enum(class),
         has_pep695_type_params: class.type_params.is_some(),
         pep695_type_param_names: class
             .type_params
@@ -92,9 +146,31 @@ pub(super) fn class_info_from(
         metaclass_name: extract_metaclass_name(class),
         has_subscript_base,
         base_subscripts: extract_base_subscripts(class),
-        is_dataclass_slots: is_dataclass && dataclass_flag(class, "slots"),
         has_manual_slots: class_has_manual_slots(class),
         docstring: extract_docstring(&class.body),
+        // Declared-nature flags resolve through the module's bindings: base
+        // forms for the class families, decorator forms for `@dataclass` and
+        // `@final`. A `dataclass_transform` factory contributes nothing here —
+        // its rebuild is scoped by [ASTREBUILD-PHASE-RESOLVER].
+        is_typed_dict: forms.contains(&TypingForm::TypedDict),
+        is_typeddict_total: class_keyword_bool(class, "total").unwrap_or(true),
+        is_dataclass: dataclass.is_some(),
+        is_dataclass_frozen: dataclass.as_ref().is_some_and(|d| d.frozen),
+        is_dataclass_kw_only: dataclass.as_ref().is_some_and(|d| d.kw_only),
+        is_dataclass_match_args_false: dataclass.as_ref().is_some_and(|d| d.match_args_false),
+        is_dataclass_order: dataclass.as_ref().is_some_and(|d| d.order),
+        is_dataclass_unsafe_hash: dataclass.as_ref().is_some_and(|d| d.unsafe_hash),
+        is_dataclass_eq_false: dataclass.as_ref().is_some_and(|d| d.eq_false),
+        is_dataclass_init_false: dataclass.as_ref().is_some_and(|d| d.init_false),
+        is_dataclass_slots: dataclass.as_ref().is_some_and(|d| d.slots),
+        is_final: class
+            .decorator_list
+            .iter()
+            .any(|dec| bindings.is_form(&dec.expression, TypingForm::FinalDecorator)),
+        is_enum: forms.iter().any(|form| form.is_enum_base()),
+        is_protocol: forms.contains(&TypingForm::Protocol),
+        is_namedtuple: forms.contains(&TypingForm::NamedTuple)
+            || forms.contains(&TypingForm::CollectionsNamedTuple),
     }
 }
 
@@ -128,41 +204,6 @@ fn extract_class_bases(class: &StmtClassDef) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// If this class is a Protocol or ABC, mark methods with `pass`-only bodies as stubs.
-fn mark_protocol_stubs(class: &StmtClassDef, bases: &[String], functions: &mut [FunctionInfo]) {
-    let is_protocol_or_abc = bases.iter().any(|b| b == "Protocol" || b == "ABC");
-    if is_protocol_or_abc {
-        let class_name_str = class.name.to_string();
-        for func in functions.iter_mut() {
-            if func.class_name.as_deref() == Some(&class_name_str)
-                && !func.is_stub_body
-                && body_is_pass_only(class, &func.name)
-            {
-                func.is_stub_body = true;
-            }
-        }
-    }
-}
-
-fn extract_is_typed_dict(class: &StmtClassDef) -> bool {
-    class.arguments.as_ref().is_some_and(|args| {
-        args.args
-            .iter()
-            .any(|expr| expr_simple_name(expr).is_some_and(|n| n == "TypedDict"))
-    })
-}
-
-fn extract_is_typeddict_total(class: &StmtClassDef) -> bool {
-    let is_typed_dict = extract_is_typed_dict(class);
-    !is_typed_dict
-        || !class.arguments.as_ref().is_some_and(|args| {
-            args.keywords.iter().any(|kw| {
-                kw.arg.as_ref().is_some_and(|a| a.as_str() == "total")
-                    && matches!(&kw.value, ruff_python_ast::Expr::BooleanLiteral(b) if !b.value)
-            })
-        })
-}
-
 fn extract_class_keywords(class: &StmtClassDef) -> Vec<String> {
     class
         .arguments
@@ -185,14 +226,6 @@ fn extract_metaclass_name(class: &StmtClassDef) -> Option<String> {
     })
 }
 
-fn extract_is_enum(class: &StmtClassDef) -> bool {
-    class.arguments.as_ref().is_some_and(|args| {
-        args.args
-            .iter()
-            .any(|expr| expr_simple_name(expr).is_some_and(|n| ENUM_BASES.contains(&n.as_str())))
-    })
-}
-
 /// Extract name references and subscript presence from base class expressions.
 fn extract_base_refs(class: &StmtClassDef) -> (Vec<String>, bool) {
     class
@@ -212,94 +245,6 @@ fn extract_base_refs(class: &StmtClassDef) -> (Vec<String>, bool) {
         .unwrap_or_default()
 }
 
-// ---------------------------------------------------------------------------
-// dataclass_transform post-processing
-// ---------------------------------------------------------------------------
-
-/// A `@dataclass_transform` factory detected at module level.
-pub(super) struct DcTransformFactory {
-    /// The function name decorated with `@dataclass_transform(...)`.
-    pub(super) name: String,
-    /// `kw_only_default` from the decorator (default `false`).
-    pub(super) kw_only_default: bool,
-    /// `frozen_default` from the decorator (default `false`).
-    pub(super) frozen_default: bool,
-    /// `order_default` from the decorator (default `false`).
-    pub(super) order_default: bool,
-    /// Field specifier function names extracted from `field_specifiers=(...)`.
-    pub(super) field_specifier_names: Vec<String>,
-}
-
-/// Overload parameter info for one definition of a field specifier function.
-pub(super) struct FieldSpecOverload {
-    /// Names of keyword-only parameters that do NOT have defaults (required).
-    pub(super) required_kwargs: Vec<String>,
-    /// Default value of `init` in this overload, if present.
-    pub(super) init_default: Option<bool>,
-    /// Default value of `kw_only` in this overload, if present.
-    pub(super) kw_only_default: Option<bool>,
-}
-
-/// Scan module-level statements for `@dataclass_transform(...)` decorated functions
-/// and apply their semantics to classes decorated by those factories.
-pub(super) fn parse_dataclass_transform_decorator(
-    expr: &Expr,
-) -> (bool, bool, bool, bool, Vec<String>) {
-    let Expr::Call(call) = expr else {
-        if let Expr::Name(n) = expr {
-            if n.id.as_str() == "dataclass_transform" {
-                return (true, false, false, false, Vec::new());
-            }
-        }
-        return (false, false, false, false, Vec::new());
-    };
-    let is_dc = super::walks::is_name_or_attr_named(call.func.as_ref(), "dataclass_transform");
-    if !is_dc {
-        return (false, false, false, false, Vec::new());
-    }
-
-    let mut kw_only_default = false;
-    let mut frozen_default = false;
-    let mut order_default = false;
-    let mut field_specifier_names = Vec::new();
-
-    for kw in &call.arguments.keywords {
-        let Some(arg_name) = kw.arg.as_ref() else {
-            continue;
-        };
-        match arg_name.as_str() {
-            "kw_only_default" => {
-                kw_only_default = matches!(&kw.value, Expr::BooleanLiteral(b) if b.value);
-            }
-            "frozen_default" => {
-                frozen_default = matches!(&kw.value, Expr::BooleanLiteral(b) if b.value);
-            }
-            "order_default" => {
-                order_default = matches!(&kw.value, Expr::BooleanLiteral(b) if b.value);
-            }
-            "field_specifiers" => {
-                if let Expr::Tuple(tup) = &kw.value {
-                    for elt in &tup.elts {
-                        if let Some(name) = expr_simple_name(elt) {
-                            field_specifier_names.push(name);
-                        }
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-
-    (
-        true,
-        kw_only_default,
-        frozen_default,
-        order_default,
-        field_specifier_names,
-    )
-}
-
-/// Build overload info for a field specifier function.
 pub(super) fn extract_docstring(body: &[Stmt]) -> Option<String> {
     let first = body.first()?;
     let Stmt::Expr(expr_stmt) = first else {
@@ -327,27 +272,6 @@ pub(super) fn body_is_stub(stmts: &[Stmt]) -> bool {
     non_docstring
         .iter()
         .all(|s| matches!(s, Stmt::Expr(e) if matches!(e.value.as_ref(), Expr::EllipsisLiteral(_))))
-}
-
-/// Check if a method in a class has a `pass`-only body (optionally preceded by a docstring).
-///
-/// This is used to mark Protocol/ABC methods with `pass` as stubs.
-pub(super) fn body_is_pass_only(class: &StmtClassDef, method_name: &str) -> bool {
-    for stmt in &class.body {
-        if let Stmt::FunctionDef(func) = stmt {
-            if func.name.as_str() == method_name {
-                let non_docstring: Vec<&Stmt> = func
-                    .body
-                    .iter()
-                    .skip_while(|s| {
-                        matches!(s, Stmt::Expr(e) if matches!(e.value.as_ref(), Expr::StringLiteral(_)))
-                    })
-                    .collect();
-                return non_docstring.iter().all(|s| matches!(s, Stmt::Pass(_)));
-            }
-        }
-    }
-    false
 }
 
 /// Collect annotated local variable declarations (`x: T` or `x: T = v`) from a
@@ -506,13 +430,12 @@ fn case_has_structural_pattern(case: &MatchCase) -> bool {
 // ---------------------------------------------------------------------------
 
 /// A decorator's name as spelled — the FULL dotted path for attribute
-/// spellings (`typing.overload` → `"typing.overload"`, never just
-/// `"overload"`), because whether `t.overload` IS `typing.overload` is a
-/// binding question the consumer answers by resolving `t`
+/// spellings (`@m.d` → `"m.d"`, never just the leaf), because which
+/// declaration a decorator binds to is a question the consumer answers by
+/// resolving the qualifier
 /// ([#380](https://github.com/Nimblesite/Basilisk/issues/380)). Dropping the
 /// qualifier here would make that question unanswerable everywhere
-/// downstream. A call decorator reports its callee (`@cache(size=1)` →
-/// `"cache"`).
+/// downstream. A call decorator reports its callee (`@d(size=1)` → `"d"`).
 pub(super) fn decorator_name(dec: &Decorator) -> Option<String> {
     match &dec.expression {
         Expr::Call(call) => dotted_expr_name(&call.func),
@@ -541,13 +464,6 @@ fn dotted_expr_name(expr: &Expr) -> Option<String> {
     }
 }
 
-// ---------------------------------------------------------------------------
-// TypedDict functional-syntax call collection
-// ---------------------------------------------------------------------------
-
-/// Collect module-level `TypedDict(...)` functional-syntax call sites.
-///
-/// Matches assignments of the form `Name = TypedDict("Name", {...}, ...)`.
 pub(super) fn expr_simple_name(expr: &Expr) -> Option<String> {
     match expr {
         Expr::Name(name) => Some(name.id.to_string()),

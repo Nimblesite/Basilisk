@@ -242,10 +242,6 @@ fn propagate_ancestors(
         if parent_base.type_args.is_empty() {
             continue;
         }
-        // Skip `Generic` itself — it's not a real ancestor in the hierarchy sense.
-        if parent_base.name == "Generic" || parent_base.name == "Protocol" {
-            continue;
-        }
 
         // Substitute type args.
         let resolved_args: Vec<String> = parent_base

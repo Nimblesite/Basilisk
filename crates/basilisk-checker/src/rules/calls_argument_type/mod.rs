@@ -89,7 +89,7 @@ fn check_local_function_calls(
         let Some(funcs) = func_groups.get(call.callee.as_str()) else {
             continue;
         };
-        let Some(func) = resolve_overload_for_call(funcs, call.args.len(), module) else {
+        let Some(func) = resolve_overload_for_call(funcs) else {
             continue;
         };
         check_call_arguments(module, call, func, resolver, judge, &typevars, diagnostics);
@@ -212,74 +212,16 @@ fn deeply_grounded(resolver: &AnnotationResolver<'_>, declared: &InferredType) -
     }
 }
 
-/// For an overloaded function, determine which function signature to check
-/// arguments against.
+/// The one function signature to check arguments against.
 ///
-/// If there is only one function (no overloads), returns it directly.
-/// If there are overloads, filters by arity — if exactly one overload matches
-/// the provided argument count, returns that overload. Otherwise returns the
-/// implementation (non-overload) function.
-fn resolve_overload_for_call<'a>(
-    funcs: &[&'a FunctionInfo],
-    arg_count: usize,
-    module: &ResolvedModule,
-) -> Option<&'a FunctionInfo> {
+/// A name bound to several declarations is an overload group; choosing among
+/// its members is overload resolution, which this rule does not perform, so
+/// the judgment abstains rather than guess ([CHKARCH-CONFORMANCE-MODE]).
+fn resolve_overload_for_call<'a>(funcs: &[&'a FunctionInfo]) -> Option<&'a FunctionInfo> {
     if funcs.len() <= 1 {
         return funcs.first().copied();
     }
-
-    // Separate overload stubs from the implementation.
-    let overloads: Vec<&FunctionInfo> = funcs
-        .iter()
-        .filter(|f| is_overload_stub(f, module))
-        .copied()
-        .collect();
-
-    if overloads.is_empty() {
-        // No @overload decorators — just use the last function.
-        return funcs.last().copied();
-    }
-
-    // Filter overloads by arity: keep those where the argument count is valid.
-    let arity_matches: Vec<&FunctionInfo> = overloads
-        .iter()
-        .filter(|f| {
-            // Skip functions with *args (they accept any number of positional args)
-            if f.vararg.is_some() {
-                return true;
-            }
-            let required = f.parameters.iter().filter(|p| !p.has_default).count();
-            let total = f.parameters.len();
-            arg_count >= required && arg_count <= total
-        })
-        .copied()
-        .collect();
-
-    match arity_matches.len() {
-        0 => {
-            // No overload matches arity — fall back to implementation.
-            funcs.iter().find(|f| !is_overload_stub(f, module)).copied()
-        }
-        1 => {
-            // Exactly one overload matches arity — check against it.
-            arity_matches.first().copied()
-        }
-        _ => {
-            // Multiple overloads match arity — fall back to implementation
-            // to avoid false positives (full type-based overload resolution
-            // would be needed to pick the right one).
-            funcs.iter().find(|f| !is_overload_stub(f, module)).copied()
-        }
-    }
-}
-
-/// Returns `true` if the function has an `@overload` decorator and a stub body.
-fn is_overload_stub(func: &FunctionInfo, _module: &ResolvedModule) -> bool {
-    func.is_stub_body
-        && func
-            .decorators
-            .iter()
-            .any(|d| d == "overload" || d.ends_with(".overload"))
+    None
 }
 
 /// A container parameter (`list[...]`, `set[...]`, …) that no `TypeVar`

@@ -23,7 +23,7 @@ use basilisk_resolver::ResolvedModule;
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
-use super::{guards::is_enum_class, Rule};
+use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
     code: "enums_members",
@@ -40,7 +40,7 @@ impl Rule for EnumMemberAnnotated {
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        for cls in module.classes.iter().filter(|c| is_enum_class(c)) {
+        for cls in module.classes.iter().filter(|c| c.is_enum) {
             for attr in cls
                 .attributes
                 .iter()

@@ -19,13 +19,6 @@ pub(super) const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/annotations_generators",
 };
 
-/// Valid return type base names for synchronous generator functions.
-pub(super) const SYNC_GENERATOR_TYPES: &[&str] = &["Generator", "Iterator", "Iterable"];
-
-/// Valid return type base names for asynchronous generator functions.
-pub(super) const ASYNC_GENERATOR_TYPES: &[&str] =
-    &["AsyncGenerator", "AsyncIterator", "AsyncIterable"];
-
 /// Extract the base type name (before `[`).
 pub(super) fn base_type_name(annotation: &str) -> &str {
     annotation
@@ -37,28 +30,14 @@ pub(super) fn base_type_name(annotation: &str) -> &str {
 
 /// Extract the yield type parameter from a generator annotation.
 ///
-/// - `Generator[A, B, C]` -> `Some("A")`
-/// - `Iterator[A]` -> `Some("A")`
-/// - `Iterable[A]` -> `Some("A")`
-/// - `AsyncGenerator[A, B]` -> `Some("A")`
-/// - `AsyncIterator[A]` -> `Some("A")`
-/// - `AsyncIterable[A]` -> `Some("A")`
-pub(super) fn extract_yield_type(annotation: &str, base: &str) -> Option<String> {
-    let bracket_pos = annotation.find('[')?;
-    let inner = annotation.get(bracket_pos + 1..annotation.len().checked_sub(1)?)?;
-
-    match base {
-        "Generator" | "AsyncGenerator" => {
-            // First type parameter is the yield type.
-            let first_arg = split_top_level_commas(inner).into_iter().next()?;
-            Some(first_arg.trim().to_owned())
-        }
-        "Iterator" | "Iterable" | "AsyncIterator" | "AsyncIterable" => {
-            // Single type parameter is the yield type.
-            Some(inner.trim().to_owned())
-        }
-        _ => None,
-    }
+/// Which subscript argument carries the yield type depends on WHICH generator
+/// form the annotation denotes — and every one of those forms
+/// (`Generator`, `Iterator`, `Iterable`, and the `Async*` variants) requires an
+/// import. Deciding that by matching the annotation's source text against those
+/// spellings is not import resolution, so that recognition is deleted. Rebuild
+/// it on the annotation cascade ([TYPEINF-ANNOTATION-RESOLUTION]).
+pub(super) fn extract_yield_type(_annotation: &str, _base: &str) -> Option<String> {
+    None
 }
 
 /// Extract the return type (3rd parameter) from `Generator[Y, S, R]`.
@@ -235,11 +214,10 @@ pub(super) fn check_send_type_compat(
     module: &ResolvedModule,
     out: &mut Vec<Diagnostic>,
 ) {
-    if !outer_base.eq_ignore_ascii_case("Generator")
-        || !callee_base.eq_ignore_ascii_case("Generator")
-    {
-        return;
-    }
+    // The `Generator`-spelling gate that stood here compared annotation source
+    // text against an import-requiring name; deleted pending cascade-based
+    // recognition ([TYPEINF-ANNOTATION-RESOLUTION]).
+    let _ = (outer_base, callee_base);
 
     let outer_bracket = outer_ann.find('[').unwrap_or(0);
     let outer_inner = outer_ann

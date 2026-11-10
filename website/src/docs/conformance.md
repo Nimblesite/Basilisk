@@ -1,103 +1,78 @@
 ---
 layout: layouts/docs.njk
-title: "Basilisk Scores 100% on the Official Python Typing Conformance Suite"
-description: "Basilisk is the only Python type checker with a perfect 100% score — published on the official python/typing conformance results page, ahead of Pyright, mypy, Pyrefly and ty. Here's the proof and how it's measured."
-keywords: pep conformance, python typing conformance results, 100% conformant type checker, best python type checker, basilisk conformance score, python/typing results
+title: "Basilisk Is Auditing and Deleting Its Checker Rules"
+description: "Basilisk withdrew its Python typing conformance claim and is now auditing every rule, deleting the ones that match source text instead of doing real type checking."
+keywords: basilisk conformance correction, python typing conformance, python/typing results, mutation testing
 date: 2026-06-23
-dateModified: 2026-07-07
+dateModified: 2026-08-08
 author: The Basilisk Project
 eleventyNavigation:
   key: Conformance
   order: 10
 ---
-{% from "conformance-chart.njk" import chart %}
 
-# Basilisk scores a perfect 100%
+# We are auditing the checker and deleting what doesn't hold up
 
-Basilisk is the **only Python type checker with a perfect {{ conformanceOfficial.byId.basilisk.pct }}% score** on the [**official `python/typing` conformance results**](https://github.com/python/typing/blob/main/conformance/results/results.html) — and it is **published right there on the Python typing repository's own results page**, graded on the same single run as every other checker.
+<p class="bench-caveat"><strong>Correction:</strong> Basilisk has retracted its former perfect-score claim. The result was not a trustworthy measure of specification conformance. We asked for Basilisk to be removed from the <code>python/typing</code> results table, and it <a href="https://github.com/python/typing/blob/main/conformance/results/results.html">has been removed</a>. Basilisk's current conformance percentage is <strong>temporarily unknown</strong>, and we are not trying to restore it.</p>
+
+We found checker logic fitted to the exact contents of conformance test files rather than implementing the typing specification generally. Those rules matched the *spelling* of code rather than its meaning: type-alias validation used prefixes and substrings taken from raw source text, including a special case for `eval(` purely because that spelling appeared in one test file. Rename an import or reformat a file and the answer changed, even though the typing behavior being tested had not.
+
+A passing result from code developed against the exact fixtures is not evidence, so the fix is not a better score.
+
+## How this happened
+
+Our development process named the conformance score as the thing to build against, and matching source text raises that score faster than real analysis does, so that is the direction the code drifted — one plausible-looking rule at a time. We then published and submitted on the strength of a green run, without ever running the one check that would have exposed it: does this rule still hold when the same program is spelled differently? That check did not exist, and building it is part of the remediation below. The suite cannot catch this class of defect by construction, because it is the artefact the code was fitted to, so every green run reinforced a conclusion we had no basis for.
+
+We believed the number meant what we said it meant. We were wrong, and we were wrong because we failed to verify it. Basilisk's author has published a [personal account and apology](https://www.christianfindlay.com/blog/basilisk-conformance-apology) taking responsibility in his own words.
+
+We also did not find this ourselves. It was reported from outside, in [issue #379](https://github.com/Nimblesite/Basilisk/issues/379), with a public reproduction. That is its own finding, and we record it as one.
+
+## What we are doing
+
+**We are auditing every rule and deleting the ones that don't do real type checking.** Not rewriting them, not patching them, not marking them TODO — deleting them, and leaving a failing test behind so the gap is visible rather than hidden. A rule stays only if it decides from the resolved syntax tree and returns the same diagnostics when the same program is spelled differently.
+
+The consequences are deliberate, and we would rather state them up front than have you discover them:
+
+- **Basilisk gets smaller before it gets better.** Expect fewer rules and fewer diagnostics.
+- **The conformance number will fall.** That is the correct outcome of removing logic that was never doing the analysis, and we will report each drop rather than avoid it.
+- **A failing test is worth more to us than a passing fixture** that was carried by code which doesn't analyse anything. The first is an accurate record of what Basilisk cannot do; the second is a claim that it can.
+
+What is left will be code that is honest about what it does — nothing else.
+
+**Where a rule can't be made reliable in a straightforward way, we will depend on a different, established type checker rather than ship our own unreliable version of it.** An answer from an engine that has earned trust is worth more to you than a Basilisk-branded one that hasn't. No replacement percentage gets published until it survives the robustness testing described below.
+
+Type checking is one part of Basilisk. The rest — language server, refactoring, formatting, integrated debugging, profiling, and the editor extensions — does not rest on the rules under audit, and that is what we are sharpening while the audit runs: make the parts that are genuinely useful solid, and remove anything that could hand you a misleading result.
 
 <p class="conf-links">
-  <a href="https://github.com/python/typing/blob/main/conformance/results/results.html" target="_blank" rel="noopener"><strong>Official python/typing results ↗</strong></a>
-  <a href="{{ conformanceOfficial.snapshot.addedPrUrl }}" target="_blank" rel="noopener">The PR that added us ↗</a>
+  <a href="https://github.com/python/typing/blob/main/conformance/results/results.html" target="_blank" rel="noopener"><strong>Current python/typing results ↗</strong></a>
+  <a href="https://github.com/Nimblesite/Basilisk/blob/main/docs/CONFORMANCE-INTEGRITY-AUDIT.md" target="_blank" rel="noopener">Full integrity audit ↗</a>
+  <a href="https://github.com/Nimblesite/Basilisk/issues/379" target="_blank" rel="noopener">Original bug report ↗</a>
+  <a href="https://github.com/Nimblesite/Basilisk/issues/408" target="_blank" rel="noopener">Integrity remediation tracker ↗</a>
   <a href="https://typing.python.org/en/latest/spec/" target="_blank" rel="noopener">Python typing spec ↗</a>
   <a href="https://github.com/python/typing/blob/main/conformance/README.md" target="_blank" rel="noopener">Conformance README ↗</a>
 </p>
 
-## The official leaderboard
+## Scope of the audit
 
-Every score below comes from **one identical run** of the [official `python/typing` conformance suite](https://github.com/python/typing/blob/main/conformance/results/results.html) — the same suite and scorer the typing community uses to grade every checker. Basilisk tops it, and is the **only tool on the board at a perfect score**.
+The review covers every place a narrow fixture could have stood in for a general implementation: source-text predicates and substring matching, hard-coded symbol spellings, rules organised around a test file rather than a specification concept, duplicated logic, and accept-everything fallbacks standing in for checks that were never written.
 
-<div class="table-wrapper">
-<table>
-<thead><tr><th>Tool</th><th>Backer</th><th>Official conformance</th></tr></thead>
-<tbody>
-{%- for t in conformanceOfficial.ranked %}
-<tr{% if t.id == "basilisk" %} class="conf-row-basilisk"{% endif %}>
-  <td>{% if t.id == "basilisk" %}<strong>Basilisk</strong>{% else %}{{ t.name }}{% endif %}</td>
-  <td>{{ t.org or "independent" }}</td>
-  <td><a href="{{ t.resultsUrl }}" target="_blank" rel="noopener">{% if t.id == "basilisk" %}<strong>{{ t.pct }}% ({{ t.passLabel }}/{{ t.total }})</strong>{% else %}{{ t.pct }}%{% endif %}</a></td>
-</tr>
-{%- endfor %}
-</tbody>
-</table>
-</div>
+Each finding is handled the same way — a test that fails because of the code, then the code is removed, then the removal is recorded. Nothing is quietly repaired in place, because a repair preserves the claim that the rule worked.
 
-<p class="conf-note">Snapshot of <a href="{{ conformanceOfficial.snapshot.snapshotUrl }}" target="_blank" rel="noopener">results.html</a> at <a href="{{ conformanceOfficial.snapshot.commitUrl }}" target="_blank" rel="noopener">python/typing@<code>{{ conformanceOfficial.snapshot.sha }}</code></a> ({{ conformanceOfficial.snapshot.dateLabel }}). These figures drift as the other tools improve, so every cell links to that tool's <strong>live</strong> results folder — check the current number yourself.</p>
+This is active remediation, not an indefinite withdrawal. If a defensible result is lower than the former claim, we publish the lower result.
 
-## How it's measured
+## The new publication bar
 
-We don't score ourselves against our own yardstick. The number above is produced by the **official `python/typing` harness**, run unmodified against the `basilisk` CLI built straight from the current checkout (`cargo build --release`), in its **default configuration**, with **every PEP conformance rule on and nothing else configured** — the same binary every install channel ships. A file passes only when the harness's diff is empty: every required error reported, and **nothing** reported on a line the suite doesn't mark. We count every diagnostic the checker emits — errors *and* warnings — so a single false positive fails the whole file.
+A future conformance result must satisfy all of these checks:
 
-Today that is **{{ conformance.scorePct }}%** — **{{ conformance.pass }} of {{ conformance.total }}** test files passing, {{ conformance.caught }} required errors caught, **{{ conformance.fp }} false positives**, **{{ conformance.missed }} missed errors**. We run in lock step with `python/typing@main` (graded at [`{{ conformance.pinnedRefShort }}`](https://github.com/python/typing/tree/{{ conformance.pinnedRef }}/conformance){% if conformance.commitDate %}, {{ conformance.commitDate }}{% endif %}); a ratchet gate keeps the score from ever regressing, and an upstream test we fail blocks merge and release.
+1. Run the official, unmodified `python/typing` harness against Basilisk's default configuration.
+2. Apply AST-preserving mutations such as consistent renaming of type variables and equivalent spelling changes. A rule is not accepted if those changes move its result.
+3. Pass independent off-suite cases derived from the typing specification and real-world code rather than from the upstream fixture text.
+4. Add regression and mutation tests for every test-specific implementation found by the audit.
+5. Publish the robustness and off-suite results alongside the suite percentage and make the methodology reproducible.
+6. Pass an audit by someone outside this project before Basilisk is submitted to `python/typing` again.
 
-Basilisk's **opt-in house-style rules** (require-annotation, redundant-annotation, missing-`@override`, explicit-`Any`) never run during scoring — a fresh install runs none of them, and enabling them would only *lower* the score, since the spec treats an unannotated value as *inferred*, not an error. "Stricter than the spec" and "conformant to the spec" are different goals; this score measures only the second.
+Until that work is complete, old conformance tables, charts, category scores, pass counts, and false-positive totals are withdrawn and should not be cited as Basilisk's current state. We are not quoting a current figure either — a number is not what is wrong here, and publishing a new one before the audit finishes would repeat the mistake.
 
-### Reproduce it yourself
+## Related performance figures
 
-Basilisk is a **registered checker in the official suite** — `BasiliskTypeChecker`
-lives in `python/typing`'s [`conformance/src/type_checker.py`](https://github.com/python/typing/blob/main/conformance/src/type_checker.py) —
-so you run the real harness directly, with nothing to patch:
-
-```bash
-# Clone python/typing FRESH, run its OWN harness against the basilisk binary,
-# and regenerate conformance/conformance_status.csv from the real results.
-python3 conformance/run_conformance.py --bin target/release/basilisk
-```
-
-Or drive the upstream harness by hand against any `basilisk` on your PATH:
-
-```bash
-git clone --depth 1 https://github.com/python/typing
-BASILISK_BIN=$(which basilisk) python typing/conformance/src/main.py --only-run basilisk
-```
-
-The runner lives in [`conformance/run_conformance.py`](https://github.com/Nimblesite/Basilisk/blob/main/conformance/run_conformance.py); it clones the suite fresh, runs the unmodified upstream harness, and never scores anything itself.
-
-## How the score got honest
-
-We'd rather say this plainly than paper over it. An earlier in-repo script inflated the figure by **excluding some diagnostic codes from the diff and not counting false positives at all**. We threw it out and adopted the official `python/typing` scoring semantics on the real default CLI. The chart is read straight from the **git history of `conformance/conformance_status.csv`** at build time — one point per commit that changed it, including that correction.
-
-{{ chart(conformance, {
-  "label": "Conformance score over time",
-  "heading": "From an in-repo script to the official harness",
-  "prevLegend": "Earlier in-repo script — excluded codes, ignored false positives (not the official measure)",
-  "officialLegend": "Official <code>python/typing</code> harness on the real default CLI",
-  "dropNote": "Early points came from an in-repo script that excluded diagnostic codes and didn&rsquo;t count false positives; later points use the official <code>python/typing</code> scoring semantics on the real default CLI. Today&rsquo;s official figure is <strong>" + conformance.chart.current.score + "%</strong> — a measurement that got honest, not a checker that got worse.",
-  "caption": "Each dot is a real commit to <code>conformance/conformance_status.csv</code>, recomputed every build. Hover a point for its date, commit, score, and false-positive count."
-}) }}
-
-## Where each category stands today
-
-Read live from `conformance/conformance_status.csv` at build time:
-
-<div class="table-wrapper">
-<table>
-<thead><tr><th>Category</th><th>Passing</th><th>Score</th><th></th></tr></thead>
-<tbody>
-{%- for cat in conformance.categories %}
-<tr><td>{{ cat.label }}</td><td>{{ cat.pass }} / {{ cat.total }}</td><td>{{ cat.pct }}%</td><td><span class="conf-cat-bar" style="width: {{ (cat.pct * 1.2) | round }}px; opacity: {{ 0.4 + cat.pct / 170 }}"></span></td></tr>
-{%- endfor %}
-</tbody>
-</table>
-</div>
-</content>
+The same review failure means our published benchmark figures also require revalidation. They are retained only as a clearly labelled historical record on the [benchmarks page](/docs/benchmarks/) and must not be used to compare Basilisk with other tools. New performance figures will be published only after the methodology and results have passed the integrity review.

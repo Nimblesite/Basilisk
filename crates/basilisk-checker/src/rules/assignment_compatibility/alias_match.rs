@@ -73,7 +73,7 @@ pub(super) fn collect_value_aliases(module: &ResolvedModule) -> HashMap<String, 
         .collect();
     let mut aliases = HashMap::new();
     for var in &module.module_vars {
-        if var.has_annotation && !is_typealias_annotation(var, &module.source) {
+        if var.has_annotation {
             continue;
         }
         let Some(text) = alias_rhs_text(var, module) else {
@@ -133,14 +133,10 @@ fn free_typevars(lowered: &str, typevars: &HashSet<String>) -> Vec<String> {
 /// `G = list["G[T]" | T]`), then specialisations that reference a root via a
 /// subscript (e.g. `S = G[str]`) and therefore bind no params of their own.
 ///
-/// Unlike [`collect_value_aliases`], annotated assignments are skipped even
-/// when the annotation is an explicit `TypeAlias`. Substituting into a generic
-/// alias is textual here, which is sound for the container bodies this pass
-/// targets but not for a `Callable` body parameterised by a `ParamSpec` —
-/// `Callback: TypeAlias = Callable[P, str]` used as `Callback[...]` needs real
-/// `ParamSpec` semantics, and approximating it produced false positives on the
-/// conformance suite's `callables_annotation` / `callables_subtyping` fixtures.
-/// Those forms are left to the callable-compatibility path that does model them.
+/// Annotated assignments are skipped: substituting into a generic alias is
+/// textual here, which is sound for the container bodies this pass targets but
+/// not for the parameterised callable forms left to the callable-compatibility
+/// path that does model them.
 pub(super) fn collect_generic_aliases(module: &ResolvedModule) -> HashMap<String, GenericAlias> {
     let typevars: HashSet<String> = module
         .typevar_calls
@@ -212,27 +208,6 @@ pub(super) fn alias_value_assignable(
         return Some(match_named_target(value, declared_name, ctx, 0));
     }
     None
-}
-
-/// Returns `true` when `var` carries an explicit `TypeAlias` annotation, i.e.
-/// `Name: TypeAlias = ...` (also `typing.TypeAlias`). Such assignments are
-/// value aliases too and must be collected despite `has_annotation` being set.
-///
-/// The annotation may be written as a string — `Name: "TypeAlias" = ...` is the
-/// same declaration to a type checker, since any annotation may appear as a
-/// forward reference ([annotation expressions](https://typing.python.org/en/latest/spec/annotations.html#string-annotations)).
-/// [`alias_base`] strips those quotes for the same reason, so the two agree on
-/// what a name is.
-fn is_typealias_annotation(var: &VariableInfo, source: &str) -> bool {
-    let Some(span) = var.annotation_span else {
-        return false;
-    };
-    let Some(text) = slice_span(source, span) else {
-        return false;
-    };
-    let unquoted = alias_base(text.trim());
-    let base = unquoted.rsplit('.').next().unwrap_or(unquoted);
-    base == "TypeAlias"
 }
 
 /// The trimmed RHS source text of an alias assignment, if non-empty.
@@ -314,14 +289,9 @@ pub(super) fn alias_assignable(
     }
 }
 
-/// Match a value against a `Named` target, resolving union aliases, generic
-/// alias specialisations, and the `Mapping[K, V]` ABC (left as a `Named`).
+/// Match a value against a `Named` target, resolving union aliases and generic
+/// alias specialisations.
 fn match_named_target(value: &InferredType, name: &str, ctx: &AliasCtx<'_>, depth: u32) -> bool {
-    // `Mapping[K, V]` arrives as a Named; treat it structurally like a dict.
-    if let Some(dict) = parse_mapping_named(name) {
-        return alias_assignable(value, &dict, ctx, depth + 1);
-    }
-
     let base = alias_base(name);
     if let Some(def) = ctx.union.get(base) {
         return alias_assignable(value, def, ctx, depth + 1);
@@ -428,12 +398,4 @@ fn positive_base_match(value: &InferredType, target: &InferredType) -> bool {
 fn alias_base(name: &str) -> &str {
     let trimmed = name.trim_matches(|c| c == '"' || c == '\'');
     trimmed.split('[').next().unwrap_or(trimmed).trim()
-}
-
-/// Parse a `mapping[K, V]` Named into a `Dict(K, V)` so it can be matched
-/// structurally against a dict literal value.
-fn parse_mapping_named(name: &str) -> Option<InferredType> {
-    let inner = name.strip_prefix("mapping[")?.strip_suffix(']')?;
-    let (key, val) = crate::types_parsing::parse_key_value_args(inner)?;
-    Some(InferredType::Dict(Box::new(key), Box::new(val)))
 }

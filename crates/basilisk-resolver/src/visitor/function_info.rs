@@ -1,9 +1,12 @@
 //! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
 //! Function Info visitor functions.
 
-use ruff_python_ast::{Expr, Parameter, ParameterWithDefault, Stmt, StmtFunctionDef, StmtReturn};
+use ruff_python_ast::{
+    Decorator, Expr, Parameter, ParameterWithDefault, Stmt, StmtFunctionDef, StmtReturn,
+};
 use ruff_text_size::Ranged;
 
+use crate::canonical::{BindingTable, TypingForm};
 use crate::scope::{
     FunctionInfo, ParameterInfo, ReturnAnnotationKind, ReturnStmtInfo, RhsKind, Span, VariableInfo,
 };
@@ -13,13 +16,36 @@ use super::assigns::{assign_infos_from, collect_all_assigns};
 use super::class_info_ext::{
     body_is_stub, decorator_name, decorator_name_and_span, extract_docstring,
 };
-use super::core::{classify_rhs, source_slice_range, text_range_to_span};
+use super::core::{classify_rhs, text_range_to_span};
 use super::narrowing::collect_narrowing_guards;
 use super::type_alias::type_param_name;
 use super::unhashable::collect_unhashable_keys_from_stmts;
 use super::yield_exprs::{collect_yield_exprs, stmt_contains_yield};
 
+/// Does any decorator on this definition resolve to `form`?
+///
+/// The question is the decorator **node**, resolved through the module's
+/// bindings — never its spelling. Implements [RESOLV-CANONICAL-BINDING].
+fn has_decorator_form(bindings: &BindingTable, decorators: &[Decorator], form: TypingForm) -> bool {
+    decorators
+        .iter()
+        .any(|decorator| bindings.form_of(&decorator.expression) == Some(form))
+}
+
+/// Does any decorator resolve to `form`, extending resolution to the builtin
+/// scope for a bare, unrebound builtin name (`@staticmethod` needs no import)?
+fn has_builtin_decorator_form(
+    bindings: &BindingTable,
+    decorators: &[Decorator],
+    form: TypingForm,
+) -> bool {
+    decorators
+        .iter()
+        .any(|decorator| bindings.form_of_with_builtins(&decorator.expression) == Some(form))
+}
+
 pub(super) fn function_info_from(
+    bindings: &BindingTable,
     func: &StmtFunctionDef,
     class_name: Option<String>,
 ) -> FunctionInfo {
@@ -111,6 +137,27 @@ pub(super) fn function_info_from(
         pep695_type_param_names,
         local_vars,
         local_unannotated_vars,
+        is_overload: has_decorator_form(bindings, &func.decorator_list, TypingForm::Overload),
+        is_staticmethod: has_builtin_decorator_form(
+            bindings,
+            &func.decorator_list,
+            TypingForm::StaticMethod,
+        ),
+        is_classmethod: has_builtin_decorator_form(
+            bindings,
+            &func.decorator_list,
+            TypingForm::ClassMethod,
+        ),
+        is_abstractmethod: has_decorator_form(
+            bindings,
+            &func.decorator_list,
+            TypingForm::AbstractMethod,
+        ),
+        is_no_type_check: has_decorator_form(
+            bindings,
+            &func.decorator_list,
+            TypingForm::NoTypeCheck,
+        ),
         is_generator: func.body.iter().any(stmt_contains_yield),
         is_async: func.is_async,
         yield_exprs,
@@ -182,48 +229,6 @@ pub(super) fn parameter_to_info(p: &Parameter) -> ParameterInfo {
             .annotation
             .as_deref()
             .map(|e| text_range_to_span(e.range())),
-        annotation_text: p.annotation.as_deref().map(annotation_source_text),
-    }
-}
-
-/// Produce a canonical text representation of an annotation `Expr` for
-/// structural comparison (e.g. overlapping-overload detection).
-pub(super) fn annotation_source_text(expr: &Expr) -> String {
-    match expr {
-        Expr::Name(n) => n.id.to_string(),
-        Expr::Attribute(a) => format!("{}.{}", annotation_source_text(&a.value), a.attr),
-        Expr::Subscript(s) => format!(
-            "{}[{}]",
-            annotation_source_text(&s.value),
-            annotation_source_text(&s.slice)
-        ),
-        Expr::Tuple(t) => t
-            .elts
-            .iter()
-            .map(annotation_source_text)
-            .collect::<Vec<_>>()
-            .join(", "),
-        Expr::BinOp(b) => format!(
-            "{} | {}",
-            annotation_source_text(&b.left),
-            annotation_source_text(&b.right)
-        ),
-        Expr::NoneLiteral(_) => "None".to_owned(),
-        Expr::EllipsisLiteral(_) => "...".to_owned(),
-        Expr::StringLiteral(s) => format!("\"{}\"", s.value),
-        Expr::NumberLiteral(n) => format!("{n:?}"),
-        Expr::BooleanLiteral(b) => if b.value { "True" } else { "False" }.to_owned(),
-        Expr::Starred(s) => format!("*{}", annotation_source_text(&s.value)),
-        Expr::List(l) => {
-            let inner = l
-                .elts
-                .iter()
-                .map(annotation_source_text)
-                .collect::<Vec<_>>()
-                .join(", ");
-            format!("[{inner}]")
-        }
-        _ => format!("{expr:?}"),
     }
 }
 
@@ -301,11 +306,7 @@ fn collect_callee_name_refs(expr: &Expr, out: &mut Vec<(String, Span)>) {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Unhashable key collection
-// ---------------------------------------------------------------------------
-
-/// Walk all statements in a function body looking for dict literals with unhashable keys.
+/// Classify a return annotation by the shape rules downstream key off.
 pub(super) fn return_annotation_kind(expr: &Expr) -> ReturnAnnotationKind {
     let (is_any, is_none, is_num) = annotation_flags(expr);
     if is_any {
@@ -319,29 +320,7 @@ pub(super) fn return_annotation_kind(expr: &Expr) -> ReturnAnnotationKind {
     }
 }
 
-/// Returns `(is_any, is_none, is_numeric_literal)` for an annotation expression.
-pub(super) fn parse_defaults_count(keywords: &[ruff_python_ast::Keyword]) -> usize {
-    for kw in keywords {
-        if kw
-            .arg
-            .as_ref()
-            .is_some_and(|arg| arg.as_str() == "defaults")
-        {
-            return match &kw.value {
-                Expr::Tuple(t) => t.elts.len(),
-                Expr::List(l) => l.elts.len(),
-                _ => 0,
-            };
-        }
-    }
-    0
-}
-
-/// Collect `Final` string-literal constant bindings from module-level statements.
-///
-/// Returns a map from variable name to the string value (e.g., `X: Final = "x"` yields
-/// `"X" -> "x"`).  Only `Final` / `Final[str]` annotations with string-literal RHS
-/// are included.
+/// Recursively collect every `Name` reference in an expression tree.
 pub(super) fn collect_name_refs_from_expr(expr: &Expr, out: &mut Vec<String>) {
     match expr {
         Expr::Name(name) => out.push(name.id.to_string()),
@@ -402,7 +381,7 @@ pub(super) fn collect_name_refs_with_spans(expr: &Expr, out: &mut Vec<(String, S
 /// Recursively collect string literal references from an expression tree.
 ///
 /// Finds string literals used as forward references in type annotations
-/// (e.g. `"SomeClass"` in `Optional["SomeClass"]`).
+/// (e.g. `"SomeClass"` in `list["SomeClass"]`).
 pub(super) fn collect_string_refs_from_expr(expr: &Expr, out: &mut Vec<String>) {
     match expr {
         Expr::StringLiteral(s) => {
@@ -423,25 +402,4 @@ pub(super) fn collect_string_refs_from_expr(expr: &Expr, out: &mut Vec<String>) 
         }
         _ => {}
     }
-}
-
-/// Convert an expression into a structured [`TypeArg`].
-///
-/// Simple names become `TypeArg::Simple`, subscript expressions become
-/// `TypeArg::Subscript { base, args }`. Other expression forms fall back to
-/// `TypeArg::Simple` using whatever simple name can be extracted (or an empty
-/// string as a last resort).
-pub(super) fn build_param_scope_owned(
-    parameters: &ruff_python_ast::Parameters,
-    source: &str,
-) -> Vec<(String, String)> {
-    super::walks::iter_all_params(parameters)
-        .filter_map(|p| {
-            let name = p.parameter.name.to_string();
-            let ann = p.parameter.annotation.as_deref()?;
-            let range = ann.range();
-            let ann_text = source_slice_range(source, range)?;
-            Some((name, ann_text.to_owned()))
-        })
-        .collect()
 }

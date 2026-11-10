@@ -27,7 +27,6 @@ use basilisk_resolver::{
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
-use super::shared::annotation_is_classvar;
 use super::Rule;
 
 mod method_binding;
@@ -272,10 +271,10 @@ fn metaclass_passes_through(metaclass_name: &str, module: &ResolvedModule) -> bo
 ///
 /// Per the [metaclass `__call__`](https://typing.python.org/en/latest/spec/constructors.html#metaclass-call-method)
 /// rules, a return annotated with a type variable
-/// (`def __call__(cls: type[T], ...) -> T`) or `Self` is the pass-through
-/// spelling. Any other concrete return — `NoReturn`, `int | Meta` — means the
-/// metaclass fully controls the call and the constructor signature is never
-/// consulted, so an arity judgment against `__new__` would be a false positive.
+/// (`def __call__(cls: type[T], ...) -> T`) is the pass-through form. Any other
+/// concrete return means the metaclass fully controls the call and the
+/// constructor signature is never consulted, so an arity judgment against
+/// `__new__` would be a false positive.
 ///
 /// An UNANNOTATED `__call__` is decided from its body instead of assumed, so
 /// this judgment survives [TYPEINF-TARGET-GRADUAL]: stripping the annotations
@@ -288,11 +287,10 @@ fn constructs_an_instance(call_fn: &FunctionInfo, module: &ResolvedModule) -> bo
         return body_delegates_construction(call_fn);
     };
     let returned = text.trim();
-    returned == "Self"
-        || module
-            .typevar_calls
-            .iter()
-            .any(|typevar| typevar.name == returned)
+    module
+        .typevar_calls
+        .iter()
+        .any(|typevar| typevar.name == returned)
 }
 
 /// Does an unannotated metaclass `__call__` hand construction back to the
@@ -310,10 +308,7 @@ fn body_delegates_construction(call_fn: &FunctionInfo) -> bool {
 /// Collects the positional (non-kw_only, non-init_false, non-ClassVar) fields of a
 /// dataclass in declaration order. These are the fields that correspond positionally
 /// to constructor arguments when no keyword arguments are used.
-fn positional_dataclass_fields<'a>(
-    class_info: &'a ClassInfo,
-    source: &str,
-) -> Vec<&'a AttributeInfo> {
+fn positional_dataclass_fields(class_info: &ClassInfo) -> Vec<&AttributeInfo> {
     class_info
         .attributes
         .iter()
@@ -322,14 +317,14 @@ fn positional_dataclass_fields<'a>(
                 && !a.is_init_false
                 && !a.is_kw_only
                 && !a.is_init_var
-                && !annotation_is_classvar(source, a.annotation_span)
+                && !a.is_class_var
         })
         .collect()
 }
 
 /// Counts the required (no-default) positional dataclass fields.
-fn required_dataclass_field_count(class_info: &ClassInfo, source: &str) -> usize {
-    positional_dataclass_fields(class_info, source)
+fn required_dataclass_field_count(class_info: &ClassInfo) -> usize {
+    positional_dataclass_fields(class_info)
         .into_iter()
         .filter(|a| !a.has_value)
         .count()
@@ -388,7 +383,7 @@ fn check_dataclass_arg_types(
         return;
     }
 
-    let fields = positional_dataclass_fields(class_info, source);
+    let fields = positional_dataclass_fields(class_info);
 
     for (idx, (arg_kind, arg_span)) in call.args.iter().enumerate() {
         let Some(field) = fields.get(idx) else {
@@ -428,6 +423,10 @@ fn check_dataclass_arg_types(
 /// class's `__new__` or `__init__` method, but only if the metaclass `__call__`
 /// passes arguments through (uses `*args, **kwargs`).
 fn check_constructor_calls(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    // Bail on parse errors — those are reported separately as BSK-0000.
+    if crate::annotation::AnnotationResolver::for_module(module).is_none() {
+        return;
+    }
     // Build a map of class names for quick lookup.
     let class_map = super::shared::class_name_map(&module.classes);
 
@@ -547,7 +546,7 @@ fn check_dataclass_no_explicit_constructor(
     }
 
     // Normal synthesised __init__: check required field count.
-    let required_count = required_dataclass_field_count(class_info, source);
+    let required_count = required_dataclass_field_count(class_info);
 
     if provided_count < required_count {
         let missing = required_count - provided_count;
@@ -583,29 +582,17 @@ fn find_constructor_method<'a>(
     let class_name = class_info.name.as_str();
 
     // Try __new__ first
-    if let Some(new_methods) = method_map.get(&(class_name, "__new__")) {
-        // Use the first non-overload __new__, or the first one
-        let new_fn = new_methods
-            .iter()
-            .find(|f| !super::shared::decorator_spelled(&f.decorators, "overload"))
-            .or_else(|| new_methods.first());
-        if let Some(func) = new_fn {
-            return Some(func);
-        }
+    if let Some(func) = method_map
+        .get(&(class_name, "__new__"))
+        .and_then(|new_methods| new_methods.first().copied())
+    {
+        return Some(func);
     }
 
     // Fall back to __init__
-    if let Some(init_methods) = method_map.get(&(class_name, "__init__")) {
-        let init_fn = init_methods
-            .iter()
-            .find(|f| !super::shared::decorator_spelled(&f.decorators, "overload"))
-            .or_else(|| init_methods.first());
-        if let Some(func) = init_fn {
-            return Some(func);
-        }
-    }
-
-    None
+    method_map
+        .get(&(class_name, "__init__"))
+        .and_then(|init_methods| init_methods.first().copied())
 }
 
 /// Check calls to functional-form `NamedTuple` / `namedtuple` for argument count errors.
