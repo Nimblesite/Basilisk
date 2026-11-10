@@ -36,7 +36,7 @@ use basilisk_resolver::ResolvedModule;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
-use crate::rules::shared::{identifiers_followed_by, is_numeric_subtype, split_top_level_commas};
+use crate::rules::shared::{identifiers_followed_by, split_top_level_commas};
 
 use super::generics_defaults_referential_2_helpers::{
     find_matching_bracket, literal_type_mismatch, parse_typevar_info_from_source,
@@ -80,8 +80,11 @@ impl Rule for TypeVarDefaultReferential {
         // Check 2: Outer scope references
         check_outer_scope(module, &info_map, &typevar_names, diagnostics);
 
-        // Check 3: Bound/constraint compatibility
+        // Check 3: Bound/constraint compatibility — verdicts route through
+        // the module-seeded context ([NARROWPLAN-SUBTYPING]).
+        let subtyping = crate::subtyping::module_context(module);
         check_bound_constraint_compat(
+            &subtyping,
             &typevar_info_list,
             &info_map,
             &span_map,
@@ -262,6 +265,7 @@ fn check_outer_scope(
 /// - T1's bound is a subtype of T2's bound (if T2 has a bound)
 /// - T2's constraints are a superset of T1's constraints (if T2 has constraints)
 fn check_bound_constraint_compat(
+    subtyping: &crate::subtyping::SubtypingContext,
     typevar_info_list: &[TypeVarInfo],
     info_map: &HashMap<&str, &TypeVarInfo>,
     span_map: &HashMap<&str, &basilisk_resolver::TypeVarCallInfo>,
@@ -282,12 +286,21 @@ fn check_bound_constraint_compat(
         let Some(tv) = span_map.get(info.name.as_str()) else {
             continue;
         };
-        check_one_bound_compat(info, ref_info, default_name, tv.span, path, diagnostics);
+        check_one_bound_compat(
+            subtyping,
+            info,
+            ref_info,
+            default_name,
+            tv.span,
+            path,
+            diagnostics,
+        );
     }
 }
 
 /// Check bound and constraint compatibility for a single `TypeVar` pair.
 fn check_one_bound_compat(
+    subtyping: &crate::subtyping::SubtypingContext,
     info: &TypeVarInfo,
     ref_info: &TypeVarInfo,
     default_name: &str,
@@ -297,7 +310,7 @@ fn check_one_bound_compat(
 ) {
     if let Some(ref info_bound) = info.bound_name {
         if let Some(ref ref_bound) = ref_info.bound_name {
-            if !is_numeric_subtype(ref_bound, info_bound) {
+            if !subtyping.is_subtype(ref_bound, info_bound) {
                 diagnostics.push(error_diagnostic_owned(
                     CODE.clone(),
                     format!(

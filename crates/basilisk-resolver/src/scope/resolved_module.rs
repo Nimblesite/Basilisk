@@ -82,6 +82,12 @@ pub struct ResolvedModule {
     /// Consumers that need genuinely module-level calls must filter by span
     /// against `functions`/`classes` `def_span`s.
     pub calls: Vec<CallSite>,
+    /// Every `cast(...)` call site in the module, in **any** expression
+    /// position — `return cast(...)`, `f(cast(...))`, and nested expressions
+    /// included. `cast()` is invalid wherever it appears, so `directives_cast`
+    /// needs a complete view that [`Self::calls`] deliberately does not give
+    /// (issue #335).
+    pub cast_calls: Vec<CallSite>,
     /// Every name bound at module scope, whatever the binding form: `=`,
     /// tuple/star unpacking, `for`/`with`/`except ... as` targets, walrus,
     /// `match` captures, `def`/`class`/`type` names, and import bindings —
@@ -333,6 +339,9 @@ impl ResolvedModule {
             super::CallReceiver::StringLiteral => ("str", true),
             super::CallReceiver::BytesLiteral => ("bytes", true),
             super::CallReceiver::Name(name) => self.builtin_type_of_name(name)?,
+            // A constructed instance's methods are resolved against the user
+            // class, not the builtin stub index ([#382]).
+            super::CallReceiver::Constructor(_) => return None,
         };
         self.builtin_classes
             .get(type_name)

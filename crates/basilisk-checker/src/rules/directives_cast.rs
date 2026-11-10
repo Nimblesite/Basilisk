@@ -9,6 +9,10 @@
 //! actively requires — so only genuine non-string value literals are rejected
 //! (issue #335).
 //!
+//! A `cast()` is invalid wherever it appears, so every expression position is
+//! checked — `return cast(1, x)` and `print(cast(1, x))` are as wrong as
+//! `y = cast(1, x)` (issue #335).
+//!
 //! - `cast()` — too few arguments
 //! - `cast(1, x)` — first argument is a value literal, not a type
 //! - `cast("Widget", x)` — OK: string forward reference
@@ -35,7 +39,7 @@ impl Rule for InvalidCastCall {
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        for call in module.calls.iter().filter(|c| c.callee == "cast") {
+        for call in &module.cast_calls {
             let arg_count = call.args.len();
             if arg_count == 2 {
                 // Exactly 2 args: reject a first argument that is a genuine value

@@ -308,16 +308,18 @@ fn dynamic_string_is_not_assignable_to_literal_string() {
 }
 
 // Exercises [TYPEINF-SPECIAL-LITERALSTRING] — literal expressions retain
-// literal-string provenance through standard container inference.
+// literal-string provenance through the engine's container synthesis.
 #[test]
 fn string_literal_container_infers_literal_string_elements() {
-    use basilisk_checker::collection_inference::infer_list_type;
+    use basilisk_checker::expr_type::infer_expression_source;
     use basilisk_checker::types::InferredType;
-    use basilisk_resolver::RhsKind;
 
-    assert_eq!(
-        infer_list_type(&[RhsKind::StrLiteral, RhsKind::StrLiteral]),
-        InferredType::List(Box::new(InferredType::LiteralString))
+    let InferredType::List(element) = infer_expression_source(r#"["a", "b"]"#) else {
+        panic!("a str-literal list display must synthesize as a list");
+    };
+    assert!(
+        element.is_assignable_to(&InferredType::LiteralString),
+        "list elements must keep literal-string provenance, got `{element}`"
     );
 }
 

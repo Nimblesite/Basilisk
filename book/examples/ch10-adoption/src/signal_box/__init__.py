@@ -1,0 +1,1 @@
+"""Signal Box adoption checkpoint."""

@@ -87,18 +87,28 @@ feedback loop. Use one focal point and no more than eight primary elements.
 
 ## Screenshot contract
 
+Classify a visual by what it shows, not its filename or manifest kind. A visual
+that depicts product or terminal appearance is screenshot evidence and must
+satisfy this contract; a diagram may explain behaviour but must not imitate a
+product screen. A screenshot-shaped SVG, HTML mock, generated image, or
+hand-built reconstruction is a fake screenshot and is forbidden.
+
 - Capture real Basilisk behavior from the release recorded in `metadata.yaml`.
 - Use a clean fixture from `book/examples/`; never expose personal paths,
   tokens, unrelated extensions, notifications, or private repository names.
 - Record OS, architecture, editor, theme, zoom, Python interpreter, Basilisk version,
   fixture, capture command/manual steps, and source file in `figures.json`.
-- Crop to the evidence while retaining enough editor/terminal context to orient
-  the reader.
+- Crop and uniformly resize to the evidence while retaining enough
+  editor/terminal context to orient the reader. Do not repaint, replace, or
+  composite product pixels or text.
 - Add numbered callouts outside the product UI where possible. Do not repaint
   text inside the screenshot.
 - Prefer one lesson per capture. If six callouts are required, take two images.
 - Terminal captures use deterministic dimensions and no animated cursor.
 - Re-capture when the UI, rule wording, or documented release changes.
+- Keep the untouched full-window capture under `assets/screenshots/masters/`;
+  record its SHA-256 and the verified release artifact SHA-256 in
+  `figures.json`.
 
 ## Cover direction
 

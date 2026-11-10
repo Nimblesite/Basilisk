@@ -33,6 +33,9 @@ pub(super) struct CallIndex {
     aliases: HashMap<String, String>,
     /// Declared `ParamSpec` names.
     paramspecs: HashSet<String>,
+    /// Module-seeded nominal context — the ONE subtyping implementation
+    /// every signature verdict routes through ([NARROWPLAN-SUBTYPING]).
+    pub(super) subtyping: crate::subtyping::SubtypingContext,
 }
 
 /// Build the [`CallIndex`] for a module.
@@ -41,6 +44,7 @@ pub(super) fn build_index(module: &ResolvedModule) -> CallIndex {
         classes: HashMap::new(),
         aliases: HashMap::new(),
         paramspecs: HashSet::new(),
+        subtyping: crate::subtyping::module_context(module),
     };
     let Some(parsed) = parse_module(module) else {
         return index;
@@ -119,18 +123,24 @@ pub(super) fn assignment_compatible(
     let Some(source) = resolve(rhs_text, index, 0) else {
         return false;
     };
-    sigs_compatible(&source, &target)
+    sigs_compatible(&index.subtyping, &source, &target)
 }
 
 /// Overload-set compatibility: every target signature must be satisfied by
 /// some source signature.  `Unknown` on either side is treated as compatible.
-pub(super) fn sigs_compatible(source: &TypeSigs, target: &TypeSigs) -> bool {
+pub(super) fn sigs_compatible(
+    subtyping: &crate::subtyping::SubtypingContext,
+    source: &TypeSigs,
+    target: &TypeSigs,
+) -> bool {
     match (source, target) {
         (TypeSigs::Unknown, _) | (_, TypeSigs::Unknown) => true,
         (TypeSigs::Sigs(src), TypeSigs::Sigs(tgt)) => {
             !src.is_empty()
                 && !tgt.is_empty()
-                && tgt.iter().all(|b| src.iter().any(|a| sig_subtype(a, b)))
+                && tgt
+                    .iter()
+                    .all(|b| src.iter().any(|a| sig_subtype(subtyping, a, b)))
         }
     }
 }

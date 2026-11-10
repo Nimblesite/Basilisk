@@ -5,7 +5,7 @@
 # Exactly 7 standard targets: build, test, lint, fmt, clean, ci, setup
 # =============================================================================
 
-.PHONY: build test lint fmt clean ci setup book mutation-test conformance bench bench-basilisk reinstall-vsix reinstall-vsix-macos reinstall-vsix-prerelease
+.PHONY: build test lint fmt clean ci setup book mutation-test conformance bench bench-basilisk reinstall-vsix reinstall-vsix-macos reinstall-vsix-prerelease package-zed
 
 # ---------------------------------------------------------------------------
 # OS Detection
@@ -39,6 +39,12 @@ PKG                        ?= basilisk-checker
 # new tests just for mutation. Slow/E2E-ish binaries are deliberately omitted so
 # the per-mutant test run stays cheap.
 #
+# The one class of NEW binary that belongs here is a `#[mutation_safe]` suite
+# WIDENING the examined scope ([CHKARCH-TESTING-MUTATION-RATCHET]): those tests
+# assert real rule behaviour first and would earn their place with the ratchet
+# switched off — they are listed so the functions they newly bring in-scope are
+# actually exercised, not scored as missed.
+#
 # Order matters, but only a little. `cargo test` stops at the first failing
 # binary, so a mutant dies as soon as a binary that kills it runs;
 # `mutation_kill_tests` exists to kill these mutants, so it runs first. Measured
@@ -47,6 +53,7 @@ PKG                        ?= basilisk-checker
 # what actually did ([CHKARCH-TESTING-MUTATION-RATCHET]).
 _CHECKER_MUTATION_TESTS := \
 	--test mutation_kill_tests \
+	--test mutation_kill_constructors_tests \
 	--test coverage_boost_tests \
 	--test coverage_boost_32_tests \
 	--test coverage_boost_33_tests \
@@ -239,6 +246,9 @@ conformance:
 	@python3 conformance/run_conformance.py --bin target/debug/basilisk
 
 ## bench: Benchmark Basilisk vs pyright/mypy/ty/pyrefly/zuban on the fixture suite.
+## INDICATIVE ONLY — this runs on a developer workstation under whatever else it
+## is doing, so nothing passes or fails on the result. Compare tools within one
+## run; do not compare across machines or across time.
 ## Requires hyperfine; competitor tools are skipped if not installed.
 ## run.sh does the CLEAN release rebuild itself (fresh binary under test) before
 ## timing, so the guarantee holds even when run.sh is invoked directly — this
@@ -247,13 +257,21 @@ bench:
 	@bash benchmarks/run.sh
 
 ## bench-basilisk: Re-time ONLY basilisk (local iteration on a perf fix).
-## Same clean release rebuild, same stability policy, same zero-tolerance gate
-## against the committed baseline — it just skips the five competitors, which
-## add minutes per iteration and say nothing about a change to this tree. Their
-## CSV cells and versions carry forward verbatim and the header records that
-## they were not re-timed. Refused in CI, which always runs the full sweep.
+## Same clean release rebuild and same stability policy — it just skips the five
+## competitors, which add minutes per iteration and say nothing about a change to
+## this tree. Their CSV cells and versions carry forward verbatim and the header
+## records that they were not re-timed. Refused in CI, which runs the full sweep.
 bench-basilisk:
 	@BENCH_ONLY_BASILISK=1 bash benchmarks/run.sh
+
+## torture: Type-torture scoreboard — hard, spec-grounded typing problems
+## scored conformance-style (`# E` lines) against pyright/mypy/ty/pyrefly/zuban,
+## every tool in its out-of-the-box defaults, with hang detection as a
+## correctness axis. WRITE-ALWAYS to benchmarks/torture/status/torture.csv,
+## read-only regression gate against the committed baseline (exit 3).
+## Needs target/release/basilisk (or BASILISK_BIN); build it first.
+torture:
+	@python3 benchmarks/torture/run_torture.py
 
 ## smoke-micropython: Real-world smoke test for typeshed-path
 ## [STUBRES-CUSTOM-TYPESHED] — points the checker at a pinned, unmodified
@@ -500,8 +518,16 @@ _test_nvim:
 _test_zed:
 	@bash scripts/test-zed.sh
 
-_package_zed:
-	@echo -e '\033[1m\033[0;36m▶ Building basilisk CLI for Zed\033[0m' && \
+## package-zed: Build the local Zed dev loop — compile the extension to WASM,
+## install the basilisk CLI, then print the `zed: install dev extension` steps.
+## Point the dev extension at the locally built binary with
+## `BASILISK_PATH=$$(which basilisk)` or `lsp.basilisk.binary.path`
+## ([ZED-DIST]); with neither, it downloads the release binary.
+package-zed:
+	@echo -e '\033[1m\033[0;36m▶ Building Zed extension (wasm32-wasip2)\033[0m' && \
+	rustup target add wasm32-wasip2 && \
+	cargo build --release --target wasm32-wasip2 --manifest-path $(_ZED_DIR)/Cargo.toml && \
+	echo -e '\033[1m\033[0;36m▶ Building basilisk CLI for Zed\033[0m' && \
 	cargo install --path crates/basilisk-cli --force && \
 	echo "$$(which basilisk) installed" && \
 	echo "" && \

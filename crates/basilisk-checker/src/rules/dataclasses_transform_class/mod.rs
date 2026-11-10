@@ -48,6 +48,16 @@ impl Rule for DataclassTransformClassViolation {
     fn check(
         &self,
         module: &ResolvedModule,
+        ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
+        super::check_with_own_types(self, module, ctx, diagnostics);
+    }
+
+    fn check_with_types(
+        &self,
+        module: &ResolvedModule,
+        types: &super::shared::module_types::ModuleTypes<'_>,
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
@@ -98,7 +108,11 @@ impl Rule for DataclassTransformClassViolation {
         check_no_order_comparison(module, &instance_map, source, path, diagnostics);
 
         // --- Check 5: Field-specifier `converter=` validation (PEP 681) ---
+        // Calls come from the module's one shared walk ([NARROWPLAN-CALLSITES]).
+        let Some(oracle) = types.oracle() else {
+            return;
+        };
         let subclass_names: Vec<&str> = direct_settings.keys().copied().collect();
-        converter::check_converters(module, &subclass_names, diagnostics);
+        converter::check_converters(module, &subclass_names, oracle.calls(), diagnostics);
     }
 }

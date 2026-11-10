@@ -38,9 +38,11 @@ readonly COPY_ITEMS=(
     "extension.toml"
     "Cargo.toml"
     "README.md"
+    # README.md links to the Chinese translation with a *relative* href, so the
+    # mirror must carry it too or the published landing page has a dead link.
+    "README.zh.md"
     "LICENSE"
     "src"
-    "languages"
     "themes"
     "debug_adapter_schemas"
     "images"

@@ -1,0 +1,73 @@
+//! Tests for [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
+//! Stack safety and unbounded-depth correctness of the transitive base walk
+//! (`scope/typeddict_meta.rs`), the shared foundation of
+//! [CHKARCH-DIAG-TYPEDDICT-READONLY-INHERITANCE].
+//!
+//! The walk is iterative (explicit worklist, zero recursion) and carries a
+//! visited set. Together those give two guarantees this file pins: a chain of
+//! ANY depth cannot grow the call stack, and a self-referential or cyclic
+//! `bases` list terminates instead of blowing up exponentially (GitHub #398).
+
+use std::fmt::Write as _;
+
+use basilisk_resolver::{class_by_name, is_transitive_typeddict};
+
+use super::common::resolve_src;
+
+/// `class C0(TypedDict)` followed by `depth` single-inheritance subclasses.
+fn deep_typeddict_chain(depth: usize) -> String {
+    let mut src = String::from("from typing import TypedDict\nclass C0(TypedDict):\n    x: int\n");
+    for level in 1..=depth {
+        let _ = writeln!(src, "class C{level}(C{}):\n    pass", level - 1);
+    }
+    src
+}
+
+/// A 1 000-deep chain resolves without exhausting the stack, and the deepest
+/// leaf is still recognised as a `TypedDict`.
+///
+/// Recursion here would push one frame per level; the iterative walk pushes
+/// heap entries instead, so depth costs memory rather than stack. The depth
+/// also sits far past any fixed cap — a bounded walk would silently report the
+/// leaf as not a `TypedDict`, which is a wrong answer, not a slow one.
+#[test]
+fn thousand_deep_chain_walks_without_stack_growth() -> Result<(), Box<dyn std::error::Error>> {
+    let resolved = resolve_src(&deep_typeddict_chain(1_000))?;
+    let class_map = class_by_name(&resolved.classes);
+
+    assert!(
+        is_transitive_typeddict("C1000", &class_map),
+        "the 1 000th subclass of a TypedDict is still a TypedDict"
+    );
+    assert!(
+        !is_transitive_typeddict("C0Missing", &class_map),
+        "an unknown class name resolves to false rather than panicking"
+    );
+    Ok(())
+}
+
+/// A class listing itself twice among its bases terminates. With a
+/// depth-bounded recursive walk this input branched at every level and took
+/// exponential time (GitHub #398); the visited set makes it linear.
+#[test]
+fn self_referential_bases_terminate() -> Result<(), Box<dyn std::error::Error>> {
+    let resolved = resolve_src("class C(C[int], C[bool]):\n    pass\n")?;
+    let class_map = class_by_name(&resolved.classes);
+
+    assert!(
+        !is_transitive_typeddict("C", &class_map),
+        "a self-referential class is not a TypedDict, and deciding that terminates"
+    );
+    Ok(())
+}
+
+/// Two classes naming each other as bases — the general cycle — terminates.
+#[test]
+fn mutually_recursive_bases_terminate() -> Result<(), Box<dyn std::error::Error>> {
+    let resolved = resolve_src("class A(B):\n    pass\nclass B(A):\n    pass\n")?;
+    let class_map = class_by_name(&resolved.classes);
+
+    assert!(!is_transitive_typeddict("A", &class_map));
+    assert!(!is_transitive_typeddict("B", &class_map));
+    Ok(())
+}

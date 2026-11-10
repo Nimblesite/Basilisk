@@ -4,42 +4,43 @@
 
 use std::collections::HashSet;
 
-use crate::rules::shared::{is_numeric_subtype, split_top_level_commas};
+use crate::rules::shared::split_top_level_commas;
+use crate::subtyping::SubtypingContext;
 
 use super::sig_model::{Param, Sig};
 
 /// `true` when signature `a` (source) is a subtype of `b` (target).
-pub(super) fn sig_subtype(a: &Sig, b: &Sig) -> bool {
-    if !ty_subtype(a.ret.as_deref(), b.ret.as_deref()) {
+pub(super) fn sig_subtype(subtyping: &SubtypingContext, a: &Sig, b: &Sig) -> bool {
+    if !ty_subtype(subtyping, a.ret.as_deref(), b.ret.as_deref()) {
         return false;
     }
     if b.gradual {
-        return gradual_target_ok(a, b);
+        return gradual_target_ok(subtyping, a, b);
     }
     if a.gradual {
-        return gradual_source_ok(a, b);
+        return gradual_source_ok(subtyping, a, b);
     }
-    concrete_subtype(a, b)
+    concrete_subtype(subtyping, a, b)
 }
 
 /// Target is gradual (`...` with optional prefix): check the prefix and any
 /// retained keyword-only parameters; everything else is unchecked.
-fn gradual_target_ok(a: &Sig, b: &Sig) -> bool {
+fn gradual_target_ok(subtyping: &SubtypingContext, a: &Sig, b: &Sig) -> bool {
     for (idx, bp) in b.positional.iter().enumerate() {
         let accepted = a.positional.get(idx).map_or_else(
             || a.gradual || a.vararg.is_present(),
-            |ap| ty_subtype(bp.ty.as_deref(), ap.ty.as_deref()),
+            |ap| ty_subtype(subtyping, bp.ty.as_deref(), ap.ty.as_deref()),
         );
         if !accepted {
             return false;
         }
     }
-    b.kwonly.iter().all(|bk| keyword_accepted(a, bk))
+    b.kwonly.iter().all(|bk| keyword_accepted(subtyping, a, bk))
 }
 
 /// Source is gradual: its prefix parameters are real requirements that the
 /// target's positional arguments must satisfy.
-fn gradual_source_ok(a: &Sig, b: &Sig) -> bool {
+fn gradual_source_ok(subtyping: &SubtypingContext, a: &Sig, b: &Sig) -> bool {
     for (idx, ap) in a.positional.iter().enumerate() {
         let supplied: Option<Option<&str>> = b
             .positional
@@ -52,24 +53,24 @@ fn gradual_source_ok(a: &Sig, b: &Sig) -> bool {
             }
             return false;
         };
-        if !ty_subtype(supplied_ty, ap.ty.as_deref()) {
+        if !ty_subtype(subtyping, supplied_ty, ap.ty.as_deref()) {
             return false;
         }
     }
     a.kwonly
         .iter()
         .filter(|ak| !ak.has_default)
-        .all(|ak| keyword_supplied(b, ak))
+        .all(|ak| keyword_supplied(subtyping, b, ak))
 }
 
 /// Full concrete-vs-concrete subtyping per the typing spec.
-fn concrete_subtype(a: &Sig, b: &Sig) -> bool {
+fn concrete_subtype(subtyping: &SubtypingContext, a: &Sig, b: &Sig) -> bool {
     let mut a_idx = 0usize;
     let mut consumed: HashSet<&str> = HashSet::new();
 
     for bp in &b.positional {
         if let Some(ap) = a.positional.get(a_idx) {
-            if !ty_subtype(bp.ty.as_deref(), ap.ty.as_deref()) {
+            if !ty_subtype(subtyping, bp.ty.as_deref(), ap.ty.as_deref()) {
                 return false;
             }
             if bp.is_standard && (!ap.is_standard || ap.name != bp.name) {
@@ -81,10 +82,10 @@ fn concrete_subtype(a: &Sig, b: &Sig) -> bool {
             let _ = consumed.insert(ap.name.as_str());
             a_idx += 1;
         } else if a.vararg.is_present() {
-            if !ty_subtype(bp.ty.as_deref(), a.vararg.ty()) {
+            if !ty_subtype(subtyping, bp.ty.as_deref(), a.vararg.ty()) {
                 return false;
             }
-            if bp.is_standard && !keyword_accepted(a, bp) {
+            if bp.is_standard && !keyword_accepted(subtyping, a, bp) {
                 return false;
             }
         } else {
@@ -95,12 +96,12 @@ fn concrete_subtype(a: &Sig, b: &Sig) -> bool {
     // Match target keyword-only params first — they may consume leftover
     // source standard params by name (`KwOnly = standard` is valid).
     for bk in &b.kwonly {
-        if !keyword_matched(a, bk, &mut consumed) {
+        if !keyword_matched(subtyping, a, bk, &mut consumed) {
             return false;
         }
     }
 
-    if !vararg_compatible(a, b, a_idx, &consumed) {
+    if !vararg_compatible(subtyping, a, b, a_idx, &consumed) {
         return false;
     }
     if !b.vararg.is_present() {
@@ -116,12 +117,18 @@ fn concrete_subtype(a: &Sig, b: &Sig) -> bool {
         }
     }
 
-    kwarg_compatible(a, b, &consumed)
+    kwarg_compatible(subtyping, a, b, &consumed)
 }
 
 /// `*args` compatibility: a target `*args` requires a source `*args` with a
 /// supertype element, and any extra source positionals must absorb it.
-fn vararg_compatible(a: &Sig, b: &Sig, a_idx: usize, consumed: &HashSet<&str>) -> bool {
+fn vararg_compatible(
+    subtyping: &SubtypingContext,
+    a: &Sig,
+    b: &Sig,
+    a_idx: usize,
+    consumed: &HashSet<&str>,
+) -> bool {
     if !b.vararg.is_present() {
         return true;
     }
@@ -130,15 +137,20 @@ fn vararg_compatible(a: &Sig, b: &Sig, a_idx: usize, consumed: &HashSet<&str>) -
         if consumed.contains(ap.name.as_str()) {
             continue;
         }
-        if !ap.has_default || !ty_subtype(bv, ap.ty.as_deref()) {
+        if !ap.has_default || !ty_subtype(subtyping, bv, ap.ty.as_deref()) {
             return false;
         }
     }
-    a.vararg.is_present() && ty_subtype(bv, a.vararg.ty())
+    a.vararg.is_present() && ty_subtype(subtyping, bv, a.vararg.ty())
 }
 
 /// `**kwargs` compatibility, including unmatched source keyword-only params.
-fn kwarg_compatible(a: &Sig, b: &Sig, consumed: &HashSet<&str>) -> bool {
+fn kwarg_compatible(
+    subtyping: &SubtypingContext,
+    a: &Sig,
+    b: &Sig,
+    consumed: &HashSet<&str>,
+) -> bool {
     let unconsumed = a
         .kwonly
         .iter()
@@ -148,11 +160,11 @@ fn kwarg_compatible(a: &Sig, b: &Sig, consumed: &HashSet<&str>) -> bool {
         if !a.kwarg.is_present() {
             return false;
         }
-        if !ty_subtype(bkw, a.kwarg.ty()) {
+        if !ty_subtype(subtyping, bkw, a.kwarg.ty()) {
             return false;
         }
         for ak in unconsumed {
-            if !ak.has_default || !ty_subtype(bkw, ak.ty.as_deref()) {
+            if !ak.has_default || !ty_subtype(subtyping, bkw, ak.ty.as_deref()) {
                 return false;
             }
         }
@@ -164,14 +176,19 @@ fn kwarg_compatible(a: &Sig, b: &Sig, consumed: &HashSet<&str>) -> bool {
 
 /// Match one target keyword-only parameter against the source, consuming the
 /// matched source parameter.
-fn keyword_matched<'a>(a: &'a Sig, bk: &Param, consumed: &mut HashSet<&'a str>) -> bool {
+fn keyword_matched<'a>(
+    subtyping: &SubtypingContext,
+    a: &'a Sig,
+    bk: &Param,
+    consumed: &mut HashSet<&'a str>,
+) -> bool {
     let named = a
         .kwonly
         .iter()
         .chain(a.positional.iter().filter(|p| p.is_standard))
         .find(|ap| ap.name == bk.name && !consumed.contains(ap.name.as_str()));
     if let Some(ap) = named {
-        if !ty_subtype(bk.ty.as_deref(), ap.ty.as_deref()) {
+        if !ty_subtype(subtyping, bk.ty.as_deref(), ap.ty.as_deref()) {
             return false;
         }
         if bk.has_default && !ap.has_default {
@@ -180,11 +197,11 @@ fn keyword_matched<'a>(a: &'a Sig, bk: &Param, consumed: &mut HashSet<&'a str>) 
         let _ = consumed.insert(ap.name.as_str());
         return true;
     }
-    a.kwarg.is_present() && ty_subtype(bk.ty.as_deref(), a.kwarg.ty())
+    a.kwarg.is_present() && ty_subtype(subtyping, bk.ty.as_deref(), a.kwarg.ty())
 }
 
 /// `true` when the source can accept keyword `bk` (by name or `**kwargs`).
-fn keyword_accepted(a: &Sig, bk: &Param) -> bool {
+fn keyword_accepted(subtyping: &SubtypingContext, a: &Sig, bk: &Param) -> bool {
     if a.gradual {
         return true;
     }
@@ -194,21 +211,21 @@ fn keyword_accepted(a: &Sig, bk: &Param) -> bool {
         .chain(a.positional.iter().filter(|p| p.is_standard))
         .find(|ap| ap.name == bk.name);
     match named {
-        Some(ap) => ty_subtype(bk.ty.as_deref(), ap.ty.as_deref()),
-        None => a.kwarg.is_present() && ty_subtype(bk.ty.as_deref(), a.kwarg.ty()),
+        Some(ap) => ty_subtype(subtyping, bk.ty.as_deref(), ap.ty.as_deref()),
+        None => a.kwarg.is_present() && ty_subtype(subtyping, bk.ty.as_deref(), a.kwarg.ty()),
     }
 }
 
 /// `true` when the target supplies required source keyword `ak`.
-fn keyword_supplied(b: &Sig, ak: &Param) -> bool {
+fn keyword_supplied(subtyping: &SubtypingContext, b: &Sig, ak: &Param) -> bool {
     let named = b
         .kwonly
         .iter()
         .chain(b.positional.iter().filter(|p| p.is_standard))
         .find(|bp| bp.name == ak.name);
     match named {
-        Some(bp) => ty_subtype(bp.ty.as_deref(), ak.ty.as_deref()),
-        None => b.kwarg.is_present() && ty_subtype(b.kwarg.ty(), ak.ty.as_deref()),
+        Some(bp) => ty_subtype(subtyping, bp.ty.as_deref(), ak.ty.as_deref()),
+        None => b.kwarg.is_present() && ty_subtype(subtyping, b.kwarg.ty(), ak.ty.as_deref()),
     }
 }
 
@@ -228,7 +245,11 @@ const COVARIANT_BASES: &[&str] = &[
 
 /// `true` when type text `narrow` is a subtype of `wide`.  Unannotated types
 /// are treated as `Any` (compatible in both directions).
-pub(super) fn ty_subtype(narrow: Option<&str>, wide: Option<&str>) -> bool {
+pub(super) fn ty_subtype(
+    subtyping: &SubtypingContext,
+    narrow: Option<&str>,
+    wide: Option<&str>,
+) -> bool {
     let (Some(narrow), Some(wide)) = (narrow, wide) else {
         return true;
     };
@@ -241,22 +262,22 @@ pub(super) fn ty_subtype(narrow: Option<&str>, wide: Option<&str>) -> bool {
     if narrow_members.len() > 1 {
         return narrow_members
             .iter()
-            .all(|member| ty_subtype(Some(member), Some(wide)));
+            .all(|member| ty_subtype(subtyping, Some(member), Some(wide)));
     }
     let wide_members = split_union(wide);
     if wide_members.len() > 1 {
         return wide_members
             .iter()
-            .any(|member| ty_subtype(Some(narrow), Some(member)));
+            .any(|member| ty_subtype(subtyping, Some(narrow), Some(member)));
     }
-    if is_numeric_subtype(narrow, wide) {
+    if subtyping.is_subtype(narrow, wide) {
         return true;
     }
-    covariant_container_subtype(narrow, wide)
+    covariant_container_subtype(subtyping, narrow, wide)
 }
 
 /// `Sequence[float] <: Sequence[object]` — same covariant base, element-wise.
-fn covariant_container_subtype(narrow: &str, wide: &str) -> bool {
+fn covariant_container_subtype(subtyping: &SubtypingContext, narrow: &str, wide: &str) -> bool {
     let (Some(narrow_base), Some(wide_base)) = (narrow.split('[').next(), wide.split('[').next())
     else {
         return false;
@@ -281,7 +302,7 @@ fn covariant_container_subtype(narrow: &str, wide: &str) -> bool {
         && narrow_args
             .iter()
             .zip(wide_args.iter())
-            .all(|(narrow_arg, wide_arg)| ty_subtype(Some(narrow_arg), Some(wide_arg)))
+            .all(|(narrow_arg, wide_arg)| ty_subtype(subtyping, Some(narrow_arg), Some(wide_arg)))
 }
 
 /// Split a type text at top-level `|`.

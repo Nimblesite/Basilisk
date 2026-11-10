@@ -140,7 +140,7 @@ fn check_metaclass_call(
 pub(super) fn sig_from_funcs(funcs: &[&basilisk_resolver::FunctionInfo]) -> ConstructorSig {
     // Pick the first non-overload function.
     for func in funcs {
-        if func.decorators.iter().any(|d| d == "overload") {
+        if crate::rules::shared::decorator_spelled(&func.decorators, "overload") {
             continue;
         }
         // If it has *args or **kwargs, we can't know the exact arity.
@@ -298,7 +298,7 @@ pub(super) fn find_constructor_func<'a>(
     for method in &["__new__", "__init__"] {
         if let Some(funcs) = method_map.get(&(class_name, method)) {
             for func in funcs {
-                if !func.decorators.iter().any(|d| d == "overload") {
+                if !crate::rules::shared::decorator_spelled(&func.decorators, "overload") {
                     return Some(func);
                 }
             }

@@ -6,37 +6,35 @@
 
 use ruff_python_ast::{ExceptHandler, Expr, ExprCall, ParameterWithDefault, Parameters, Stmt};
 
-/// Walk every `Call` expression reachable from `stmts`, including nested
-/// argument calls, into nested control-flow bodies and into nested function
-/// and class definitions.
+/// Walk every `Call` expression in **every expression position** reachable
+/// from `stmts` — statement values, receivers (`C(1).method()`), argument
+/// lists, container literals, conditional expressions, comprehensions,
+/// f-strings, lambda bodies, decorators, and nested function and class
+/// definitions.
 ///
-/// For each call, `visit` is invoked with the [`ExprCall`] node. Callers do
-/// not need to recurse manually — `visit_calls` traverses arguments first,
-/// then yields the outer call.
+/// A call is a call wherever it appears; visiting only statement-outermost
+/// expressions silently skipped the same error the bare statement reports
+/// ([#381](https://github.com/Nimblesite/Basilisk/issues/381)). Calls are
+/// yielded in source order, outer call before its nested calls.
 pub fn visit_calls(stmts: &[Stmt], visit: &mut impl FnMut(&ExprCall)) {
-    walk_all_stmts(stmts, &mut |stmt| match stmt {
-        Stmt::Expr(node) => visit_calls_in_expr(&node.value, visit),
-        Stmt::Assign(node) => visit_calls_in_expr(&node.value, visit),
-        Stmt::AnnAssign(node) => {
-            if let Some(val) = node.value.as_deref() {
-                visit_calls_in_expr(val, visit);
-            }
-        }
-        Stmt::Return(node) => {
-            if let Some(val) = &node.value {
-                visit_calls_in_expr(val, visit);
-            }
-        }
-        _ => {}
-    });
+    let mut collector = CallWalker { visit };
+    for stmt in stmts {
+        ruff_python_ast::visitor::Visitor::visit_stmt(&mut collector, stmt);
+    }
 }
 
-fn visit_calls_in_expr(expr: &Expr, visit: &mut impl FnMut(&ExprCall)) {
-    if let Expr::Call(call) = expr {
-        for arg in &call.arguments.args {
-            visit_calls_in_expr(arg, visit);
+/// The [`ruff_python_ast::visitor::Visitor`] behind [`visit_calls`]: default
+/// traversal everywhere, yielding each [`ExprCall`] on the way down.
+struct CallWalker<'v, F> {
+    visit: &'v mut F,
+}
+
+impl<'a, F: FnMut(&'a ExprCall)> ruff_python_ast::visitor::Visitor<'a> for CallWalker<'_, F> {
+    fn visit_expr(&mut self, expr: &'a Expr) {
+        if let Expr::Call(call) = expr {
+            (self.visit)(call);
         }
-        visit(call);
+        ruff_python_ast::visitor::walk_expr(self, expr);
     }
 }
 

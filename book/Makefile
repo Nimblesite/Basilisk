@@ -15,6 +15,7 @@ render-assets:
 
 screenshots:
 	$(PYTHON) scripts/capture_editor_screenshots.py
+	$(PYTHON) scripts/capture_adoption_screenshots.py
 
 epub:
 	$(PYTHON) scripts/build.py

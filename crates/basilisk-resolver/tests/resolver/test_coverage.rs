@@ -272,7 +272,9 @@ fn decorator_via_attribute_name() -> Result<(), Box<dyn std::error::Error>> {
         .to_owned();
     let resolved = resolve_src(&src)?;
     let func = resolved.functions.iter().find(|f| f.name == "bar");
-    assert!(func.is_some_and(|f| f.decorators.iter().any(|d| d == "abstractmethod")));
+    // The FULL dotted path is recorded — discarding the qualifier made
+    // `@t.overload` indistinguishable from a foreign `overload` (#380).
+    assert!(func.is_some_and(|f| f.decorators.iter().any(|d| d == "abc.abstractmethod")));
     Ok(())
 }
 

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import unittest
 from pathlib import Path
@@ -33,6 +34,51 @@ class BookContractTests(unittest.TestCase):
             outline,
         )
         self.assertNotIn("canonical Python **3.12**", repository_instructions)
+
+    def test_ready_screenshots_are_direct_captures_of_the_pinned_release(self) -> None:
+        """A UI-shaped diagram cannot pass as screenshot evidence."""
+        book = json.loads((BOOK_ROOT / "book.json").read_text(encoding="utf-8"))
+        ledger = json.loads((BOOK_ROOT / "figures.json").read_text(encoding="utf-8"))
+        screenshots = [
+            figure
+            for figure in ledger["figures"]
+            if figure["kind"] in {"screenshot", "annotated-screenshot"}
+            and figure["status"] == "ready"
+        ]
+
+        self.assertGreaterEqual(len(screenshots), 2)
+        self.assertTrue(
+            {"shot-09-config-editor", "shot-09-config-preview"}
+            <= {figure["id"] for figure in screenshots}
+        )
+        for figure in screenshots:
+            capture = figure["capture"]
+            raw_master = BOOK_ROOT / capture["rawMaster"]
+            with raw_master.open("rb") as source:
+                digest = hashlib.file_digest(source, "sha256").hexdigest()
+            self.assertEqual(capture["authenticity"], "direct-release-capture")
+            self.assertEqual(capture["basiliskVersion"], book["basiliskRelease"])
+            self.assertEqual(capture["releaseTag"], book["basiliskReleaseTag"])
+            self.assertEqual(capture["releaseCommit"], book["basiliskReleaseCommit"])
+            self.assertEqual(capture["masterSha256"], digest)
+            self.assertEqual(figure["master"], capture["rawMaster"])
+            self.assertTrue(figure["path"].startswith("assets/screenshots/"))
+
+    def test_book_instructions_forbid_relabelled_fake_screenshots(self) -> None:
+        """Keep the no-mock rule in both agent and author instructions."""
+        repository_instructions = (REPOSITORY_ROOT / "CLAUDE.md").read_text(
+            encoding="utf-8"
+        )
+        book_instructions = (BOOK_ROOT / "README.md").read_text(encoding="utf-8")
+        visual_contract = (BOOK_ROOT / "VISUAL-DESIGN-SYSTEM.md").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn(
+            "NEVER mock, redraw, reconstruct, generate", repository_instructions
+        )
+        self.assertIn("even if it is labelled a diagram", book_instructions)
+        self.assertIn("hand-built reconstruction is a fake screenshot", visual_contract)
 
 
 if __name__ == "__main__":

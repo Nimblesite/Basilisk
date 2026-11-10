@@ -20,26 +20,41 @@ y = t[1]
 
 #[test]
 fn positive_out_of_bounds() -> Result<(), Box<dyn std::error::Error>> {
-    // TODO: resolver does not yet produce tuple_index_violations for literal indices.
-    // When it does, this test should assert E0103 fires.
+    // Module-level miss found by the torture corpus (tuple_index.py, GitHub
+    // #284 family): the spec's tuples chapter requires an error for an
+    // out-of-range literal index on a fixed-length tuple, at every scope.
     let source = r#"
 t: tuple[int, str, bool] = (1, "a", True)
 x = t[3]
 "#;
     let diags = run(source)?;
-    let _ = codes(&diags);
+    let hits: Vec<&str> = messages_for(&diags, "tuples_index");
+    assert_eq!(
+        hits.len(),
+        1,
+        "module-level `t[3]` on a 3-tuple must fire exactly once, got: {hits:?}"
+    );
+    assert!(
+        hits[0].contains("index 3") && hits[0].contains("length 3"),
+        "diagnostic must name index 3 and tuple length 3: {}",
+        hits[0]
+    );
     Ok(())
 }
 
 #[test]
 fn negative_out_of_bounds() -> Result<(), Box<dyn std::error::Error>> {
-    // TODO: resolver does not yet produce tuple_index_violations for literal indices.
     let source = r#"
 t: tuple[int, str, bool] = (1, "a", True)
 x = t[-4]
 "#;
     let diags = run(source)?;
-    let _ = codes(&diags);
+    let hits: Vec<&str> = messages_for(&diags, "tuples_index");
+    assert_eq!(
+        hits.len(),
+        1,
+        "module-level `t[-4]` on a 3-tuple must fire exactly once, got: {hits:?}"
+    );
     Ok(())
 }
 
@@ -61,7 +76,6 @@ z = t[-3]
 
 #[test]
 fn single_element_tuple() -> Result<(), Box<dyn std::error::Error>> {
-    // TODO: resolver does not yet produce tuple_index_violations for literal indices.
     let source = r#"
 t: tuple[int] = (42,)
 x = t[0]
@@ -69,7 +83,12 @@ y = t[1]
 z = t[-2]
 "#;
     let diags = run(source)?;
-    let _ = codes(&diags);
+    let hits: Vec<&str> = messages_for(&diags, "tuples_index");
+    assert_eq!(
+        hits.len(),
+        2,
+        "`t[1]` and `t[-2]` are out of range for a 1-tuple; `t[0]` is not: {hits:?}"
+    );
     Ok(())
 }
 
@@ -144,6 +163,58 @@ def load() -> list:
             .filter(|d| d.code.code == "tuples_index")
             .map(|d| d.message.as_str())
             .collect::<Vec<_>>()
+    );
+    Ok(())
+}
+
+#[test]
+fn local_annotated_tuple_out_of_range_fires() -> Result<(), Box<dyn std::error::Error>> {
+    // The direct-subscript miss is scope-wide: an annotated LOCAL is not a
+    // parameter (tuples_index_2's territory), so it was never checked either.
+    let source = r#"
+def f() -> None:
+    two: tuple[int, str] = (1, "a")
+    bad = two[2]
+"#;
+    let diags = run(source)?;
+    let hits: Vec<&str> = messages_for(&diags, "tuples_index");
+    assert_eq!(
+        hits.len(),
+        1,
+        "`two[2]` on an annotated local 2-tuple must fire exactly once, got: {hits:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn variadic_and_shadowed_tuples_stay_clean() -> Result<(), Box<dyn std::error::Error>> {
+    // `tuple[int, ...]` has no fixed length — any literal index is in range.
+    let source = r#"
+t: tuple[int, ...] = (1, 2, 3)
+x = t[5]
+"#;
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"tuples_index"),
+        "variadic tuples must never fire: {:?}",
+        messages_for(&diags, "tuples_index")
+    );
+
+    // A function-local rebinding shadows the module annotation — the local
+    // `two` is a different, unannotated variable (the exact #284 bleed shape).
+    let source = r#"
+two: tuple[int, str] = (1, "a")
+
+
+def f() -> int:
+    two = (1, 2, 3)
+    return two[2]
+"#;
+    let diags = run(source)?;
+    assert!(
+        !codes(&diags).contains(&"tuples_index"),
+        "a shadowing local rebind must not be checked against the module annotation: {:?}",
+        messages_for(&diags, "tuples_index")
     );
     Ok(())
 }

@@ -14,23 +14,35 @@
     clippy::uninlined_format_args,
     dead_code
 )]
+#[path = "checker/annotation_resolution_tests.rs"]
+mod annotation_resolution;
 #[path = "checker/annotations_typeexpr_tests.rs"]
 mod annotations_typeexpr;
+#[path = "checker/assignment_call_synthesis_tests.rs"]
+mod assignment_call_synthesis;
 #[path = "checker/assignment_compatibility_tests.rs"]
 mod assignment_compatibility;
 #[path = "checker/callables_annotation_tests.rs"]
 mod callables_annotation;
 #[path = "checker/calls_argument_type_tests.rs"]
 mod calls_argument_type;
+#[path = "checker/calls_expression_position_tests.rs"]
+mod calls_expression_position;
+#[path = "checker/class_body_method_binding_tests.rs"]
+mod class_body_method_binding;
 #[path = "checker/classes_override_tests.rs"]
 mod classes_override;
 #[path = "checker/classes_override_2_tests.rs"]
 mod classes_override_2;
 mod common;
+#[path = "checker/decorator_resolution_tests.rs"]
+mod decorator_resolution;
 #[path = "checker/dict_key_hashable_tests.rs"]
 mod dict_key_hashable;
 #[path = "checker/dict_key_hashable_group_tests.rs"]
 mod dict_key_hashable_group;
+#[path = "checker/directives_assert_type_oracle_tests.rs"]
+mod directives_assert_type_oracle;
 #[path = "checker/imports_unresolved_tests.rs"]
 mod imports_unresolved;
 #[path = "checker/match_exhaustiveness_tests.rs"]
@@ -55,7 +67,13 @@ mod names_undefined;
 mod overloads_consistency;
 #[path = "checker/overloads_definitions_tests.rs"]
 mod overloads_definitions;
+#[path = "checker/param_infer_exemption_tests.rs"]
+mod param_infer_exemption;
+#[path = "checker/returns_call_synthesis_tests.rs"]
+mod returns_call_synthesis;
 #[path = "checker/returns_compatibility_tests.rs"]
 mod returns_compatibility;
 #[path = "checker/returns_compatibility_2_tests.rs"]
 mod returns_compatibility_2;
+#[path = "checker/subtyping_context_routing_tests.rs"]
+mod subtyping_context_routing;

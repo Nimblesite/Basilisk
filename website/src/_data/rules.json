@@ -717,7 +717,7 @@
     "body": [
       {
         "type": "text",
-        "html": "<a href=\"https://peps.python.org/pep-0695/\">PEP 695</a> requires the RHS of a <code>type</code> statement to be a valid type expression. The same restrictions as <code>TypeAlias</code> (<code>aliases_implicit</code>) apply."
+        "html": "<a href=\"https://peps.python.org/pep-0695/\">PEP 695</a> requires the RHS of a <code>type</code> statement to be a valid type expression. The RHS is validated **structurally** on the parsed <code>ruff</code> expression tree (issue #379 \u2014 substring matching both missed invalid forms and misfired on identifiers containing matched text): names, dotted names, <code>X | Y</code> unions, <code>None</code>, string forward references, and subscriptions of those are type expressions; every other expression form (literals, calls, lambdas, conditionals, comparisons, comprehensions, boolean operators) is not. Subscript <em>arguments</em> are never descended into \u2014 special forms like <code>Literal...</code>, <code>Callable[..., X]</code>, and <code>AnnotatedX, ...</code> legitimately hold non-type expressions there."
       },
       {
         "type": "code",
@@ -1017,7 +1017,7 @@
       },
       {
         "type": "text",
-        "html": "The check is performed by extracting the annotation text from the source around the variable&#x27;s name span and comparing it against the RHS kind."
+        "html": "Every right-hand side \u2014 literal, call, constructor, method, variable \u2014 is typed by the module&#x27;s ModuleOracle (NARROWPLAN-INTEGRATION Step 1: <code>BidirEngine::synth</code>, with <code>synth_call</code> resolving call returns, GitHub #397/#378), collection displays are judged in the annotation&#x27;s expected-type context by engine check mode, and nominal verdicts route through crate::subtyping::SubtypingContext."
       }
     ],
     "group": "Type System",
@@ -1288,7 +1288,7 @@
     "body": [
       {
         "type": "text",
-        "html": "When a function is called with a literal argument whose type is clearly incompatible with the declared parameter annotation, Basilisk reports the mismatch.  The check mirrors the literal-kind vs annotation comparison used by <code>assignment_compatibility</code>."
+        "html": "Every argument is judged by the TYPE the module&#x27;s bidirectional engine synthesises for it (NARROWPLAN-INTEGRATION Step 3), checked against the declared parameter type through the one shared judgment (TypeJudge) \u2014 never by the syntactic shape of the expression."
       },
       {
         "type": "code",
@@ -2213,7 +2213,11 @@
     "body": [
       {
         "type": "text",
-        "html": "<code>assert_type(expr, Type)</code> is a static-analysis directive that verifies the inferred type of <code>expr</code> equals <code>Type</code>.  When the resolver can determine both sides and they do not match, this rule emits an error."
+        "html": "<code>assert_type(expr, Type)</code> is a static-analysis directive that verifies the inferred type of <code>expr</code> equals <code>Type</code>. Two judgments feed it (NARROWPLAN-INTEGRATION Step 5):"
+      },
+      {
+        "type": "text",
+        "html": "- the resolver&#x27;s flow-narrowed comparison of declared parameter types   (<code>type_mismatch</code> on basilisk_resolver::AssertTypeCallInfo), and - the module&#x27;s span-indexed oracle \u2014 the SAME engine behind hover \u2014 for   expressions the resolver cannot type (call results, attributes). The   oracle verdict fires only when both sides are fully known and provably   DISJOINT (neither assignable to the other), so spelling variance and   literal widening can never manufacture a false positive   (CHKARCH-CONFORMANCE-MODE)."
       },
       {
         "type": "code",
@@ -2252,6 +2256,10 @@
       {
         "type": "text",
         "html": "<code>typing.cast(typ, val)</code> must be called with exactly two positional arguments, and the first argument must be a type expression, not a value literal. A <em>quoted</em> first argument (<code>cast(&quot;Widget&quot;, x)</code>) is NOT a value literal \u2014 it is the standard <a href=\"https://peps.python.org/pep-0484/\">PEP 484</a> forward-reference spelling, which typeshed admits directly (<code>cast(typ: type_T | str | Any, val)</code>) and which ruff&#x27;s <code>TC006</code> actively requires \u2014 so only genuine non-string value literals are rejected (issue #335)."
+      },
+      {
+        "type": "text",
+        "html": "A <code>cast()</code> is invalid wherever it appears, so every expression position is checked \u2014 <code>return cast(1, x)</code> and <code>print(cast(1, x))</code> are as wrong as <code>y = cast(1, x)</code> (issue #335)."
       },
       {
         "type": "text",
@@ -5099,17 +5107,21 @@
     "tags": [
       "pep"
     ],
-    "summary": "Unbound variable on some code paths",
-    "summaryHtml": "Unbound variable on some code paths",
+    "summary": "possibly-unbound variable at a `return`",
+    "summaryHtml": "possibly-unbound variable at a <code>return</code>",
     "body": [
       {
         "type": "text",
-        "html": "When a function contains a <code>return &lt;name&gt;</code> statement and the name is assigned in the function body, but only inside conditional branches (e.g. <code>if</code>, <code>while</code>, <code>try</code>), it may be unbound when the <code>return</code> is reached on other paths."
+        "html": "NARROWPLAN-INTEGRATION Step 8 (#285(https://github.com/Nimblesite/Basilisk/issues/285)): definite assignment is tracked over ALL paths, and divergence is the walker&#x27;s inference-driven analysis (NARROWPLAN-FLOW, crate::narrow::stmt_diverges) \u2014 a branch that provably never falls through (<code>return</code>, <code>raise</code>, a <code>NoReturn</code>-typed call, <code>while True:</code> without <code>break</code>) cannot leave the name unbound, so it drops out of the merge instead of poisoning it."
       },
       {
         "type": "code",
         "lang": "python",
-        "code": "def maybe_assign(flag: bool) -> int:\n    if flag:\n        result = 42\n    return result   # result may be unbound if flag is False \u2192 E0019"
+        "code": "def maybe_assign(flag: bool) -> int:\n    if flag:\n        result = 42\n    return result   # result may be unbound if flag is False \u2192 names_unbound\n\ndef guarded(flag: bool) -> int:\n    if flag:\n        result = 42\n    else:\n        return 0    # this path never reaches the return below\n    return result   # bound on every live path \u2014 silent"
+      },
+      {
+        "type": "text",
+        "html": "Gradual posture (TYPEINF-TARGET-GRADUAL): a read the walk cannot prove bound on every live path fires only where the walk is exact (straight lines, <code>if</code>/<code>elif</code>/<code>else</code>, <code>try</code> success paths, <code>match</code> cases, <code>with</code> bodies); inside loop bodies, <code>except</code> handlers, and <code>finally</code> blocks \u2014 where an earlier iteration or a mid-statement exception makes &quot;bound&quot; path-dependent \u2014 the walk abstains."
       }
     ],
     "group": "Type System",
@@ -5128,26 +5140,30 @@
     "tags": [
       "pep"
     ],
-    "summary": "Undefined variable used in a return statement or as a module-level callee",
-    "summaryHtml": "Undefined variable used in a return statement or as a module-level callee",
+    "summary": "Reference to a name with no visible definition",
+    "summaryHtml": "Reference to a name with no visible definition",
     "body": [
       {
         "type": "text",
-        "html": "Flags any name referenced in a <code>return</code> expression \u2014 bare (<code>return x</code>), the base of an attribute/subscript chain (<code>return x.y</code>), a call argument, or the **callee of a call** (<code>return x()</code>) \u2014 that is not defined in scope. A name is considered defined if it is a parameter, a local assignment (<code>=</code>, <code>for</code>, <code>with</code>), a module-level function, class, variable, or import, an enclosing scope&#x27;s binding, a cross-module imported symbol, or a builtin."
+        "html": "Flags any name referenced in a <code>return</code> expression \u2014 bare (<code>return x</code>), the base of an attribute/subscript chain (<code>return x.y</code>), a call argument, or the **callee of a call** (<code>return x()</code>) \u2014 that is not defined in scope. A name is considered defined if it is a parameter, a local assignment (<code>=</code>, <code>for</code>, <code>with</code>), a module-level function, class, variable, import, or <a href=\"https://peps.python.org/pep-0695/\">PEP 695</a> <code>type</code> alias, an enclosing scope&#x27;s binding, a cross-module imported symbol, or a builtin."
       },
       {
         "type": "text",
-        "html": "Also flags a module-level statement that calls a name bound nowhere in the module (issue #397), and a class that names its own yet-unbound self among its bases (issue #398) \u2014 Python evaluates the bases tuple before binding the class name, so both raise <code>NameError</code> the moment the module is imported. Shadowing stays legal: <code>class D(D)</code> is only flagged when the class statement is the SOLE binding of that name (no earlier class, import, assignment, or builtin to inherit from). A <code>from m import *</code> disables both module-level passes: the star can bind any name."
+        "html": "Also flags a module-level statement that calls a name bound nowhere in the module (issue #397), and a class that lists **its own name among its bases** (issue #398) \u2014 Python evaluates the bases tuple before binding the class name, so both raise <code>NameError</code> the moment the module is imported. Shadowing stays legal: <code>class D(D)</code> is only flagged when the class statement is the SOLE binding of that name (no earlier class, import, assignment, or builtin to inherit from). A <code>from m import *</code> disables both module-level passes: the star can bind any name."
       },
       {
         "type": "code",
         "lang": "python",
-        "code": "def compute() -> int:\n    return undefined_name     # never defined \u2192 E0018\n    return undefined_fn()     # undefined callee \u2192 E0018\n\na: int = print2(\"abc\")        # no `print2` anywhere \u2192 E0018\n\nclass D(D):                   # `D` unbound in its own bases \u2192 E0018\n    pass"
+        "code": "def compute() -> int:\n    return undefined_name     # never defined \u2192 E0018\n    return undefined_fn()     # undefined callee \u2192 E0018\n\n\na: int = print2(\"abc\")        # no `print2` anywhere \u2192 E0018\n\nclass D(D):                   # `D` unbound in its own bases \u2192 E0018\n    pass"
       }
     ],
     "group": "Type System",
     "docsUrl": "https://www.basilisk-python.dev/errors/names_undefined",
     "references": [
+      {
+        "label": "PEP 695",
+        "url": "https://peps.python.org/pep-0695/"
+      },
       {
         "label": "Python language reference: Naming and binding",
         "url": "https://docs.python.org/3/reference/executionmodel.html#naming-and-binding"

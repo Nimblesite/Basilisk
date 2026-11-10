@@ -85,9 +85,12 @@ fn push_param_tokens(raw: &mut Vec<RawToken>, param: &ParameterInfo) {
 
 /// Check if a function has `@staticmethod` or `@classmethod` decorator.
 fn has_static_decorator(decorators: &[String]) -> bool {
-    decorators
-        .iter()
-        .any(|d| d == "staticmethod" || d == "classmethod")
+    decorators.iter().any(|d| {
+        matches!(
+            d.rsplit('.').next().unwrap_or(d.as_str()),
+            "staticmethod" | "classmethod"
+        )
+    })
 }
 
 /// Collect tokens for a single function or method definition.

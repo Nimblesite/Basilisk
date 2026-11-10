@@ -11,6 +11,7 @@ use basilisk_resolver::ResolvedModule;
 use super::Rule;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
+use crate::types::InferredType;
 
 const CODE: ErrorCode = ErrorCode {
     code: "narrowing_typeguard",
@@ -22,15 +23,12 @@ const CODE: ErrorCode = ErrorCode {
 ///
 /// Implements [TYPEINF-NARROWING-TYPEGUARD] and [TYPEINF-NARROWING-TYPEIS] —
 /// validity precondition of a user-defined narrowing function: it must have a
-/// parameter to narrow. The narrowing *effect* (positive-only for `TypeGuard`,
-/// bidirectional for `TypeIs`) is applied in the out-of-scope resolver narrowing
-/// visitor (see the consolidated map).
+/// parameter to narrow. Guard-ness is read from the RESOLVED return type
+/// ([TYPEINF-ANNOTATION-RESOLUTION]), so an alias of `TypeGuard[X]` /
+/// `TypeIs[X]` is a guard exactly as the spelled-out form is. The narrowing
+/// *effect* (positive-only for `TypeGuard`, bidirectional for `TypeIs`) is
+/// applied in the narrowing flow (see the consolidated map).
 pub(crate) struct TypeGuardNoNarrowingParam;
-
-/// Returns `true` if the annotation text references `TypeGuard` or `TypeIs`.
-fn is_type_guard_or_type_is(ann_text: &str) -> bool {
-    ann_text.contains("TypeGuard") || ann_text.contains("TypeIs")
-}
 
 /// Returns `true` if the function has only `self` or `cls` parameters
 /// (no user-facing parameters to narrow).
@@ -44,10 +42,23 @@ impl Rule for TypeGuardNoNarrowingParam {
     fn check(
         &self,
         module: &ResolvedModule,
+        ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
+        super::check_with_own_types(self, module, ctx, diagnostics);
+    }
+
+    fn check_with_types(
+        &self,
+        module: &ResolvedModule,
+        types: &super::shared::module_types::ModuleTypes<'_>,
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
         let source = &module.source;
+        let Some(resolver) = types.annotations() else {
+            return;
+        };
 
         for func in &module.functions {
             // Must be a method (inside a class).
@@ -60,26 +71,23 @@ impl Rule for TypeGuardNoNarrowingParam {
                 continue;
             };
 
-            // Extract annotation text from source.
-            let Some(ann_text) = slice_span(source, ann_span) else {
+            // The return type must RESOLVE to a narrowing form — through
+            // aliases too, so `Guard = TypeGuard[int]` does not hide one.
+            // Resolved from the indexed annotation NODE: slicing the text and
+            // re-parsing it costs a `ruff` parse per annotated method.
+            let Some(InferredType::Guard { type_is, .. }) = resolver.resolve_span(ann_span) else {
                 continue;
             };
-
-            // Check if the return type involves TypeGuard or TypeIs.
-            if !is_type_guard_or_type_is(ann_text) {
-                continue;
-            }
 
             // Check if the method has no user-facing parameters.
             if !has_only_self_or_cls(func) {
                 continue;
             }
 
-            let guard_kind = if ann_text.contains("TypeIs") {
-                "TypeIs"
-            } else {
-                "TypeGuard"
-            };
+            let guard_kind = if type_is { "TypeIs" } else { "TypeGuard" };
+            // Only the diagnostic path needs the annotation AS WRITTEN, so the
+            // source slice happens here rather than on every method checked.
+            let ann_text = slice_span(source, ann_span).unwrap_or(guard_kind);
 
             diagnostics.push(error_diagnostic_owned(
                 CODE.clone(),

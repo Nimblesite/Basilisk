@@ -120,6 +120,13 @@ fn collect_statement_assigns(stmts: &[Stmt]) -> Vec<String> {
                 // like a nested function. Do NOT recurse into the class body.
                 out.push(class.name.to_string());
             }
+            Stmt::TypeAlias(node) => {
+                // A PEP 695 `type` statement binds its alias name in the
+                // enclosing scope, exactly like a `def`.
+                if let Some(name) = expr_simple_name(&node.name) {
+                    out.push(name);
+                }
+            }
             Stmt::Import(node) => {
                 // A function-local import binds names in the enclosing scope and
                 // is reachable by nested scopes (incl. methods of nested classes).
@@ -164,142 +171,10 @@ fn collect_statement_assigns(stmts: &[Stmt]) -> Vec<String> {
                     out.extend(collect_statement_assigns(&case.body));
                 }
             }
-            // `type X = ...` (PEP 695) binds `X` in the enclosing scope.
-            Stmt::TypeAlias(node) => {
-                out.extend(extract_target_names(&node.name));
-            }
             _ => {}
         }
     }
     out
-}
-
-/// Collect names assigned at the top level of a function body (unconditionally).
-pub(super) fn collect_unconditional_assigns(stmts: &[Stmt]) -> Vec<String> {
-    // A walrus in a statement's own expression — the `if`/`while` test, a `for`
-    // iterable, an assigned value — is evaluated whenever control reaches that
-    // statement, so it binds on every path past it just like a plain `=`.
-    let mut assignments = collect_walrus_targets(stmts, Reach::Definite);
-
-    for stmt in stmts {
-        match stmt {
-            Stmt::Assign(node) => {
-                assignments.extend(node.targets.iter().flat_map(extract_target_names));
-            }
-            Stmt::AnnAssign(node) => {
-                if let Some(name) = expr_simple_name(&node.target) {
-                    assignments.push(name);
-                }
-            }
-            Stmt::For(node) => {
-                // The for-loop variable(s) are bound whenever the loop body runs.
-                assignments.extend(extract_target_names(&node.target));
-            }
-            Stmt::FunctionDef(func) => {
-                assignments.push(func.name.to_string());
-            }
-            Stmt::ClassDef(class) => {
-                assignments.push(class.name.to_string());
-            }
-            Stmt::Import(node) => {
-                // Top-level imports bind their names unconditionally.
-                assignments.extend(plain_import_bound_names(node));
-            }
-            Stmt::ImportFrom(node) => {
-                assignments.extend(from_import_bound_names(node));
-            }
-            Stmt::If(node) => {
-                // Check if this is an if-else statement that guarantees assignment
-                if let Some(if_else_assignments) = collect_if_else_assignments(node) {
-                    assignments.extend(if_else_assignments);
-                }
-            }
-            Stmt::Try(node) => {
-                assignments.extend(collect_try_assignments(node));
-            }
-            _ => {}
-        }
-    }
-
-    assignments
-}
-
-/// Names guaranteed to be bound after a `try` statement completes.
-///
-/// The success path binds the `try` body's assigns plus the `else` clause's.
-/// A handler path guarantees only that handler's own assigns (the exception
-/// may pre-empt any assignment in the `try` body), so with handlers present a
-/// name must be bound on the success path AND in every handler. Without
-/// handlers an exception propagates out of the function, so only the success
-/// path reaches the following statements. `finally` always runs.
-fn collect_try_assignments(node: &ruff_python_ast::StmtTry) -> Vec<String> {
-    let mut success_path = collect_unconditional_assigns(&node.body);
-    success_path.extend(collect_unconditional_assigns(&node.orelse));
-
-    let mut guaranteed = node
-        .handlers
-        .iter()
-        .map(|ExceptHandler::ExceptHandler(h)| collect_unconditional_assigns(&h.body))
-        .fold(success_path, |acc, handler_assigns| {
-            acc.into_iter()
-                .filter(|name| handler_assigns.contains(name))
-                .collect()
-        });
-
-    guaranteed.extend(collect_unconditional_assigns(&node.finalbody));
-    guaranteed
-}
-
-/// Check if an if statement has both if and else branches that assign the same variables.
-/// Returns the intersection of assignments from all branches if they cover all paths.
-pub(super) fn collect_if_else_assignments(
-    if_stmt: &ruff_python_ast::StmtIf,
-) -> Option<Vec<String>> {
-    let if_branch_assigns = collect_unconditional_assigns(&if_stmt.body);
-
-    // Check if there's an else clause
-    let has_else = if_stmt
-        .elif_else_clauses
-        .iter()
-        .any(|clause| clause.test.is_none());
-    if !has_else {
-        return None;
-    }
-
-    // Collect assignments from all elif/else branches
-    let mut all_else_assigns = Vec::new();
-    for clause in &if_stmt.elif_else_clauses {
-        if clause.test.is_none() {
-            // This is the else branch
-            all_else_assigns.extend(collect_unconditional_assigns(&clause.body));
-        } else {
-            // This is an elif branch - for now, we'll be conservative and only handle
-            // simple if-else without elif chains
-            return None;
-        }
-    }
-
-    // If there are elif branches, we can't guarantee coverage
-    let has_elif = if_stmt
-        .elif_else_clauses
-        .iter()
-        .any(|clause| clause.test.is_some());
-    if has_elif {
-        return None;
-    }
-
-    // Find the intersection of assignments from if and else branches
-    let intersection: Vec<String> = if_branch_assigns
-        .iter()
-        .filter(|name| all_else_assigns.contains(name))
-        .cloned()
-        .collect();
-
-    if intersection.is_empty() {
-        None
-    } else {
-        Some(intersection)
-    }
 }
 
 // ---------------------------------------------------------------------------

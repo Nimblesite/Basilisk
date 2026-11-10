@@ -4,7 +4,7 @@ title: "Basilisk for Zed — Install & Use the Python Extension"
 description: "Install and use the Basilisk Python language server in the Zed editor. The matching binary downloads automatically with the extension — zero configuration, no separate install. Diagnostics, completions, debugging, and profiling."
 keywords: basilisk, zed, zed editor, python, language server, lsp, install, extension, debugging, profiling, slash commands
 date: 2026-02-28
-dateModified: 2026-03-31
+dateModified: 2026-08-04
 author: The Basilisk Project
 eleventyNavigation:
   key: Zed
@@ -18,13 +18,22 @@ Basilisk ships a native [Zed](https://zed.dev) extension that registers the Basi
 
 ## Install the extension
 
-1. Open the extensions view: command palette (`Cmd+Shift+P`) → **zed: extensions**
-2. Search for **Basilisk**
-3. Click **Install**
+Basilisk is **not yet listed in Zed's extension registry** — the [submission to `zed-industries/extensions`](https://github.com/zed-industries/extensions) is pending, so searching the extensions view for "Basilisk" will not find it. Install it directly instead; it takes one clone and one command-palette action.
 
-That's it. Open a Python file and Basilisk is your language server.
+1. Clone the extension repository:
 
-> **Installing from source?** If you are working in a checkout of the repository, install it as a dev extension instead: command palette → **zed: install dev extension** → select the `basilisk-zed/` directory. Zed compiles the extension to WASM automatically — you never pre-build or copy a `.wasm` file.
+   ```sh
+   git clone https://github.com/Nimblesite/basilisk-zed.git
+   ```
+
+2. Open the command palette (`Cmd+Shift+P` / `Ctrl+Shift+P`) → **zed: install dev extension**
+3. Select the cloned `basilisk-zed` directory
+
+Zed compiles the extension to WASM itself — you never pre-build or copy a `.wasm` file. Open a Python file and Basilisk is your language server.
+
+> **Working in the monorepo?** Select the `basilisk-zed/` directory of your [Basilisk](https://github.com/Nimblesite/Basilisk) checkout instead of cloning separately. `make package-zed` builds the extension and a local `basilisk` binary in one step.
+
+To update, `git pull` in the cloned directory and re-run **zed: install dev extension**. Once the registry listing lands, the extensions view will handle installs and updates for you.
 
 ## The binary comes with the extension
 

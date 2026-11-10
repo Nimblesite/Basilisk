@@ -143,14 +143,6 @@ fn check_alias_attribute_access(
 // Violation 8: a type argument violates a type parameter's bound
 // ---------------------------------------------------------------------------
 
-/// Primitive subtype relationship used for bound checking.
-///
-/// Delegates to the shared tower ([NARROWPLAN-SUBTYPING]); parity with the
-/// former local table is pinned in `tests/subtyping_context_tests.rs`.
-fn is_subtype_of(arg_type: &str, bound_type: &str) -> bool {
-    crate::subtyping::name_subtype(arg_type, bound_type)
-}
-
 /// Build the bounded-alias table from AST-derived alias definitions.
 fn collect_bounded_aliases(scoping: &Pep695Scoping) -> Vec<TypeAliasWithBounds> {
     scoping
@@ -188,13 +180,23 @@ pub(super) fn check_type_alias_bound_violations(
     if aliases.is_empty() {
         return;
     }
+    // Bound verdicts route through the module-seeded context
+    // ([NARROWPLAN-SUBTYPING]).
+    let subtyping = crate::subtyping::module_context(module);
 
     for var in &module.module_vars {
         if !var.has_annotation {
             continue;
         }
         if let Some(annotation) = extract_annotation_for_var(source, var.name_span) {
-            check_annotation_bounds(annotation, var.name_span, &aliases, path, diagnostics);
+            check_annotation_bounds(
+                &subtyping,
+                annotation,
+                var.name_span,
+                &aliases,
+                path,
+                diagnostics,
+            );
         }
     }
 
@@ -204,7 +206,14 @@ pub(super) fn check_type_alias_bound_violations(
                 continue;
             }
             if let Some(annotation) = extract_annotation_for_var(source, var.name_span) {
-                check_annotation_bounds(annotation, var.name_span, &aliases, path, diagnostics);
+                check_annotation_bounds(
+                    &subtyping,
+                    annotation,
+                    var.name_span,
+                    &aliases,
+                    path,
+                    diagnostics,
+                );
             }
         }
     }
@@ -232,6 +241,7 @@ fn extract_annotation_for_var(source: &str, name_span: Span) -> Option<&str> {
 
 /// Check a single annotation `AliasName[args...]` for bound violations.
 fn check_annotation_bounds(
+    subtyping: &crate::subtyping::SubtypingContext,
     annotation: &str,
     span: Span,
     aliases: &[TypeAliasWithBounds],
@@ -263,7 +273,7 @@ fn check_annotation_bounds(
             continue;
         };
         let arg_trimmed = arg.trim();
-        if arg_trimmed == "..." || is_subtype_of(arg_trimmed, bound) {
+        if arg_trimmed == "..." || subtyping.is_subtype(arg_trimmed, bound) {
             continue;
         }
         diagnostics.push(error_diagnostic_owned(

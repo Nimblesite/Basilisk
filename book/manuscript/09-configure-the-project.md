@@ -12,15 +12,19 @@ second question is policy. If the answer lives only in somebody's memory—or in
 an editor setting on one laptop—the project does not really have an answer.
 
 This chapter puts the answer in the repository. We will enable two annotation
-rules for Signal Box, inspect them in the real configuration editor, and scope
+rules for Signal Box, inspect them through the configuration editor, and scope
 a milder severity to its test tree. The important habit is not “turn on as
 much as possible.” It is: make one deliberate choice, see exactly what it will
 change, and leave a configuration another reader can understand.
 
+The Basilisk behavior in this chapter is limited to the official 0.39.0
+release. Its [versioned configuration-editor specification](https://github.com/Nimblesite/Basilisk/blob/b8ae454cfabc54d26d7e4efc029f2f01bd083bc8/docs/specs/LSP-CONFIGURATION-EDITOR-SPEC.md)
+and released command-line behavior provide the product boundary used below.
+
 ## Python semantics and project policy are different layers
 
 Python's authorities draw a useful boundary around this discussion. The
-versioned Python documentation says:
+official Python documentation says:
 
 > “The Python runtime does not enforce function and variable type
 > annotations.” — [Python `typing` documentation](https://docs.python.org/3/library/typing.html)
@@ -37,15 +41,23 @@ The maintained typing specification also says:
 That sentence is why this chapter treats required annotations as an explicit
 Basilisk choice. `BSK-0001` reports a missing parameter annotation and
 `BSK-0002` reports a missing return annotation, but both are opt-in Basilisk
-rules. They are not requirements that the Python typing specification silently
-forgot to mention.
+rules, and 0.39.0 stays silent where its inference already determines the
+parameter from a literal default or the return from literal-only paths. They
+are not requirements that the Python typing specification silently forgot to
+mention.
 
-There are consequently two useful rule sources in the editor:
+There are consequently two useful rule sources and two command lanes:
 
 - Python typing-spec rules, labelled `pep` in the Source facet, are selected by
-  Basilisk's unconfigured default and implement the checker's typing baseline.
+  Basilisk's unconfigured default and run under `basilisk check`.
 - Basilisk rules, labelled `basilisk`, add project policy beyond that baseline
-  and remain off until the project selects them.
+  and run under `basilisk analyze` only after project configuration selects
+  them.
+
+The 0.39.0 [checker architecture specification](https://github.com/Nimblesite/Basilisk/blob/b8ae454cfabc54d26d7e4efc029f2f01bd083bc8/docs/specs/CHECKER-ARCHITECTURE-SPEC.md)
+defines that partition. Enabling `BSK-0001` does not add it to `check`; it makes
+it eligible for `analyze`. A project that wants both typing semantics and house
+policy runs both commands.
 
 This distinction is more precise than a “strictness level.” A project may want
 required annotations but not another house rule, or may want an opt-in rule at
@@ -64,6 +76,9 @@ For a new Basilisk project, put policy under `[tool.basilisk]` in the
 root-level `pyproject.toml`. The rule table is a child of that namespace:
 
 ```toml
+[tool.basilisk]
+typeshed-commit = "83c2518a9e6abbda0c44592c3483de459198f887"
+
 [tool.basilisk.rules]
 "BSK-0001" = "error"
 "BSK-0002" = "error"
@@ -83,10 +98,8 @@ it. In a monorepo the useful question is therefore not "which file is
 active?" but "which `pyproject.toml` is nearest to the file I am looking at?"
 The configuration editor answers it — its source badge names the file an
 approved edit will write. If a legacy root-level `basilisk.json` is still
-lying around, the editor lists it as an ignored source; it is never read, so
-migrate its keys into `[tool.basilisk]` and delete it. Editing the
-`pyproject.toml` that governs a different subtree is the modern way to waste
-the same quiet afternoon.
+lying around, Basilisk ignores it silently. Migrate its keys into
+`[tool.basilisk]`; the editor neither reads it nor reports it as another source.
 
 The editor itself is not a second policy store. It asks the Basilisk language
 server for the live catalog and active configuration, then asks the server to
@@ -96,15 +109,15 @@ takes you back to the durable source of truth.
 ## Read the Rules view
 
 In VS Code, open the Command Palette and run **Basilisk: Open Configuration
-Editor**. The command appears when the running Basilisk server advertises the
-configuration-editor capability. It opens a full editor tab, leaving enough
-room for the rule list and its evidence.
+Editor**. In 0.39.0 the command is capability-gated: it appears when the
+running server advertises the configuration-editor operations. It opens a full
+editor tab for the server-computed project view.
 
-![The real VS Code configuration editor for Signal Box shows a tag rail, searchable rule rows, issue counts, and explicit per-rule severity controls.](../assets/screenshots/09-configuration-editor.png)
+![A direct capture of the Basilisk 0.39.0 Configuration Editor in VS Code shows its five views, tag facets, searchable rule rows, severity controls, and active pyproject source.](../assets/screenshots/09-configuration-editor.png)
 
-*Figure 9.1 — The capture uses the book's Signal Box workspace and a real
-Basilisk language server. The totals belong to this captured source snapshot;
-the stable lesson is the structure of the view, not a frozen rule count.*
+*Figure 9.1 — The real 0.39.0 Configuration Editor renders state supplied by
+the language server. Catalog and diagnostic totals belong to this captured
+Signal Box workspace, not to a permanent product contract.*
 
 Read the screen from left to right:
 
@@ -119,14 +132,14 @@ Read the screen from left to right:
    `tag:strictness`, `severity:error`, `status:entry`, `status:disabled`, or
    `has:diagnostics`. Combine terms to narrow the list.
 4. **Rule rows** show the stable code, title, short explanation, tags, current
-   issue/fix counts, and a severity control. Select the rule title to open its
+   diagnostic count, and a severity control. Select the rule title to open its
    detail and occurrences.
 5. **The source badge** tells you which root file will receive an approved
    edit. In the capture it is Signal Box's `pyproject.toml`.
 
 Do not turn a moving total from this screen into team policy. “We enable
-`BSK-0002` at error” is reviewable. “We enable all 165 rules” will become stale
-as the catalog changes and does not explain why any one rule belongs.
+`BSK-0002` at error” is reviewable. “We enable every current rule” will become
+stale as the catalog changes and does not explain why any one rule belongs.
 
 ## Four editor choices, four stored severities
 
@@ -141,8 +154,8 @@ of them is a mode, a placeholder, or a level.
 | **Disabled** | Keep an explicit record that the rule is off | `disabled` |
 
 A typing-spec rule offers only the first three. It can be graded down, but no
-table may disable it; an inline directive on the offending line, discussed at
-the end of this chapter, remains the way to record one honest exception.
+table may disable it; a narrow inline directive on the offending line,
+discussed at the end of this chapter, is one way to record an honest exception.
 
 There is no *inherited* or *native* choice, because Basilisk stores no default,
 inherited, or native severity values. A rule with no entry is not sitting in a
@@ -163,32 +176,35 @@ control.
 Changing a rule control does not immediately edit the project. It asks the
 language server to calculate a preview from the active configuration, the live
 rule catalog, and the current workspace diagnostics. The preview expands a tag
-or rule selection into concrete rule codes and shows both the persisted change
-and its hypothetical diagnostic impact.
+or rule selection into concrete rule codes and shows effective severity changes
+and their hypothetical diagnostic impact.
 
 ![A four-stage diagram shows one Basilisk rule moving through server preview, human review, one approved configuration edit, and a project recheck.](../assets/diagrams/09-configuration-resolution.png)
 
 *Figure 9.2 — Configuration is a short transaction: choose, preview, review,
 then apply once. Until the last step, `pyproject.toml` is unchanged.*
 
-Signal Box has one missing-return diagnostic in its test helper. Suppose the
-project decides that `BSK-0002` should report as a warning while that debt is
-paid down. Set the control for `BSK-0002` to Warning and read what comes back
-before anything is written.
+Suppose Signal Box considers grading its missing-return policy from Error to
+Warning. Set the root control for `BSK-0002` to Warning and read what comes back
+before anything is written. The preview names one effective severity change
+and shows the current diagnostic impact. The selected control and source badge
+identify the entry to be written.
 
-![The real Basilisk preview dialog shows BSK-0002 moving to warning, along with recalculated workspace impact and separate Cancel and Apply changes actions.](../assets/screenshots/09-configuration-preview.png)
+![A direct Basilisk 0.39.0 VS Code capture shows a BSK-0002 error-to-warning preview, the current error and warning impact, and separate Cancel and Apply change actions.](../assets/screenshots/09-configuration-preview.png)
 
-*Figure 9.3 — The captured preview is deliberately left unapplied. It shows
-which persisted entry would change and how the current Signal Box diagnostics
-would be reclassified without mutating the fixture used to reproduce the image.*
+*Figure 9.3 — This real 0.39.0 preview is a proposal tied to Signal Box's
+current source revision. It has no durable effect until the reader approves
+the resulting edit.*
 
 Read the lower line first: it names `BSK-0002` and the severity it moves from
 and to. The header's source badge names the file that will receive the entry.
 Then read the impact cards.
 Those numbers are a forecast for the current workspace, not a promise about
 future files. **Cancel** closes the preview without changing anything. **Apply
-changes** approves this specific preview, writes and saves the active project
-file through a VS Code workspace edit, and asks Basilisk to recheck the root.
+change** approves this preview and asks the client to apply one versioned
+workspace edit. VS Code saves a configuration document dirtied by that edit,
+but does not implicitly save a file that already contained the reader's
+unsaved changes. Basilisk then reloads and rechecks the root.
 
 If the configuration changes after the preview was calculated, Basilisk
 rejects the stale revision instead of overwriting the newer text. Refresh,
@@ -197,9 +213,10 @@ on which you based the decision have changed.
 
 ## Scope is a folder, not a pattern
 
-That change graded `BSK-0002` for the whole project. A narrower answer — the
-test tree only — is a different move: Basilisk scopes rules by folder, so you
-write a second, much smaller configuration file, `tests/pyproject.toml`:
+That preview considered grading `BSK-0002` to Warning for the whole project.
+Cancel it. The checkpoint instead keeps the root rule at Error and makes a
+narrower decision for tests: Basilisk scopes rules by folder, so it uses a
+second, smaller file, `tests/pyproject.toml`:
 
 ```toml
 [tool.basilisk.rules]
@@ -246,29 +263,35 @@ prefer the rules whose purpose you can explain.
 
 ## Signal Box checkpoint
 
-Open `book/examples/signal-box` as the VS Code workspace, then work through one
-complete decision:
+Open `book/examples/signal-box` as the VS Code workspace. The checkpoint already
+contains the root policy and a narrower `tests/pyproject.toml`, so its result is
+reproducible without changing a file:
 
-1. Run `basilisk check` from the Signal Box root. Identify the missing
-   parameter annotation in `src/signal_box/readings.py` and the two missing
-   return annotations. They are errors because the project explicitly selects
-   `BSK-0001` and `BSK-0002` at error.
-2. Open **Basilisk: Open Configuration Editor**. Confirm that the source badge
-   names `signal-box/pyproject.toml`.
-3. Create `tests/pyproject.toml` containing a `[tool.basilisk.rules]` table
-   with the single entry `"BSK-0002" = "warning"`. Reopen the configuration
-   editor and find the new folder in Path Overrides.
-4. Before rechecking, predict the result: the helper in
-   `tests/test_readings.py` becomes a warning; the missing return in
-   `src/signal_box/readings.py` remains an error; the missing parameter remains
-   an error because this change names only `BSK-0002`.
-5. Compare your prediction with what `basilisk check` reports.
-6. Delete the entry and confirm that the project-level error behaviour returns
-   for the test helper — the root table decides `BSK-0002` again the moment the
-   nearer table stops deciding it.
+```console
+basilisk --version
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src \
+  python3 -m unittest discover -s tests -v
+basilisk check --color never
+basilisk analyze --color never
+```
+
+The recorded release prints `basilisk 0.39.0`, and the runtime suite passes one
+test. `check` reports no diagnostics because this fixture contains no detected
+typing-spec violation; it also notes that configured non-PEP rules belong to
+`analyze`. `analyze` reports three policy diagnostics: `BSK-0001` and
+`BSK-0002` are errors in `src/signal_box/readings.py`, while `BSK-0002` is a
+warning for `sample_reading` under `tests/`. Its summary is `Found 3 diagnostics
+(2 errors).`
+
+Now inspect the files and predict that result from configuration alone. The
+root selects both rules as errors. The test folder's nearer table names only
+`BSK-0002`, so it grades that rule to warning and leaves `BSK-0001` to the root.
+Open **Basilisk: Open Configuration Editor** and confirm that the Project view
+names the root source and Path Overrides lists `tests/`.
 
 For a guided variation, keep the same folder and choose Info rather than
-Warning. Which diagnostics change category, and which remain untouched?
+Warning in `tests/pyproject.toml`. Re-run `analyze`: only the test helper should
+change category. Restore Warning when you finish.
 
 For an independent variation, choose one real directory in your own project
 and one rule whose purpose you understand. Write down the expected affected
@@ -287,6 +310,8 @@ when the repository is actually making a project choice.
 
 - Python typing semantics and Basilisk project policy now occupy separate
   layers in your mental model.
+- `basilisk check` evaluates typing-spec rules; `basilisk analyze` evaluates
+  configured opt-in policy, so a project using both runs both commands.
 - Opt-in rules become active through an explicit non-disabled severity.
 - Removing an entry withdraws a decision rather than choosing a default; the
   next table up the folder chain then decides the rule.
@@ -313,3 +338,5 @@ current catalog. Check both against the Basilisk release used by your project.
 - [`pyproject.toml` specification](https://packaging.python.org/en/latest/specifications/pyproject-toml/)
 - [Basilisk configuration guide](https://www.basilisk-python.dev/docs/configuration/)
 - [Basilisk rule reference](https://www.basilisk-python.dev/docs/rules/)
+- [Basilisk 0.39.0 checker architecture](https://github.com/Nimblesite/Basilisk/blob/b8ae454cfabc54d26d7e4efc029f2f01bd083bc8/docs/specs/CHECKER-ARCHITECTURE-SPEC.md)
+- [Basilisk 0.39.0 configuration-editor specification](https://github.com/Nimblesite/Basilisk/blob/b8ae454cfabc54d26d7e4efc029f2f01bd083bc8/docs/specs/LSP-CONFIGURATION-EDITOR-SPEC.md)

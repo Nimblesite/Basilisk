@@ -161,7 +161,7 @@ fn class_attr_descriptor_call_flag() -> Result<(), Box<dyn std::error::Error>> {
     let resolved = resolve_src(&src)?;
     let cls = resolved.classes.iter().find(|c| c.name == "Foo");
     let attr = cls.and_then(|c| c.attributes.iter().find(|a| a.name == "bar"));
-    assert!(attr.is_some_and(|a| a.rhs_is_descriptor_call));
+    assert!(attr.is_some_and(|a| a.rhs_descriptor.is_some()));
     Ok(())
 }
 

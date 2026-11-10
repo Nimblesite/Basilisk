@@ -31,13 +31,18 @@
 //! when configuration resolves it to a non-disabled severity
 //! ([CHKARCH-COMMANDS]).
 
+/// The single annotation entry point: a type expression resolved through the
+/// name cascade.
+///
+/// Implements [TYPEINF-ANNOTATION-RESOLUTION].
+pub mod annotation;
 pub mod bidir;
 pub mod cached;
 pub mod class_naming;
-pub mod collection_inference;
 pub mod context;
 pub mod diagnostic;
 pub mod exports;
+pub mod expr_type;
 pub mod imports;
 pub mod incremental;
 pub mod incremental_defs;

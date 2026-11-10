@@ -56,6 +56,11 @@ pub enum CallReceiver {
     BytesLiteral,
     /// A named variable or parameter whose annotation/inferred type is resolved later.
     Name(String),
+    /// A direct constructor call on a named callee (`C().method(...)`): the
+    /// receiver is a fresh *instance* of `C`, so instance-method binding
+    /// consumes the implicit `self` parameter
+    /// ([#382](https://github.com/Nimblesite/Basilisk/issues/382)).
+    Constructor(String),
 }
 
 /// A `NamedTuple` definition collected from module-level code.
@@ -311,6 +316,10 @@ pub struct TypeStatementInfo {
     pub rhs_span: Span,
     /// Span of the name token.
     pub name_span: Span,
+    /// The statement's own type-parameter names (`T` in `type X[T] = rhs`).
+    /// PEP 695 binds these in the alias's annotation scope, shadowing any
+    /// module-level binding of the same name inside the RHS.
+    pub param_names: Vec<String>,
 }
 
 /// Information about an `Annotated[...]` subscription with too few arguments.

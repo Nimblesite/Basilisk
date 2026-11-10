@@ -58,7 +58,9 @@ whenever prediction will expose their mental model.
   the typing specification, an accepted PEP, or documented runtime behaviour
   makes the boundary relevant to the lesson
 - Basilisk behavior: one named release per book edition
-- Screenshots: captured from that same release and recorded in `figures.json`
+- Screenshots: direct captures from that same release, with untouched masters
+  and release provenance recorded in `figures.json`; a reconstructed product
+  screen is forbidden even when labelled as a diagram
 - Website: practical companion links may move forward; release-specific claims
   remain tied to the edition's release and source provenance
 

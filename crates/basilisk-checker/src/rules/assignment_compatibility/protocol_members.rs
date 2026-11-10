@@ -91,7 +91,7 @@ pub(super) fn protocol_satisfied(
                 specialize_class_sigs(tgt_sigs, &target.generic_params, target_args, index);
             let specialized_source =
                 specialize_class_sigs(src_sigs, &source.generic_params, source_args, index);
-            if !sigs_compatible(&specialized_source, &specialized_target) {
+            if !sigs_compatible(&index.subtyping, &specialized_source, &specialized_target) {
                 return false;
             }
         } else if !source_attrs.contains(*name) {

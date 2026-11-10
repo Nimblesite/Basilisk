@@ -66,6 +66,12 @@ assert(#config_mod.validate(config_mod.resolve({ log_level = "verbose" })) == 1)
 -- 2. binary.lua — all resolution paths
 -- ============================================================
 print("--- binary.lua ---")
+-- is_executable: the public guard `lsp.start` consults before resolving, over
+-- every shape a configured `binary_path` can take.
+assert(binary_mod.is_executable(nil) == false)
+assert(binary_mod.is_executable("") == false)
+assert(binary_mod.is_executable("/nonexistent/basilisk") == false)
+assert(binary_mod.is_executable(42) == false)
 -- configured path: nil, empty, nonexistent, valid
 binary_mod.resolve(nil)
 binary_mod.resolve("")
@@ -73,6 +79,7 @@ binary_mod.resolve("/nonexistent/basilisk")
 local ls_path = vim.fn.exepath("ls")
 if ls_path ~= "" then
   binary_mod.resolve(ls_path)
+  assert(binary_mod.is_executable(ls_path) == true)
 end
 -- env var: nil, empty, valid, invalid
 local orig_env = vim.env.BASILISK_PATH
@@ -235,6 +242,35 @@ for _ = 1, 4 do
 end
 -- Force restart resets
 lsp_mod.restart(config_mod.resolve(), true)
+
+-- ============================================================
+-- 5b. codelens.lua — both activation paths on one runtime
+-- ============================================================
+-- Implements [NVIM-LSP-CLIENT-CONFIGURATION-API-MAPPINGS] (Code Lens row).
+-- Which branch `activate` takes is decided by the Neovim it runs on, so the
+-- version under test would otherwise dictate which half of the contract is ever
+-- executed. Swapping `vim.lsp.codelens` drives BOTH: the 0.12+ `enable` API and
+-- the 0.10/0.11 `refresh` fallback with its manual BufEnter/InsertLeave loop.
+print("--- codelens.lua ---")
+local codelens = require("basilisk.codelens")
+local real_codelens = vim.lsp.codelens
+local lens_buf = vim.api.nvim_create_buf(false, true)
+
+-- Modern runtime: enable() exists and owns its own refresh scheduling.
+vim.lsp.codelens = {
+  enable = function(_, _) end,
+  refresh = function(_) end,
+}
+codelens.activate(lens_buf)
+
+-- Legacy runtime: no enable(), so activate() refreshes now and on each event.
+vim.lsp.codelens = { refresh = function(_) end }
+codelens.activate(lens_buf)
+vim.api.nvim_exec_autocmds("BufEnter", { buffer = lens_buf })
+vim.api.nvim_exec_autocmds("InsertLeave", { buffer = lens_buf })
+
+vim.lsp.codelens = real_codelens
+vim.api.nvim_buf_delete(lens_buf, { force = true })
 
 -- ============================================================
 -- 6. memory.lua — complete_refs, display, LSP calls
@@ -607,6 +643,47 @@ if lsp_binary then
     sl.update()
     local status_text = sl.get()
     sl.get_color()
+
+    -- Server-notification handlers on a REAL attached client. `install_handlers`
+    -- is the public seam that re-installs them after an external
+    -- `vim.lsp.config` (as this exerciser and any user config do), and nothing
+    -- else in the suite called it — so `window/logMessage`,
+    -- `window/showMessage` and `workspace/applyEdit` were never dispatched
+    -- through the plugin's own handlers. Drive each one the way the server
+    -- does, including the message levels that pick different log routes and
+    -- the applyEdit shapes ([CONFIGEDITOR-SOURCES]: `changes` vs
+    -- `documentChanges`, and a non-config document that must NOT be persisted).
+    lsp_mod.install_handlers()
+    local handlers = lsp_client.handlers or {}
+    local function dispatch(method, params)
+      local handler = handlers[method]
+      if handler then
+        pcall(handler, nil, params, { method = method, client_id = lsp_client.id })
+      end
+    end
+    for _, level in ipairs({ 1, 2, 3, 4 }) do
+      dispatch("window/logMessage", { type = level, message = "Basilisk: level " .. level })
+      dispatch("window/showMessage", { type = level, message = "Basilisk: shown " .. level })
+    end
+    -- Degenerate payloads: absent, empty and non-string messages are ignored.
+    dispatch("window/logMessage", nil)
+    dispatch("window/logMessage", { type = 3, message = "" })
+    dispatch("window/showMessage", { type = 3, message = 42 })
+    local edited_uri = vim.uri_from_fname(lsp_tmpdir .. "/pyproject.toml")
+    dispatch("workspace/applyEdit", {
+      edit = { changes = { [edited_uri] = {} } },
+    })
+    dispatch("workspace/applyEdit", {
+      edit = {
+        documentChanges = {
+          { textDocument = { uri = edited_uri, version = 1 }, edits = {} },
+          { kind = "create", uri = vim.uri_from_fname(lsp_tmpdir .. "/created.py") },
+        },
+      },
+    })
+    dispatch("workspace/applyEdit", { edit = { changes = { [vim.uri_from_bufnr(lsp_buf)] = {} } } })
+    dispatch("workspace/applyEdit", { edit = "not a table" })
+    wait(200)
 
     -- Execute commands with real LSP client.
     pcall(vim.cmd, "BasiliskOrganizeImports")

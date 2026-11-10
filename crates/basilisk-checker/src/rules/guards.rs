@@ -25,7 +25,7 @@ use basilisk_resolver::{ClassInfo, FunctionInfo, ResolvedModule};
 /// - A method inside a `Protocol` class (interface contract, not implementation).
 pub(crate) fn is_stub_context(func: &FunctionInfo, classes: &[ClassInfo]) -> bool {
     // @overload variants MUST be annotated — their signatures drive type resolution.
-    if func.decorators.iter().any(|d| d == "overload") {
+    if super::shared::decorator_spelled(&func.decorators, "overload") {
         return false;
     }
     // Pure stub bodies (only `...` / `pass`) are exempt — covers Protocol stubs
@@ -34,7 +34,7 @@ pub(crate) fn is_stub_context(func: &FunctionInfo, classes: &[ClassInfo]) -> boo
         return true;
     }
     // Non-stub abstractmethod bodies are also exempt.
-    if func.decorators.iter().any(|d| d == "abstractmethod") {
+    if super::shared::decorator_spelled(&func.decorators, "abstractmethod") {
         return true;
     }
     // Protocol methods are interface contracts, not implementations.
@@ -52,18 +52,19 @@ pub(crate) fn is_stub_context(func: &FunctionInfo, classes: &[ClassInfo]) -> boo
 /// checks for the function, so return-value/assignment diagnostics (E0011) must
 /// not fire. Argument-count (E0041) and similar signature checks still apply.
 pub(crate) fn is_no_type_check(func: &FunctionInfo) -> bool {
-    func.decorators.iter().any(|d| d == "no_type_check")
+    super::shared::decorator_spelled(&func.decorators, "no_type_check")
 }
 
-/// Returns `true` when a class is an Enum subclass.
+/// Returns `true` when a class is an Enum subclass, in either the bare
+/// (`class C(Enum)`) or module-qualified (`class C(enum.Enum)`) spelling.
 ///
 /// Enum members are unannotated by design — their type is `Literal[EnumClass.member]`,
 /// synthesised by the Enum metaclass.  Firing BSK-0005 on them is a false positive.
 pub(crate) fn is_enum_class(class: &ClassInfo) -> bool {
     class.bases.iter().any(|b| {
         matches!(
-            b.as_str(),
-            "Enum" | "IntEnum" | "StrEnum" | "Flag" | "IntFlag"
+            b.strip_prefix("enum.").unwrap_or(b),
+            "Enum" | "IntEnum" | "StrEnum" | "Flag" | "IntFlag" | "ReprEnum"
         )
     })
 }
@@ -189,7 +190,7 @@ pub(crate) fn collect_transform_functions(
     let mut result = HashMap::new();
 
     for func in &module.functions {
-        if !func.decorators.iter().any(|d| d == "dataclass_transform") {
+        if !super::shared::decorator_spelled(&func.decorators, "dataclass_transform") {
             continue;
         }
 

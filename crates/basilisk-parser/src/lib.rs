@@ -75,6 +75,27 @@ pub fn parse_source(source: String, path: String) -> Result<ParsedModule, ParseE
         })
 }
 
+/// Parse a single type expression — e.g. the contents of a string forward
+/// reference inside an annotation. Returns `None` when the text does not
+/// parse as an expression (the caller treats it gradually).
+#[must_use]
+pub fn parse_type_expression(text: &str) -> Option<ruff_python_ast::Expr> {
+    ruff_python_parser::parse_expression(text.trim())
+        .ok()
+        .map(|parsed| *parsed.into_syntax().body)
+}
+
+/// The element expressions of a subscript slice: a tuple slice contributes
+/// each element (`x[a, b]` → `[a, b]`), any other slice is the single
+/// element (`x[a]` → `[a]`).
+#[must_use]
+pub fn subscript_elements(sub: &ruff_python_ast::ExprSubscript) -> Vec<&ruff_python_ast::Expr> {
+    match sub.slice.as_ref() {
+        ruff_python_ast::Expr::Tuple(tuple) => tuple.elts.iter().collect(),
+        other => vec![other],
+    }
+}
+
 /// Read a file from disk and parse it.
 ///
 /// # Errors

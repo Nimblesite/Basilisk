@@ -13,7 +13,7 @@
 
 use std::collections::HashMap;
 
-use ruff_python_ast::{Expr, Stmt};
+use ruff_python_ast::{Expr, ExprCall, Stmt};
 use ruff_text_size::Ranged;
 
 use basilisk_resolver::ResolvedModule;
@@ -43,10 +43,12 @@ struct ConverterCtx<'a> {
 }
 
 /// Entry point: run all converter-related checks for classes inheriting from a
-/// class-applied `@dataclass_transform` base.
+/// class-applied `@dataclass_transform` base. `calls` is the module's shared
+/// every-position call collection ([NARROWPLAN-CALLSITES]).
 pub(super) fn check_converters(
     module: &ResolvedModule,
     transform_subclasses: &[&str],
+    calls: &[&ExprCall],
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     let Some(parsed) = parse_module(module) else {
@@ -74,7 +76,7 @@ pub(super) fn check_converters(
         let _ = ctx.class_fields.insert(cls.name.to_string(), fields);
     }
 
-    check_constructor_calls(&parsed.ast.body, &ctx, diagnostics);
+    check_constructor_calls(calls, &ctx, diagnostics);
     check_attr_assignments(&ctx, diagnostics);
 }
 
@@ -399,16 +401,16 @@ fn factory_return_type(name: &str, module_stmts: &[Stmt]) -> Option<String> {
 
 /// Check positional constructor-call arguments against each field's input type.
 fn check_constructor_calls(
-    stmts: &[Stmt],
+    calls: &[&ExprCall],
     ctx: &ConverterCtx<'_>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    basilisk_resolver::visit_calls(stmts, &mut |call| {
+    for call in calls {
         let Expr::Name(callee) = call.func.as_ref() else {
-            return;
+            continue;
         };
         let Some(fields) = ctx.class_fields.get(callee.id.as_str()) else {
-            return;
+            continue;
         };
         for (idx, arg) in call.arguments.args.iter().enumerate() {
             let Some(field) = fields.get(idx) else {
@@ -435,7 +437,7 @@ fn check_constructor_calls(
                 ));
             }
         }
-    });
+    }
 }
 
 /// Check `instance.field = value` assignments against the field's input type.

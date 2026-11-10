@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title desc">
+  <title id="title">Read the signature and its provenance</title>
+  <desc id="desc">Three explanatory cards pair a type declaration with its source: a reviewed local stub, bundled typeshed, and a generated best-effort stub.</desc>
+  <rect width="1600" height="1000" fill="#0a0c12"/>
+  <rect x="34" y="34" width="1532" height="932" rx="30" fill="#10141d" stroke="#252d3f" stroke-width="3"/>
+  <text x="82" y="110" fill="#e8500a" font-family="monospace" font-size="28" font-weight="700" letter-spacing="5">PROVENANCE IS EVIDENCE</text>
+  <text x="82" y="178" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="60" font-weight="800">A type is a claim from somewhere</text>
+  <text x="84" y="226" fill="#8892a4" font-family="system-ui,sans-serif" font-size="29">Read the declaration path before deciding how much confidence it deserves.</text>
+
+  <g transform="translate(68 292)">
+    <rect width="460" height="530" rx="28" fill="#123128" stroke="#34d399" stroke-width="4"/>
+    <text x="32" y="58" fill="#86efac" font-family="monospace" font-size="25" font-weight="700">REVIEWED OVERRIDE</text>
+    <rect x="28" y="92" width="404" height="174" rx="17" fill="#0e1c18" stroke="#2f5b4d" stroke-width="3"/>
+    <text x="52" y="137" fill="#d1fae5" font-family="monospace" font-size="21">def fetch_packet(</text>
+    <text x="76" y="176" fill="#d1fae5" font-family="monospace" font-size="21">sensor_id: str, *,</text>
+    <text x="76" y="215" fill="#d1fae5" font-family="monospace" font-size="21">timeout: float = ...</text>
+    <text x="52" y="250" fill="#d1fae5" font-family="monospace" font-size="21">) -&gt; Packet | None</text>
+    <text x="32" y="322" fill="#86efac" font-family="system-ui,sans-serif" font-size="22" font-weight="800">PATH</text>
+    <text x="32" y="362" fill="#f0f2f7" font-family="monospace" font-size="21">stubs/vendor_sensor.pyi</text>
+    <line x1="32" y1="402" x2="428" y2="402" stroke="#2f5b4d" stroke-width="3"/>
+    <text x="32" y="450" fill="#86efac" font-family="system-ui,sans-serif" font-size="22" font-weight="800">REVIEW QUESTION</text>
+    <text x="32" y="482" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="23">What runtime evidence</text>
+    <text x="32" y="512" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="23">supports this promise?</text>
+  </g>
+
+  <g transform="translate(570 292)">
+    <rect width="460" height="530" rx="28" fill="#17232c" stroke="#6ec5e9" stroke-width="4"/>
+    <text x="32" y="58" fill="#7dd3fc" font-family="monospace" font-size="25" font-weight="700">BUNDLED TYPESHED</text>
+    <rect x="28" y="92" width="404" height="174" rx="17" fill="#0e1820" stroke="#365164" stroke-width="3"/>
+    <text x="52" y="145" fill="#e0f2fe" font-family="monospace" font-size="22">def sleep(</text>
+    <text x="76" y="187" fill="#e0f2fe" font-family="monospace" font-size="22">secs: float</text>
+    <text x="52" y="229" fill="#e0f2fe" font-family="monospace" font-size="22">) -&gt; None</text>
+    <text x="32" y="322" fill="#7dd3fc" font-family="system-ui,sans-serif" font-size="22" font-weight="800">IDENTITY</text>
+    <text x="32" y="362" fill="#f0f2f7" font-family="monospace" font-size="20">83c2518a…f887</text>
+    <line x1="32" y1="402" x2="428" y2="402" stroke="#365164" stroke-width="3"/>
+    <text x="32" y="450" fill="#7dd3fc" font-family="system-ui,sans-serif" font-size="22" font-weight="800">REVIEW QUESTION</text>
+    <text x="32" y="482" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="23">Is this the snapshot</text>
+    <text x="32" y="512" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="23">the project selected?</text>
+  </g>
+
+  <g transform="translate(1072 292)">
+    <rect width="460" height="530" rx="28" fill="#2a2015" stroke="#fbbf24" stroke-width="4"/>
+    <text x="32" y="58" fill="#fcd34d" font-family="monospace" font-size="25" font-weight="700">GENERATED · TIER 3</text>
+    <rect x="28" y="92" width="404" height="174" rx="17" fill="#1c1710" stroke="#625039" stroke-width="3"/>
+    <text x="52" y="157" fill="#fef3c7" font-family="monospace" font-size="21">def fetch_packet(</text>
+    <text x="76" y="199" fill="#fef3c7" font-family="monospace" font-size="21">sensor_id, timeout</text>
+    <text x="52" y="241" fill="#fef3c7" font-family="monospace" font-size="21">) -&gt; Any</text>
+    <text x="32" y="322" fill="#fcd34d" font-family="system-ui,sans-serif" font-size="22" font-weight="800">PATH</text>
+    <text x="32" y="362" fill="#f0f2f7" font-family="monospace" font-size="19">.basilisk/stubs/…</text>
+    <line x1="32" y1="402" x2="428" y2="402" stroke="#625039" stroke-width="3"/>
+    <text x="32" y="450" fill="#fcd34d" font-family="system-ui,sans-serif" font-size="22" font-weight="800">REVIEW QUESTION</text>
+    <text x="32" y="482" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="23">Which details did the</text>
+    <text x="32" y="512" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="23">generator fail to recover?</text>
+  </g>
+
+  <rect x="202" y="872" width="1196" height="70" rx="20" fill="#0f1218" stroke="#4a5468" stroke-width="3"/>
+  <text x="800" y="918" text-anchor="middle" fill="#f0f2f7" font-family="system-ui,sans-serif" font-size="28"><tspan fill="#e8500a" font-weight="800">Signature + source:</tspan> together they tell you what was claimed and who owns it.</text>
+</svg>

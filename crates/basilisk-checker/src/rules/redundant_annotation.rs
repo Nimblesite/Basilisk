@@ -11,13 +11,46 @@
 //! z: float = 42      # NO warning — annotation adds information (widening)
 //! ```
 
-use crate::inference::infer_rhs;
 use crate::types::InferredType;
 use basilisk_resolver::ResolvedModule;
 
 use crate::diagnostic::{warning_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
+
+/// The engine's type for the value at `span`, widened to annotation form —
+/// `x: int = 5` reads as `int` against `int`, exactly what "the annotation
+/// repeats what inference already knows" means ([TYPEINF-REDUNDANT]).
+///
+/// Only a value whose type is syntactically self-evident (a literal or a
+/// display) can make an annotation REDUNDANT. A call's result type comes
+/// from its callee, so annotating it adds information — and BSK-0003 demands
+/// exactly that annotation, which BSK-0050 must never contradict.
+fn oracle_widened(
+    types: &super::shared::module_types::ModuleTypes<'_>,
+    span: Option<basilisk_resolver::Span>,
+) -> Option<InferredType> {
+    use ruff_python_ast::Expr;
+    let oracle = types.oracle()?;
+    let span = span?;
+    if !matches!(
+        oracle.expr(span)?,
+        Expr::NumberLiteral(_)
+            | Expr::StringLiteral(_)
+            | Expr::BytesLiteral(_)
+            | Expr::BooleanLiteral(_)
+            | Expr::NoneLiteral(_)
+            | Expr::FString(_)
+            | Expr::List(_)
+            | Expr::Dict(_)
+            | Expr::Set(_)
+            | Expr::Tuple(_)
+    ) {
+        return None;
+    }
+    let ty = oracle.synth_span(span)?;
+    crate::expr_type::is_fully_known(&ty).then(|| crate::expr_type::display_widened(&ty))
+}
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-0050",
@@ -40,9 +73,26 @@ impl Rule for RedundantAnnotationWarning {
     fn check(
         &self,
         module: &ResolvedModule,
+        ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
+        super::check_with_own_types(self, module, ctx, diagnostics);
+    }
+
+    fn check_with_types(
+        &self,
+        module: &ResolvedModule,
+        types: &super::shared::module_types::ModuleTypes<'_>,
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
+        // The declared type comes from the shared cascade
+        // ([TYPEINF-ANNOTATION-RESOLUTION]): an annotation that is redundant
+        // *through an alias* (`type Age = int` then `x: Age = 1`) is redundant
+        // all the same, and a name we cannot resolve is gradual, never a guess.
+        let Some(resolver) = types.annotations() else {
+            return;
+        };
         // Check module-level variables
         module
             .module_vars
@@ -51,16 +101,13 @@ impl Rule for RedundantAnnotationWarning {
             .filter_map(|var| {
                 let annotation_text = extract_annotation(&module.source, var.name_span)?;
 
-                // Use inference system to get RHS type
-                let inferred_type = infer_rhs(&var.rhs_kind);
+                // The value's type comes from the module's shared oracle.
+                let inferred_type = oracle_widened(types, var.rhs_span)?;
 
-                // Skip if inference failed
-                if matches!(inferred_type, InferredType::Unknown) {
-                    return None;
-                }
-
-                // Parse annotation text to InferredType using existing parser
-                let declared_type = InferredType::from_annotation(annotation_text);
+                let declared_type = var
+                    .annotation_span
+                    .and_then(|span| resolver.resolve_span(span))
+                    .or_else(|| resolver.resolve_text(annotation_text))?;
 
                 // Check if annotation is redundant (base type match)
                 if types_match_for_w0050(&inferred_type, &declared_type) {
@@ -96,24 +143,22 @@ impl Rule for RedundantAnnotationWarning {
             .filter_map(|attr| {
                 let annotation_text = extract_annotation(&module.source, attr.name_span)?;
 
-                // Use inference system to get RHS type
-                let inferred_type = infer_rhs(&attr.rhs_kind);
-
-                // For class attributes with literal values, we can infer the type from the source
-                let inferred_type = if matches!(inferred_type, InferredType::Unknown) {
-                    // Try to infer from the source text
-                    infer_type_from_source(&module.source, attr.name_span)
-                } else {
-                    inferred_type
-                };
+                // The value's type comes from the module's shared oracle; a
+                // class-body literal the oracle has no span for falls back to
+                // the source-window inference until the resolver records
+                // attribute value spans.
+                let inferred_type = oracle_widened(types, attr.rhs_span)
+                    .unwrap_or_else(|| infer_type_from_source(&module.source, attr.name_span));
 
                 // Skip if inference still failed
                 if matches!(inferred_type, InferredType::Unknown) {
                     return None;
                 }
 
-                // Parse annotation text to InferredType using existing parser
-                let declared_type = InferredType::from_annotation(annotation_text);
+                let declared_type = attr
+                    .annotation_span
+                    .and_then(|span| resolver.resolve_span(span))
+                    .or_else(|| resolver.resolve_text(annotation_text))?;
 
                 // Check if annotation is redundant (base type match)
                 if types_match_for_w0050(&inferred_type, &declared_type) {
@@ -284,13 +329,14 @@ fn annotation_defines_field(
 }
 
 /// attrs-style class decorators (`@define`, `@frozen`, `@mutable`, `@attr.s`,
-/// `@attr.attrs`, …). The resolver records only the final name segment, so
-/// `@attr.s` arrives as `"s"` and `@attrs.define` as `"define"`. A stray match
-/// merely suppresses a warning — safe — whereas a miss corrupts a model.
+/// `@attr.attrs`, …). The resolver records the decorator's dotted spelling,
+/// so the final name segment is compared: `@attr.s` arrives as `"attr.s"` and
+/// `@attrs.define` as `"attrs.define"`. A stray match merely suppresses a
+/// warning — safe — whereas a miss corrupts a model.
 fn has_attrs_class_decorator(class: &basilisk_resolver::ClassInfo) -> bool {
     class.decorator_spans.iter().any(|(name, _)| {
         matches!(
-            name.as_str(),
+            name.rsplit('.').next().unwrap_or(name.as_str()),
             "define" | "frozen" | "mutable" | "attrs" | "s"
         )
     })

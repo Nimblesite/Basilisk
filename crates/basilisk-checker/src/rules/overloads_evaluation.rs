@@ -39,9 +39,23 @@ impl Rule for OverloadUnionExpansionFailure {
     fn check(
         &self,
         module: &ResolvedModule,
+        ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
+        super::check_with_own_types(self, module, ctx, diagnostics);
+    }
+
+    fn check_with_types(
+        &self,
+        module: &ResolvedModule,
+        types: &super::shared::module_types::ModuleTypes<'_>,
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
+        // Overload membership is a binding question ([#380]).
+        let Some(resolver) = types.annotations() else {
+            return;
+        };
         let source = &module.source;
         let path = &module.path;
 
@@ -54,11 +68,7 @@ impl Rule for OverloadUnionExpansionFailure {
             if !func.is_stub_body {
                 continue;
             }
-            if !func
-                .decorators
-                .iter()
-                .any(|d| d == "overload" || d.ends_with(".overload"))
-            {
+            if !super::shared::overload_decorated(resolver, &func.decorators) {
                 continue;
             }
             overload_groups
@@ -77,14 +87,23 @@ impl Rule for OverloadUnionExpansionFailure {
         };
 
         // Walk each function definition looking for calls inside function bodies.
+        let subtyping = types.subtyping();
         for stmt in &parsed.ast.body {
-            visit_stmt_for_overload_calls(stmt, source, path, &overload_groups, diagnostics);
+            visit_stmt_for_overload_calls(
+                subtyping,
+                stmt,
+                source,
+                path,
+                &overload_groups,
+                diagnostics,
+            );
         }
     }
 }
 
 /// Walk a statement recursively to find function definitions and check their bodies.
 fn visit_stmt_for_overload_calls(
+    subtyping: &crate::subtyping::SubtypingContext,
     stmt: &ruff_python_ast::Stmt,
     source: &str,
     path: &str,
@@ -100,6 +119,7 @@ fn visit_stmt_for_overload_calls(
         // Walk the function body for call expressions.
         for body_stmt in &func_def.body {
             check_stmt_for_calls(
+                subtyping,
                 body_stmt,
                 source,
                 path,
@@ -111,11 +131,25 @@ fn visit_stmt_for_overload_calls(
 
         // Also recurse into nested function definitions.
         for body_stmt in &func_def.body {
-            visit_stmt_for_overload_calls(body_stmt, source, path, overload_groups, diagnostics);
+            visit_stmt_for_overload_calls(
+                subtyping,
+                body_stmt,
+                source,
+                path,
+                overload_groups,
+                diagnostics,
+            );
         }
     } else if let Stmt::ClassDef(cls) = stmt {
         for body_stmt in &cls.body {
-            visit_stmt_for_overload_calls(body_stmt, source, path, overload_groups, diagnostics);
+            visit_stmt_for_overload_calls(
+                subtyping,
+                body_stmt,
+                source,
+                path,
+                overload_groups,
+                diagnostics,
+            );
         }
     }
 }
@@ -142,6 +176,7 @@ fn build_param_type_map(
 
 /// Check a statement inside a function body for calls to overloaded functions.
 fn check_stmt_for_calls(
+    subtyping: &crate::subtyping::SubtypingContext,
     stmt: &ruff_python_ast::Stmt,
     source: &str,
     path: &str,
@@ -154,6 +189,7 @@ fn check_stmt_for_calls(
     match stmt {
         Stmt::Expr(expr_stmt) => {
             check_expr_for_overload_call(
+                subtyping,
                 &expr_stmt.value,
                 source,
                 path,
@@ -164,6 +200,7 @@ fn check_stmt_for_calls(
         }
         Stmt::Assign(assign) => {
             check_expr_for_overload_call(
+                subtyping,
                 &assign.value,
                 source,
                 path,
@@ -175,6 +212,7 @@ fn check_stmt_for_calls(
         Stmt::AnnAssign(ann_assign) => {
             if let Some(val) = &ann_assign.value {
                 check_expr_for_overload_call(
+                    subtyping,
                     val,
                     source,
                     path,
@@ -187,6 +225,7 @@ fn check_stmt_for_calls(
         Stmt::Return(ret) => {
             if let Some(val) = &ret.value {
                 check_expr_for_overload_call(
+                    subtyping,
                     val,
                     source,
                     path,
@@ -203,6 +242,7 @@ fn check_stmt_for_calls(
 /// Check a call expression to see if it is calling an overloaded function
 /// with union-typed arguments that fail expansion.
 fn check_expr_for_overload_call(
+    subtyping: &crate::subtyping::SubtypingContext,
     expr: &ruff_python_ast::Expr,
     source: &str,
     path: &str,
@@ -271,7 +311,7 @@ fn check_expr_for_overload_call(
                 if let Some(param) = overload.parameters.get(arg_idx) {
                     if let Some(ann_span) = param.annotation_span {
                         if let Some(ann_text) = slice_span(source, ann_span) {
-                            return is_type_assignable(member, ann_text);
+                            return is_type_assignable(subtyping, member, ann_text);
                         }
                     }
                 }
@@ -410,38 +450,31 @@ fn split_type_args(inner: &str) -> Vec<&str> {
 }
 
 /// Check if a type is assignable to an annotation.
-fn is_type_assignable(source_type: &str, target_type: &str) -> bool {
+///
+/// Bracket-aware union decomposition stays here (the context's `|` split is
+/// top-level only); every leaf verdict routes through the module-seeded
+/// context ([NARROWPLAN-SUBTYPING]).
+fn is_type_assignable(
+    subtyping: &crate::subtyping::SubtypingContext,
+    source_type: &str,
+    target_type: &str,
+) -> bool {
     let src = source_type.trim();
     let tgt = target_type.trim();
-
-    if src == tgt {
-        return true;
-    }
-
-    // `Any` accepts everything.
-    if tgt == "Any" || src == "Any" {
-        return true;
-    }
-
-    // `object` accepts everything.
-    if tgt == "object" {
-        return true;
-    }
 
     // Union in target: X | Y
     if tgt.contains('|') {
         return split_pipe_union(tgt)
             .iter()
-            .any(|part| is_type_assignable(src, part));
+            .any(|part| is_type_assignable(subtyping, src, part));
     }
 
     // `Union[X, Y]` in target.
     if let Some(inner) = tgt.strip_prefix("Union[").and_then(|s| s.strip_suffix(']')) {
         return split_type_args(inner)
             .iter()
-            .any(|part| is_type_assignable(src, part));
+            .any(|part| is_type_assignable(subtyping, src, part));
     }
 
-    // Numeric tower via the shared core ([NARROWPLAN-SUBTYPING]).
-    crate::subtyping::name_subtype(src, tgt)
+    subtyping.is_subtype(src, tgt)
 }

@@ -586,6 +586,9 @@ fn check_alias_parameterization(
         .iter()
         .map(|tv| tv.name.as_str())
         .collect();
+    // Bound verdicts route through the module-seeded context
+    // ([NARROWPLAN-SUBTYPING]).
+    let subtyping = crate::subtyping::module_context(module);
 
     // Check function parameter annotations
     for func in &module.functions {
@@ -601,6 +604,7 @@ fn check_alias_parameterization(
             };
             let ann_text = ann_text.trim();
             check_single_annotation(
+                &subtyping,
                 ann_text,
                 ann_span,
                 alias_map,
@@ -621,6 +625,7 @@ fn check_alias_parameterization(
         };
         let ann_text = ann_text.trim();
         check_single_annotation(
+            &subtyping,
             ann_text,
             ann_span,
             alias_map,
@@ -633,6 +638,7 @@ fn check_alias_parameterization(
 
 /// Check a single annotation for alias parameterization errors.
 fn check_single_annotation(
+    subtyping: &crate::subtyping::SubtypingContext,
     ann_text: &str,
     ann_span: Span,
     alias_map: &std::collections::HashMap<String, AliasInfo>,
@@ -719,7 +725,7 @@ fn check_single_annotation(
                         if typevar_names.contains(arg_trimmed) {
                             continue;
                         }
-                        if !is_assignable_to_bound(arg_trimmed, bound) {
+                        if !is_assignable_to_bound(subtyping, arg_trimmed, bound) {
                             diagnostics.push(error_diagnostic_owned(
                                 CODE.clone(),
                                 format!(
@@ -744,13 +750,17 @@ fn check_single_annotation(
 
 /// Check if a type argument is assignable to a `TypeVar` bound.
 ///
-/// Numeric-tower bounds delegate to the shared core
+/// Numeric-tower bounds route through the module-seeded context
 /// ([NARROWPLAN-SUBTYPING], parity pinned in
 /// `tests/subtyping_context_tests.rs`); any other bound accepts
 /// conservatively.
-fn is_assignable_to_bound(arg: &str, bound: &str) -> bool {
+fn is_assignable_to_bound(
+    subtyping: &crate::subtyping::SubtypingContext,
+    arg: &str,
+    bound: &str,
+) -> bool {
     match bound {
-        "int" | "float" | "complex" => crate::subtyping::name_subtype(arg, bound),
+        "int" | "float" | "complex" => subtyping.is_subtype(arg, bound),
         _ => true,
     }
 }

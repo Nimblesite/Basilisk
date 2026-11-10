@@ -5,8 +5,17 @@
 # python/typing FRESH and runs the suite's OWN harness (see
 # conformance/run_conformance.py). The downloaded fixtures under conformance/tests/
 # and the fresh clone under target/ are git-ignored and already skipped by Ruff's
-# respect-gitignore default, so no extra excludes are needed.
-extend-exclude = []
+# respect-gitignore default.
+#
+# benchmarks/torture/cases/ IS excluded: those files are conformance-style
+# SCORING FIXTURES where the line a statement sits on is part of the test. Each
+# `# E` marks a line that must draw an error, and an error on any unmarked line
+# is a false positive ([CHKARCH-TESTING-BENCH] scoreboard, run_torture.py). A
+# one-line `def f() -> int: return <bad>` deliberately collapses the two
+# diagnostics that construct draws onto the single marked line; reformatting it
+# into def + body moves one diagnostic onto an unmarked line and fails the
+# scoreboard. Formatting is not a safe transformation on line-scored data.
+extend-exclude = ["benchmarks/torture/cases"]
 
 # Ruff 0.16 added `*.md` to the default `include`, which formats Python fenced
 # blocks inside Markdown. That is out of scope here: our prose (docs/specs/,

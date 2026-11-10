@@ -56,18 +56,35 @@ ok "debugpy: $(python3 -c 'import debugpy; print(debugpy.__version__)' 2>&1)"
 
 cd "$REPO_ROOT/basilisk.nvim"
 
-# Ensure plenary.nvim is available.
-if [[ ! -d /tmp/plenary.nvim ]]; then
-    git clone --depth 1 https://github.com/nvim-lua/plenary.nvim /tmp/plenary.nvim
-fi
-# Ensure nvim-dap is available.
-if [[ ! -d /tmp/nvim-dap ]]; then
-    git clone --depth 1 https://github.com/mfussenegger/nvim-dap /tmp/nvim-dap
-fi
-# Ensure mini.nvim is available (for screenshot tests).
-if [[ ! -d /tmp/mini.nvim ]]; then
-    git clone --depth 1 https://github.com/echasnovski/mini.nvim /tmp/mini.nvim
-fi
+# Test plugins live in /tmp (and are restored from the CI cache), so a
+# directory existing proves nothing: macOS's /tmp reaper deletes stale FILES and
+# leaves the empty directory tree behind, and a cache restore can be partial the
+# same way. A hollow checkout fails far away from here — plenary's
+# `:PlenaryBustedDirectory` simply does not exist and every spec is "not an
+# editor command". So each plugin is validated by a file it MUST provide and
+# re-cloned when that file is missing.
+ensure_plugin() {
+    local dir="$1" proof="$2" repo="$3"
+    if [[ -f "$dir/$proof" ]]; then
+        return 0
+    fi
+    if [[ -e "$dir" ]]; then
+        warn "$dir is present but incomplete (no $proof) — re-cloning"
+        rm -rf "$dir"
+    fi
+    git clone --depth 1 "$repo" "$dir"
+    if [[ ! -f "$dir/$proof" ]]; then
+        echo -e "${RED}✗ $repo cloned but $proof is missing${RESET}" >&2
+        exit 1
+    fi
+}
+
+ensure_plugin /tmp/plenary.nvim plugin/plenary.vim \
+    https://github.com/nvim-lua/plenary.nvim
+ensure_plugin /tmp/nvim-dap plugin/dap.lua \
+    https://github.com/mfussenegger/nvim-dap
+ensure_plugin /tmp/mini.nvim lua/mini/test.lua \
+    https://github.com/echasnovski/mini.nvim
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
 

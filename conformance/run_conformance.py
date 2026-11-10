@@ -498,6 +498,54 @@ def resolve_suite(opts: dict, dest: Path) -> tuple[Path, dict]:
     return clone_suite(opts["ref"], dest)
 
 
+def assert_graded_commit_is_live_main(commit: dict) -> None:
+    """FAIL the gate unless the graded suite IS the live ``python/typing@main`` tip.
+
+    The gate exists to catch the moment upstream adds a test we do not pass, so
+    grading anything other than the CURRENT tip silently defeats it. A stale
+    tree can reach the harness three ways — ``--ref`` naming another branch/tag,
+    ``--suite-dir`` pointing at a checkout from an earlier run, or
+    ``--reuse-clone`` re-entering one — and all three would otherwise score
+    100% against yesterday's tests and report a pass.
+
+    So in gate mode the graded HEAD is compared against ``git ls-remote`` for
+    ``main``, live. A mismatch, an unreachable remote, or a missing ref all
+    FAIL: an unverifiable score is not a passing score ([CHKARCH-CONFORMANCE]).
+    """
+    try:
+        out = subprocess.run(
+            ["git", "ls-remote", UPSTREAM_URL, f"refs/heads/{UPSTREAM_REF}"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        ).stdout.strip()
+    except (subprocess.CalledProcessError, OSError, subprocess.TimeoutExpired) as exc:
+        raise RuntimeError(
+            f"gate cannot verify the graded commit against {UPSTREAM_REPO}@"
+            f"{UPSTREAM_REF}: {exc}. The conformance gate refuses to pass a score "
+            "it cannot prove was measured against the current suite."
+        ) from exc
+    live = out.split("\t", 1)[0].strip() if out else ""
+    if not live:
+        raise RuntimeError(
+            f"gate could not resolve {UPSTREAM_REPO}@{UPSTREAM_REF} — refusing to "
+            "grade against an unverifiable suite."
+        )
+    if live != commit["sha"]:
+        raise RuntimeError(
+            "STALE CONFORMANCE SUITE — the gate graded "
+            f"{commit['short']} ({commit['date']}) but {UPSTREAM_REPO}@"
+            f"{UPSTREAM_REF} is now {live[:7]}. Every gate run must score the "
+            "CURRENT suite, or a newly added upstream test can never fail us. "
+            "Re-run without --suite-dir/--reuse-clone/--ref so the suite is "
+            "cloned fresh."
+        )
+    print(
+        f"  gate suite verified: {UPSTREAM_REPO}@{commit['short']} is {UPSTREAM_REF} tip"
+    )
+
+
 def _run_with_suite(opts: dict, root: Path, suite_dir: Path) -> int:
     """Run one phase against the suite directory owned by the caller."""
     conf_dir, commit = resolve_suite(opts, suite_dir)
@@ -532,6 +580,10 @@ def _run_with_suite(opts: dict, root: Path, suite_dir: Path) -> int:
 
     if not opts["gate"]:
         return 0
+
+    # The score only means something if it was measured against the CURRENT
+    # suite — verify that before trusting it ([CHKARCH-CONFORMANCE]).
+    assert_graded_commit_is_live_main(commit)
 
     # The gate is the kept assert_wheel_conformance.py, run over the harness's OWN
     # results (100% pass, 0 false positives, from coverage-thresholds.json). It

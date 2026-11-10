@@ -30,12 +30,20 @@ pub(crate) fn target_names(target: &Expr, out: &mut Vec<String>) {
 }
 
 /// Collect every name BOUND anywhere in a statement list — assignment and
-/// loop targets, `with ... as` names, `except ... as` names — stopping at
-/// nested function/class boundaries (their bindings are their own scope's).
+/// loop targets, `with ... as` names, `except ... as` names, and PEP 572
+/// walrus targets in any expression position — stopping at nested
+/// function/class boundaries (their bindings are their own scope's).
 ///
 /// Conservative direction: reporting MORE names than strictly rebound only
 /// resets narrows early (sound); missing one would leave a stale narrow.
 pub(crate) fn bound_names(stmts: &[Stmt], out: &mut HashSet<String>) {
+    // A walrus binds from inside an *expression*, so no statement shape
+    // reveals it — the workspace's one collector finds them
+    // ([TYPEINF-NARROWING-ASSIGN]).
+    out.extend(basilisk_resolver::collect_walrus_targets(
+        stmts,
+        basilisk_resolver::Reach::Any,
+    ));
     for stmt in stmts {
         bound_names_in_stmt(stmt, out);
     }
@@ -136,5 +144,35 @@ mod tests {
     #[test]
     fn attribute_and_subscript_targets_bind_nothing() {
         assert!(bound_in("obj.attr = 1\nxs[0] = 2\n").is_empty());
+    }
+
+    /// [PEP 572](https://peps.python.org/pep-0572/) assignment expressions
+    /// bind their target in the ENCLOSING scope — in an `if`/`while` test, a
+    /// call argument, a comprehension, or a plain expression statement. A
+    /// walrus hides inside an *expression*, so a statement-shape-only scan
+    /// misses it, and [TYPEINF-NARROWING-ASSIGN] says a missed binding
+    /// leaves a stale narrow on a name that has already been rebound.
+    #[test]
+    fn walrus_targets_are_bindings_in_every_expression_position() {
+        let names = bound_in(concat!(
+            "if (a := f()):\n",
+            "    pass\n",
+            "while (b := g()):\n",
+            "    pass\n",
+            "print(c := h())\n",
+            "d = [e := 1 for _ in xs]\n",
+            "def inner():\n",
+            "    hidden = (nested := 1)\n",
+        ));
+        for expected in ["a", "b", "c", "d", "e"] {
+            assert!(
+                names.contains(expected),
+                "walrus target `{expected}` must count as a binding: {names:?}"
+            );
+        }
+        assert!(
+            !names.contains("nested"),
+            "a walrus inside a nested function binds in THAT scope: {names:?}"
+        );
     }
 }

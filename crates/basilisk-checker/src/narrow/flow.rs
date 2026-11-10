@@ -21,7 +21,7 @@ use crate::types::InferredType;
 
 use super::env::NarrowEnv;
 use super::guards::{guard_outcomes_in, GuardOutcome};
-use super::reachability::{stmt_diverges, stmts_diverge};
+use super::reachability::stmt_diverges;
 use super::rebind::{bound_names, target_names};
 
 /// One narrowed name-use site: the location and the type visible there.
@@ -75,6 +75,16 @@ pub fn analyse_function_in(
             .map(|guard| ((guard.span.start, guard.span.end), guard))
             .collect(),
         ctx,
+        // The module's callable interfaces convert to `Ty` ONCE, here, and
+        // stay in the engine's outermost scope for the whole walk
+        // ([NARROWPLAN-INTEGRATION]).
+        engine: BidirEngine::new(
+            ctx.callables
+                .iter()
+                .map(|(name, ty)| (name.clone(), Ty::from_inferred(ty)))
+                .collect(),
+        ),
+        diverges: HashMap::new(),
         result: FlowResult::default(),
     };
     walker.walk_stmts(body);
@@ -86,6 +96,14 @@ struct FlowWalker<'g> {
     env: NarrowEnv,
     guards_by_span: HashMap<(u32, u32), &'g NarrowingGuard>,
     ctx: &'g super::guards::NarrowContext,
+    /// One engine for the whole walk. Its outermost scope holds the module's
+    /// callable interfaces, converted once at construction; each synthesis
+    /// pushes only the currently-visible flow bindings on top and resets the
+    /// solver, so no per-expression cost scales with module size
+    /// ([NARROWPLAN-INTEGRATION]).
+    engine: BidirEngine,
+    /// Divergence answers by statement span — see [`FlowWalker::one_diverges`].
+    diverges: HashMap<(u32, u32), bool>,
     result: FlowResult,
 }
 
@@ -455,42 +473,50 @@ impl FlowWalker<'_> {
     /// binding — the SAME engine the definition-level queries run
     /// ([TYPEINF-TARGET-BIDIRECTIONAL]).
     ///
-    /// # Rebuild the seed BEFORE wiring this into a rule ([NARROWPLAN-INTEGRATION])
-    ///
-    /// Every call clones the WHOLE module's callables plus a full
-    /// [`NarrowEnv::visible`] snapshot (itself `declared` + `scope` + every
-    /// open frame) into a fresh map, then discards the engine's solver state
-    /// via `finish()` — so per-expression cost scales with module size and
-    /// nothing amortizes. That is survivable only because the flow walker has
-    /// no production consumer yet and so no benchmark gate times it; the
-    /// plan makes fixing it a precondition for the first rule migration,
-    /// not a follow-up. Do not wire a rule to this without doing that first.
-    fn synth_type(&self, expr: &Expr) -> InferredType {
-        let mut globals: HashMap<String, Ty> = self
-            .ctx
-            .callables
-            .iter()
-            .map(|(name, ty)| (name.clone(), Ty::from_inferred(ty)))
+    /// The callable seed lives in [`FlowWalker::engine`]'s outermost scope for
+    /// the whole walk; only the flow bindings — which are function-sized, not
+    /// module-sized — are pushed as an overlay per expression, and
+    /// [`BidirEngine::solve_expression`] resets the solver in place rather
+    /// than throwing the engine away. That is what makes the walker cheap
+    /// enough to sit behind a live rule ([NARROWPLAN-INTEGRATION]).
+    fn synth_type(&mut self, expr: &Expr) -> InferredType {
+        let overlay = self
+            .env
+            .visible()
+            .into_iter()
+            .map(|(name, ty)| (name, Ty::from_inferred(&ty)))
             .collect();
-        for (name, ty) in self.env.visible() {
-            let _ = globals.insert(name, Ty::from_inferred(&ty));
-        }
-        let mut engine = BidirEngine::new(globals);
-        let ty = engine.synth(expr);
-        let solution = engine.finish();
+        self.engine.push_scope_with(overlay);
+        let ty = self.engine.synth(expr);
+        let solution = self.engine.solve_expression();
+        self.engine.pop_scope();
         ty.to_inferred(&solution.vars)
     }
 
-    /// Inference-driven divergence of a statement list.
-    fn body_diverges(&self, stmts: &[Stmt]) -> bool {
-        let mut synth = |expr: &Expr| self.synth_type(expr);
-        stmts_diverge(stmts, &mut synth)
+    /// Inference-driven divergence of a statement list: only its last
+    /// statement can carry control past the list.
+    fn body_diverges(&mut self, stmts: &[Stmt]) -> bool {
+        stmts.last().is_some_and(|last| self.one_diverges(last))
     }
 
-    /// Inference-driven divergence of one statement.
-    fn one_diverges(&self, stmt: &Stmt) -> bool {
+    /// Inference-driven divergence of one statement, memoized by span.
+    ///
+    /// `walk_if` probes a body's divergence and then walks that same body,
+    /// whose `walk_stmts` probes each statement again — so without a memo the
+    /// same statements are re-synthesized once per enclosing branch. The memo
+    /// is keyed by span alone because the only two synthesis-dependent forms
+    /// are a call statement typed `Never` and a `while` test proven to be a
+    /// truthy literal, neither of which a narrowing frame can change.
+    fn one_diverges(&mut self, stmt: &Stmt) -> bool {
+        let range = stmt.range();
+        let key = (u32::from(range.start()), u32::from(range.end()));
+        if let Some(&cached) = self.diverges.get(&key) {
+            return cached;
+        }
         let mut synth = |expr: &Expr| self.synth_type(expr);
-        stmt_diverges(stmt, &mut synth)
+        let answer = stmt_diverges(stmt, &mut synth);
+        let _ = self.diverges.insert(key, answer);
+        answer
     }
 
     /// Record every narrowed `Name` read inside `expr`.

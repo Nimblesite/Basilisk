@@ -907,3 +907,91 @@ def f(x: A | B) -> None:
         "with @final A, the complement must be B: {final_uses:?}"
     );
 }
+
+/// [NARROWPLAN-INTEGRATION]: the module's callable interfaces are converted
+/// once and held in the engine's outermost scope for the whole walk, so a
+/// module full of callables the function never mentions must produce EXACTLY
+/// the same narrowed uses and unreachable ranges as an empty module. This is
+/// the correctness half of making the seed cheap: amortizing it must not let
+/// module-level names leak into a function's flow types.
+#[test]
+fn unrelated_module_callables_never_change_the_walk() {
+    use basilisk_checker::narrow::{analyse_function_in, NarrowContext};
+    use basilisk_checker::types::CallableInfo;
+
+    // Nested branches so the divergence probe and the body walk ask about the
+    // same statements repeatedly — the memoized path.
+    let source = r"
+def f(x: int | None, y: str | None) -> int:
+    if x is None:
+        if y is None:
+            return 0
+        z = y
+        return 1
+    w = x
+    return w
+";
+    let parsed = basilisk_parser::parse_source(source.to_owned(), "flow.py".to_owned())
+        .expect("fixture parses");
+    let resolved = basilisk_resolver::resolve(&parsed).expect("fixture resolves");
+    let function = resolved.functions.first().expect("function");
+    let declared: HashMap<String, InferredType> = [
+        (
+            "x".to_owned(),
+            InferredType::Optional(Box::new(InferredType::Int)),
+        ),
+        (
+            "y".to_owned(),
+            InferredType::Optional(Box::new(InferredType::Str)),
+        ),
+    ]
+    .into_iter()
+    .collect();
+    let reparsed = ruff_python_parser::parse_module(source).expect("reparses");
+    let body = reparsed
+        .syntax()
+        .body
+        .iter()
+        .find_map(|stmt| match stmt {
+            Stmt::FunctionDef(def) => Some(def.body.clone()),
+            _ => None,
+        })
+        .expect("body");
+
+    let empty_module = analyse_function_in(
+        &body,
+        NarrowEnv::new(declared.clone()),
+        &function.narrowing_guards,
+        &NarrowContext::default(),
+    );
+
+    let mut crowded = NarrowContext::default();
+    for index in 0..500 {
+        let _ = crowded.callables.insert(
+            format!("unused{index}"),
+            InferredType::Callable(CallableInfo {
+                param_types: vec![],
+                return_type: Box::new(InferredType::Never),
+            }),
+        );
+    }
+    let crowded_module = analyse_function_in(
+        &body,
+        NarrowEnv::new(declared),
+        &function.narrowing_guards,
+        &crowded,
+    );
+
+    assert_eq!(
+        crowded_module.narrowed_uses, empty_module.narrowed_uses,
+        "500 unmentioned module callables must not alter narrowing"
+    );
+    assert_eq!(
+        crowded_module.unreachable_ranges, empty_module.unreachable_ranges,
+        "500 unmentioned module callables must not alter reachability"
+    );
+    assert!(
+        !empty_module.narrowed_uses.is_empty(),
+        "the fixture must actually narrow something, or it proves nothing"
+    );
+}

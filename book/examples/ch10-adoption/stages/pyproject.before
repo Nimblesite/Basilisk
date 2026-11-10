@@ -1,0 +1,11 @@
+[project]
+name = "signal-box-adoption"
+version = "0.1.0"
+requires-python = ">=3.9"
+
+[tool.basilisk]
+include = ["src", "tests"]
+typeshed-commit = "83c2518a9e6abbda0c44592c3483de459198f887"
+
+[tool.basilisk.rule-tags]
+strictness = "error"

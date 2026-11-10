@@ -5,27 +5,28 @@
 //! type is checked against every applicable overload of the active
 //! `builtins.pyi` declaration ([STUBRES-PYI] #288) — never against a hand table.
 
-use basilisk_resolver::{CallSite, ResolvedModule, RhsKind};
+use basilisk_resolver::{CallSite, ResolvedModule};
 use basilisk_stubs::StubFunction;
 
 use crate::diagnostic::Diagnostic;
+use crate::rules::shared::judge::TypeJudge;
 use crate::types::InferredType;
 
-use super::arg_types::{satisfies_str_iterable, ScopedTypes};
-use super::{arg_rhs_mismatch, make_diagnostic};
+use super::arg_types::{may_be_str, satisfies_str_iterable};
+use super::make_diagnostic;
 
 /// Validate arguments to bound built-in methods against all applicable
 /// overloads from the active `builtins.pyi` declaration ([STUBRES-PYI] #288).
 ///
-/// Arguments are judged by their resolved *type* ([`ScopedTypes`]), not by the
-/// syntactic shape of the expression, so a display of `str`-typed elements is
-/// accepted and a `list[int]` name is rejected (GitHub #356).
+/// Arguments are judged by the type the module's engine synthesises for them
+/// ([`TypeJudge`], [NARROWPLAN-INTEGRATION] Step 3), not by the syntactic
+/// shape of the expression, so a display of `str`-typed elements is accepted
+/// and a `list[int]` name is rejected (GitHub #356).
 pub(super) fn check_builtin_method_argument_types(
     module: &ResolvedModule,
+    judge: &TypeJudge<'_, '_>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    // Built once, and only for a module that actually calls a built-in method.
-    let mut scoped: Option<ScopedTypes<'_>> = None;
     for call in &module.calls {
         let declarations: Vec<_> = module
             .builtin_methods_for_call(call)
@@ -37,11 +38,10 @@ pub(super) fn check_builtin_method_argument_types(
         if declarations.is_empty() {
             continue;
         }
-        let types = scoped.get_or_insert_with(|| ScopedTypes::from_module(module));
         let argument_types: Vec<InferredType> = call
             .args
             .iter()
-            .map(|(rhs, span)| types.argument_type(*span, rhs))
+            .map(|(_, span)| judge.inferred(Some(*span)))
             .collect();
         diagnostics.extend(incompatible_argument(
             call,
@@ -66,14 +66,17 @@ fn incompatible_argument(
     {
         return None;
     }
-    let (index, ((_, span), argument)) = call.args.iter().zip(argument_types).enumerate().find(
-        |(index, ((rhs, _), argument))| {
-            declarations.iter().all(|declaration| {
-                stub_parameter_annotation(declaration, *index)
-                    .is_some_and(|annotation| !stub_argument_compatible(annotation, rhs, argument))
-            })
-        },
-    )?;
+    let (index, ((_, span), argument)) =
+        call.args
+            .iter()
+            .zip(argument_types)
+            .enumerate()
+            .find(|(index, (_, argument))| {
+                declarations.iter().all(|declaration| {
+                    stub_parameter_annotation(declaration, *index)
+                        .is_some_and(|annotation| !stub_argument_compatible(annotation, argument))
+                })
+            })?;
     let expected = expected_annotations(declarations, index);
     let description = describe_argument(argument, &expected);
     Some(make_diagnostic(
@@ -99,9 +102,9 @@ fn stub_accepts_call(
         .iter()
         .zip(argument_types)
         .enumerate()
-        .all(|(index, ((rhs, _), argument))| {
+        .all(|(index, (_, argument))| {
             stub_parameter_annotation(declaration, index)
-                .is_none_or(|annotation| stub_argument_compatible(annotation, rhs, argument))
+                .is_none_or(|annotation| stub_argument_compatible(annotation, argument))
         })
 }
 
@@ -134,11 +137,10 @@ fn describe_argument(argument: &InferredType, expected: &str) -> String {
     }
 }
 
-/// Is one argument compatible with the annotation an overload declares for it?
-///
-/// `argument` is the resolved type of the expression; `rhs` its syntactic shape,
-/// still consulted by the literal-kind comparison in [`arg_rhs_mismatch`].
-fn stub_argument_compatible(annotation: &str, rhs: &RhsKind, argument: &InferredType) -> bool {
+/// Is one argument's resolved type compatible with the annotation an overload
+/// declares for it? Only a positively-known mismatch rejects
+/// ([CHKARCH-CONFORMANCE-MODE]).
+fn stub_argument_compatible(annotation: &str, argument: &InferredType) -> bool {
     let normalized = annotation.replace(' ', "");
     if normalized == "Any" || normalized == "object" {
         return true;
@@ -147,10 +149,29 @@ fn stub_argument_compatible(annotation: &str, rhs: &RhsKind, argument: &Inferred
         return satisfies_str_iterable(argument);
     }
     if normalized.contains("LiteralString") {
-        return matches!(
-            rhs,
-            RhsKind::StrLiteral | RhsKind::Other | RhsKind::CallExpr
-        );
+        return may_be_str(argument);
     }
-    arg_rhs_mismatch(annotation, rhs, None).is_none()
+    !scalar_annotation_mismatch(annotation, argument)
+}
+
+/// A positively-known scalar argument type that can never satisfy a scalar
+/// stub annotation — the type-level restatement of the builtin scalar
+/// incompatibilities (`str` where `int` is declared, and so on).
+fn scalar_annotation_mismatch(annotation: &str, argument: &InferredType) -> bool {
+    let base = annotation
+        .split('[')
+        .next()
+        .unwrap_or(annotation)
+        .trim()
+        .to_ascii_lowercase();
+    let Some(kind) = super::scalar_type_name(argument) else {
+        return false;
+    };
+    matches!(
+        (base.as_str(), kind),
+        ("int" | "bool" | "float" | "bytes", "str")
+            | ("int" | "str" | "float", "bytes")
+            | ("int" | "str" | "bool", "float")
+            | ("str" | "bytes", "int")
+    )
 }

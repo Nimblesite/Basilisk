@@ -74,7 +74,7 @@ pub fn infer_parameters(
     let parameters = param_vars
         .into_iter()
         .map(|(name, var)| {
-            let inferred = var.map(|id| solution.vars.resolve(id));
+            let inferred = var.map(|id| solution.vars.resolve_with_inflow(id));
             (name, inferred)
         })
         .collect();
@@ -203,6 +203,11 @@ def f(p):
         assert_eq!(name, "p");
         let ty = ty.clone().expect("inferred");
         assert!(
+            !matches!(ty, InferredType::Unknown),
+            "call-site lower bounds must produce a REAL type, not the \
+             vacuously-admitting Unknown"
+        );
+        assert!(
             InferredType::Literal(LiteralValue::Int(1)).is_assignable_to(&ty)
                 && InferredType::Literal(LiteralValue::Int(2)).is_assignable_to(&ty),
             "call-site arguments must be admitted by the inferred type, got {ty:?}"
@@ -258,7 +263,9 @@ pub fn imported_callable_globals(
             let ty = match symbol.kind {
                 ExternalSymbolKind::Function => {
                     InferredType::Callable(crate::types::CallableInfo {
-                        param_types: Vec::new(),
+                        // An imported function's parameters are not modelled
+                        // here — gradual tail, not "takes no arguments".
+                        param_types: crate::types::gradual_params(Vec::new()),
                         return_type: Box::new(
                             symbol
                                 .type_annotation

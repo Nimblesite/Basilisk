@@ -1,0 +1,11 @@
+"""Deliberately incomplete legacy decoder."""
+
+from typing import Any
+
+
+def decode_packet(raw):
+    """Convert a vendor payload into the shape used by Signal Box."""
+    return dict(
+        sensor_id=str(raw["sensor_id"]),
+        celsius=float(raw["celsius"]),
+    )

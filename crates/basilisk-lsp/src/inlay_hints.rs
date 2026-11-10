@@ -2,24 +2,29 @@
 //!
 //! Inlay Hints handler: inferred types and parameter names.
 
+use basilisk_checker::expr_type::ModuleSpanTypes;
 use basilisk_resolver::{ResolvedModule, VariableInfo};
 use tower_lsp::lsp_types::{InlayHint, InlayHintKind, InlayHintLabel};
 
-use crate::util::{byte_offset_to_position, infer_return_type_display, rhs_or_expr_type_display};
+use crate::util::{byte_offset_to_position, infer_return_type_display, span_type_display};
 
 /// Compute inlay hints for a resolved module.
 #[must_use]
 pub fn inlay_hints(resolved: &ResolvedModule, source: &str) -> Vec<InlayHint> {
     let mut hints = Vec::new();
 
+    // One span-indexed oracle for every hint — the SAME engine behind checker
+    // diagnostics ([NARROWPLAN-INTEGRATION] Step 5).
+    let types = ModuleSpanTypes::build(resolved);
+
     // Variable type hints — unannotated variables with inferable types.
-    variable_type_hints(resolved, source, &mut hints);
+    variable_type_hints(resolved, &types, source, &mut hints);
 
     // Parameter name hints at call sites.
     parameter_name_hints(resolved, source, &mut hints);
 
     // Return type hints for functions without explicit annotations.
-    function_return_type_hints(resolved, source, &mut hints);
+    function_return_type_hints(resolved, &types, source, &mut hints);
 
     // Generic type parameter hints — variance, bounds, constraints.
     generic_type_param_hints(resolved, source, &mut hints);
@@ -28,27 +33,33 @@ pub fn inlay_hints(resolved: &ResolvedModule, source: &str) -> Vec<InlayHint> {
 }
 
 /// Add type hints for unannotated variables — module-level and function-local.
-fn variable_type_hints(resolved: &ResolvedModule, source: &str, hints: &mut Vec<InlayHint>) {
-    push_variable_type_hints(&resolved.module_vars, source, hints);
+fn variable_type_hints(
+    resolved: &ResolvedModule,
+    types: &ModuleSpanTypes<'_>,
+    source: &str,
+    hints: &mut Vec<InlayHint>,
+) {
+    push_variable_type_hints(&resolved.module_vars, types, source, hints);
 
     // Local variables within functions (implements the [#68] fix: `local_vars`
     // is annotated-only, so unannotated locals live in `local_unannotated_vars`).
     for func in &resolved.functions {
-        push_variable_type_hints(&func.local_unannotated_vars, source, hints);
+        push_variable_type_hints(&func.local_unannotated_vars, types, source, hints);
     }
 }
 
 /// Push a `: <type>` hint for each unannotated variable with an inferable RHS type.
-fn push_variable_type_hints(vars: &[VariableInfo], source: &str, hints: &mut Vec<InlayHint>) {
+fn push_variable_type_hints(
+    vars: &[VariableInfo],
+    types: &ModuleSpanTypes<'_>,
+    source: &str,
+    hints: &mut Vec<InlayHint>,
+) {
     for var in vars {
         if var.has_annotation {
             continue;
         }
-        let type_name = inlay_type_display(&rhs_or_expr_type_display(
-            &var.rhs_kind,
-            var.rhs_span,
-            source,
-        ));
+        let type_name = inlay_type_display(&span_type_display(types, var.rhs_span));
         if type_name.is_empty() {
             continue;
         }
@@ -112,14 +123,19 @@ fn parameter_name_hints(resolved: &ResolvedModule, source: &str, hints: &mut Vec
 }
 
 /// Add return type hints for functions without explicit return annotations.
-fn function_return_type_hints(resolved: &ResolvedModule, source: &str, hints: &mut Vec<InlayHint>) {
+fn function_return_type_hints(
+    resolved: &ResolvedModule,
+    types: &ModuleSpanTypes<'_>,
+    source: &str,
+    hints: &mut Vec<InlayHint>,
+) {
     for func in &resolved.functions {
         // Skip functions that already have an explicit return annotation.
         if func.return_annotation_span.is_some() {
             continue;
         }
 
-        let inferred = inlay_type_display(&infer_return_type_display(func));
+        let inferred = inlay_type_display(&infer_return_type_display(types, func));
         if inferred.is_empty() {
             continue;
         }

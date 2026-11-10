@@ -56,7 +56,36 @@ responsibility to cover.
   `VSCODE_MARKETPLACE_PAT`, `OPEN_VSX_PAT`, and mirror credentials, then install
   each published artifact on a clean machine.
 - [ ] **`[HYBRID]`** Submit the standalone `Nimblesite/basilisk-zed` mirror to
-  `zed-industries/extensions`; automation already renders and tests that mirror.
+  [`zed-industries/extensions`](https://github.com/zed-industries/extensions).
+  Never submitted to date — Basilisk does not appear in that repo's
+  `extensions.toml`, so the Zed extensions view cannot find it and
+  [install-zed](../../website/src/docs/install-zed.md) documents the dev-extension
+  flow until the listing lands. Automation already renders, version-stamps, and
+  WASM-gates the mirror ([ZED-MIRROR](../specs/ZED-SPEC.md#ZED-MIRROR)); only the
+  one-time human-reviewed PR is missing. The `basilisk` extension ID is
+  unclaimed upstream.
+
+  **Blocked until the next tagged release.** The published mirror at `v0.39.0`
+  still carries the `languages/python/` tree that shadows Zed's built-in Python
+  ([ZED-TREESITTER](../specs/ZED-SPEC.md#ZED-TREESITTER)); listing it would ship
+  that regression to every installer. Cut a release first so `publish-zed`
+  pushes a mirror without it, then pin *that* commit.
+
+  Procedure, once the fixed mirror is tagged:
+  1. Fork `zed-industries/extensions`.
+  2. `git submodule add https://github.com/Nimblesite/basilisk-zed.git extensions/basilisk`
+     (HTTPS, not SSH — the registry requires it), then check the submodule out at
+     the release tag so the pinned commit is the version being listed.
+  3. Add to `extensions.toml`:
+     `[basilisk]` / `submodule = "extensions/basilisk"` / `version = "<tag without v>"`.
+     The version MUST equal `extension.toml`'s stamped version.
+  4. `pnpm sort-extensions` to normalise ordering in `extensions.toml` and
+     `.gitmodules`.
+  5. Open the PR. A root `LICENSE` is mandatory for listings (MIT is already
+     rendered into the mirror by `render-zed-mirror.sh`).
+
+  Subsequent version bumps amend the submodule pointer and the `version` field —
+  the same PR shape, or the community update action.
 - [ ] **`[HUMAN]`** Submit the prepared
   `basilisk.nvim/lspconfig/basilisk.lua` definition upstream.
 - [ ] **`[HYBRID]`** Submit `basilisk` to the upstream

@@ -20,7 +20,7 @@ browser build.
   the existing `wasm32-wasip2` Zed job, which already establishes the toolchain
   and cache pattern.
 - Record the `.wasm` byte size and ratchet it downward-only, matching the repo's
-  other gates ([CHKARCH-TESTING-BENCH-RATCHET]). The current unoptimised release
+  other gates ([CHKARCH-TESTING-BENCH]). The current unoptimised release
   artefact is **7.2 MB**, of which the embedded typeshed ZIP is 2.8 MB. That is
   the honest starting point; `opt-level = "z"`, `wasm-opt -Oz` and transport
   compression have not been applied yet and should move it before the first

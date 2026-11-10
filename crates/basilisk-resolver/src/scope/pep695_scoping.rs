@@ -82,17 +82,21 @@ pub struct Pep695AliasDef {
     pub params: Vec<Pep695Param>,
     /// Simple names referenced in the RHS value expression.
     pub rhs_refs: Vec<String>,
-    /// Names referenced at the *top level* of the RHS — a bare `Name` or a direct
-    /// member of a top-level `X | Y` union — but NOT names nested inside a
-    /// subscript/container. A bare reference to another alias is non-terminating
-    /// (`type A = B`), whereas one through a container (`type A = list[B]`) is
-    /// legitimate recursion; this powers mutual-cycle detection (`generics_syntax_scoping`).
+    /// Names referenced at the *same level* as the RHS: a bare `Name`, a member
+    /// of an `X | Y` union, an argument of a transparent
+    /// `Union[..]`/`Optional[..]`/`Annotated[..]` form, or a parsed string
+    /// forward reference — but NOT names inside a real constructor subscript.
+    /// A bare reference to another alias is non-terminating (`type A = B`),
+    /// whereas one through a container (`type A = list[B]`) is legitimate
+    /// recursion; this powers mutual-cycle detection (`generics_syntax_scoping`).
     pub rhs_bare_refs: Vec<String>,
-    /// When the RHS contains a self-referential subscript `Name[args]`, the
-    /// simple argument names of the first such subscript.
-    pub self_ref_args: Option<Vec<String>>,
     /// `true` when this alias is nested (directly or transitively) in a function body.
     pub in_function: bool,
+    /// `true` when this alias's nearest enclosing scope is a class body.
+    /// Class-scope names are not visible from methods or module scope —
+    /// only module-scope aliases (`!in_function && !in_class`) bind a name
+    /// every function body can see.
+    pub in_class: bool,
 }
 
 /// An attribute access `Name.attr` somewhere in the module (outside `type` RHS).

@@ -28,7 +28,8 @@ use ruff_text_size::Ranged;
 use basilisk_resolver::{ResolvedModule, Span};
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
-use crate::rules::shared::{ann_str, expr_name, is_numeric_subtype, split_top_level_commas};
+use crate::rules::shared::{ann_str, expr_name, split_top_level_commas};
+use crate::subtyping::SubtypingContext;
 
 use super::Rule;
 
@@ -50,7 +51,10 @@ impl Rule for CallableSubtypingViolation {
         let Some(parsed) = super::shared::parse_module(module) else {
             return;
         };
-        check_stmts(&parsed.ast.body, &module.path, diagnostics);
+        // Callable variance verdicts route through the module-seeded
+        // context ([NARROWPLAN-SUBTYPING]).
+        let subtyping = crate::subtyping::module_context(module);
+        check_stmts(&subtyping, &parsed.ast.body, &module.path, diagnostics);
     }
 }
 
@@ -102,24 +106,15 @@ fn parse_callable_sig(s: &str) -> Option<CallableSig> {
 // Subtype / supertype relationships
 // ---------------------------------------------------------------------------
 
-/// Returns `true` when `candidate` is a subtype of `required`.
-///
-/// The gradual `Any`/`object` acceptances stay local; the tower delegates to
-/// the shared core ([NARROWPLAN-SUBTYPING]), with parity pinned in
-/// `tests/subtyping_context_tests.rs`.
-fn is_subtype(candidate: &str, required: &str) -> bool {
-    required == "object"
-        || required == "Any"
-        || candidate == "Any"
-        || is_numeric_subtype(candidate, required)
-}
-
 /// Returns `true` when the return type of the *source* callable is compatible
 /// with the return type of the *target* callable (covariant check).
 ///
-/// The source return type must be a subtype of the target return type.
-fn return_type_compat(source_ret: &str, target_ret: &str) -> bool {
-    is_subtype(source_ret, target_ret)
+/// The source return type must be a subtype of the target return type;
+/// verdicts route through the module-seeded context
+/// ([NARROWPLAN-SUBTYPING], parity pinned in
+/// `tests/subtyping_context_tests.rs`).
+fn return_type_compat(subtyping: &SubtypingContext, source_ret: &str, target_ret: &str) -> bool {
+    subtyping.is_subtype(source_ret, target_ret)
 }
 
 /// Returns `true` when the parameter types of the *source* callable are
@@ -128,7 +123,11 @@ fn return_type_compat(source_ret: &str, target_ret: &str) -> bool {
 ///
 /// The source parameter types must be supertypes of the corresponding target
 /// parameter types.
-fn param_types_compat(source_params: &[String], target_params: &[String]) -> bool {
+fn param_types_compat(
+    subtyping: &SubtypingContext,
+    source_params: &[String],
+    target_params: &[String],
+) -> bool {
     if source_params.len() != target_params.len() {
         // Arity mismatch — not a subtyping violation handled here.
         return true;
@@ -139,7 +138,7 @@ fn param_types_compat(source_params: &[String], target_params: &[String]) -> boo
         .all(|(src, tgt)| {
             // Contravariance: source param must be a supertype of target param,
             // i.e. `tgt` must be a subtype of `src`.
-            is_subtype(tgt, src)
+            subtyping.is_subtype(tgt, src)
         })
 }
 
@@ -147,14 +146,19 @@ fn param_types_compat(source_params: &[String], target_params: &[String]) -> boo
 // AST traversal
 // ---------------------------------------------------------------------------
 
-fn check_stmts(stmts: &[Stmt], path: &str, diag: &mut Vec<Diagnostic>) {
+fn check_stmts(
+    subtyping: &SubtypingContext,
+    stmts: &[Stmt],
+    path: &str,
+    diag: &mut Vec<Diagnostic>,
+) {
     for stmt in stmts {
         match stmt {
             Stmt::FunctionDef(func) => {
                 let param_callables = collect_callable_params(func);
-                check_func_body(&func.body, &param_callables, path, diag);
+                check_func_body(subtyping, &func.body, &param_callables, path, diag);
             }
-            Stmt::ClassDef(cls) => check_stmts(&cls.body, path, diag),
+            Stmt::ClassDef(cls) => check_stmts(subtyping, &cls.body, path, diag),
             _ => {}
         }
     }
@@ -190,6 +194,7 @@ fn collect_callable_params(
 /// Check all annotated assignments inside a function body for callable
 /// subtyping violations.
 fn check_func_body(
+    subtyping: &SubtypingContext,
     stmts: &[Stmt],
     param_callables: &std::collections::HashMap<String, CallableSig>,
     path: &str,
@@ -218,7 +223,7 @@ fn check_func_body(
             let span = Span::from(ann.range());
 
             // Check return type covariance.
-            if !return_type_compat(&source_sig.return_type, &target_sig.return_type) {
+            if !return_type_compat(subtyping, &source_sig.return_type, &target_sig.return_type) {
                 diag.push(error_diagnostic_owned(
                     CODE.clone(),
                     format!(
@@ -244,7 +249,7 @@ fn check_func_body(
             }
 
             // Check parameter type contravariance.
-            if !param_types_compat(&source_sig.param_types, &target_sig.param_types) {
+            if !param_types_compat(subtyping, &source_sig.param_types, &target_sig.param_types) {
                 diag.push(error_diagnostic_owned(
                     CODE.clone(),
                     format!(

@@ -45,7 +45,7 @@ pub fn hover_at(
     let hit = find_symbol_at_offset(resolved, byte_offset);
 
     if let Some(ref hit) = hit {
-        push_symbol_sections(resolved, source, hit, &mut sections);
+        push_symbol_sections(resolved, hit, &mut sections);
     } else {
         push_reference_sections(resolved, source, byte_offset, &mut sections);
     }
@@ -109,10 +109,10 @@ fn push_reference_sections(
         return;
     };
     if let Some(hit) = find_definition_by_name(resolved, &name) {
-        push_symbol_sections(resolved, source, &hit, sections);
+        push_symbol_sections(resolved, &hit, sections);
         return;
     }
-    push_imported_name_sections(resolved, source, &name, sections);
+    push_imported_name_sections(resolved, &name, sections);
 }
 
 /// Push the sections for a free name that only cross-module resolution knows:
@@ -122,12 +122,7 @@ fn push_reference_sections(
 /// this falls back to the import declaration itself, which is always available
 /// from the same-file parse — so hovering a usage of an imported name is
 /// deterministic and never races cross-file indexing (GitHub #200).
-fn push_imported_name_sections(
-    resolved: &ResolvedModule,
-    source: &str,
-    name: &str,
-    sections: &mut Vec<String>,
-) {
+fn push_imported_name_sections(resolved: &ResolvedModule, name: &str, sections: &mut Vec<String>) {
     let mut pushed = false;
     if let Some(ext_sym) = resolved.imported_symbols.get(name) {
         let module = crate::util::find_import_by_bound_name(resolved, name)
@@ -148,7 +143,7 @@ fn push_imported_name_sections(
     }
     if !pushed {
         if let Some(imp) = crate::util::find_import_by_bound_name(resolved, name) {
-            let sig = format_type_signature(&SymbolHit::Import(imp), source);
+            let sig = format_type_signature(&SymbolHit::Import(imp), resolved);
             sections.push(format!("```python\n{sig}\n```"));
         }
     }
@@ -184,11 +179,10 @@ pub(super) fn external_symbol_card(
 /// provenance annotation for imported symbols.
 fn push_symbol_sections(
     resolved: &ResolvedModule,
-    source: &str,
     hit: &SymbolHit<'_>,
     sections: &mut Vec<String>,
 ) {
-    let sig = format_type_signature(hit, source);
+    let sig = format_type_signature(hit, resolved);
     sections.push(format!("```python\n{sig}\n```"));
 
     // A class hover includes its constructor so the user sees how to
@@ -196,7 +190,7 @@ fn push_symbol_sections(
     // nearest one in the local base chain.
     if let SymbolHit::Class(class) = hit {
         if let Some(init) = find_class_init(resolved, class) {
-            let init_sig = format_type_signature(&SymbolHit::Function(init), source);
+            let init_sig = format_type_signature(&SymbolHit::Function(init), resolved);
             sections.push(format!("```python\n{init_sig}\n```"));
         }
     }

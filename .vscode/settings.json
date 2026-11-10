@@ -41,5 +41,6 @@
     "basilisk.enabled": true,
     "basilisk.uv.enabled": true,
     "deslop.topOffenders.splitByLanguage": true,
-    "deslop.topOffenders.groupBy": "file"
+    "deslop.topOffenders.groupBy": "type",
+    "deslop.topOffenders.sortBy": "path"
 }

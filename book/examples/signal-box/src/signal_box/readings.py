@@ -1,9 +1,9 @@
-"""Small deliberately incomplete boundary used by Chapter 9."""
+"""Small deliberately unannotated boundary used by Chapter 9."""
 
 
-def normalize_reading(raw) -> None:
+def normalize_reading(raw):
     """Normalize a raw reading after its boundary policy is chosen."""
-    return {
-        "sensor_id": str(raw["sensor_id"]),
-        "celsius": float(raw["celsius"]),
-    }
+    return dict(
+        sensor_id=str(raw["sensor_id"]),
+        celsius=float(raw["celsius"]),
+    )

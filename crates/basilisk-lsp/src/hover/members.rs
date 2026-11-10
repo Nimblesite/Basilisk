@@ -95,7 +95,7 @@ fn local_member_hover(
                     })
             })
     })?;
-    let signature = crate::util::format_type_signature(&hit, &resolved.source);
+    let signature = crate::util::format_type_signature(&hit, resolved);
     let docstring = match hit {
         crate::util::SymbolHit::Function(func) => func.docstring.clone(),
         _ => None,
@@ -338,7 +338,7 @@ fn expression_receiver_type(
     let expression = receiver_scope::receiver_expression(before_dot)?;
     let scope = receiver_scope::scope_at(resolved, source, before_dot.len());
     let inferred =
-        basilisk_checker::inference::infer_expression_source_in_scope(expression, &scope);
+        basilisk_checker::expr_type::infer_expression_source_in_scope(expression, &scope);
     basilisk_checker::class_naming::class_name_of_type(&inferred)
 }
 

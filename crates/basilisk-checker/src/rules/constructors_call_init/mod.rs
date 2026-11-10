@@ -42,6 +42,16 @@ impl Rule for ConstructorCallError {
     fn check(
         &self,
         module: &ResolvedModule,
+        ctx: &super::CheckContext,
+        diagnostics: &mut Vec<Diagnostic>,
+    ) {
+        super::check_with_own_types(self, module, ctx, diagnostics);
+    }
+
+    fn check_with_types(
+        &self,
+        module: &ResolvedModule,
+        types: &super::shared::module_types::ModuleTypes<'_>,
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
@@ -68,11 +78,11 @@ impl Rule for ConstructorCallError {
             diagnostics,
         );
 
-        // Re-parse source to walk call expressions.
-        let Some(parsed) = super::shared::parse_module(module) else {
+        // Every call in every expression position, from the module's one
+        // shared walk ([NARROWPLAN-CALLSITES]).
+        let Some(oracle) = types.oracle() else {
             return;
         };
-
         let ctx = Ctx {
             source,
             path,
@@ -80,9 +90,9 @@ impl Rule for ConstructorCallError {
             method_map: &method_map,
             typevar_names: &typevar_names,
         };
-        basilisk_resolver::visit_calls(&parsed.ast.body, &mut |call| {
+        for call in oracle.calls() {
             check_constructor_call(call, &ctx, diagnostics);
-        });
+        }
     }
 }
 
@@ -109,7 +119,7 @@ fn check_class_scoped_typevars_in_self(
 
         for init_func in init_funcs {
             // Skip overload decorators — only check the implementation.
-            if init_func.decorators.iter().any(|d| d == "overload") {
+            if crate::rules::shared::decorator_spelled(&init_func.decorators, "overload") {
                 continue;
             }
 
@@ -307,7 +317,7 @@ fn check_subscript_constructor(
 
     if let Some(init_funcs) = method_map.get(&(class_name, "__init__")) {
         for init_func in init_funcs {
-            if init_func.decorators.iter().any(|d| d == "overload") {
+            if crate::rules::shared::decorator_spelled(&init_func.decorators, "overload") {
                 continue;
             }
             check_init_method_args(

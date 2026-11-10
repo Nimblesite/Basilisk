@@ -314,7 +314,11 @@ pub(super) fn collect_protocol_instantiation_violations(
 pub(super) fn class_has_abstract_methods(cls: &ClassInfo) -> bool {
     cls.method_decorators
         .iter()
-        .any(|(_method_name, decorators)| decorators.iter().any(|d| d == "abstractmethod"))
+        .any(|(_method_name, decorators)| {
+            decorators
+                .iter()
+                .any(|d| d.rsplit('.').next() == Some("abstractmethod"))
+        })
 }
 
 /// Check if a non-Protocol class missing required protocol members.

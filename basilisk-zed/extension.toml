@@ -8,11 +8,15 @@ authors = ["Basilisk Contributors"]
 description = "The only Python type checker scoring 100% on the official python/typing conformance suite (https://github.com/python/typing/blob/main/conformance/results/results.html) — and the fastest we've measured. Complete open-source Python dev environment in Rust: type checker, language server, debugger, profiler, plus VS Code, Cursor, Zed & Neovim extensions. Strict by default."
 repository = "https://github.com/Nimblesite/Basilisk"
 
-# No [grammars.python] block: the language below reuses Zed's built-in
-# tree-sitter-python grammar by name, so Zed never compiles a grammar from
-# source (which requires downloading the ~400 MB wasi-sdk toolchain). The
-# query files in languages/python/ augment the built-in grammar. See
-# docs/specs/ZED-SPEC.md [ZED-GRAMMAR].
+# No [grammars.*] and no languages/ directory: Basilisk attaches to Zed's
+# BUILT-IN Python language by name. Shipping either would register a second
+# language called "Python", and Zed's registry OVERWRITES the existing entry's
+# grammar/matcher/loader on a name collision, so the extension's definition
+# would silently replace the built-in one (bracket auto-close, f-string and
+# docstring pairs, elif/else auto-dedent, shebang detection, `debuggers`, and
+# the far richer highlight/runnable queries all lost). Same shape as the other
+# Python language-server extensions in the registry (ty, pyrefly, pylsp).
+# Implements [ZED-GRAMMAR] and [ZED-TREESITTER] — see docs/specs/ZED-SPEC.md.
 
 # LSP wiring: Zed launches `basilisk lsp` for Python. Implements [ZED-LSP].
 [language_servers.basilisk]

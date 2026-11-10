@@ -131,6 +131,14 @@
       "topics": ["stubs", "py.typed", "import resolution", "packages"]
     },
     {
+      "key": "python-typing-writing-stubs",
+      "title": "Writing and maintaining stub files",
+      "url": "https://typing.python.org/en/latest/guides/writing_stubs.html",
+      "authority": "Python typing project",
+      "versionScope": "maintained guide",
+      "topics": ["stub generation", "stub review", "stub testing"]
+    },
+    {
       "key": "python-typing-spec-directives",
       "title": "Type checker directives",
       "url": "https://typing.python.org/en/latest/spec/directives.html",
@@ -425,6 +433,46 @@
       "authority": "The Basilisk Project",
       "versionScope": "live repository; use a release permalink for exact behavior",
       "topics": ["source", "tests", "implementation"]
+    },
+    {
+      "key": "basilisk-release-0-39-0",
+      "title": "Basilisk v0.39.0 release",
+      "url": "https://github.com/Nimblesite/Basilisk/releases/tag/v0.39.0",
+      "authority": "The Basilisk Project",
+      "versionScope": "immutable release tag published 2026-08-02",
+      "topics": ["release artifact", "release checksums", "version baseline"]
+    },
+    {
+      "key": "basilisk-stub-resolution-spec-0-39-0",
+      "title": "Basilisk v0.39.0 stub-resolution specification",
+      "url": "https://github.com/Nimblesite/Basilisk/blob/b8ae454cfabc54d26d7e4efc029f2f01bd083bc8/docs/specs/CHECKER-STUB-RESOLUTION-SPEC.md",
+      "authority": "The Basilisk Project",
+      "versionScope": "Basilisk 0.39.0 source commit",
+      "topics": ["stub resolution", "typeshed selection", "stub generation", "provenance"]
+    },
+    {
+      "key": "basilisk-checker-architecture-spec-0-39-0",
+      "title": "Basilisk v0.39.0 checker architecture specification",
+      "url": "https://github.com/Nimblesite/Basilisk/blob/b8ae454cfabc54d26d7e4efc029f2f01bd083bc8/docs/specs/CHECKER-ARCHITECTURE-SPEC.md",
+      "authority": "The Basilisk Project",
+      "versionScope": "Basilisk 0.39.0 source commit",
+      "topics": ["command partition", "rule severity", "folder configuration", "configuration discovery"]
+    },
+    {
+      "key": "basilisk-configuration-editor-spec-0-39-0",
+      "title": "Basilisk v0.39.0 configuration-editor specification",
+      "url": "https://github.com/Nimblesite/Basilisk/blob/b8ae454cfabc54d26d7e4efc029f2f01bd083bc8/docs/specs/LSP-CONFIGURATION-EDITOR-SPEC.md",
+      "authority": "The Basilisk Project",
+      "versionScope": "Basilisk 0.39.0 source commit",
+      "topics": ["configuration editor", "preview", "apply", "path overrides"]
+    },
+    {
+      "key": "basilisk-mass-autofix-spec-0-39-0",
+      "title": "Basilisk v0.39.0 mass-autofix and adoption specification",
+      "url": "https://github.com/Nimblesite/Basilisk/blob/b8ae454cfabc54d26d7e4efc029f2f01bd083bc8/docs/specs/LSP-MASS-AUTOFIX-SPEC.md",
+      "authority": "The Basilisk Project",
+      "versionScope": "Basilisk 0.39.0 source commit",
+      "topics": ["mass fix", "fix tiers", "adoption", "graduation", "folder configuration"]
     }
   ]
 }

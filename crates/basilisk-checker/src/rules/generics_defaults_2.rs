@@ -26,8 +26,6 @@ use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
-use crate::rules::shared::is_numeric_subtype;
-
 const CODE: ErrorCode = ErrorCode {
     code: "generics_defaults_2",
     docs_url: "https://www.basilisk-python.dev/errors/generics_defaults_2",
@@ -51,6 +49,10 @@ impl Rule for TypeVarDefaultIncompatible {
             .iter()
             .map(|tv| tv.name.as_str())
             .collect();
+        // One subtyping implementation ([NARROWPLAN-SUBTYPING]): bound
+        // verdicts route through the module-seeded context, so a default
+        // that subclasses the bound is accepted, not just the numeric tower.
+        let subtyping = crate::subtyping::module_context(module);
 
         for tv in &module.typevar_calls {
             // Only plain TypeVar can have bounds/constraints with defaults.
@@ -73,7 +75,7 @@ impl Rule for TypeVarDefaultIncompatible {
             // Case 1: bound + default — default must be a subtype of bound.
             if tv.has_bound {
                 if let Some(ref bound_name) = tv.bound_type_name {
-                    if !is_numeric_subtype(default_name, bound_name) {
+                    if !subtyping.is_subtype(default_name, bound_name) {
                         diagnostics.push(error_diagnostic_owned(
                             CODE.clone(),
                             format!(

@@ -10,6 +10,7 @@
 //! ([TYPEINF-TARGET-CONSTRAINTS]); [`super::solve`] discharges them.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use ruff_python_ast::{Expr, Number, Operator, UnaryOp};
 use ruff_text_size::Ranged;
@@ -28,7 +29,7 @@ use super::tyvar::{Polarity, TyVarStore};
 pub struct BidirEngine {
     pub(super) vars: TyVarStore,
     pub(super) constraints: ConstraintSet,
-    scopes: Vec<HashMap<String, Ty>>,
+    scopes: Vec<Arc<HashMap<String, Ty>>>,
     /// Lowercased class name → (attribute → type), for plain attribute-load
     /// synthesis on user classes (`Point().x`). Empty unless the caller
     /// provides module class schemas via [`BidirEngine::set_class_attributes`].
@@ -43,7 +44,7 @@ impl BidirEngine {
         Self {
             vars: TyVarStore::default(),
             constraints: ConstraintSet::default(),
-            scopes: vec![globals],
+            scopes: vec![Arc::new(globals)],
             class_attributes: HashMap::new(),
         }
     }
@@ -60,6 +61,43 @@ impl BidirEngine {
         solve(self.vars, self.constraints.into_vec())
     }
 
+    /// [`BidirEngine::finish`] for one expression out of many: discharge the
+    /// constraints recorded since the last call and clear the solver state,
+    /// KEEPING the scope stack.
+    ///
+    /// A caller that synthesizes expression after expression against one set
+    /// of bindings (the flow walker, [NARROWPLAN-INTEGRATION]) would otherwise
+    /// have to rebuild those bindings for every expression. Resetting the
+    /// variables and constraints — rather than carrying them — keeps each
+    /// expression's solve independent, exactly as a fresh engine would, and
+    /// stops the constraint set growing without bound across the walk.
+    #[must_use]
+    pub fn solve_expression(&mut self) -> Solution {
+        let vars = std::mem::take(&mut self.vars);
+        let constraints = std::mem::take(&mut self.constraints);
+        solve(vars, constraints.into_vec())
+    }
+
+    /// Enter a nested binding scope, pre-populated, that shadows the ones
+    /// below it — the overlay form of [`BidirEngine::new`] for a caller whose
+    /// outer scopes are fixed for the whole run.
+    pub fn push_scope_with(&mut self, bindings: HashMap<String, Ty>) {
+        self.scopes.push(Arc::new(bindings));
+    }
+
+    /// [`BidirEngine::push_scope_with`] for a caller that keeps the bindings
+    /// alive across many pushes (the module oracle's per-query overlays):
+    /// pushing is a pointer clone, and any in-scope rebinding copies on
+    /// write, leaving the shared map untouched.
+    pub fn push_scope_shared(&mut self, bindings: Arc<HashMap<String, Ty>>) {
+        self.scopes.push(bindings);
+    }
+
+    /// Leave the innermost binding scope, dropping its bindings.
+    pub fn pop_scope(&mut self) {
+        let _ = self.scopes.pop();
+    }
+
     /// Allocate a fresh variable — the parameter-inference entry point
     /// (issue #317, [`crate::param_infer`]).
     pub fn fresh_param_var(&mut self, polarity: Polarity) -> super::tyvar::TyVarId {
@@ -69,7 +107,7 @@ impl BidirEngine {
     /// Bind a name in the OUTERMOST scope (module globals / parameters).
     pub fn bind_global(&mut self, name: &str, ty: Ty) {
         if let Some(scope) = self.scopes.first_mut() {
-            let _ = scope.insert(name.to_owned(), ty);
+            let _ = Arc::make_mut(scope).insert(name.to_owned(), ty);
         }
     }
 
@@ -89,13 +127,13 @@ impl BidirEngine {
     /// Bind a name in the innermost scope.
     pub(super) fn bind(&mut self, name: &str, ty: Ty) {
         if let Some(scope) = self.scopes.last_mut() {
-            let _ = scope.insert(name.to_owned(), ty);
+            let _ = Arc::make_mut(scope).insert(name.to_owned(), ty);
         }
     }
 
     /// Run `body` inside a fresh child scope.
     pub(super) fn scoped<R>(&mut self, body: impl FnOnce(&mut Self) -> R) -> R {
-        self.scopes.push(HashMap::new());
+        self.scopes.push(Arc::new(HashMap::new()));
         let result = body(self);
         let _ = self.scopes.pop();
         result
@@ -159,6 +197,11 @@ impl BidirEngine {
         let elem = self.vars.fresh(Polarity::Output);
         for elt in elts {
             let ty = self.synth_spread_aware(elt);
+            // The bound lands in the store IMMEDIATELY (not only in the
+            // constraint set the final solve discharges) so a same-run
+            // consumer — a method call on this very display — can resolve
+            // the element type mid-run.
+            self.vars.add_lower(elem, ty.clone());
             self.constraints.push(
                 ty,
                 Ty::Var(elem),
@@ -197,6 +240,8 @@ impl BidirEngine {
                 continue;
             };
             let key_ty = self.synth(key);
+            // Mid-run resolvable, exactly as collection elements are.
+            self.vars.add_lower(key_var, key_ty.clone());
             self.constraints.push(
                 key_ty,
                 Ty::Var(key_var),
@@ -204,6 +249,7 @@ impl BidirEngine {
                 ConstraintReason::DictKey,
             );
             let value_ty = self.synth(&item.value);
+            self.vars.add_lower(value_var, value_ty.clone());
             self.constraints.push(
                 value_ty,
                 Ty::Var(value_var),
@@ -242,12 +288,39 @@ impl BidirEngine {
         Ty::Callable(params, Box::new(body))
     }
 
-    /// `a if cond else b`: the union of both branches.
+    /// `a if cond else b`: the union of both branches, with an
+    /// `x is [not] None` test narrowing `x` inside the arm it proves —
+    /// `value if value is not None else 0` with `value: int | None` is
+    /// `int | Literal[0]`, never `int | None | Literal[0]`
+    /// ([TYPEINF-NARROWING]).
     fn synth_ternary(&mut self, ternary: &ruff_python_ast::ExprIf) -> Ty {
         let _ = self.synth(&ternary.test);
-        let body = self.synth(&ternary.body);
-        let orelse = self.synth(&ternary.orelse);
+        let guard = none_guard(&ternary.test);
+        let body = self.synth_narrowed(&ternary.body, guard.as_ref(), true);
+        let orelse = self.synth_narrowed(&ternary.orelse, guard.as_ref(), false);
         Ty::Union(vec![body, orelse])
+    }
+
+    /// Synthesize one ternary arm under the guard's verdict for that arm:
+    /// the arm where `x is not None` HOLDS sees `x` without its `None`, the
+    /// other arm sees `x` as `None` itself.
+    fn synth_narrowed(&mut self, expr: &Expr, guard: Option<&NoneGuard>, is_true_arm: bool) -> Ty {
+        let Some(guard) = guard else {
+            return self.synth(expr);
+        };
+        let Some(current) = self.lookup(&guard.name) else {
+            return self.synth(expr);
+        };
+        let non_none_holds = guard.test_is_not_none == is_true_arm;
+        let narrowed = if non_none_holds {
+            strip_none(&current)
+        } else {
+            Ty::Ground(InferredType::None_)
+        };
+        self.push_scope_with(std::iter::once((guard.name.clone(), narrowed)).collect());
+        let ty = self.synth(expr);
+        self.pop_scope();
+        ty
     }
 
     /// `(name := value)`: the value's type, also bound to `name`.
@@ -289,13 +362,42 @@ impl BidirEngine {
         // (`Named` deliberately conflates class/instance at Stage 2 — the
         // display value is right and no rule enforces it yet.)
         if let Ty::Ground(InferredType::Named(name)) = callee {
+            // …except a `type`-typed value: calling SOME class constructs an
+            // instance of an unknowable class, never an instance of `type`.
+            if name == "type" || name.starts_with("type[") {
+                return Ty::unknown();
+            }
             return Ty::Ground(InferredType::Named(name.clone()));
         }
         match call.func.as_ref() {
+            // `type(x)` yields x's CLASS — a class object, which is never a
+            // plain value like `None` ([TYPEINF-SPECIAL]); which class stays
+            // gradual. The two-plus-argument form creates a new class.
+            Expr::Name(name)
+                if name.id.as_str() == "type"
+                    && call.arguments.args.len() == 1
+                    && self.lookup("type").is_none() =>
+            {
+                Ty::Ground(InferredType::Named("type".to_owned()))
+            }
             Expr::Name(name) => super::builtins::builtin_call_return(name.id.as_str())
                 .map_or_else(Ty::unknown, Ty::Ground),
             Expr::Attribute(attribute) => {
                 let receiver = self.synth(&attribute.value).to_inferred(&self.vars);
+                // `d.get(key, default)` never returns `None`: the result is
+                // value-or-default, keeping the value's precision (PEP 675
+                // provenance included) instead of the one-argument
+                // `Optional[value]` the table answers.
+                if attribute.attr.as_str() == "get" && call.arguments.args.len() == 2 {
+                    if let InferredType::Dict(_, value) = &receiver {
+                        let default = call
+                            .arguments
+                            .args
+                            .get(1)
+                            .map_or_else(Ty::unknown, |arg| self.synth(arg));
+                        return Ty::Union(vec![Ty::Ground((**value).clone()), default]);
+                    }
+                }
                 super::builtins::builtin_method_return(&receiver, attribute.attr.as_str())
                     .map_or_else(Ty::unknown, Ty::Ground)
             }
@@ -529,5 +631,84 @@ fn numeric_or_seq(ty: &Ty) -> OpClass {
             | InferredType::Literal(LiteralValue::Str(_)),
         ) => OpClass::Str,
         _ => OpClass::Other,
+    }
+}
+
+/// An `x is None` / `x is not None` ternary test, reduced to the name it
+/// narrows and which way the test points.
+struct NoneGuard {
+    name: String,
+    /// `true` for `is not None`, `false` for `is None`.
+    test_is_not_none: bool,
+}
+
+/// Recognise `name is None` / `name is not None` as a narrowing guard.
+fn none_guard(test: &Expr) -> Option<NoneGuard> {
+    let Expr::Compare(compare) = test else {
+        return None;
+    };
+    let Expr::Name(name) = compare.left.as_ref() else {
+        return None;
+    };
+    let (op, comparator) = compare
+        .ops
+        .first()
+        .zip(compare.comparators.first())
+        .filter(|_| compare.ops.len() == 1)?;
+    if !matches!(comparator, Expr::NoneLiteral(_)) {
+        return None;
+    }
+    let test_is_not_none = match op {
+        ruff_python_ast::CmpOp::Is => false,
+        ruff_python_ast::CmpOp::IsNot => true,
+        _ => return None,
+    };
+    Some(NoneGuard {
+        name: name.id.to_string(),
+        test_is_not_none,
+    })
+}
+
+/// The type with `None` removed from its top-level alternatives — how an
+/// `is not None` guard narrows what it proves.
+fn strip_none(ty: &Ty) -> Ty {
+    match ty {
+        Ty::Ground(ground) => Ty::Ground(strip_none_inferred(ground)),
+        Ty::Union(arms) => {
+            let kept: Vec<Ty> = arms
+                .iter()
+                .filter(|arm| !matches!(arm, Ty::Ground(InferredType::None_)))
+                .map(strip_none)
+                .collect();
+            match kept.len() {
+                0 => Ty::Ground(InferredType::Never),
+                1 => kept
+                    .into_iter()
+                    .next()
+                    .unwrap_or(Ty::Ground(InferredType::Never)),
+                _ => Ty::Union(kept),
+            }
+        }
+        other => other.clone(),
+    }
+}
+
+/// [`strip_none`] over the ground representation.
+fn strip_none_inferred(ty: &InferredType) -> InferredType {
+    match ty {
+        InferredType::Optional(inner) => strip_none_inferred(inner),
+        InferredType::Union(arms) => {
+            let kept: Vec<InferredType> = arms
+                .iter()
+                .filter(|arm| !matches!(arm, InferredType::None_))
+                .map(strip_none_inferred)
+                .collect();
+            match kept.len() {
+                0 => InferredType::Never,
+                1 => kept.into_iter().next().unwrap_or(InferredType::Never),
+                _ => InferredType::Union(kept),
+            }
+        }
+        other => other.clone(),
     }
 }

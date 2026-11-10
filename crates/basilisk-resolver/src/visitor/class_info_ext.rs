@@ -505,33 +505,38 @@ fn case_has_structural_pattern(case: &MatchCase) -> bool {
 // Decorator helpers
 // ---------------------------------------------------------------------------
 
-/// Extract the `frozen=True/False` flag from `@dataclass(frozen=...)`.
-/// Returns `false` if no explicit `frozen=` is present (default is `False`).
+/// A decorator's name as spelled — the FULL dotted path for attribute
+/// spellings (`typing.overload` → `"typing.overload"`, never just
+/// `"overload"`), because whether `t.overload` IS `typing.overload` is a
+/// binding question the consumer answers by resolving `t`
+/// ([#380](https://github.com/Nimblesite/Basilisk/issues/380)). Dropping the
+/// qualifier here would make that question unanswerable everywhere
+/// downstream. A call decorator reports its callee (`@cache(size=1)` →
+/// `"cache"`).
 pub(super) fn decorator_name(dec: &Decorator) -> Option<String> {
     match &dec.expression {
-        Expr::Name(name) => Some(name.id.to_string()),
-        Expr::Attribute(attr) => Some(attr.attr.to_string()),
-        Expr::Call(call) => match call.func.as_ref() {
-            Expr::Name(name) => Some(name.id.to_string()),
-            Expr::Attribute(attr) => Some(attr.attr.to_string()),
-            _ => None,
-        },
-        _ => None,
+        Expr::Call(call) => dotted_expr_name(&call.func),
+        expr => dotted_expr_name(expr),
     }
 }
 
 /// Extract the decorator name together with the span of the name identifier.
 pub(super) fn decorator_name_and_span(dec: &Decorator) -> Option<(String, Span)> {
     match &dec.expression {
-        Expr::Name(name) => Some((name.id.to_string(), text_range_to_span(name.range()))),
-        Expr::Attribute(attr) => Some((attr.attr.to_string(), text_range_to_span(attr.range()))),
-        Expr::Call(call) => match call.func.as_ref() {
-            Expr::Name(name) => Some((name.id.to_string(), text_range_to_span(name.range()))),
-            Expr::Attribute(attr) => {
-                Some((attr.attr.to_string(), text_range_to_span(attr.range())))
-            }
-            _ => None,
-        },
+        Expr::Call(call) => {
+            dotted_expr_name(&call.func).map(|name| (name, text_range_to_span(call.func.range())))
+        }
+        expr => dotted_expr_name(expr).map(|name| (name, text_range_to_span(expr.range()))),
+    }
+}
+
+/// Render `a.b.c` from a name or attribute chain; `None` for anything else.
+fn dotted_expr_name(expr: &Expr) -> Option<String> {
+    match expr {
+        Expr::Name(name) => Some(name.id.to_string()),
+        Expr::Attribute(attr) => {
+            dotted_expr_name(&attr.value).map(|value| format!("{value}.{}", attr.attr))
+        }
         _ => None,
     }
 }

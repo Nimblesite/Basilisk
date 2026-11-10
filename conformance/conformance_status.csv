@@ -1,7 +1,7 @@
 basilisk_rules,file,category,status,caught,missed,false_positives
 aliases_implicit,aliases_explicit.py,aliases,PASS,21,0,0
 aliases_implicit|annotations_forward_refs|generics_defaults_specialization,aliases_implicit.py,aliases,PASS,22,0,0
-aliases_newtype|assignment_compatibility,aliases_newtype.py,aliases,PASS,14,0,0
+aliases_newtype,aliases_newtype.py,aliases,PASS,14,0,0
 aliases_recursive|assignment_compatibility,aliases_recursive.py,aliases,PASS,11,0,0
 aliases_type_statement|generics_syntax_scoping,aliases_type_statement.py,aliases,PASS,24,0,0
 aliases_typealiastype,aliases_typealiastype.py,aliases,PASS,22,0,0
@@ -13,9 +13,9 @@ annotations_generators|annotations_generators_2,annotations_generators.py,annota
 aliases_implicit|annotations_forward_refs|annotations_typeexpr,annotations_typeexpr.py,annotations,PASS,15,0,0
 assignment_compatibility|callables_annotation|callables_protocol|callables_protocol_2,callables_annotation.py,callables,PASS,16,0,0
 callables_kwargs|callables_protocol_2|calls_argument_type,callables_kwargs.py,callables,PASS,12,0,0
-callables_protocol_2,callables_protocol.py,callables,PASS,17,0,0
+assignment_compatibility|callables_protocol_2,callables_protocol.py,callables,PASS,17,0,0
 assignment_compatibility|callables_subtyping,callables_subtyping.py,callables,PASS,32,0,0
-assignment_compatibility|classes_classvar|protocols_definition_2|qualifiers_final_annotation,classes_classvar.py,classes,PASS,17,0,0
+classes_classvar|protocols_definition_2|qualifiers_final_annotation,classes_classvar.py,classes,PASS,17,0,0
 classes_override_3,classes_override.py,classes,PASS,0,0,0
 constructors_call_init|generics_defaults_referential_2,constructors_call_init.py,constructors,PASS,5,0,0
 calls_argument_count,constructors_call_metaclass.py,constructors,PASS,2,0,0
@@ -88,7 +88,7 @@ directives_assert_type_2|generics_basic|generics_typevartuple_basic|generics_upp
 generics_typevartuple_basic|generics_variance,generics_variance.py,generics,PASS,9,0,0
 generics_variance_inference,generics_variance_inference.py,generics,PASS,23,0,0
 historical_positional,historical_positional.py,historical,PASS,4,0,0
-tuples_index_2,literals_interactions.py,literals,PASS,4,0,0
+calls_argument_type|tuples_index_2,literals_interactions.py,literals,PASS,4,0,0
 assignment_compatibility|generics_upper_bound_2|literals_literalstring|literals_parameterizations|literals_semantics_2,literals_literalstring.py,literals,PASS,9,0,0
 assignment_compatibility|generics_scoping|generics_variance_inference|literals_parameterizations|literals_parameterizations_2|literals_semantics_2,literals_parameterizations.py,literals,PASS,17,0,0
 assignment_compatibility|literals_semantics_2,literals_semantics.py,literals,PASS,4,0,0
@@ -107,7 +107,7 @@ protocols_class_objects_2|protocols_explicit,protocols_class_objects.py,protocol
 classes_classvar|protocols_definition|protocols_definition_2,protocols_definition.py,protocols,PASS,21,0,0
 protocols_explicit|protocols_explicit_2|protocols_explicit_3|protocols_subtyping,protocols_explicit.py,protocols,PASS,6,0,0
 generics_variance_inference|protocols_generic,protocols_generic.py,protocols,PASS,9,0,0
-protocols_definition_2|protocols_explicit|protocols_merging,protocols_merging.py,protocols,PASS,6,0,0
+assignment_compatibility|protocols_definition_2|protocols_explicit|protocols_merging,protocols_merging.py,protocols,PASS,6,0,0
 protocols_modules,protocols_modules.py,protocols,PASS,3,0,0
 ,protocols_recursive.py,protocols,PASS,0,0,0
 protocols_runtime_checkable|protocols_runtime_checkable_2,protocols_runtime_checkable.py,protocols,PASS,6,0,0
@@ -115,7 +115,7 @@ protocols_runtime_checkable|protocols_runtime_checkable_2,protocols_runtime_chec
 assignment_compatibility|protocols_explicit,protocols_subtyping.py,protocols,PASS,7,0,0
 protocols_variance|protocols_variance_2,protocols_variance.py,protocols,PASS,5,0,0
 qualifiers_annotated|qualifiers_annotated_2,qualifiers_annotated.py,qualifiers,PASS,20,0,0
-assignment_compatibility|calls_argument_count|namedtuples_define_functional|qualifiers_final_annotation|qualifiers_final_annotation_2,qualifiers_final_annotation.py,qualifiers,PASS,26,0,0
+calls_argument_count|namedtuples_define_functional|qualifiers_final_annotation|qualifiers_final_annotation_2,qualifiers_final_annotation.py,qualifiers,PASS,26,0,0
 overloads_consistency_2|qualifiers_final_decorator,qualifiers_final_decorator.py,qualifiers,PASS,3,0,0
 ,specialtypes_any.py,specialtypes,PASS,0,0,0
 assignment_compatibility|specialtypes_never|specialtypes_never_2,specialtypes_never.py,specialtypes,PASS,3,0,0

@@ -208,7 +208,7 @@ fn collect_out_of_range_subscripts(
 }
 
 /// A literal integer index: `3` or `-3`.
-fn literal_int(expr: &Expr) -> Option<i64> {
+pub(super) fn literal_int(expr: &Expr) -> Option<i64> {
     match expr {
         Expr::NumberLiteral(num) => match &num.value {
             Number::Int(value) => value.as_i64(),
@@ -269,13 +269,19 @@ fn fixed_tuple_len_from_container_annotation(annotation: &str) -> Option<usize> 
 }
 
 /// The length of a fixed-size tuple annotation: `tuple[str, int]` → `Some(2)`.
-fn fixed_tuple_len(annotation: &str) -> Option<usize> {
+///
+/// Variadic (`tuple[int, ...]`) and PEP 646 unpacked (`tuple[int, *Ts]`,
+/// `tuple[int, *tuple[str, ...]]`) forms have no fixed length and yield `None`.
+pub(super) fn fixed_tuple_len(annotation: &str) -> Option<usize> {
     let inner = annotation
         .strip_prefix("tuple[")
         .or_else(|| annotation.strip_prefix("Tuple["))?
         .strip_suffix(']')?;
     let elements = split_top_level_args(inner);
-    if elements.iter().any(|e| e.trim() == "...") {
+    if elements
+        .iter()
+        .any(|e| e.trim() == "..." || e.trim().starts_with('*'))
+    {
         return None;
     }
     match elements.as_slice() {
