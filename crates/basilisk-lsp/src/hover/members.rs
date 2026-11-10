@@ -280,21 +280,13 @@ pub(crate) fn builtin_member_declarations<'a>(
     &'a basilisk_resolver::scope::IndexedStubClass,
     Vec<&'a basilisk_stubs::StubFunction>,
 )> {
-    let (type_name, literal_receiver) = dot_receiver_builtin_type(resolved, source, byte_offset)?;
+    let (type_name, _literal_receiver) = dot_receiver_builtin_type(resolved, source, byte_offset)?;
     let class = resolved.builtin_classes.get(&type_name)?;
     let declarations = class
         .declaration
         .methods
         .iter()
         .filter(|method| method.name == member)
-        .filter(|method| {
-            literal_receiver
-                || method
-                    .receiver
-                    .as_ref()
-                    .and_then(|receiver| receiver.annotation.as_deref())
-                    .is_none_or(|annotation| !annotation.contains("LiteralString"))
-        })
         .collect::<Vec<_>>();
     (!declarations.is_empty()).then_some((class, declarations))
 }

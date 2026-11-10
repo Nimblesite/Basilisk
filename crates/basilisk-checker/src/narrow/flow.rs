@@ -1,3 +1,27 @@
+// ############################################################################
+// # BROKEN — THIS FILE DOES NOT COMPILE. DO NOT "FIX" IT BY RESTORING TEXT   #
+// # MATCHING.                                                                #
+// #                                                                          #
+// # Deleted helper this file called:                                         #
+// #   InferredType::from_annotation (types_parsing.rs)
+// #                                                                          #
+// # That helper decided types from the SPELLING of source text (lowercased   #
+// # annotation strings, `"int"`/`"str"`/`"object"` literal matching, `|`     #
+// # splitting, `starts_with("tuple[")`). It was deleted, not replaced.       #
+// #                                                                          #
+// # The call sites below are LEFT BROKEN ON PURPOSE. They are the map of     #
+// # what must be rebuilt on the resolved AST — resolved bindings, canonical  #
+// # `TypeNode`, and `assignable`/`equivalent` — or made to abstain.          #
+// #                                                                          #
+// # Restoring the deleted helper, vendoring a copy of it, or re-deriving a   #
+// # type from source text anywhere below is FORBIDDEN.                       #
+// #                                                                          #
+// # Evidence and the failing tests that pin the real behaviour:              #
+// #   docs/RULE-VALIDITY-REPORT.md                                           #
+// #   crates/basilisk-checker/tests/legacy_annotation_text_parser_pin_tests.rs
+// #   crates/basilisk-checker/tests/pep_spelling_invariance_pin_tests.rs     #
+// ############################################################################
+
 //! Implements [TYPEINF-TARGET-NARROWING]. See docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-TARGET-NARROWING
 //! The statement-level flow walker: drives a [`NarrowEnv`] through a function
 //! body, applying resolver-collected guards at branches (positive frame in
@@ -615,7 +639,19 @@ fn element_type(iterable: &InferredType) -> InferredType {
         | InferredType::Literal(crate::types::LiteralValue::Str(_)) => InferredType::Str,
         InferredType::Generator(yield_type, _, _) => (**yield_type).clone(),
         InferredType::Tuple(elems) => tuple_element(elems),
-        InferredType::Named(name) if name == "range" => InferredType::Int,
+        // ##############################################################
+        // # DELETED — the `name == "range"` arm. DO NOT RESTORE IT.     #
+        // #                                                            #
+        // # It typed the element of an iterable as `int` when the       #
+        // # iterable's type RENDERED as the five characters "range".   #
+        // # `from builtins import range as r`, a user `class range`,   #
+        // # or any class a module names `range` all got the builtin's  #
+        // # element type. `range` resolves through the binding table    #
+        // # like every other name (CLAUDE.md: builtins are not an       #
+        // # exception).                                                 #
+        // #                                                            #
+        // # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs #
+        // ##############################################################
         _ => InferredType::Unknown,
     }
 }

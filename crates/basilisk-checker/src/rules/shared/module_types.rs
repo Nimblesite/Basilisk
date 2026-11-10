@@ -15,15 +15,15 @@
 use basilisk_resolver::ResolvedModule;
 
 use crate::annotation::AnnotationResolver;
-use crate::subtyping::{module_context, SubtypingContext};
 
+use super::nominal::NominalHierarchy;
 use super::oracle::ModuleOracle;
 
 /// Everything a rule needs to answer "what type is this, and does it fit?".
 pub(crate) struct ModuleTypes<'m> {
     annotations: Option<AnnotationResolver<'m>>,
     oracle: Option<ModuleOracle<'m>>,
-    subtyping: SubtypingContext,
+    nominal: NominalHierarchy<'m>,
 }
 
 impl<'m> ModuleTypes<'m> {
@@ -38,7 +38,7 @@ impl<'m> ModuleTypes<'m> {
         Self {
             annotations,
             oracle,
-            subtyping: module_context(module),
+            nominal: NominalHierarchy::build(module),
         }
     }
 
@@ -53,8 +53,13 @@ impl<'m> ModuleTypes<'m> {
         self.oracle.as_ref()
     }
 
-    /// The module's nominal class hierarchy ([TYPEINF-SUBTYPING]).
-    pub(crate) fn subtyping(&self) -> &SubtypingContext {
-        &self.subtyping
+    /// The module's nominal class hierarchy ([TYPEINF-SUBTYPING-NOMINAL]).
+    ///
+    /// REPLACES the deleted `subtyping()` accessor, which handed out a
+    /// hierarchy keyed on strings harvested from rendered annotation text —
+    /// every rule that took it inherited a verdict about spelling. This one is
+    /// keyed on class definition sites; see [`NominalHierarchy`].
+    pub(crate) fn nominal(&self) -> &NominalHierarchy<'m> {
+        &self.nominal
     }
 }

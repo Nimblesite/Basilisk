@@ -7,7 +7,11 @@
 // text>)` turned each of these annotations into an opaque `Named(..)`, and
 // `shared::is_unverifiable_return_type` skipped every `Named` — so a wrong
 // return through an alias or a same-file class drew nothing at all
-// (Refs #378).
+// ([#378](https://github.com/Nimblesite/Basilisk/issues/378)). Alias semantics
+// are governed by [PEP 613](https://peps.python.org/pep-0613/) and
+// [PEP 695](https://peps.python.org/pep-0695/#generic-type-alias); assignment
+// and return annotations inherit the [PEP 484](https://peps.python.org/pep-0484/)
+// compatibility contract.
 
 use super::common::*;
 

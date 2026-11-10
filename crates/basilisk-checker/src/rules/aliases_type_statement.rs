@@ -3,15 +3,15 @@
 //!
 //! PEP 695 requires the RHS of a `type` statement to be a valid type
 //! expression. The RHS is validated **structurally** on the parsed `ruff`
-//! expression tree (issue #379 — substring matching both missed invalid
-//! forms and misfired on identifiers containing matched text): names,
-//! dotted names, `X | Y` unions, `None`, string forward references, and
-//! subscriptions of those are type expressions; every other expression
-//! form (literals, calls, lambdas, conditionals, comparisons,
-//! comprehensions, boolean operators) is not. Subscript *arguments* are
-//! never descended into — special forms like `Literal[...]`,
-//! `Callable[[...], X]`, and `Annotated[X, ...]` legitimately hold
-//! non-type expressions there.
+//! expression tree via the shared judge ([LINESCANPLAN-AST-MIGRATION], issue
+//! #379 — substring matching both missed invalid forms and misfired on
+//! identifiers containing matched text): names, dotted names, `X | Y`
+//! unions, `None`, string forward references, and subscriptions of those are
+//! type expressions; every other expression form (literals, calls, lambdas,
+//! conditionals, comparisons, comprehensions, boolean operators, attribute
+//! access on a subscript) is not. The `type` statement is lazily evaluated,
+//! so string forward references are valid anywhere in the RHS, including as
+//! union operands — recursive aliases spell themselves that way.
 //!
 //! ```python
 //! type BadAlias1 = [int, str]   # E — list literal
@@ -22,10 +22,11 @@
 use std::collections::{HashMap, HashSet};
 
 use basilisk_resolver::{ResolvedModule, RhsKind, Span};
-use ruff_python_ast::{Expr, Operator, Stmt};
+use ruff_python_ast::{Expr, Stmt};
 use ruff_text_size::Ranged;
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
+use crate::rules::shared::{is_type_expression, StringPolicy, TypeExprJudge};
 
 use super::Rule;
 
@@ -45,43 +46,6 @@ fn make_diag(name: &str, span: Span, path: &str) -> Diagnostic {
             "PEP 695: `type X = T` requires T to be a type, not a literal or expression".to_owned(),
         ),
     )
-}
-
-/// The names a statement must treat as non-types: module bindings that hold a
-/// value, minus the statement's OWN type parameters.
-///
-/// PEP 695 binds a `type` statement's parameters in its annotation scope, so
-/// `T = 1` followed by `type Wrapper[T] = T | None` is valid. The shadowing is
-/// resolved per NAME at the leaf rather than by rebuilding a filtered set per
-/// statement — a module of `n` aliases and `m` value bindings costs `O(n + m)`
-/// instead of `O(n * m)` ([CHKARCH-TESTING-BENCH]).
-struct NonTypes<'a> {
-    module: &'a HashSet<&'a str>,
-    shadowed: &'a [String],
-}
-
-impl NonTypes<'_> {
-    fn contains(&self, name: &str) -> bool {
-        self.module.contains(name) && !self.shadowed.iter().any(|param| param == name)
-    }
-}
-
-/// Whether `expr` has the structural shape of a type expression.
-///
-/// A bare name bound to a non-type module variable (e.g. `x = 42` then
-/// `type Bad = x`) is rejected; subscript arguments are deliberately not
-/// descended into (special forms hold non-type expressions there).
-fn is_type_expression(expr: &Expr, non_type_names: &NonTypes<'_>) -> bool {
-    match expr {
-        Expr::Name(name) => !non_type_names.contains(name.id.as_str()),
-        Expr::Attribute(_) | Expr::NoneLiteral(_) | Expr::StringLiteral(_) => true,
-        Expr::Subscript(subscript) => is_type_expression(&subscript.value, non_type_names),
-        Expr::BinOp(binop) if binop.op == Operator::BitOr => {
-            is_type_expression(&binop.left, non_type_names)
-                && is_type_expression(&binop.right, non_type_names)
-        }
-        _ => false,
-    }
 }
 
 /// Index every `type X = rhs` value expression in the module's ALREADY-PARSED
@@ -152,11 +116,17 @@ impl Rule for TypeStatementInvalidRhs {
             let Some(rhs) = rhs_nodes.get(&(stmt.rhs_span.start, stmt.rhs_span.end)) else {
                 continue;
             };
-            let non_types = NonTypes {
-                module: &module_non_types,
-                shadowed: &stmt.param_names,
+            // PEP 695 binds the statement's own type parameters in its
+            // annotation scope, so `T = 1` followed by `type Wrapper[T] = T`
+            // is valid — the parameter shadows the module binding.
+            let judge = TypeExprJudge {
+                non_type: &|name| {
+                    module_non_types.contains(name)
+                        && !stmt.param_names.iter().any(|param| param == name)
+                },
+                strings: StringPolicy::LazyForwardRef,
             };
-            if !is_type_expression(rhs, &non_types) {
+            if !is_type_expression(rhs, &judge) {
                 diagnostics.push(make_diag(&stmt.name, stmt.name_span, path));
             }
         }

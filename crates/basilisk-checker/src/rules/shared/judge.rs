@@ -16,16 +16,16 @@ use basilisk_resolver::Span;
 use ruff_python_ast::Expr;
 
 use crate::annotation::AnnotationResolver;
-use crate::subtyping::SubtypingContext;
 use crate::types::InferredType;
 
+use super::nominal::NominalHierarchy;
 use super::oracle::ModuleOracle;
 
 /// The module's type judgment, borrowed from the shared context.
 pub(crate) struct TypeJudge<'m, 'a> {
     oracle: Option<&'a ModuleOracle<'m>>,
     resolver: &'a AnnotationResolver<'m>,
-    subtyping: &'a SubtypingContext,
+    nominal: &'a NominalHierarchy<'m>,
 }
 
 impl<'m, 'a> TypeJudge<'m, 'a> {
@@ -33,12 +33,12 @@ impl<'m, 'a> TypeJudge<'m, 'a> {
     pub(crate) fn new(
         oracle: Option<&'a ModuleOracle<'m>>,
         resolver: &'a AnnotationResolver<'m>,
-        subtyping: &'a SubtypingContext,
+        nominal: &'a NominalHierarchy<'m>,
     ) -> Self {
         Self {
             oracle,
             resolver,
-            subtyping,
+            nominal,
         }
     }
 
@@ -57,6 +57,13 @@ impl<'m, 'a> TypeJudge<'m, 'a> {
     /// ([TYPEINF-ANNOTATION-RESOLUTION]).
     pub(crate) fn resolve_annotation_text(&self, text: &str) -> Option<InferredType> {
         self.resolver.resolve_text(text)
+    }
+
+    /// The declared type of the annotation node covering `span`, resolved
+    /// through the cascade. `None` when no annotation node has exactly that
+    /// span — the caller then has nothing to judge and must stay silent.
+    pub(crate) fn declared_at(&self, span: Span) -> Option<InferredType> {
+        self.resolver.resolve_span(span)
     }
 
     /// The AST node occupying `span`, if the oracle indexed one.
@@ -87,11 +94,37 @@ impl<'m, 'a> TypeJudge<'m, 'a> {
             == Some(true)
     }
 
-    /// Does `inferred` fit `declared` — by assignability, or by a nominal
-    /// subclass relationship only the module's class table knows?
+    /// Does `inferred` fit `declared`?
+    ///
+    /// Two halves: the structural relations `InferredType` knows (the builtin
+    /// tower, literals, unions, containers), then the nominal subclass walk
+    /// over the module's resolved class hierarchy.
     pub(crate) fn fits(&self, inferred: &InferredType, declared: &InferredType) -> bool {
+        // Two nominal leaves are the NOMINAL layer's question. `InferredType`
+        // holds a rendering, not a resolved identity, so `is_assignable_to`
+        // has nothing lawful to decide them with and deliberately panics
+        // rather than compare characters.
+        //
+        // THIS GUARD IS TOP-LEVEL ONLY, AND THAT IS A LIVE BUG. It catches
+        // `Named` vs `Named` and nothing else, so every NESTED pair still
+        // walks into `is_assignable_to` and reaches the panic in production:
+        // `list[Cairn]` against `list[Waypoint]`, `dict[str, Cairn]`, a tuple
+        // element, a callable parameter or return, a `TypeIs[...]` operand.
+        // Anything that recurses past the outermost constructor is unprotected.
+        //
+        // The guard is not the fix and must not be extended into one — a
+        // deeper walk here would be the same text-derived comparison one
+        // level down. The fix is a nominal leaf that carries its definition
+        // site, after which `is_assignable_to` can decide the pair itself at
+        // any depth.
+        if matches!(
+            (inferred, declared),
+            (InferredType::Named(_), InferredType::Named(_))
+        ) {
+            return nominal_subclass_assignable(inferred, declared, self.nominal);
+        }
         inferred.is_assignable_to(declared)
-            || nominal_subclass_assignable(inferred, declared, self.subtyping)
+            || nominal_subclass_assignable(inferred, declared, self.nominal)
     }
 
     /// Is `declared` a target this nominal judgment may rule on at all?
@@ -154,70 +187,41 @@ impl<'m, 'a> TypeJudge<'m, 'a> {
     }
 }
 
-/// Nominal-subclass acceptance through the module's registered hierarchy:
-/// `x: Base = Derived()` and `x: int = MyInt()` are assignments
-/// [`InferredType::is_assignable_to`] alone cannot bless because it has no
-/// class table ([NARROWPLAN-INTEGRATION]: nominal verdicts route through
-/// [`SubtypingContext`]). Union sides decompose exactly as assignability does.
+/// Is `inferred` assignable to `declared` because one names a SUBCLASS of the
+/// other, or a member of the enum the other names?
+///
+/// REBUILT on resolved class identity. The deleted version rendered both
+/// types back into strings through a spelling table (`InferredType::Int =>
+/// "int"`, `Named(name) => name.split('[').next()`) and compared the text,
+/// settling enum membership with
+/// `sub.strip_prefix(sup).is_some_and(|rest| rest.starts_with('.'))` — so any
+/// class whose name merely began with the target's and a dot was accepted,
+/// and a genuine member reached under an alias was rejected.
+///
+/// Here both leaves resolve through the module's binding table to class
+/// definitions and the answer comes from the resolved hierarchy. Only the
+/// `Named` leaves are handled: every other pair is a relation
+/// [`InferredType::is_assignable_to`] already owns, and `false` here means
+/// "no NOMINAL evidence", never "these types conflict".
 pub(crate) fn nominal_subclass_assignable(
     inferred: &InferredType,
     declared: &InferredType,
-    subtyping: &SubtypingContext,
+    nominal: &NominalHierarchy<'_>,
 ) -> bool {
-    match (inferred, declared) {
-        (InferredType::Union(arms), _) => arms.iter().all(|arm| {
-            arm.is_assignable_to(declared) || nominal_subclass_assignable(arm, declared, subtyping)
-        }),
-        (_, InferredType::Union(arms)) => arms.iter().any(|arm| {
-            inferred.is_assignable_to(arm) || nominal_subclass_assignable(inferred, arm, subtyping)
-        }),
-        (InferredType::Optional(inner), _) => {
-            nominal_subclass_assignable(inner, declared, subtyping)
-                && InferredType::None_.is_assignable_to(declared)
-        }
-        (_, InferredType::Optional(inner)) => {
-            nominal_subclass_assignable(inferred, inner, subtyping)
-        }
-        // The nominal walk only ARBITRATES across representations — a `Named`
-        // class against a builtin leaf (either direction). Two container
-        // forms already had their structural verdict from
-        // [`InferredType::is_assignable_to`]; re-blessing them under their
-        // bare class name would erase invariance errors.
-        _ if matches!(inferred, InferredType::Named(_))
-            || matches!(declared, InferredType::Named(_)) =>
-        {
-            match (nominal_leaf(inferred), nominal_leaf(declared)) {
-                // `Answer.Yes` IS an `Answer`: a dotted member literal is an
-                // instance of the enum that owns it.
-                (Some(sub), Some(sup)) => {
-                    subtyping.is_subtype(&sub, &sup)
-                        || sub
-                            .strip_prefix(sup.as_str())
-                            .is_some_and(|rest| rest.starts_with('.'))
-                }
-                _ => false,
-            }
-        }
-        _ => false,
-    }
-}
-
-/// The name a type participates in the nominal walk under — a class's base
-/// spelling, or the builtin name of a concrete leaf. Containers join under
-/// their builtin class so a user class deriving `dict[K, V]` is accepted
-/// where `dict` is declared.
-fn nominal_leaf(ty: &InferredType) -> Option<String> {
-    match ty {
-        InferredType::Named(name) => Some(name.split('[').next().unwrap_or(name).to_owned()),
-        InferredType::Int => Some("int".to_owned()),
-        InferredType::Str | InferredType::LiteralString => Some("str".to_owned()),
-        InferredType::Float => Some("float".to_owned()),
-        InferredType::Bool => Some("bool".to_owned()),
-        InferredType::Bytes => Some("bytes".to_owned()),
-        InferredType::List(_) => Some("list".to_owned()),
-        InferredType::Set(_) => Some("set".to_owned()),
-        InferredType::Dict(_, _) => Some("dict".to_owned()),
-        InferredType::Tuple(_) => Some("tuple".to_owned()),
-        _ => None,
-    }
+    let (InferredType::Named(sub), InferredType::Named(sup)) = (inferred, declared) else {
+        return false;
+    };
+    // No `sub == sup` shortcut. Same spelling is not same definition — a
+    // module may declare two classes with one name — and one definition
+    // reached under two names has two spellings. Both cases are answered
+    // below by resolving each leaf to a definition site.
+    nominal
+        .is_subclass(sub, sup)
+        .or_else(|| nominal.is_declared_member(sub, sup))
+        // Neither leaf resolves to a class this module defines, or the walk
+        // hit an edge it could not follow. There is no resolved identity to
+        // compare, so this is not evidence of a conflict: stay silent rather
+        // than report a mismatch the checker cannot substantiate
+        // ([CHKARCH-CONFORMANCE-MODE]).
+        .unwrap_or(true)
 }

@@ -150,7 +150,8 @@ mod tests {
 
     // [LSPUV-WORKSPACE-DETECTION]: parsing `[tool.uv.workspace]` members/glob
     // patterns/excludes, and the no-workspace / malformed / literal-member
-    // edge cases.
+    // edge cases. Regression:
+    // https://github.com/Nimblesite/Basilisk/issues/204
     #[test]
     fn parses_workspace_with_members_and_excludes() {
         let dir = tempfile::tempdir().unwrap();
@@ -165,9 +166,15 @@ members = ["packages/*"]
 exclude = ["packages/beta"]
 "#;
         let ws = write_and_parse(&dir, pyproject);
-        assert_eq!(ws.members.len(), 2);
-        assert!(ws.members.contains(&member_a));
-        assert!(ws.members.contains(&member_b));
+        assert_eq!(
+            ws.members,
+            vec![member_a],
+            "[tool.uv.workspace].exclude must subtract beta from the expanded members"
+        );
+        assert!(
+            !ws.members.contains(&member_b),
+            "an excluded workspace directory must never remain an import/search root"
+        );
         assert_eq!(ws.exclude, vec!["packages/beta".to_owned()]);
     }
 

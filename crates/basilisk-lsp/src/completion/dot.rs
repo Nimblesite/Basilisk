@@ -45,7 +45,7 @@ pub(super) fn dot_completions(
 fn builtin_class_member_items(
     class: &basilisk_resolver::scope::IndexedStubClass,
     prefix: &str,
-    literal_receiver: bool,
+    _literal_receiver: bool,
 ) -> Vec<CompletionItem> {
     let mut seen = std::collections::HashSet::new();
     class
@@ -53,14 +53,6 @@ fn builtin_class_member_items(
         .methods
         .iter()
         .filter(|method| prefix.is_empty() || method.name.starts_with(prefix))
-        .filter(|method| {
-            literal_receiver
-                || method
-                    .receiver
-                    .as_ref()
-                    .and_then(|receiver| receiver.annotation.as_deref())
-                    .is_none_or(|annotation| !annotation.contains("LiteralString"))
-        })
         .filter(|method| seen.insert(method.name.clone()))
         .map(|method| CompletionItem {
             label: method.name.clone(),

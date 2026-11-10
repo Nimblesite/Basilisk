@@ -491,7 +491,7 @@ The shipped VSIX and the tested VSIX **must be the same artifact**. A single rec
 | Path | Entry point | Purpose |
 |---|---|---|
 | Release | `.github/workflows/release.yml` `vsix` job | builds & publishes the per-platform VSIX |
-| Local install | `make reinstall-vsix` / `make reinstall-vsix-macos` | clean rebuild + install the exact release VSIX |
+| Local install | `make _reinstall_vsix` / `make _reinstall_vsix TARGET=darwin-arm64` | clean rebuild + install the exact release VSIX |
 | E2E gate | `make _test_vsix` (→ `_release_vsix`) | runs the e2e suite against the staged release bundle |
 
 Invariants:

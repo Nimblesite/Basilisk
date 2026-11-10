@@ -18,6 +18,12 @@ use super::ImportSearchPaths;
 /// `imports_unresolved` in the
 /// editor for third-party imports that the CLI resolves.
 /// Implements [ANALYSIS-INCR-IMPORTS].
+///
+/// Relative `from` imports must preserve and apply the AST's leading-dot level
+/// before this dispatch, as required by
+/// [PEP 328](https://peps.python.org/pep-0328/#guido-s-decision). The full-path
+/// regression is [#369](https://github.com/Nimblesite/Basilisk/issues/369);
+/// resolving every `ImportInfo.module` as absolute violates that contract.
 pub fn resolve_module_imports(
     resolved: &mut basilisk_resolver::ResolvedModule,
     search_paths: &ImportSearchPaths,

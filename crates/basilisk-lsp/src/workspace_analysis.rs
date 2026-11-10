@@ -82,9 +82,7 @@ pub fn bsk_to_lsp(
     let start = byte_offset_to_position(text, d.span.start_usize());
     let end = byte_offset_to_position(text, d.span.end_usize());
     let severity = match d.severity {
-        basilisk_checker::Severity::Error | basilisk_checker::Severity::SafetyViolation => {
-            DiagnosticSeverity::ERROR
-        }
+        basilisk_checker::Severity::Error => DiagnosticSeverity::ERROR,
         basilisk_checker::Severity::Warning => DiagnosticSeverity::WARNING,
         basilisk_checker::Severity::Info => DiagnosticSeverity::INFORMATION,
     };

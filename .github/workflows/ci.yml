@@ -421,15 +421,14 @@ jobs:
     # the opt-in contract). Falls back to the standard runner when unset.
     runs-on: ${{ vars.BIG_RUNNER || 'ubuntu-24.04' }}
     # Two full workspace compiles dominate this job: the instrumented `ci`-profile
-    # build (~8m) and the clean `--release` build the conformance gate demands
-    # (~5m). Tests and the gate itself are the cheap part. At 20 the job was
-    # killed 30 SECONDS into the conformance gate with every test already green —
-    # a budget that stops the prime-directive gate from running is worse than no
-    # budget at all, because a red gate and a gate that never ran look identical.
+    # build (~8m) and the clean `--release` build the pristine fixture regression
+    # requires (~5m). Tests and the fixture run itself are the cheap part. The
+    # timeout must leave enough room for that internal regression evidence to run;
+    # it is not a current official conformance result.
     timeout-minutes: 35
     steps:
       # cargo-llvm-cov instruments and RE-compiles the entire workspace, and the
-      # conformance gate clones python/typing fresh — together they exhausted the
+      # pristine fixture regression clones its pinned python/typing snapshot fresh — together they exhausted the
       # runner's ~14 GB root disk ("No space left on device" mid-build). Reclaim
       # the ~25 GB of preinstalled toolchains this job never touches
       # (dotnet/android/ghc/CodeQL/boost) up front so the instrumented artifacts
@@ -468,9 +467,10 @@ jobs:
         uses: taiki-e/install-action@81ee9698f20724138a785d788c7567d40f14cd2d # cargo-llvm-cov
 
       # NO fixture cache and NO vendored calculator, by design ([CHKARCH-CONFORMANCE]).
-      # test-rust.sh clones python/typing@main FRESH every run via
-      # conformance/run_conformance.py and scores the binary with the suite's OWN
-      # harness — the conformance number can never ride on a stale/cached artifact.
+      # test-rust.sh freshly clones the declared historical python/typing
+      # snapshot that still carries the removed Basilisk adapter and scores the
+      # binary with that snapshot's OWN harness. This is a pristine-fixture
+      # regression guard, not a current official conformance result.
       - name: Run Rust tests with coverage
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -937,7 +937,7 @@ jobs:
 
       - name: Run mutation test shard
         if: env.RUN == 'true'
-        run: make mutation-test SHARD="${{ matrix.shard }}" MUTATION_CHECK=0
+        run: make _mutation_test SHARD="${{ matrix.shard }}" MUTATION_CHECK=0
 
       # The ONLY artifact CI is allowed to create ([GITHUB-NO-ARTIFACTS]): a
       # transient in-run hand-off so the `mutation-test` job below can merge the
@@ -984,7 +984,25 @@ jobs:
           # The merge step ABOVE is the gate: it fails the job if the mutation
           # score regresses against the committed baseline. The HTML report is
           # not uploaded as an artifact ([GITHUB-NO-ARTIFACTS]) — it is
-          # reproducible locally via `make mutation-test`.
+          # reproducible locally via `make _mutation_test`.
+
+  # ── Mutated-suite conformance: NO JOB, BY POLICY ───────────────────────────
+  # A job named "Mutated Conformance Ratchet" lived here. It ran
+  # `conformance/run_mutation_conformance.py` as a REQUIRED CHECK that failed
+  # when the measured pass rate fell below a committed floor.
+  #
+  # DELETED, NOT MOVED OR DISABLED. CLAUDE.md: conformance is "never a gate,
+  # threshold, or ratchet ANYWHERE ... in `coverage-thresholds.json`,
+  # `make test`, CI, or a script." A conformance floor is the exact incentive
+  # that produced the fitting this repository is being emptied of: with a
+  # ratchet in CI, deleting a rule that only worked on the fixtures' spelling
+  # turns the build red, so the cheapest route to green is to keep the
+  # cheating code. A drop caused by REMOVING text-matched logic is progress and
+  # must be recordable without failing a build.
+  #
+  # The measurement itself is kept and still runnable locally
+  # (`make conformance MUTATED=1`); the script exits 0 whatever it measures.
+  # Do not reintroduce this job, a `needs:` on it, or any threshold check.
 
   # ── Build gate (standard job name per repo standards) ──────────────────────
   # `needs` is deliberately NARROW. This job consumes nothing from the test jobs

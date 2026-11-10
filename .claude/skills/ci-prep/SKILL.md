@@ -33,7 +33,7 @@ Example only. you must not use this. you must parse the gh action:
 3. **Rust Tests & Coverage** (`./scripts/test-rust.sh` — runs tests with `cargo llvm-cov` and enforces per-crate coverage thresholds)
 4. **VS Code Extension** (`make _test_vsix` — works on macOS via the native window server; on Linux it auto-uses `xvfb-run` when `DISPLAY` is empty)
 5. **Neovim Extension** (`make _test_nvim` — requires `nvim` 0.11+, `pytest`, `luarocks`. Install via `brew install neovim luarocks` on macOS)
-6. **Mutation Testing** (`make mutation-test` — runs `cargo mutants` and asserts no regression vs. `mutation_testing/mutation_scores.json`. Requires `cargo install cargo-mutants`)
+6. **Mutation Testing** (`make _mutation_test` — runs `cargo mutants` and asserts no regression vs. `mutation_testing/mutation_scores.json`. Requires `cargo install cargo-mutants`)
 
 **Mutation testing local-cadence exception.** The full mutation run takes ~10+ minutes even on a fast machine and is the ONLY checklist item you may skip locally: skip it when nothing in the mutation scope changed since the last green mutation run (no changes to mutated Rust code, `#[mutation_safe]` tests, `mutation_testing/`, or `scripts/mutation_examine_re.py`). If anything in scope changed, run it. CI always runs the full sharded suite on GitHub Actions regardless (4 parallel shards, ~9 min wall-clock), so the gate is never actually skipped — this exception only trims redundant local wall-clock.
 

@@ -4,31 +4,16 @@
   "eleventyExcludeFromCollections": true
 }
 ---
+{#- Implements [WITHDRAWAL-SURFACES]. The site is one statement plus a notice at
+    every retired URL. Only the statement is submitted for indexing: the notice
+    pages are 297 byte-identical copies, and listing them would ask search
+    engines to index the same paragraph 297 times. They stay reachable — and
+    carry `noindex` — so an old link still explains itself. -#}
 <?xml version="1.0" encoding="utf-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  {%- for item in collections.all %}
-  {%- if not item.data.eleventyExcludeFromCollections %}
   <url>
-    <loc>{{ site.url }}{{ item.url }}</loc>
-    {%- if item.data.dateModified %}
-    <lastmod>{{ item.data.dateModified | isoDate }}</lastmod>
-    {%- elif item.data.date %}
-    <lastmod>{{ item.data.date | isoDate }}</lastmod>
-    {%- endif %}
-    {%- if item.url == "/" or item.url == "/index.html" or item.url == "/zh/" %}
+    <loc>{{ site.url }}/</loc>
     <priority>1.0</priority>
-    <changefreq>weekly</changefreq>
-    {%- elif "/docs/" in item.url or "/errors/" in item.url %}
-    <priority>0.8</priority>
     <changefreq>monthly</changefreq>
-    {%- elif "/blog/" in item.url %}
-    <priority>0.7</priority>
-    <changefreq>monthly</changefreq>
-    {%- else %}
-    <priority>0.5</priority>
-    <changefreq>monthly</changefreq>
-    {%- endif %}
   </url>
-  {%- endif %}
-  {%- endfor %}
 </urlset>

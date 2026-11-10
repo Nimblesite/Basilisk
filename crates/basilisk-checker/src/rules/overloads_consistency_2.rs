@@ -6,19 +6,13 @@
 //!
 //! * If any signature is `@staticmethod` / `@classmethod`, *all* signatures and
 //!   the implementation must carry the same decorator.
-//! * `@final` and `@override` apply to the *implementation only* (or, in a stub,
-//!   the first overload). Placing either on an `@overload` signature when an
-//!   implementation is present is an error; in a stub (no implementation),
-//!   placing either on any but the first overload is an error.
 
 use std::collections::HashMap;
 
 use basilisk_resolver::{FunctionInfo, ResolvedModule, Span};
 
-use crate::annotation::AnnotationResolver;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
-use super::shared::overload_decorated;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
@@ -26,10 +20,16 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/overloads_consistency_2",
 };
 
-fn has_dec(decorators: &[String], name: &str) -> bool {
-    decorators
-        .iter()
-        .any(|d| d == name || d.ends_with(&format!(".{name}")))
+fn has_dec(_decorators: &[String], _name: &str) -> bool {
+    // ILLEGAL TO RESTORE: the deleted implementation classified decorators by
+    // their rendered spelling and trailing token. It therefore missed aliases
+    // of the builtin decorators and granted builtin semantics to unrelated user
+    // attributes. The real implementation must consume resolver-provided
+    // canonical decorator identity; that implementation does not exist yet.
+    panic!(
+        "overloads_consistency_2: decorator identity was deleted because it was derived from \
+         rendered source spelling; rebuild this caller on canonical resolved decorator identity"
+    )
 }
 
 /// Emits `overloads_consistency_2` for decorator inconsistencies within an overload group.
@@ -52,11 +52,10 @@ impl Rule for OverloadDecoratorConsistency {
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        // Overload membership is a binding question ([#380]); the
-        // staticmethod/final/override checks below stay spelling-based.
-        let Some(resolver) = types.annotations() else {
+        // Bail on parse errors — those are reported separately as BSK-0000.
+        if types.annotations().is_none() {
             return;
-        };
+        }
         let mut groups: HashMap<(Option<&str>, &str), Vec<&FunctionInfo>> = HashMap::new();
         for func in &module.functions {
             groups
@@ -66,40 +65,26 @@ impl Rule for OverloadDecoratorConsistency {
         }
 
         for funcs in groups.values() {
-            check_group(funcs, resolver, &module.path, diagnostics);
+            check_group(funcs, &module.path, diagnostics);
         }
     }
 }
 
-fn check_group(
-    funcs: &[&FunctionInfo],
-    resolver: &AnnotationResolver<'_>,
-    path: &str,
-    out: &mut Vec<Diagnostic>,
-) {
-    let overloads: Vec<&&FunctionInfo> = funcs
-        .iter()
-        .filter(|f| overload_decorated(resolver, &f.decorators))
-        .collect();
+fn check_group(funcs: &[&FunctionInfo], path: &str, out: &mut Vec<Diagnostic>) {
+    let overloads: Vec<&&FunctionInfo> = funcs.iter().filter(|f| f.is_overload).collect();
     if overloads.is_empty() {
         return;
     }
-    let implementation = funcs
-        .iter()
-        .find(|f| !overload_decorated(resolver, &f.decorators));
+    let implementation = funcs.iter().find(|f| !f.is_overload);
 
     match implementation {
-        // Group WITH an implementation: `@final`/`@override` belong on the
-        // implementation, never on an overload signature.
+        // Group WITH an implementation.
         Some(impl_fn) => {
             check_static_class_consistency(&overloads, Some(impl_fn), out, path);
-            check_impl_only_decorators(&overloads, out, path);
         }
-        // Group WITHOUT an implementation is legal only in a stub (`.pyi`); there
-        // `@final`/`@override` must appear on the FIRST overload only.
+        // Group WITHOUT an implementation is legal only in a stub (`.pyi`).
         None if is_stub(path) => {
             check_static_class_consistency(&overloads, None, out, path);
-            check_first_overload_only_decorators(&overloads, out, path);
         }
         None => {}
     }
@@ -146,58 +131,6 @@ fn check_static_class_consistency(
                 path,
             ));
             return; // one decorator-consistency diagnostic per group is enough
-        }
-    }
-}
-
-/// In a stub the `@final`/`@override` decorator must be on the FIRST overload
-/// only. Flag the first later overload that carries either decorator.
-fn check_first_overload_only_decorators(
-    overloads: &[&&FunctionInfo],
-    out: &mut Vec<Diagnostic>,
-    path: &str,
-) {
-    for overload in overloads.iter().skip(1) {
-        for kind in ["final", "override"] {
-            if let Some((_, span)) = overload
-                .decorator_spans
-                .iter()
-                .find(|(name, _)| name == kind || name.ends_with(&format!(".{kind}")))
-            {
-                out.push(make_diagnostic(
-                    format!(
-                        "`@{kind}` on a later overload of `{}`: in a stub it must appear only on \
-                         the first overload",
-                        overload.name
-                    ),
-                    *span,
-                    path,
-                ));
-                return; // one placement diagnostic per group is enough
-            }
-        }
-    }
-}
-
-/// `@final` / `@override` belong on the implementation, not an overload signature.
-fn check_impl_only_decorators(overloads: &[&&FunctionInfo], out: &mut Vec<Diagnostic>, path: &str) {
-    for overload in overloads {
-        for kind in ["final", "override"] {
-            if let Some((_, span)) = overload
-                .decorator_spans
-                .iter()
-                .find(|(name, _)| name == kind || name.ends_with(&format!(".{kind}")))
-            {
-                out.push(make_diagnostic(
-                    format!(
-                        "`@{kind}` on an `@overload` signature of `{}`: it should be applied only \
-                         to the implementation",
-                        overload.name
-                    ),
-                    *span,
-                    path,
-                ));
-            }
         }
     }
 }

@@ -216,6 +216,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "basilisk-canonical"
+version = "0.0.0-PLACEHOLDER"
+dependencies = [
+ "ruff_python_ast",
+ "ruff_python_parser",
+ "ruff_text_size",
+ "serde",
+ "thiserror",
+ "toml",
+ "tracing",
+]
+
+[[package]]
 name = "basilisk-checker"
 version = "0.0.0-PLACEHOLDER"
 dependencies = [
@@ -370,6 +383,7 @@ dependencies = [
 name = "basilisk-resolver"
 version = "0.0.0-PLACEHOLDER"
 dependencies = [
+ "basilisk-canonical",
  "basilisk-parser",
  "basilisk-stubs",
  "basilisk-test-utils",
@@ -377,12 +391,14 @@ dependencies = [
  "ruff_text_size",
  "serde",
  "thiserror",
+ "toml",
 ]
 
 [[package]]
 name = "basilisk-stubs"
 version = "0.0.0-PLACEHOLDER"
 dependencies = [
+ "basilisk-canonical",
  "basilisk-common",
  "basilisk-parser",
  "ruff_python_ast",

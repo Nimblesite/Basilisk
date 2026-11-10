@@ -9,17 +9,16 @@
 # fixture's construct; the published tables therefore compare per-tool
 # distributions (median/range), never construct-vs-construct across tools.
 #
-# Run from the repo root:  make bench   (or:  bash benchmarks/run.sh)
+# Run from the repo root:  make _bench   (or:  bash benchmarks/run.sh)
 #
-# WRITE-ALWAYS, GATE-SEPARATELY. Two responsibilities that must NEVER suppress
-# each other (benchmarks/summarize.py enforces this):
+# WRITE-ALWAYS, REVIEW-SEPARATELY. The recorder and the human review must never
+# suppress each other (benchmarks/summarize.py enforces unconditional writes):
 #
 #   1. The measured numbers are written STRAIGHT to the git-tracked status CSV
 #      the instant each score exists — after every fixture (incremental) and at
 #      the end (final). There is NO path where a run measures a number and does
 #      not record it: the file ALWAYS shows what this build actually did. A
-#      benchmark that hides a slower number is a lie, and the entire point of the
-#      suite is to KNOW the moment a number slips.
+#      benchmark that hides a slower number is incomplete evidence.
 #   2. NOTHING GATES ON THESE NUMBERS. The benchmark is an INDICATIVE,
 #      developer-run measurement: it runs on whatever workstation a contributor
 #      happens to use, against whatever else that machine is doing. Background
@@ -38,9 +37,9 @@
 #   benchmarks/status/<machine>.csv   — git-tracked per-machine results table,
 #                                        ALWAYS rewritten with the latest measured
 #                                        numbers. The
-#                                        website reads this file, so the published
-#                                        numbers are never hand-typed and never
-#                                        stale relative to the last run.
+#                                        website may read this file only as a
+#                                        clearly withdrawn historical record
+#                                        while the methodology audit is open.
 #   benchmarks/results/*.json         — raw hyperfine output (untracked: ~9.6k
 #                                        lines rewritten every run, pure diff noise)
 #   benchmarks/results/summary.md     — human-readable summary (tracked: the
@@ -88,23 +87,23 @@ MIN_STABILITY_RUNS=30
 # runs populate them so the measured runs are cache hits.
 WARMCACHE="$OUT/.warmcache"
 MYPYCACHE="$OUT/.mypycache"
-# LOCAL ITERATION MODE (make bench-basilisk). Times ONLY the basilisk columns
+# LOCAL ITERATION MODE (make _bench ONLY=basilisk). Times ONLY the basilisk columns
 # and skips the competitor pull, discovery, preflight, and timing. Closing a
 # basilisk performance gap needs the basilisk number in a minute, not the many
 # minutes five 0.5s-per-invocation competitors add to every iteration — and
 # re-timing them proves nothing about a change to THIS tree.
 #
-# It relaxes nothing that decides anything: the full `cargo clean` + fresh
-# release build, the noisy-measurement stability policy, and the zero-tolerance
-# gate against the COMMITTED baseline all run exactly as in a full sweep. The
-# competitor cells are CARRIED FORWARD verbatim from the status CSV rather than
+# It preserves the measurement-quality controls: the full `cargo clean` + fresh
+# release build and the noisy-measurement stability policy run exactly as in a
+# full sweep. The competitor cells are CARRIED FORWARD verbatim from the status CSV rather than
 # blanked (a blank cell means "not installed / failed preflight" and must keep
 # meaning that), and the CSV header records which tools this run measured and
 # which it carried, so the file never implies a competitor was re-timed.
-# CI always runs the full sweep, so the mode is refused there.
+# If invoked from GitHub Actions, only a full sweep may write the record; a
+# partial automated run would silently carry stale competitor measurements.
 BENCH_ONLY_BASILISK="${BENCH_ONLY_BASILISK:-}"
 if [[ -n "$BENCH_ONLY_BASILISK" && "${GITHUB_ACTIONS:-}" == "true" ]]; then
-  echo "ERROR: BENCH_ONLY_BASILISK is a local iteration mode; CI must run the full sweep." >&2
+  echo "ERROR: BENCH_ONLY_BASILISK is a local iteration mode; automated runs must use the full sweep." >&2
   exit 2
 fi
 mkdir -p "$OUT" "$STATUS_DIR"
@@ -182,7 +181,7 @@ echo "  fresh binary: $BSK"
 # and is never "pulled". The upgrade is best-effort PER TOOL: a failed pull
 # (offline, yanked release, non-pip install channel) prints a LOUD warning and
 # the run continues on the installed version, so a transient PyPI hiccup can't
-# brick the basilisk performance gate — but the staleness is always visible in
+# prevent an otherwise useful measurement — but the staleness is always visible in
 # the log, never silent. The pull runs outside all timing, so it never affects a
 # measured number. Recognized package names == CLI command names for all five.
 RECOGNIZED_CHECKERS="pyright mypy ty pyrefly zuban"
@@ -544,7 +543,8 @@ for FILE in "${FIXTURES[@]}"; do
   # file reflects reality the instant each score exists. Runs BETWEEN timed
   # fixtures (never inside a hyperfine measurement), so it can't perturb timings;
   # if the run dies mid-suite the status CSV already holds every completed score.
-  # No gate here — the write is unconditional; the gate runs once, at the end.
+  # No gate here or at the end — the write is unconditional and the final call
+  # only renders the complete report.
   python3 "$ROOT/benchmarks/summarize.py" "$OUT" incremental "${TOOL_NAMES[@]}" >/dev/null || true
 done
 

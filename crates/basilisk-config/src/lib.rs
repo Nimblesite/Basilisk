@@ -81,7 +81,10 @@ pub const DEFAULT_EXCLUDES: &[&str] = &[
 ///
 /// Returns `BasiliskConfig::default()` (empty chain — PEP rules at `error`,
 /// nothing else runs; [CHKARCH-CONFIG-MODEL]) if no config table is found
-/// anywhere on the chain, and likewise on malformed files.
+/// anywhere on the chain. Treating a malformed file the same way is the open
+/// CLI contract violation [#227](https://github.com/Nimblesite/Basilisk/issues/227):
+/// malformed configuration must surface to command callers as exit code 2,
+/// not silently become defaults.
 #[must_use]
 pub fn load_basilisk_config(start: &Path) -> BasiliskConfig {
     let chain: Vec<BasiliskConfig> = absolute_start(start)

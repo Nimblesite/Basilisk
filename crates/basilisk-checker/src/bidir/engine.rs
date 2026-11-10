@@ -34,6 +34,15 @@ pub struct BidirEngine {
     /// synthesis on user classes (`Point().x`). Empty unless the caller
     /// provides module class schemas via [`BidirEngine::set_class_attributes`].
     class_attributes: HashMap<String, HashMap<String, InferredType>>,
+    /// The module's binding table, when the caller supplied one.
+    ///
+    /// This is how a callee becomes a SYMBOL instead of a spelling: the
+    /// builtin-call table is keyed on what `builtins` definition the callee
+    /// resolves to, so `def len(xs): ...` in the module under analysis wins
+    /// over the builtin and `from builtins import len as size` still reaches
+    /// it ([RESOLV-CANONICAL-BINDING]). Without a table the engine can only
+    /// abstain — it must never fall back to reading the callee's characters.
+    bindings: Option<Arc<basilisk_resolver::BindingTable>>,
 }
 
 impl BidirEngine {
@@ -46,7 +55,14 @@ impl BidirEngine {
             constraints: ConstraintSet::default(),
             scopes: vec![Arc::new(globals)],
             class_attributes: HashMap::new(),
+            bindings: None,
         }
+    }
+
+    /// Provide the module's binding table, so callee identity is resolved
+    /// rather than spelled. See [`BidirEngine::bindings`].
+    pub fn set_bindings(&mut self, bindings: Arc<basilisk_resolver::BindingTable>) {
+        self.bindings = Some(bindings);
     }
 
     /// Provide the module's class-attribute schemas for plain attribute-load
@@ -361,26 +377,56 @@ impl BidirEngine {
         // Constructor: a class object used as a callee yields an instance.
         // (`Named` deliberately conflates class/instance at Stage 2 — the
         // display value is right and no rule enforces it yet.)
-        if let Ty::Ground(InferredType::Named(name)) = callee {
-            // …except a `type`-typed value: calling SOME class constructs an
-            // instance of an unknowable class, never an instance of `type`.
-            if name == "type" || name.starts_with("type[") {
-                return Ty::unknown();
+        // REBUILT from the deleted `name == "type" || name.starts_with("type[")`
+        // test, which decided that a callee was a CLASS OBJECT from how its
+        // type happened to be RENDERED — missing `builtins.type` under an
+        // alias and mistaking a user class named `type` for it.
+        //
+        // Class-object-ness is now a resolved LEAF, not a rendering: the
+        // cascade turns both `type` and `type[C]` into
+        // `InferredType::ClassObject` by resolving the annotation head
+        // ([TYPEINF-ANNOTATION-RESOLUTION]), so the spelling test has no work
+        // left to do. A user's own `class type` resolves to `Named("type")`
+        // and constructs an instance, exactly as any other class does.
+        match callee {
+            // Calling a class object: `type(x)` answers with a class, while
+            // `t()` for `t: type[C]` answers with a `C`. This engine models
+            // both callees as `ClassObject` and cannot yet tell them apart,
+            // so it abstains instead of picking one ([CHKARCH-CONFORMANCE-MODE]).
+            Ty::Ground(InferredType::ClassObject) => return Ty::unknown(),
+            Ty::Ground(InferredType::Named(name)) => {
+                return Ty::Ground(InferredType::Named(name.clone()))
             }
-            return Ty::Ground(InferredType::Named(name.clone()));
+            _ => {}
         }
         match call.func.as_ref() {
-            // `type(x)` yields x's CLASS — a class object, which is never a
-            // plain value like `None` ([TYPEINF-SPECIAL]); which class stays
-            // gradual. The two-plus-argument form creates a new class.
-            Expr::Name(name)
-                if name.id.as_str() == "type"
-                    && call.arguments.args.len() == 1
-                    && self.lookup("type").is_none() =>
-            {
-                Ty::Ground(InferredType::Named("type".to_owned()))
-            }
-            Expr::Name(name) => super::builtins::builtin_call_return(name.id.as_str())
+            // ##############################################################
+            // # DELETED — the `type(x)` arm. DO NOT RESTORE IT.            #
+            // #                                                           #
+            // #   Expr::Name(name)                                        #
+            // #       if name.id.as_str() == "type"                       #
+            // #           && call.arguments.args.len() == 1               #
+            // #           && self.lookup("type").is_none() =>             #
+            // #                                                           #
+            // # Recognising `builtins.type` by its four characters. The    #
+            // # `self.lookup("type").is_none()` guard is the same defect   #
+            // # wearing a seatbelt: it asks whether the SPELLING `type` is #
+            // # bound in the local frame, so a module-level `class type`   #
+            // # still hijacked the call, and `builtins.type(x)` — the      #
+            // # identical object, written as an `Expr::Attribute` — never  #
+            // # reached the arm at all.                                    #
+            // #                                                           #
+            // # Which object a callee denotes is a binding question:       #
+            // # `form_of_with_builtins` -> `TypingForm::TypeClass`.        #
+            // #                                                           #
+            // # Pinned by: tests/source_text_verdict_pin_tests.rs          #
+            // ##############################################################
+            Expr::Name(_) => self
+                .bindings
+                .as_ref()
+                .and_then(|bindings| {
+                    super::builtins::builtin_call_return(bindings, call.func.as_ref())
+                })
                 .map_or_else(Ty::unknown, Ty::Ground),
             Expr::Attribute(attribute) => {
                 let receiver = self.synth(&attribute.value).to_inferred(&self.vars);
@@ -568,7 +614,19 @@ fn iteration_element(iterable: &Ty) -> Ty {
         Ty::Ground(InferredType::Str | InferredType::LiteralString) => {
             Ty::Ground(InferredType::Str)
         }
-        Ty::Ground(InferredType::Named(name)) if name == "range" => Ty::Ground(InferredType::Int),
+        // ##############################################################
+        // # DELETED — the `name == "range"` arm. DO NOT RESTORE IT.     #
+        // #                                                            #
+        // # It typed the element of an iterable as `int` when the       #
+        // # iterable's type RENDERED as the five characters "range".   #
+        // # `from builtins import range as r`, a user `class range`,   #
+        // # or any class a module names `range` all got the builtin's  #
+        // # element type. `range` resolves through the binding table    #
+        // # like every other name (CLAUDE.md: builtins are not an       #
+        // # exception).                                                 #
+        // #                                                            #
+        // # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs #
+        // ##############################################################
         _ => Ty::unknown(),
     }
 }

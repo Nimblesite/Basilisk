@@ -31,12 +31,11 @@
 //! v2: TA7[int, str]    # OK — T1=int, T2=str, Ts=()
 //! ```
 
-use basilisk_resolver::{ResolvedModule, Span};
+use basilisk_resolver::{BindingTable, ResolvedModule, Span, TypingForm};
 use ruff_python_ast::{Expr, Stmt};
 use ruff_text_size::Ranged;
 
 use crate::diagnostic::{error_diag_help_note, error_diagnostic_owned, Diagnostic, ErrorCode};
-use crate::rules::shared::split_top_level_commas;
 
 use super::Rule;
 
@@ -55,7 +54,6 @@ impl Rule for TypeVarTupleSpecializationViolation {
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        let source = &module.source;
         let path = &module.path;
 
         // Collect the names of all TypeVarTuple definitions in this module.
@@ -77,12 +75,7 @@ impl Rule for TypeVarTupleSpecializationViolation {
 
         // Build a map of module-level alias name -> AliasInfo by scanning
         // top-level assignments of the form `Name = <subscript-or-name>`.
-        let alias_map = build_alias_map(
-            &parsed.ast.body,
-            source,
-            &typevartuple_names,
-            &typevar_names,
-        );
+        let alias_map = build_alias_map(&parsed.ast.body, &typevartuple_names, &typevar_names);
 
         if alias_map.is_empty() {
             return;
@@ -93,6 +86,7 @@ impl Rule for TypeVarTupleSpecializationViolation {
             &parsed.ast.body,
             &alias_map,
             &typevartuple_names,
+            &module.bindings,
             path,
             diagnostics,
         );
@@ -110,11 +104,10 @@ struct AliasInfo {
 
 /// Build a map from alias name to `AliasInfo` by scanning module-level
 /// assignments like `Name = tuple[int, T]` or `Name = tuple[*Ts, T1, T2]`.
-fn build_alias_map<'a>(
+fn build_alias_map(
     stmts: &[Stmt],
-    source: &str,
-    typevartuple_names: &[&'a str],
-    typevar_names: &[&'a str],
+    typevartuple_names: &[&str],
+    typevar_names: &[&str],
 ) -> std::collections::HashMap<String, AliasInfo> {
     let mut map = std::collections::HashMap::new();
 
@@ -133,14 +126,7 @@ fn build_alias_map<'a>(
             continue;
         };
 
-        // Get the RHS text from source.
-        let rhs_range = assign.value.range();
-        let Some(rhs_text) = source.get(rhs_range.start().to_usize()..rhs_range.end().to_usize())
-        else {
-            continue;
-        };
-
-        let info = analyse_alias_rhs(rhs_text.trim(), typevartuple_names, typevar_names);
+        let info = analyse_alias_value(&assign.value, typevartuple_names, typevar_names);
         if info.regular_typevar_count > 0 || info.has_typevartuple {
             let _ = map.insert(lhs_name.id.to_string(), info);
         }
@@ -149,38 +135,39 @@ fn build_alias_map<'a>(
     map
 }
 
-/// Analyse the RHS of a type alias to count its TypeVar/TypeVarTuple parameters.
-fn analyse_alias_rhs(rhs: &str, typevartuple_names: &[&str], typevar_names: &[&str]) -> AliasInfo {
-    // If no brackets, this might be a bare name — treat as zero params.
-    let Some(bracket_pos) = rhs.find('[') else {
-        return AliasInfo {
-            regular_typevar_count: 0,
-            has_typevartuple: false,
-        };
-    };
-
-    let Some(inner) = rhs.get(bracket_pos + 1..rhs.len().saturating_sub(1)) else {
-        return AliasInfo {
-            regular_typevar_count: 0,
-            has_typevartuple: false,
-        };
-    };
-
-    let args = split_top_level_commas(inner);
+/// Analyse the RHS of a type alias to count its TypeVar/TypeVarTuple
+/// parameters, from the AST: the slice elements of the subscripted RHS.
+/// `TypeVar`/`TypeVarTuple` references are matched by declared name identity,
+/// never source text ([ASTREBUILD-LAW]).
+fn analyse_alias_value(
+    value: &Expr,
+    typevartuple_names: &[&str],
+    typevar_names: &[&str],
+) -> AliasInfo {
     let mut regular_typevar_count = 0usize;
     let mut has_typevartuple = false;
 
-    for arg in &args {
-        let arg = arg.trim();
-        // Starred argument: `*Ts` — a TypeVarTuple unpack.
-        if let Some(name) = arg.strip_prefix('*') {
-            let name = name.trim();
-            // `*tuple[...]` is an unpacked homogeneous tuple, not a TVT name.
-            if !name.starts_with("tuple[") && typevartuple_names.contains(&name) {
-                has_typevartuple = true;
+    if let Expr::Subscript(sub) = value {
+        let elements: Vec<&Expr> = match sub.slice.as_ref() {
+            Expr::Tuple(tuple) => tuple.elts.iter().collect(),
+            single => vec![single],
+        };
+        for element in elements {
+            match element {
+                // Starred argument: `*Ts` — a TypeVarTuple unpack. A starred
+                // non-name (`*tuple[...]`) is an unpacked tuple, not a TVT.
+                Expr::Starred(starred) => {
+                    if let Expr::Name(name) = starred.value.as_ref() {
+                        if typevartuple_names.contains(&name.id.as_str()) {
+                            has_typevartuple = true;
+                        }
+                    }
+                }
+                Expr::Name(name) if typevar_names.contains(&name.id.as_str()) => {
+                    regular_typevar_count = regular_typevar_count.saturating_add(1);
+                }
+                _ => {}
             }
-        } else if typevar_names.contains(&arg) {
-            regular_typevar_count = regular_typevar_count.saturating_add(1);
         }
     }
 
@@ -195,6 +182,7 @@ fn check_stmts(
     stmts: &[Stmt],
     alias_map: &std::collections::HashMap<String, AliasInfo>,
     typevartuple_names: &[&str],
+    bindings: &BindingTable,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
@@ -205,6 +193,7 @@ fn check_stmts(
                     &expr_stmt.value,
                     alias_map,
                     typevartuple_names,
+                    bindings,
                     path,
                     diagnostics,
                 );
@@ -214,11 +203,19 @@ fn check_stmts(
                     &assign.value,
                     alias_map,
                     typevartuple_names,
+                    bindings,
                     path,
                     diagnostics,
                 );
                 for target in &assign.targets {
-                    check_expr(target, alias_map, typevartuple_names, path, diagnostics);
+                    check_expr(
+                        target,
+                        alias_map,
+                        typevartuple_names,
+                        bindings,
+                        path,
+                        diagnostics,
+                    );
                 }
             }
             Stmt::AnnAssign(ann_assign) => {
@@ -227,18 +224,40 @@ fn check_stmts(
                     &ann_assign.annotation,
                     alias_map,
                     typevartuple_names,
+                    bindings,
                     path,
                     diagnostics,
                 );
                 if let Some(value) = &ann_assign.value {
-                    check_expr(value, alias_map, typevartuple_names, path, diagnostics);
+                    check_expr(
+                        value,
+                        alias_map,
+                        typevartuple_names,
+                        bindings,
+                        path,
+                        diagnostics,
+                    );
                 }
             }
             Stmt::FunctionDef(func) => {
-                check_stmts(&func.body, alias_map, typevartuple_names, path, diagnostics);
+                check_stmts(
+                    &func.body,
+                    alias_map,
+                    typevartuple_names,
+                    bindings,
+                    path,
+                    diagnostics,
+                );
             }
             Stmt::ClassDef(cls) => {
-                check_stmts(&cls.body, alias_map, typevartuple_names, path, diagnostics);
+                check_stmts(
+                    &cls.body,
+                    alias_map,
+                    typevartuple_names,
+                    bindings,
+                    path,
+                    diagnostics,
+                );
             }
             _ => {}
         }
@@ -250,18 +269,33 @@ fn check_expr(
     expr: &Expr,
     alias_map: &std::collections::HashMap<String, AliasInfo>,
     typevartuple_names: &[&str],
+    bindings: &BindingTable,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     match expr {
         Expr::Subscript(sub) => {
             // Check the inner slice first (recursively).
-            check_expr(&sub.slice, alias_map, typevartuple_names, path, diagnostics);
+            check_expr(
+                &sub.slice,
+                alias_map,
+                typevartuple_names,
+                bindings,
+                path,
+                diagnostics,
+            );
 
             // Get the alias name being specialised.
             let Expr::Name(alias_name) = sub.value.as_ref() else {
                 // Recurse into the value expression too.
-                check_expr(&sub.value, alias_map, typevartuple_names, path, diagnostics);
+                check_expr(
+                    &sub.value,
+                    alias_map,
+                    typevartuple_names,
+                    bindings,
+                    path,
+                    diagnostics,
+                );
                 return;
             };
 
@@ -272,7 +306,7 @@ fn check_expr(
             let span = Span::from(sub.range());
 
             // Determine the provided type arguments from the slice.
-            let provided_args = collect_type_args(&sub.slice);
+            let provided_args = collect_type_args(&sub.slice, bindings);
 
             if info.has_typevartuple {
                 // Violation 2: alias has a TypeVarTuple — must supply at least
@@ -300,21 +334,32 @@ fn check_expr(
         }
         Expr::Tuple(tup) => {
             for elt in &tup.elts {
-                check_expr(elt, alias_map, typevartuple_names, path, diagnostics);
+                check_expr(
+                    elt,
+                    alias_map,
+                    typevartuple_names,
+                    bindings,
+                    path,
+                    diagnostics,
+                );
             }
         }
         _ => {}
     }
 }
 
-/// Collect the type arguments of a subscript slice expression as text tokens.
+/// Collect the type arguments of a subscript slice expression, classified.
 ///
 /// For `Alias[A, B, C]` the slice will be a `Tuple(A, B, C)` or just `A` when
 /// there is a single argument.
-fn collect_type_args(slice: &Expr) -> Vec<SliceArg> {
+fn collect_type_args(slice: &Expr, bindings: &BindingTable) -> Vec<SliceArg> {
     match slice {
-        Expr::Tuple(tup) => tup.elts.iter().map(classify_slice_elt).collect(),
-        other => vec![classify_slice_elt(other)],
+        Expr::Tuple(tup) => tup
+            .elts
+            .iter()
+            .map(|elt| classify_slice_elt(elt, bindings))
+            .collect(),
+        other => vec![classify_slice_elt(other, bindings)],
     }
 }
 
@@ -329,12 +374,19 @@ enum SliceArg {
     Plain,
 }
 
-fn classify_slice_elt(elt: &Expr) -> SliceArg {
+/// Classify one type argument. The unpacked-tuple form is recognised by
+/// resolving the starred subscript's base through the binding table to the
+/// builtin `tuple` constructor (or its `typing.Tuple` alias) — never by the
+/// spelling `tuple` ([ASTREBUILD-LAW]).
+fn classify_slice_elt(elt: &Expr, bindings: &BindingTable) -> SliceArg {
     match elt {
         Expr::Starred(starred) => match starred.value.as_ref() {
             Expr::Name(n) => SliceArg::StarredName(n.id.to_string()),
             Expr::Subscript(sub) => {
-                if matches!(sub.value.as_ref(), Expr::Name(n) if n.id.as_str() == "tuple") {
+                if matches!(
+                    bindings.form_of_with_builtins(&sub.value),
+                    Some(TypingForm::TupleClass | TypingForm::TupleAlias)
+                ) {
                     SliceArg::StarredTuple
                 } else {
                     SliceArg::StarredName(String::new())

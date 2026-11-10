@@ -4,19 +4,30 @@
 use ruff_python_ast::{Expr, Stmt, StmtAnnAssign, StmtAssign, StmtClassDef, StmtIf};
 use ruff_text_size::Ranged;
 
-use crate::scope::{AttributeInfo, FunctionInfo, MatchStmtInfo, RhsKind};
+use crate::canonical::{BindingTable, TypingForm};
+use crate::scope::{AttributeInfo, DescriptorKind, FunctionInfo, MatchStmtInfo, RhsKind};
 use crate::static_condition::{parse_static_condition, StaticCondition};
 use crate::visitor::class_info_ext::decorator_name;
+
+/// Whether a class-body value is wrapped in the enum non-member marker, which
+/// keeps it out of the enumeration's members.
+///
+/// Resolved through the module's bindings, so an aliased or module-qualified
+/// use is recognised and a local definition of the same name is not.
+fn rhs_is_nonmember_call(bindings: &BindingTable, value: &Expr) -> bool {
+    matches!(value, Expr::Call(call) if bindings.is_form(&call.func, TypingForm::EnumNonmember))
+}
 
 /// Return type for [`collect_class_body`]: attributes, method names, and
 /// per-method decorator lists.
 pub(super) type ClassBodyInfo = (Vec<AttributeInfo>, Vec<String>, Vec<(String, Vec<String>)>);
 
 use super::annotations::{
-    annotation_contains_readonly_expr, annotation_is_init_var, annotation_is_kw_only,
+    annotation_contains_readonly_expr, annotation_is_class_var, annotation_is_final,
+    annotation_is_init_var, annotation_is_kw_only,
 };
 use super::class_info_ext::{class_info_from, expr_simple_name};
-use super::core::{classify_rhs, collect_from_body, text_range_to_span};
+use super::core::{classify_rhs, collect_function_scope, text_range_to_span};
 use super::dataclass::{field_init_is_false, field_kw_only_override};
 use super::function_info::function_info_from;
 
@@ -35,10 +46,10 @@ fn mark_nested_in_class(functions: &mut [FunctionInfo], from: usize) {
 }
 
 pub(super) fn collect_class_body(
+    bindings: &BindingTable,
     class: &StmtClassDef,
     functions: &mut Vec<FunctionInfo>,
     match_stmts: &mut Vec<MatchStmtInfo>,
-    class_kw_only: bool,
 ) -> ClassBodyInfo {
     let mut attributes = Vec::new();
     let mut method_names = Vec::new();
@@ -50,16 +61,16 @@ pub(super) fn collect_class_body(
         match stmt {
             Stmt::AnnAssign(ann) => {
                 // Detect `_: KW_ONLY` sentinel — skip it as a real attribute.
-                if is_kw_only_sentinel(ann) {
+                if is_kw_only_sentinel(bindings, ann) {
                     after_kw_only_sentinel = true;
                 } else if let Some(attr) =
-                    ann_attribute(ann, after_kw_only_sentinel, class_kw_only, None)
+                    ann_attribute(bindings, ann, after_kw_only_sentinel, None)
                 {
                     attributes.push(attr);
                 }
             }
             Stmt::Assign(assign) => {
-                assign_attributes(assign, None, &mut attributes);
+                assign_attributes(bindings, assign, None, &mut attributes);
             }
             // A `if sys.version_info >= (...)` / `if TYPE_CHECKING` guard inside a
             // class body conditionally defines fields. Collect them, tagged with
@@ -67,15 +78,22 @@ pub(super) fn collect_class_body(
             // exist for the target version.
             Stmt::If(if_stmt) => {
                 collect_guarded_fields(
+                    bindings,
                     if_stmt,
                     None,
                     after_kw_only_sentinel,
-                    class_kw_only,
                     &mut attributes,
                 );
             }
             Stmt::FunctionDef(func) => {
-                let func_info = function_info_from(func, Some(class.name.to_string()));
+                let func_info = function_info_from(
+                    bindings,
+                    func,
+                    Some((
+                        class.name.to_string(),
+                        text_range_to_span(class.name.range()),
+                    )),
+                );
                 let method_name = func_info.name.clone();
                 let decs = func_info.decorators.clone();
                 functions.push(func_info);
@@ -83,15 +101,7 @@ pub(super) fn collect_class_body(
                 // lexically nested inside the class; mark the non-method ones so
                 // `generics_self_usage` does not treat their `Self` as module-level usage.
                 let nested_start = functions.len();
-                collect_from_body(
-                    &func.body,
-                    functions,
-                    &mut Vec::new(),
-                    &mut Vec::new(),
-                    &mut Vec::new(),
-                    match_stmts,
-                    false,
-                );
+                collect_function_scope(bindings, &func.body, functions, match_stmts);
                 mark_nested_in_class(functions, nested_start);
                 method_names.push(method_name.clone());
                 method_decorators.push((method_name, decs));
@@ -99,7 +109,7 @@ pub(super) fn collect_class_body(
             Stmt::ClassDef(inner_class) => {
                 // Nested classes contribute method FunctionInfos for annotation
                 // checking; only module-level classes enter the module schema.
-                let _inner_info = class_info_from(inner_class, functions, match_stmts);
+                let _inner_info = class_info_from(bindings, inner_class, functions, match_stmts);
             }
             _ => {}
         }
@@ -169,24 +179,27 @@ fn collect_nested_method_names(
     }
 }
 
-/// `true` for the `_: KW_ONLY` dataclass sentinel.
-fn is_kw_only_sentinel(ann: &StmtAnnAssign) -> bool {
+/// `true` for the keyword-only dataclass sentinel field.
+fn is_kw_only_sentinel(bindings: &BindingTable, ann: &StmtAnnAssign) -> bool {
     matches!(expr_simple_name(&ann.target), Some(name) if name == "_")
-        && annotation_is_kw_only(&ann.annotation)
+        && annotation_is_kw_only(bindings, &ann.annotation)
 }
 
 /// Build an [`AttributeInfo`] from an annotated field (`name: T = value`), or
 /// `None` when the target is not a simple name.
 fn ann_attribute(
+    bindings: &BindingTable,
     ann: &StmtAnnAssign,
     after_kw_only_sentinel: bool,
-    class_kw_only: bool,
     guard: Option<StaticCondition>,
 ) -> Option<AttributeInfo> {
     let name = expr_simple_name(&ann.target)?;
-    let field_kw_only = ann.value.as_deref().and_then(field_kw_only_override);
-    // Determine kw_only: explicit field() override wins; then sentinel; then class default.
-    let is_kw_only = field_kw_only.unwrap_or(after_kw_only_sentinel || class_kw_only);
+    let field_kw_only = ann
+        .value
+        .as_deref()
+        .and_then(|value| field_kw_only_override(bindings, value));
+    // Determine kw_only: explicit field() override wins; then sentinel.
+    let is_kw_only = field_kw_only.unwrap_or(after_kw_only_sentinel);
     Some(AttributeInfo {
         name,
         name_span: text_range_to_span(ann.target.range()),
@@ -195,14 +208,22 @@ fn ann_attribute(
         has_value: ann.value.is_some(),
         rhs_kind: RhsKind::Other,
         rhs_span: ann.value.as_ref().map(|v| text_range_to_span(v.range())),
-        rhs_is_nonmember_call: false,
         rhs_is_lambda: false,
         rhs_descriptor: None,
         rhs_name: None,
-        is_readonly: annotation_contains_readonly_expr(&ann.annotation),
+        is_readonly: annotation_contains_readonly_expr(bindings, &ann.annotation),
+        is_final: annotation_is_final(bindings, &ann.annotation),
+        is_class_var: annotation_is_class_var(bindings, &ann.annotation),
         is_kw_only,
-        is_init_false: ann.value.as_deref().is_some_and(field_init_is_false),
-        is_init_var: annotation_is_init_var(&ann.annotation),
+        is_init_false: ann
+            .value
+            .as_deref()
+            .is_some_and(|value| field_init_is_false(bindings, value)),
+        is_init_var: annotation_is_init_var(bindings, &ann.annotation),
+        rhs_is_nonmember_call: ann
+            .value
+            .as_deref()
+            .is_some_and(|value| rhs_is_nonmember_call(bindings, value)),
         guard,
     })
 }
@@ -211,15 +232,19 @@ fn ann_attribute(
 /// descriptor wrapper (if any) and the simple name of the callable bound.
 ///
 /// `m = f` → `(None, Some("f"))`; `s = staticmethod(g)` →
-/// `(Some("staticmethod"), Some("g"))`; anything else → names absent ([#382]).
-fn rhs_callable_binding(value: &Expr) -> (Option<String>, Option<String>) {
+/// `(Some(StaticMethod), Some("g"))`; anything else → both absent ([#382]).
+/// The wrapper is the callee's resolved binding with the builtin fallback, so
+/// an aliased import counts and a module-local shadow does not.
+fn rhs_callable_binding(
+    bindings: &BindingTable,
+    value: &Expr,
+) -> (Option<DescriptorKind>, Option<String>) {
     match value {
         Expr::Name(name) => (None, Some(name.id.to_string())),
         Expr::Call(call) => {
-            let wrapper = match call.func.as_ref() {
-                Expr::Name(n) if n.id == "staticmethod" || n.id == "classmethod" => {
-                    n.id.to_string()
-                }
+            let wrapper = match bindings.form_of_with_builtins(&call.func) {
+                Some(TypingForm::StaticMethod) => DescriptorKind::StaticMethod,
+                Some(TypingForm::ClassMethod) => DescriptorKind::ClassMethod,
                 _ => return (None, None),
             };
             let bound = match call.arguments.args.as_ref() {
@@ -234,16 +259,13 @@ fn rhs_callable_binding(value: &Expr) -> (Option<String>, Option<String>) {
 
 /// Append an [`AttributeInfo`] for each simple-name target of `name = value`.
 fn assign_attributes(
+    bindings: &BindingTable,
     assign: &StmtAssign,
     guard: Option<&StaticCondition>,
     attributes: &mut Vec<AttributeInfo>,
 ) {
-    let rhs_is_nonmember_call = matches!(
-        &*assign.value,
-        Expr::Call(c) if matches!(c.func.as_ref(), Expr::Name(n) if n.id == "nonmember")
-    );
     let rhs_is_lambda = matches!(&*assign.value, Expr::Lambda(_));
-    let (rhs_descriptor, rhs_name) = rhs_callable_binding(&assign.value);
+    let (rhs_descriptor, rhs_name) = rhs_callable_binding(bindings, &assign.value);
     for target in &assign.targets {
         if let Some(name) = expr_simple_name(target) {
             attributes.push(AttributeInfo {
@@ -254,14 +276,16 @@ fn assign_attributes(
                 has_value: true,
                 rhs_kind: classify_rhs(&assign.value),
                 rhs_span: Some(text_range_to_span(assign.value.range())),
-                rhs_is_nonmember_call,
                 rhs_is_lambda,
-                rhs_descriptor: rhs_descriptor.clone(),
+                rhs_descriptor,
                 rhs_name: rhs_name.clone(),
                 is_readonly: false,
+                is_final: false,
+                is_class_var: false,
                 is_kw_only: false,
                 is_init_false: false,
                 is_init_var: false,
+                rhs_is_nonmember_call: rhs_is_nonmember_call(bindings, &assign.value),
                 guard: guard.cloned(),
             });
         }
@@ -273,19 +297,19 @@ fn assign_attributes(
 /// enclosing guard). Methods and nested classes inside guards are intentionally
 /// left to the existing unconditional handling.
 fn collect_guarded_fields(
+    bindings: &BindingTable,
     if_stmt: &StmtIf,
     outer: Option<&StaticCondition>,
     after_kw_only_sentinel: bool,
-    class_kw_only: bool,
     attributes: &mut Vec<AttributeInfo>,
 ) {
-    let test = parse_static_condition(&if_stmt.test);
+    let test = parse_static_condition(bindings, &if_stmt.test);
     let if_guard = combine_guards(outer, test.clone());
     collect_fields_in_branch(
+        bindings,
         &if_stmt.body,
         &if_guard,
         after_kw_only_sentinel,
-        class_kw_only,
         attributes,
     );
 
@@ -294,7 +318,7 @@ fn collect_guarded_fields(
     for clause in &if_stmt.elif_else_clauses {
         let branch = match &clause.test {
             Some(elif_test) => {
-                let cond = parse_static_condition(elif_test);
+                let cond = parse_static_condition(bindings, elif_test);
                 let mut parts = prior_negations.clone();
                 parts.push(cond.clone());
                 prior_negations.push(StaticCondition::Not(Box::new(cond)));
@@ -304,10 +328,10 @@ fn collect_guarded_fields(
         };
         let guard = combine_guards(outer, branch);
         collect_fields_in_branch(
+            bindings,
             &clause.body,
             &guard,
             after_kw_only_sentinel,
-            class_kw_only,
             attributes,
         );
     }
@@ -315,33 +339,30 @@ fn collect_guarded_fields(
 
 /// Collect the field statements (and nested `if`s) of a single guarded branch.
 fn collect_fields_in_branch(
+    bindings: &BindingTable,
     stmts: &[Stmt],
     guard: &StaticCondition,
     after_kw_only_sentinel: bool,
-    class_kw_only: bool,
     attributes: &mut Vec<AttributeInfo>,
 ) {
     for stmt in stmts {
         match stmt {
-            Stmt::AnnAssign(ann) if !is_kw_only_sentinel(ann) => {
-                if let Some(attr) = ann_attribute(
-                    ann,
-                    after_kw_only_sentinel,
-                    class_kw_only,
-                    Some(guard.clone()),
-                ) {
+            Stmt::AnnAssign(ann) if !is_kw_only_sentinel(bindings, ann) => {
+                if let Some(attr) =
+                    ann_attribute(bindings, ann, after_kw_only_sentinel, Some(guard.clone()))
+                {
                     attributes.push(attr);
                 }
             }
             Stmt::Assign(assign) => {
-                assign_attributes(assign, Some(guard), attributes);
+                assign_attributes(bindings, assign, Some(guard), attributes);
             }
             Stmt::If(nested) => {
                 collect_guarded_fields(
+                    bindings,
                     nested,
                     Some(guard),
                     after_kw_only_sentinel,
-                    class_kw_only,
                     attributes,
                 );
             }

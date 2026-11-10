@@ -382,7 +382,13 @@ sequenced checkboxes live in the checklist
    outermost positions ([NARROWPLAN-CALLSITES](#NARROWPLAN-CALLSITES)) —
    fixes #381, #382, and the position half of #335.
 5. `directives_assert_type` / `directives_reveal_type` = the hover oracle,
-   byte for byte — fixes #290 (solved generics surface everywhere).
+   byte for byte — fixes #290 (solved generics surface everywhere). Valid
+   `reveal_type` reporting remains open in
+   [#418](https://github.com/Nimblesite/Basilisk/issues/418) under the
+   [typing directive specification](https://typing.python.org/en/latest/spec/directives.html#reveal-type),
+   and recursive PEP 695 call substitution remains open in
+   [#419](https://github.com/Nimblesite/Basilisk/issues/419) under
+   [PEP 695 § Generic functions](https://peps.python.org/pep-0695/#generic-functions).
 6. `BSK-0001` consults `param_infer` before demanding an inferable
    annotation — fixes #317.
 7. Text-matching long tail: `slice_span` ~80 consumers → 0 — fixes #379 and
@@ -406,7 +412,7 @@ Every step, no exceptions:
 - A live conformance run, **recorded not gated**: it detects unintended
   regressions in rules that were working. A drop traced to a deliberate deletion
   is reported and kept ([CHKARCH-CONFORMANCE](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE)).
-- `make bench`: indicative only, gates nothing ([CHKARCH-TESTING-BENCH]). The
+- `make _bench`: indicative only, gates nothing ([CHKARCH-TESTING-BENCH]). The
   walker is real production cost the moment step 1 lands — record the baseline
   **in that same change**.
 - `make test` fail-fast, coverage ratchet up, mutation ratchet up — read against
@@ -421,7 +427,7 @@ made cheap BEFORE the first rule consumed it — DONE.** The same staging that
 kept these cores off live diagnostics also kept them off every performance
 gate: `narrow::analyse_function_in` is reached only through the
 `narrowed_uses` Salsa query, whose sole callers today are tests and
-`examples/`. `make bench` times `basilisk check`, which never enters this code
+`examples/`. `make _bench` times `basilisk check`, which never enters this code
 — so no ratchet was watching it, and a cost that small fixtures hide would
 have landed as a *regression on the first wiring change*, when the
 benchmark ([CHKARCH-TESTING-BENCH](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TESTING-BENCH), indicative, non-gating)
@@ -603,10 +609,10 @@ measures speed — self-measured, reproducible, write-always:
   are vendor/benchmark claims, not independently audited; treat them as
   directional. The only numbers Basilisk acts on are the ones its own
   scoreboard harness produces ([NARROWPLAN-SCOREBOARD](#NARROWPLAN-SCOREBOARD)).
-- **Competitors are moving targets.** Pyrefly and ty ship fast and are well
-  funded; ty is actively closing its bidirectional gap. The scoreboard ratchet
-  is designed for this: leads are re-proven against latest releases on every
-  run, and a lost axis turns CI red rather than silently eroding the claim.
+- **Competitors are moving targets.** Any future comparison must identify exact
+  versions and remeasure them with an independently reviewed methodology. No
+  comparative figure or CI gate is reinstated merely by rerunning the current
+  withdrawn scoreboard.
 
 ## Acceptance {#NARROWPLAN-ACCEPTANCE}
 
@@ -924,10 +930,12 @@ before the stage is declared closed:
   `unnecessary_lazy_evaluations`, `bool_to_int_with_if`, `too_many_lines` on
   `is_assignable_to` (the `Callable` arm extracted into `callable_assignable` /
   `callable_params_assignable`), and a `type_complexity` in the #381 test.
-- [x] `python3 conformance/run_conformance.py` — 100% / 0 false positives from
-  a fresh `python/typing@main` clone against a clean `--release` build
-  ([CHKARCH-CONFORMANCE]).
-  — 141/141, 0 false positives. The gate found SIX regressions this stage had
+- [x] **Historical pristine-fixture record:**
+  `python3 conformance/run_conformance.py` returned 141/141 and 0 false
+  positives from the then-current `python/typing@main` clone against a clean
+  `--release` build. This predates the retraction and is not conformance
+  evidence ([CHKARCH-CONFORMANCE]). The fixture comparison found SIX
+  regressions this stage had
   introduced, each fixed by teaching the checker, never by silencing a rule:
   1. **`aliases_typealiastype`** (2 FP) — the legacy textual alias matcher
      scooped up `X = TypeAliasType("X", body, ...)` and matched values against
@@ -969,13 +977,13 @@ before the stage is declared closed:
   — 8/8 (`param_inference`, `typeis_narrowing`, `enum_literal_expansion`,
   `tuple_index`, `recursive_aliases`, `generic_constructor`,
   `paramspec_decorator`, `recursive_bases`).
-- [x] `make bench` — no fixture slower than the committed baseline
+- [x] `make _bench` — no fixture slower than the committed baseline
   ([CHKARCH-TESTING-BENCH]). **Closed by maintainer decision
   (2026-08-05): the branch's current numbers are accepted as the committed
   baseline, with an absolute ceiling of 20 ms per fixture; the ratchet stays
   armed from here — any further material regression is still a build
   failure.** History of the chase, kept for the record: the stage's first
-  `make bench` run failed on EVERY fixture, +2.0%
+  `make _bench` run failed on EVERY fixture, +2.0%
   to +82.4%. Bisected to the branch, not to this stage's boxes: `da742832`
   (main) checks `aliases_type_statement` in 8.9 ms, `84a7661e` (this branch,
   2026-08-03) in 15.8 ms; the Stage 0.5 work added ~2% on top of that. It went
@@ -1319,9 +1327,10 @@ before the stage is declared closed:
   `walk_if` probe-then-walk and the `walk_stmts` re-probe no longer
   re-synthesize the same expressions. Cost went from linear in module size to
   flat.
-- [ ] Record a `make bench` baseline on a fixture that actually exercises the
-  flow walker **in the same change that first wires it**, so the walker stops
-  being invisible to the ratchet the moment it starts costing real time.
+- [ ] Record an indicative `make _bench` measurement on a fixture that actually
+  exercises the flow walker **in the same change that first wires it**, so its
+  cost is visible for human review. Do not turn that workstation timing into a
+  pass/fail gate.
 - [x] **Step 1 — `assignment_compatibility` to the engine; delete its
   `RhsKind` shape-matching in the same change.** Landed: every right-hand side
   is typed by `rules/shared/oracle.rs` (`ModuleOracle`, a `BidirEngine` seeded
@@ -1388,7 +1397,15 @@ before the stage is declared closed:
   the oracle and fires on a provably disjoint, fully-grounded verdict —
   `assert_type(make(), str)` with `make() -> int` fires
   (`tests/checker/directives_assert_type_oracle_tests.rs`, 5 tests), while
-  literal widening, untyped callees, and unsolved generics abstain. PEP 675
+  literal widening and untyped callees abstain. The previous abstention for
+  unsolved generics is an explicitly open implementation gap, not completion:
+  [#419](https://github.com/Nimblesite/Basilisk/issues/419) requires recursive
+  return substitution under
+  [PEP 695](https://peps.python.org/pep-0695/#generic-functions), and
+  [#418](https://github.com/Nimblesite/Basilisk/issues/418) requires valid
+  `reveal_type` calls to emit the inferred type under the
+  [typing directive specification](https://typing.python.org/en/latest/spec/directives.html#reveal-type).
+  Both are pinned red in `tests/runtime_type_safety_regressions_tests.rs`. PEP 675
   provenance survives display widening (`Literal["x"]` renders
   `LiteralString`), pinning the #290 hover regression. Conformance stayed
   141/141 with 0 FP through the change.
@@ -1641,9 +1658,10 @@ before the stage is declared closed:
   *Measured 2026-08-05 after the subtyping/Step-8/Step-7a pass — green:*
   *workspace `cargo test --workspace` **7253 / 0** (checker 4067, resolver
   625, and every other crate), `cargo clippy --workspace --all-targets`
-  clean at full strictness, `cargo fmt --all` applied, live conformance
-  **141/141 with 0 false positives and 0 missed** (fresh `--release` build,
-  binary passed explicitly), torture golden **12/12** with the
+  clean at full strictness, `cargo fmt --all` applied, a historical pristine
+  fixture run recorded **141/141 with 0 false positives and 0 missed** (this is
+  a withdrawn fixture result, not conformance evidence), torture golden
+  **12/12** with the
   committed-baseline scoreboard gate reporting "no basilisk regression",
   Zed extension job green (WASM `wasm32-wasip2` build + clippy + 97 tests),
   `website/src/_data/rules.json` regenerated so the
@@ -1652,8 +1670,8 @@ before the stage is declared closed:
   reports docs and READMEs in sync. *Still to run:* the instrumented
   coverage ratchet (`./scripts/test-rust.sh`), `make _test_vsix`,
   `make _test_nvim`, the mutation ratchet (in scope — `names_unbound`,
-  `rebind`, and eleven rule files changed), and `make bench` on a quiet
-  machine (the prior red gate was attributed to thermal load by a
+  `rebind`, and eleven rule files changed), and `make _bench` on a quiet
+  machine (the prior benchmark alert was attributed to thermal load by a
   head-to-head against the committed binary: 19.3/14.2/14.9/13.2 ms
   baseline vs 20.6/14.6/14.9/13.2 ms working, a true code delta of 0–7%).*
 
@@ -1707,6 +1725,11 @@ Nothing below (except the already-live torture corpus) starts before the
 demolition order above it is complete: score the shipped checker, not a
 detached engine.
 
+> **Withdrawn figures:** Completed scores and competitor standings below are
+> retained as dated investigation logs only. They are not current claims or
+> rankings. The harness and methodology must be independently reviewed before
+> any result is republished or used as a CI gate.
+
 - [x] Seed the scoreboard with a **type-torture corpus**: hard, spec-grounded
   problems (several straight from the issue tracker) scored conformance-style
   against every competitor, with hang detection as a correctness axis.
@@ -1717,7 +1740,7 @@ detached engine.
   `TypeIs`, PEP 612 `ParamSpec` preservation, generic constructor solving) +
   `run_torture.py` (out-of-the-box defaults for every tool, best-effort
   latest-release pull, per-invocation timeout scored as `hang`, WRITE-ALWAYS
-  `status/torture.csv` after every case, read-only regression gate against
+  `status/torture.csv` after every case, historical regression comparison against
   the committed baseline, exit 3). The first measured run (2026-08-04)
   landed basilisk at 5/8, pinning three live defects; all three are fixed —
   the #374 enum-expansion false positive (enum literal expansion
@@ -1739,11 +1762,13 @@ detached engine.
   class object per the special-types chapter), and `ternary_narrowing`
   (`x is [not] None` guards narrow conditional-expression arms). All twelve
   are pinned in-process by `torture_golden_tests.rs`; basilisk stands 12/12.
-- [ ] Build the inference scoreboard harness mirroring `benchmarks/`: pull the
+- [ ] After independent methodology review, build the inference scoreboard
+  harness mirroring `benchmarks/`: pull the
   latest official release of each competitor (pyright, mypy, ty, pyrefly,
   zuban) every run; write scores to a status file immediately and
-  unconditionally; gate read-only against the committed baseline.
-  (The torture runner above implements the full write-always/gate/pull
+  unconditionally; compare read-only against the committed baseline for human
+  review before any gate is considered.
+  (The torture runner above implements the historical write-always/comparison/pull
   contract for its own corpus; this box widens the same mechanism to the
   five measurable-target axes.)
 - [ ] Build the reveal_type-precision corpus

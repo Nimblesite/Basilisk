@@ -12,35 +12,42 @@ pub mod scope;
 pub mod static_condition;
 mod visitor;
 
+/// Canonical symbol resolution, re-exported so consumers keep one import path.
+///
+/// The registry lives in `basilisk-canonical` because `basilisk-stubs` must
+/// answer the same recognition questions and cannot depend on this crate.
+pub use basilisk_canonical as canonical;
+pub use basilisk_canonical::{
+    assignable, equivalent, registry_health, BindingTable, BuiltinClass, CanonicalSymbol,
+    LiteralValue, TypeNode, TypingForm,
+};
 pub use ident::{is_simple_ascii_python_identifier, is_simple_python_identifier};
 pub use static_condition::{evaluate, parse_static_condition, BranchTruth, StaticCondition};
-pub use visitor::walks::{
-    is_name_or_attr_named, iter_all_params, visit_calls, walk_all_stmts, walk_function_stmts,
-};
+pub use visitor::walks::{iter_all_params, visit_calls, walk_all_stmts, walk_function_stmts};
 pub use visitor::walrus::{collect_walrus_targets, Reach};
 
 pub use scope::{
-    class_by_name, collect_name_set, collect_name_set_where, collect_names, collect_names_where,
-    has_extra_items_transitive, is_transitive_typeddict, name_lookup, strip_typeddict_qualifiers,
-    transitive_typeddict_names, AnnotatedTooFewArgs, AssertTypeCallInfo, AttrAccess, AttributeInfo,
-    BaseSubscriptEntry, BoundedTypeVarAttrViolation, CallSite, ClassInfo, CompareOp, DecoratorRef,
-    EnumValueTypeViolationInfo, EnumValueTypeViolationKind, FinalViolationInfo, FinalViolationKind,
-    FloatParamIntAttrAccess, FunctionInfo, GenericDefKind, GenericParamInfo,
-    HistoricalPositionalViolation, HistoricalPositionalViolationKind, ImportInfo, ImportKind,
-    ImportResolution, ImportedModuleApi, InvalidStringAnnotation, InvalidStringAnnotationKind,
-    LiteralAugmentedAssignViolation, LiteralStringEnumMismatch, LocalClassVarViolation,
-    MatchCaseNarrowing, MatchStmtInfo, ModuleAttrAccessInfo, ModuleAttrAssignment,
-    ModuleBareAssignment, ModuleOrderComparisonInfo, Named, NamedTupleDefInfo, NarrowingGuard,
-    NarrowingGuardKind, NewTypeCallInfo, PackageDepKind, ParameterInfo, Pep695AliasDef,
-    Pep695BoundViolation, Pep695BoundViolationKind, Pep695Def, Pep695Param, Pep695ParamKind,
-    Pep695Scoping, ProtocolClassObjectViolation, ProtocolInstantiationViolation,
-    ProtocolRtcViolation, ProtocolRtcViolationKind, ProtocolSelfViolation, ReadOnlyViolationInfo,
-    ReadOnlyViolationKind, ResolvedModule, ReturnAnnotationKind, ReturnStmtInfo,
-    RevealTypeCallInfo, RhsKind, RhsStringRef, Span, TupleIndexViolation, TypeAliasDefInfo,
-    TypeAliasTypeCallInfo, TypeAliasTypeViolation, TypeAliasTypeViolationKind, TypeArg,
-    TypeStatementInfo, TypeVarCallInfo, TypedDictCallInfo, TypedDictKeyViolation,
-    TypedDictKeyViolationKind, TypedDictSecondArgKind, UnboundTypeVarUsage,
-    UnhashableHashCallViolation, UnhashableKeyRef, UnresolvedReason, VariableInfo, YieldExprInfo,
+    collect_name_set, collect_name_set_where, collect_names, collect_names_where, name_lookup,
+    typed_dict_class_names, Ancestry, AnnotatedTooFewArgs, AssertTypeCallInfo, AttrAccess,
+    AttributeInfo, BaseRef, BaseSubscriptEntry, BoundedTypeVarAttrViolation, CallSite, ClassGraph,
+    ClassInfo, CompareOp, DecoratorRef, DescriptorKind, EnumValueTypeViolationInfo,
+    EnumValueTypeViolationKind, FinalViolationInfo, FinalViolationKind, FloatParamIntAttrAccess,
+    FunctionInfo, GenericDefKind, GenericParamInfo, HistoricalPositionalViolation,
+    HistoricalPositionalViolationKind, ImportInfo, ImportKind, ImportResolution, ImportedModuleApi,
+    InvalidStringAnnotation, InvalidStringAnnotationKind, LiteralAugmentedAssignViolation,
+    LiteralStringEnumMismatch, LocalClassVarViolation, MatchCaseNarrowing, MatchStmtInfo,
+    ModuleAttrAccessInfo, ModuleAttrAssignment, ModuleBareAssignment, ModuleBindings,
+    ModuleOrderComparisonInfo, Named, NamedTupleDefInfo, NarrowingGuard, NarrowingGuardKind,
+    NewTypeCallInfo, PackageDepKind, ParameterInfo, Pep695AliasDef, Pep695BoundViolation,
+    Pep695BoundViolationKind, Pep695Def, Pep695Param, Pep695ParamKind, Pep695Scoping,
+    ProtocolClassObjectViolation, ProtocolInstantiationViolation, ProtocolRtcViolation,
+    ProtocolRtcViolationKind, ProtocolSelfViolation, ReadOnlyViolationInfo, ReadOnlyViolationKind,
+    ResolvedBase, ResolvedModule, ReturnAnnotationKind, ReturnStmtInfo, RevealTypeCallInfo,
+    RhsKind, RhsStringRef, Span, TupleIndexViolation, TypeAliasDefInfo, TypeAliasTypeCallInfo,
+    TypeAliasTypeViolation, TypeAliasTypeViolationKind, TypeArg, TypeStatementInfo,
+    TypeVarCallInfo, TypedDictCallInfo, TypedDictKeyViolation, TypedDictKeyViolationKind,
+    TypedDictSecondArgKind, UnboundTypeVarUsage, UnhashableHashCallViolation, UnhashableKeyRef,
+    UnresolvedReason, VariableInfo, YieldExprInfo,
 };
 
 use basilisk_parser::ParsedModule;

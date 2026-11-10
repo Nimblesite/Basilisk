@@ -5,7 +5,9 @@
 //! [#290](https://github.com/Nimblesite/Basilisk/issues/290): expressions the
 //! resolver cannot type — call results above all — are judged by the SAME
 //! span-indexed engine hover reads, and fire only on a provably disjoint
-//! verdict.
+//! verdict. The assertions enforce the canonical
+//! [typing specification for `assert_type`](https://typing.python.org/en/latest/spec/directives.html#assert-type),
+//! whose type system foundation is [PEP 484](https://peps.python.org/pep-0484/).
 
 use super::common::*;
 

@@ -19,15 +19,118 @@ cb: Callable[[int], int] = two_args
 
 #[test]
 fn callable_param_type_mismatch() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
-from typing import Callable
-def str_func(x: str) -> str:
-    return x
+    // PEP 484 callable subtyping: parameter types are contravariant. A value
+    // callable only with `str` cannot inhabit a slot that may be called with
+    // `int`. These spellings are semantically identical and must produce the
+    // same exact rule diagnostic from resolved symbols, never rendered text.
+    // https://peps.python.org/pep-0484/#covariance-and-contravariance
+    let rejected = [
+        r#"
+from typing import Callable as Signature
+from builtins import int as Whole, str as Text
 
-cb: Callable[[int], str] = str_func
-";
-    let diags = run(source)?;
-    let _ = codes(&diags);
+def render(value: Text) -> Text:
+    return value
+
+callback: Signature[[Whole], Text] = render
+"#,
+        r#"
+import typing as contracts
+import builtins as core
+
+def render(value: core.str) -> core.str:
+    return value
+
+callback: contracts.Callable[[core.int], core.str] = render
+"#,
+        r#"
+from typing import Callable as Invocation
+from builtins import int as Count, str as Label
+
+def label_for(item: Label) -> Label:
+    return item
+
+consumer: Invocation[[Count], Label] = label_for
+"#,
+        "
+from typing import Callable as Signature
+from builtins import int as Whole, str as Text
+
+def render(
+        value : Text ,
+) -> Text :
+        return value
+
+callback : Signature[
+    [ Whole ] ,
+    Text ,
+] = render
+",
+    ];
+    for source in rejected {
+        let diags = run(source)?;
+        assert_eq!(
+            diags.len(),
+            1,
+            "PEP 484 callable mismatch must produce one diagnostic: {diags:?}"
+        );
+        assert_eq!(
+            codes(&diags),
+            vec!["callables_protocol_2"],
+            "callable parameter spelling changed the owning rule"
+        );
+    }
+
+    let accepted = [
+        r#"
+from typing import Callable as Signature
+from builtins import int as Whole, str as Text
+
+def render(value: Whole) -> Text:
+    return "ok"
+
+callback: Signature[[Whole], Text] = render
+"#,
+        r#"
+import typing as contracts
+import builtins as core
+
+def render(value: core.int) -> core.str:
+    return "ok"
+
+callback: contracts.Callable[[core.int], core.str] = render
+"#,
+        r#"
+from typing import Callable as Invocation
+from builtins import int as Count, str as Label
+
+def label_for(item: Count) -> Label:
+    return "ok"
+
+consumer: Invocation[[Count], Label] = label_for
+"#,
+        "
+from typing import Callable as Signature
+from builtins import int as Whole, str as Text
+
+def render(
+        value : Whole ,
+) -> Text :
+        return 'ok'
+
+callback : Signature[
+    [ Whole ] ,
+    Text ,
+] = render
+",
+    ];
+    for source in accepted {
+        let diags = run(source)?;
+        assert!(
+            diags.is_empty(),
+            "PEP 484-compatible callable assignment produced diagnostics: {diags:?}"
+        );
+    }
     Ok(())
 }
 

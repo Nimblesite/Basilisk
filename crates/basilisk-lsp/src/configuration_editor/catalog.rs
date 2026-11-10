@@ -16,9 +16,7 @@ pub(super) const fn wire_severity(value: basilisk_checker::Severity) -> RuleSeve
     match value {
         basilisk_checker::Severity::Info => RuleSeverity::Info,
         basilisk_checker::Severity::Warning => RuleSeverity::Warning,
-        basilisk_checker::Severity::Error | basilisk_checker::Severity::SafetyViolation => {
-            RuleSeverity::Error
-        }
+        basilisk_checker::Severity::Error => RuleSeverity::Error,
     }
 }
 
@@ -167,15 +165,11 @@ mod tests {
     use crate::configuration_editor::model::{RuleSelector, RuleSeverity, TagKind};
 
     // Implements [CONFIGEDITOR-MODEL]: the checker's severity ladder folds onto
-    // the four wire severities without losing the error class.
+    // the three wire severities without losing the error class.
     #[test]
     fn severity_conversions_round_trip_the_wire_shape() {
         assert_eq!(
             wire_severity(basilisk_checker::Severity::Error),
-            RuleSeverity::Error
-        );
-        assert_eq!(
-            wire_severity(basilisk_checker::Severity::SafetyViolation),
             RuleSeverity::Error
         );
         assert_eq!(

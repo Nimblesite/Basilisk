@@ -20,12 +20,13 @@
 
 use std::collections::{HashMap, HashSet};
 
-use basilisk_resolver::{evaluate, parse_static_condition, BranchTruth, ResolvedModule};
+use basilisk_resolver::{
+    evaluate, parse_static_condition, BindingTable, BranchTruth, ResolvedModule,
+};
 use ruff_python_ast::{Expr, Stmt};
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
-use super::guards::is_enum_class;
 use super::shared::parse_module;
 use super::Rule;
 
@@ -47,7 +48,7 @@ impl Rule for EnumMemberAccess {
         let enum_names: HashSet<&str> = module
             .classes
             .iter()
-            .filter(|cls| is_enum_class(cls))
+            .filter(|cls| cls.is_enum)
             .map(|cls| cls.name.as_str())
             .collect();
         if enum_names.is_empty() {
@@ -63,7 +64,13 @@ impl Rule for EnumMemberAccess {
 
         // enum class name -> member names whose guard is statically false at the target.
         let mut excluded: HashMap<String, HashSet<String>> = HashMap::new();
-        collect_excluded_members(&parsed.ast.body, &enum_names, target_version, &mut excluded);
+        collect_excluded_members(
+            &module.bindings,
+            &parsed.ast.body,
+            &enum_names,
+            target_version,
+            &mut excluded,
+        );
         if excluded.is_empty() {
             return;
         }
@@ -86,6 +93,7 @@ impl Rule for EnumMemberAccess {
 /// Walk the module, recording for each enum class the member names defined only
 /// under a statically-false `if`-guard.
 fn collect_excluded_members(
+    bindings: &BindingTable,
     stmts: &[Stmt],
     enum_names: &HashSet<&str>,
     target: (u32, u32),
@@ -95,27 +103,32 @@ fn collect_excluded_members(
         if let Stmt::ClassDef(cls) = stmt {
             if enum_names.contains(cls.name.as_str()) {
                 let mut members = HashSet::new();
-                collect_dead_branch_members(&cls.body, target, &mut members);
+                collect_dead_branch_members(bindings, &cls.body, target, &mut members);
                 if !members.is_empty() {
                     let _ = out.insert(cls.name.to_string(), members);
                 }
             }
             // Nested classes may also be enums.
-            collect_excluded_members(&cls.body, enum_names, target, out);
+            collect_excluded_members(bindings, &cls.body, enum_names, target, out);
         }
     }
 }
 
 /// Collect names assigned inside an `if`-guard that is statically false at the
 /// target (and recurse into live branches for nested guards).
-fn collect_dead_branch_members(stmts: &[Stmt], target: (u32, u32), out: &mut HashSet<String>) {
+fn collect_dead_branch_members(
+    bindings: &BindingTable,
+    stmts: &[Stmt],
+    target: (u32, u32),
+    out: &mut HashSet<String>,
+) {
     for stmt in stmts {
         let Stmt::If(if_stmt) = stmt else {
             continue;
         };
-        match evaluate(&parse_static_condition(&if_stmt.test), target) {
+        match evaluate(&parse_static_condition(bindings, &if_stmt.test), target) {
             BranchTruth::AlwaysFalse => collect_assigned_names(&if_stmt.body, out),
-            _ => collect_dead_branch_members(&if_stmt.body, target, out),
+            _ => collect_dead_branch_members(bindings, &if_stmt.body, target, out),
         }
     }
 }

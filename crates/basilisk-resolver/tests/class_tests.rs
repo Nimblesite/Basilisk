@@ -17,6 +17,9 @@ mod test_classes;
 #[path = "resolver/test_recursive_bases.rs"]
 mod test_recursive_bases;
 
+#[path = "resolver/test_class_descriptors.rs"]
+mod test_class_descriptors;
+
 #[path = "resolver/test_class_properties.rs"]
 mod test_class_properties;
 

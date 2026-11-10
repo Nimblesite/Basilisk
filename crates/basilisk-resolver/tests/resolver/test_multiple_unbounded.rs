@@ -72,3 +72,85 @@ fn tuple_starred_before_ellipsis() -> Result<(), Box<dyn std::error::Error>> {
     );
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// The `tuple` head is RESOLVED, not spelled
+//
+// Pins the 2026-08-09 review finding: `is_unbounded_component` and
+// `annotation_has_multiple_unbounded` recognised an unpacked unbounded tuple
+// with `expr_simple_name(...) == "tuple"`, which grants builtin meaning to the
+// final token of any expression.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn multiple_unbounded_is_flagged_through_an_aliased_import(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "from builtins import tuple as ordered_pair\n",
+        "def f(x: ordered_pair[*ordered_pair[str, ...], *ordered_pair[int, ...]]) -> None:\n",
+        "    pass\n",
+    )
+    .to_owned();
+    let resolved = resolve_src(&src)?;
+    assert_eq!(
+        resolved.multiple_unbounded_tuple_spans.len(),
+        1,
+        "`ordered_pair` IS `builtins.tuple`; renaming the import does not make \
+         two unbounded unpacks legal"
+    );
+    Ok(())
+}
+
+#[test]
+fn multiple_unbounded_is_flagged_through_the_typing_alias() -> Result<(), Box<dyn std::error::Error>>
+{
+    let src = concat!(
+        "from typing import Tuple\n",
+        "def f(x: Tuple[*Tuple[str, ...], *Tuple[int, ...]]) -> None:\n",
+        "    pass\n",
+    )
+    .to_owned();
+    let resolved = resolve_src(&src)?;
+    assert_eq!(
+        resolved.multiple_unbounded_tuple_spans.len(),
+        1,
+        "PEP 585's `typing.Tuple` is the same class as `tuple`"
+    );
+    Ok(())
+}
+
+#[test]
+fn multiple_unbounded_is_flagged_through_the_qualified_builtin(
+) -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "import builtins\n",
+        "def f(x: builtins.tuple[*builtins.tuple[str, ...], *builtins.tuple[int, ...]]) -> None:\n",
+        "    pass\n",
+    )
+    .to_owned();
+    let resolved = resolve_src(&src)?;
+    assert_eq!(
+        resolved.multiple_unbounded_tuple_spans.len(),
+        1,
+        "`builtins.tuple` is the builtin, written the long way"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_user_class_named_tuple_is_not_the_builtin() -> Result<(), Box<dyn std::error::Error>> {
+    let src = concat!(
+        "class tuple:\n",
+        "    pass\n",
+        "def f(x: tuple[..., int]) -> None:\n",
+        "    pass\n",
+    )
+    .to_owned();
+    let resolved = resolve_src(&src)?;
+    assert!(
+        resolved.multiple_unbounded_tuple_spans.is_empty(),
+        "the module defines its own `tuple`; the builtin's variadic rules do \
+         not apply to an unrelated class that borrowed its name"
+    );
+    Ok(())
+}

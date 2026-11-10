@@ -1,3 +1,27 @@
+// ############################################################################
+// # BROKEN — THIS FILE DOES NOT COMPILE. DO NOT "FIX" IT BY RESTORING TEXT   #
+// # MATCHING.                                                                #
+// #                                                                          #
+// # Deleted helper this file called:                                         #
+// #   types_star_tuples (homogeneous_tuple_elem / is_unpacked_tuple_elem / tuple_assignable_with_star)
+// #                                                                          #
+// # That helper decided types from the SPELLING of source text (lowercased   #
+// # annotation strings, `"int"`/`"str"`/`"object"` literal matching, `|`     #
+// # splitting, `starts_with("tuple[")`). It was deleted, not replaced.       #
+// #                                                                          #
+// # The call sites below are LEFT BROKEN ON PURPOSE. They are the map of     #
+// # what must be rebuilt on the resolved AST — resolved bindings, canonical  #
+// # `TypeNode`, and `assignable`/`equivalent` — or made to abstain.          #
+// #                                                                          #
+// # Restoring the deleted helper, vendoring a copy of it, or re-deriving a   #
+// # type from source text anywhere below is FORBIDDEN.                       #
+// #                                                                          #
+// # Evidence and the failing tests that pin the real behaviour:              #
+// #   docs/RULE-VALIDITY-REPORT.md                                           #
+// #   crates/basilisk-checker/tests/legacy_annotation_text_parser_pin_tests.rs
+// #   crates/basilisk-checker/tests/pep_spelling_invariance_pin_tests.rs     #
+// ############################################################################
+
 //! Implements [TYPEINF-OVERVIEW], [TYPEINF-SUBTYPING], and
 //! [TYPEINF-SPECIAL]. See
 //! docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-OVERVIEW
@@ -55,6 +79,26 @@ pub enum InferredType {
     LiteralString,
     /// Named type (`ClassName`) - fallback for named types not yet resolved
     Named(String),
+    /// `object` — the TOP type, which every value inhabits.
+    ///
+    /// A variant of its own, not `Named("object")`: the relation "everything
+    /// is assignable to the top type" must not be decided by comparing a
+    /// rendered name against the five characters `object`. A module that
+    /// declares its own `class object` resolves that name through its class
+    /// table instead and never reaches this ([RESOLV-CANONICAL-BINDING]).
+    ///
+    /// Distinct from `Any`: `list[object]` and `list[Any]` must stay apart —
+    /// narrowing `list[object]` to `list[int]` is an error the spec requires
+    /// ([TYPEINF-NARROWING-TYPEIS]), while `list[Any]` is consistent with
+    /// anything.
+    Object,
+    /// `type` / `type[X]` — a CLASS OBJECT.
+    ///
+    /// A variant of its own for the same reason as [`Self::Object`]: a value
+    /// positively known to be an instance (`None`, `3`, `"x"`) can never be a
+    /// class object, and that judgment must not rest on a `starts_with("type[")`
+    /// test against a rendering. WHICH class stays gradual.
+    ClassObject,
     /// `TypeForm[T]` — represents a type form object for type `T` (PEP 747).
     /// The inner type is what the type form represents (e.g. `TypeForm[int]`
     /// means a type form that represents `int`).
@@ -178,6 +222,8 @@ impl fmt::Display for InferredType {
             InferredType::Unknown => write!(f, "Unknown"),
             InferredType::LiteralString => write!(f, "LiteralString"),
             InferredType::Named(name) => write!(f, "{name}"),
+            InferredType::Object => write!(f, "object"),
+            InferredType::ClassObject => write!(f, "type"),
             InferredType::TypeForm(inner) => match inner.as_ref() {
                 InferredType::Any => write!(f, "TypeForm"),
                 other => write!(f, "TypeForm[{other}]"),
@@ -206,6 +252,38 @@ impl fmt::Display for LiteralValue {
 }
 
 impl InferredType {
+    /// Whether this value still contains the legacy nominal representation.
+    ///
+    /// `Named(String)` is a rendering, not a resolved type identity.  A
+    /// relation may carry it for display, but must not compare it with another
+    /// type and manufacture a verdict from the characters.  Callers use this
+    /// predicate only to enter a loud deletion boundary.
+    #[must_use]
+    pub(crate) fn contains_legacy_named(&self) -> bool {
+        match self {
+            Self::Named(_) => true,
+            Self::List(inner)
+            | Self::Set(inner)
+            | Self::Optional(inner)
+            | Self::TypeForm(inner)
+            | Self::Guard { inner, .. } => inner.contains_legacy_named(),
+            Self::Dict(key, value) => key.contains_legacy_named() || value.contains_legacy_named(),
+            Self::Tuple(items) | Self::Union(items) => {
+                items.iter().any(Self::contains_legacy_named)
+            }
+            Self::Callable(info) => {
+                info.param_types.iter().any(Self::contains_legacy_named)
+                    || info.return_type.contains_legacy_named()
+            }
+            Self::Generator(yielded, sent, returned) => {
+                yielded.contains_legacy_named()
+                    || sent.contains_legacy_named()
+                    || returned.contains_legacy_named()
+            }
+            _ => false,
+        }
+    }
+
     /// Creates a union of two types, flattening nested unions.
     ///
     /// Implements [TYPEINF-VARS-FLOW] — the join of types assigned across branches
@@ -232,6 +310,22 @@ impl InferredType {
         }
         if matches!(b, InferredType::Never) {
             return a;
+        }
+
+        // DELETED PATH: union deduplication below uses derived `PartialEq`.
+        // For `Named(String)` that compares a RENDERING and silently merges
+        // two same-spelled definitions (or keeps one definition reached under
+        // two spellings twice).  Carrying a resolved nominal identity in the
+        // leaf does not exist yet, so any non-trivial union involving that
+        // legacy representation must fail loudly instead of publishing a
+        // character-derived union.
+        if a.contains_legacy_named() || b.contains_legacy_named() {
+            panic!(
+                "basilisk-checker: `InferredType::union` was DELETED for values containing \
+                 `Named(String)` because deduplication compared rendered type spellings. The \
+                 real implementation requires resolved nominal identity on the leaf. Do not \
+                 restore string equality or silently keep both arms."
+            );
         }
 
         // Flatten both sides into vectors of types
@@ -269,10 +363,29 @@ impl InferredType {
     /// checks live in out-of-scope rule modules (see the consolidated map).
     #[must_use]
     pub fn is_assignable_to(&self, other: &InferredType) -> bool {
-        if special_named_assignable(self, other) {
-            return true;
+        // The universally decidable gradual/top relations do not inspect a
+        // nominal leaf, so preserve them. Every other relation involving the
+        // legacy `Named(String)` representation is deleted loudly: the match
+        // below derives `PartialEq`, container invariance, callable variance,
+        // and union membership recursively, and any of those would otherwise
+        // compare the rendered characters at some depth.
+        let universal = matches!(other, Self::Object | Self::Any | Self::Unknown)
+            || matches!(self, Self::Any | Self::Never | Self::Unknown);
+        if !universal && (self.contains_legacy_named() || other.contains_legacy_named()) {
+            panic!(
+                "basilisk-checker: `InferredType::is_assignable_to` was DELETED for types \
+                 containing `Named(String)` because nested assignability compared rendered \
+                 nominal spellings through derived equality. The real implementation requires \
+                 a resolved definition identity on every nominal leaf. Do not restore string \
+                 equality or substitute a boolean answer."
+            );
         }
         match (self, other) {
+            // `object` is the TOP type: every value inhabits it. Decided on
+            // the resolved variant, never on a rendered name — a module's own
+            // `class object` is an ordinary `Named` leaf and gets nothing
+            // from this arm.
+            (_, InferredType::Object) => true,
             // Any is assignable to/from everything (PEP 484).
             // Unknown means we cannot determine the type — assume compatible to avoid false positives.
             // Never is the bottom type — assignable to everything.
@@ -419,14 +532,37 @@ impl InferredType {
             (InferredType::TypeForm(inner_a), InferredType::TypeForm(inner_b)) => {
                 inner_a.is_assignable_to(inner_b)
             }
-            // Named types with the same base name (before `[`) are assumed compatible.
-            // Without full generic variance analysis we cannot determine if
-            // `Foo[int]` is assignable to `Foo[float]`, so we avoid false positives.
-            (InferredType::Named(a_name), InferredType::Named(b_name)) => {
-                let a_base = a_name.split('[').next().unwrap_or(a_name);
-                let b_base = b_name.split('[').next().unwrap_or(b_name);
-                a_base == b_base
-            }
+            // ##############################################################
+            // # DELETED — the `(Named, Named)` arm. DO NOT RESTORE IT AND  #
+            // # DO NOT REPLACE IT WITH A PLACEHOLDER THAT ANSWERS EITHER   #
+            // # WAY.                                                       #
+            // #                                                            #
+            // # It read:                                                   #
+            // #   let a_base = a_name.split('[').next()...                 #
+            // #   let b_base = b_name.split('[').next()...                 #
+            // #   a_base == b_base                                         #
+            // #                                                            #
+            // # That is PARSING A TYPE OUT OF A STRING — splitting a       #
+            // # rendered generic at a bracket and comparing the text       #
+            // # before it. Two unrelated classes whose renderings happened  #
+            // # to agree were declared compatible; the same class reached   #
+            // # by two spellings was not.                                  #
+            // #                                                            #
+            // # `InferredType::Named(String)` is itself the defect: it     #
+            // # carries a RENDERING where it must carry a resolved         #
+            // # identity. The replacement compares canonical `TypeNode`s   #
+            // # via `assignable`, whose `None` is an honest abstention.    #
+            // #                                                            #
+            // # Pinned by: tests/nominal_spelling_surgery_pin_tests.rs     #
+            // ##############################################################
+            (InferredType::Named(_), InferredType::Named(_)) => panic!(
+                "basilisk-checker: comparing two `InferredType::Named` values was \
+                 DELETED because it split both RENDERED names at `[` and compared \
+                 the text before the bracket. It panics because the real \
+                 implementation — comparing resolved class identity on canonical \
+                 `TypeNode`s — DOES NOT EXIST YET. Do not restore the string \
+                 surgery and do not answer `true`/`false` in its place."
+            ),
             // Ellipsis (`...`) parsed as Named is compatible when it appears
             // inside Callable parameter lists (e.g. `Callable[..., T]`).
             // For tuple annotations, `...` has special semantics that need
@@ -487,46 +623,6 @@ fn callable_params_assignable(source: &[InferredType], target: &[InferredType]) 
         .iter()
         .zip(target_prefix.iter())
         .all(|(source_param, target_param)| target_param.is_assignable_to(source_param))
-}
-
-/// Relations a `Named` leaf settles outright, hoisted ahead of the main
-/// assignability match — every one only ever ANSWERS `true`, never rejects:
-///
-/// * `object` is the top type: every value IS an object, so it accepts
-///   anything as a target, and in the SOURCE position it stays as permissive
-///   as the gradual `Any` it used to be modelled by — narrowing an
-///   `object`-typed value to a concrete type is how most `isinstance` code is
-///   written, and this level has no flow information to tell a narrowed use
-///   from an unnarrowed one, so rejecting it would fire on spec-valid code.
-/// * `None` satisfies `Hashable` (it defines `__hash__`). Compared
-///   case-insensitively: the [TYPEINF-ANNOTATION-RESOLUTION] cascade keeps
-///   the ABC's real spelling, the legacy annotation parser it replaces folded
-///   it to `Named("hashable")`.
-/// * A class object (`type` / `type[X]`) IS callable — calling it constructs
-///   an instance — and when the class itself is gradual (`type` means
-///   `type[Any]`) so is its constructor signature, so it satisfies every
-///   `Callable` target.
-fn special_named_assignable(source: &InferredType, target: &InferredType) -> bool {
-    let is_object = |ty: &InferredType| matches!(ty, InferredType::Named(name) if name == "object");
-    if is_object(source) || is_object(target) {
-        return true;
-    }
-    match (source, target) {
-        (InferredType::None_, InferredType::Named(name)) => name.eq_ignore_ascii_case("hashable"),
-        (InferredType::Named(name), InferredType::Callable(_)) => {
-            name == "type" || name.starts_with("type[")
-        }
-        // A `Named` value satisfies a `type` target: the engine's Stage-2
-        // class/instance conflation cannot tell `cls` (a class object) from
-        // an instance, so a nominal value MAY be a class object — rejecting
-        // it would fire on `def f(cls) -> type[Self]: return cls`. Values
-        // positively known NOT to be class objects (`None`, literals,
-        // containers) still mismatch.
-        (InferredType::Named(_), InferredType::Named(target_name)) => {
-            target_name == "type" || target_name.starts_with("type[")
-        }
-        _ => false,
-    }
 }
 
 /// Generator yield/return positions are covariant; the value sent back into

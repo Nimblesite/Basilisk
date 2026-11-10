@@ -5,15 +5,15 @@
 //! Every table is built from the module's Ruff AST, never from source text:
 //! aliases keep a borrowed reference to their right-hand-side **expression**
 //! so the cascade expands them by evaluating a type expression, and imports
-//! keep the defining module plus the name as spelled there, so `from typing
-//! import Sequence as Seq` and `import typing as t` resolve identically.
+//! keep the defining module plus the name as spelled there, so an aliased
+//! `from`-import and an aliased module import record the same facts.
 
 use std::collections::{HashMap, HashSet};
 
 use ruff_python_ast::{Expr, ModModule, Stmt, StmtClassDef};
 
-/// One alias definition reachable from a type expression: `type X[P..] = rhs`,
-/// `X: TypeAlias = rhs`, or the implicit `X = <type expression>`.
+/// One alias definition reachable from a type expression: `type X[P..] = rhs`
+/// or the implicit `X = <type expression>`.
 #[derive(Debug)]
 pub(super) struct AliasEntry<'m> {
     /// PEP 695 type-parameter names, in declaration order (empty otherwise).
@@ -28,31 +28,21 @@ pub(super) struct ImportedName {
     /// The defining module's dotted path (`typing`, `collections.abc`).
     pub(super) module: String,
     /// The name as spelled in the defining module — alias-independent, so
-    /// `from typing import Sequence as Seq` records `Sequence`.
+    /// `from m import A as B` records `A`.
     pub(super) original: String,
 }
 
 /// The resolution tables for one module.
 #[derive(Debug, Default)]
 pub(super) struct Tables<'m> {
-    /// Alias name → definition (all three alias spellings).
+    /// Alias name → definition.
     pub(super) aliases: HashMap<String, AliasEntry<'m>>,
     /// Same-file classes, by declared name.
     pub(super) nominal: HashSet<String>,
-    /// The subset of [`Self::nominal`] whose assignability is **structural** —
-    /// `Protocol` and `TypedDict` classes. They resolve like any other class;
-    /// the set exists so a rule that can only compare *nominally* knows to
-    /// abstain rather than invent a mismatch.
-    pub(super) structural: HashSet<String>,
     /// Names bound by `from X import name`.
     pub(super) imports: HashMap<String, ImportedName>,
     /// Local binding → module path, for `import X` / `import X as Y`.
     pub(super) modules: HashMap<String, String>,
-    /// Value re-bindings of one name to another: `o = overload`,
-    /// `o = typing.overload`. The decorator resolution follows these chains
-    /// ([#380](https://github.com/Nimblesite/Basilisk/issues/380)); annotation
-    /// resolution does not consult them.
-    pub(super) values: HashMap<String, String>,
 }
 
 impl<'m> Tables<'m> {
@@ -80,7 +70,6 @@ impl<'m> Tables<'m> {
     fn collect_one(&mut self, stmt: &'m Stmt) {
         match stmt {
             Stmt::TypeAlias(alias) => self.insert_type_statement(alias),
-            Stmt::AnnAssign(assign) => self.insert_annotated_alias(assign),
             Stmt::ClassDef(class) => self.insert_class(class),
             Stmt::Import(import) => self.insert_plain_imports(import),
             Stmt::ImportFrom(import) => self.insert_from_imports(import),
@@ -113,34 +102,9 @@ impl<'m> Tables<'m> {
         );
     }
 
-    /// `X: TypeAlias = rhs` (PEP 613), bare or `typing.`-qualified.
-    fn insert_annotated_alias(&mut self, assign: &'m ruff_python_ast::StmtAnnAssign) {
-        let Some(value) = assign.value.as_deref() else {
-            return;
-        };
-        if !is_type_alias_annotation(&assign.annotation) {
-            return;
-        }
-        if let Some(name) = simple_name(&assign.target) {
-            let _ = self.aliases.insert(
-                name,
-                AliasEntry {
-                    params: Vec::new(),
-                    value,
-                },
-            );
-        }
-    }
-
-    /// Every class declares a type the cascade can name. A `Protocol` or
-    /// `TypedDict` base additionally marks it **structural**, which is a fact
-    /// about how it is *compared*, not about whether the name resolves.
+    /// Every class declares a type the cascade can name.
     fn insert_class(&mut self, class: &'m StmtClassDef) {
-        let name = class.name.to_string();
-        if class_is_structural(class) {
-            let _ = self.structural.insert(name.clone());
-        }
-        let _ = self.nominal.insert(name);
+        let _ = self.nominal.insert(class.name.to_string());
     }
 
     /// `import X`, `import X.Y`, `import X as Y`.
@@ -198,11 +162,6 @@ impl<'m> Tables<'m> {
         let Some(name) = simple_name(target) else {
             return;
         };
-        // Any name-to-name re-binding joins the value table (`o = overload`),
-        // whether or not it also reads as a type alias below.
-        if let Some(rhs) = dotted_name(&assign.value) {
-            let _ = self.values.insert(name.clone(), rhs);
-        }
         if self.aliases.contains_key(&name) || self.nominal.contains(&name) {
             return;
         }
@@ -218,8 +177,8 @@ impl<'m> Tables<'m> {
     }
 
     /// Is `expr` shaped like a type expression whose head names something this
-    /// module can resolve? Deliberately narrow: `X = 5` and `X = TypeVar("X")`
-    /// are values, not aliases.
+    /// module can resolve? Deliberately narrow: `X = 5` and `X = f("X")` are
+    /// values, not aliases.
     fn is_type_expression(&self, expr: &Expr) -> bool {
         match expr {
             Expr::Name(name) => self.names_a_type(name.id.as_str()),
@@ -235,7 +194,7 @@ impl<'m> Tables<'m> {
     /// Does a bare name denote a type — a builtin, a same-file class, another
     /// alias, or an imported symbol?
     fn names_a_type(&self, name: &str) -> bool {
-        super::builtins::is_builtin_type_name(&name.to_ascii_lowercase())
+        super::builtins::is_builtin_type_name(name)
             || self.nominal.contains(name)
             || self.aliases.contains_key(name)
             || self.imports.contains_key(name)
@@ -272,25 +231,6 @@ fn child_bodies(stmt: &Stmt) -> Vec<&[Stmt]> {
             .collect(),
         _ => Vec::new(),
     }
-}
-
-/// `Protocol` and `TypedDict` bases make a class structural.
-fn class_is_structural(class: &StmtClassDef) -> bool {
-    class.bases().iter().any(|base| {
-        let head = match base {
-            Expr::Subscript(sub) => dotted_name(&sub.value),
-            other => dotted_name(other),
-        };
-        head.is_some_and(|name| {
-            let leaf = name.rsplit('.').next().unwrap_or(&name).to_owned();
-            leaf == "Protocol" || leaf == "TypedDict"
-        })
-    })
-}
-
-/// `TypeAlias` / `typing.TypeAlias` in annotation position (PEP 613).
-fn is_type_alias_annotation(annotation: &Expr) -> bool {
-    dotted_name(annotation).is_some_and(|name| name == "TypeAlias" || name.ends_with(".TypeAlias"))
 }
 
 /// The top-level component of a dotted module path (`os.path` → `os`).

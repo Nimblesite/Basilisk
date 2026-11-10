@@ -24,7 +24,7 @@ use tower_lsp::lsp_types::{
     WorkspaceServerCapabilities,
 };
 use tower_lsp::Client;
-use tracing::info;
+use tracing::{error, info};
 
 use crate::config::AnalysisMode;
 use crate::workspace::WorkspaceIndex;
@@ -37,6 +37,26 @@ pub(super) async fn initialize(
     server: &LspServer,
     params: InitializeParams,
 ) -> LspResult<InitializeResult> {
+    // Fail CLOSED on a broken specification registry
+    // ([RESOLV-CANONICAL-REGISTRY]). With an empty index every canonical
+    // lookup answers `None`, so the server would recognise no typing symbol
+    // and quietly publish clean diagnostics for code it never analysed. The
+    // CLI already refuses to run in that state; an editor session must not be
+    // the one place the failure is invisible.
+    if let Err(error) = basilisk_resolver::registry_health() {
+        error!(%error, "specification registry failed to load; refusing to initialize");
+        return Err(tower_lsp::jsonrpc::Error {
+            code: tower_lsp::jsonrpc::ErrorCode::InternalError,
+            message: format!(
+                "Basilisk cannot start: its specification registry failed to load ({error}). \
+                 Every type-recognition lookup would answer \"unknown\", so no diagnostic \
+                 could be trusted."
+            )
+            .into(),
+            data: None,
+        });
+    }
+
     // Collect workspace roots.
     let mut roots: Vec<std::path::PathBuf> = Vec::new();
     if let Some(folders) = &params.workspace_folders {

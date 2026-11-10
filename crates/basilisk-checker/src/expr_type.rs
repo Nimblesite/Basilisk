@@ -100,21 +100,18 @@ pub fn infer_expression_source(source: &str) -> InferredType {
 /// An empty scope reproduces [`infer_expression_source`] exactly.
 #[must_use]
 pub fn infer_expression_source_in_scope<S: std::hash::BuildHasher>(
-    source: &str,
-    scope: &std::collections::HashMap<String, InferredType, S>,
+    _source: &str,
+    _scope: &std::collections::HashMap<String, InferredType, S>,
 ) -> InferredType {
-    let Ok(parsed) = ruff_python_parser::parse_expression(source) else {
-        return InferredType::Unknown;
-    };
-    let module = parsed.into_syntax();
-    let globals = scope
-        .iter()
-        .map(|(name, ty)| (name.clone(), crate::bidir::Ty::from_inferred(ty)))
-        .collect();
-    let mut engine = crate::bidir::BidirEngine::new(globals);
-    let ty = engine.synth(&module.body);
-    let solution = engine.finish();
-    ty.to_inferred(&solution.vars)
+    // DELETED: an isolated `&str` expression has no original AST identity,
+    // source offset, or enclosing binding scope. Re-parsing it into a new
+    // zero-offset tree cannot support a semantic type verdict.
+    panic!(
+        "basilisk-checker: `infer_expression_source_in_scope` was DELETED because it \
+         reparsed expression source text outside the module AST and supplied a \
+         hand-built name map as scope. The real implementation must receive the original \
+         expression node and resolved scope. Do not restore parsing or return `Unknown`."
+    )
 }
 
 /// Whether a type contains no `Unknown` anywhere — display surfaces show a
@@ -129,6 +126,8 @@ pub fn infer_expression_source_in_scope<S: std::hash::BuildHasher>(
 pub fn is_fully_known(ty: &InferredType) -> bool {
     match ty {
         InferredType::Unknown => false,
+        // Both are complete answers: the top type and "some class object".
+        InferredType::Object | InferredType::ClassObject => true,
         // Variants carrying nested types: known only if every child is.
         InferredType::List(inner)
         | InferredType::Set(inner)
@@ -173,6 +172,9 @@ pub fn is_fully_known(ty: &InferredType) -> bool {
 #[must_use]
 pub fn display_widened(ty: &InferredType) -> InferredType {
     match ty {
+        // Neither carries a nested type, and neither is a literal.
+        InferredType::Object => InferredType::Object,
+        InferredType::ClassObject => InferredType::ClassObject,
         InferredType::Literal(literal) => match literal {
             crate::types::LiteralValue::Int(_) => InferredType::Int,
             // PEP 675: a literal expression is provably a `LiteralString`;

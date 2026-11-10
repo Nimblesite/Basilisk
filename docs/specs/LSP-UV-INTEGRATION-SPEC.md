@@ -105,8 +105,11 @@ Resolution and provenance are specified in
 ### Detection {#LSPUV-WORKSPACE-DETECTION}
 
 `parse_uv_workspace` reads `[tool.uv.workspace]`, expands literal members and simple trailing
-`/*` patterns, and returns sorted existing directories. It parses `exclude`, but currently
-does not subtract excluded members.
+`/*` patterns, subtracts every path matched by `exclude`, and returns the
+remaining sorted existing directories. An excluded member must not become a
+workspace import/search root. This contract is pinned by
+[#204](https://github.com/Nimblesite/Basilisk/issues/204) in
+`crates/basilisk-uv/src/workspace.rs`.
 
 ### Model {#LSPUV-WORKSPACE-MODEL}
 

@@ -48,13 +48,17 @@ pub mod incremental;
 pub mod incremental_defs;
 pub mod inference;
 pub mod narrow;
-pub mod ownership;
 pub mod param_infer;
 pub mod rule_catalog;
+pub mod rule_status;
 pub mod rule_tags;
 pub mod rules;
 pub mod span_util;
 pub mod stub_constructor;
+/// DELETED spelling-keyed subtyping layer, reduced to panicking signatures.
+///
+/// Every body here panics because the real implementation does not exist yet.
+/// Read the banner at the head of the file before touching any caller.
 pub mod subtyping;
 pub mod suppression;
 mod suppression_audit;
@@ -63,8 +67,10 @@ mod suppression_audit;
 /// Implements [TYPEINF-TARGET] and [TYPEINF-TARGET-TYPELEVEL].
 pub mod tyeval;
 pub mod types;
-pub mod types_parsing;
-pub(crate) mod types_star_tuples;
+/// DELETED text parser for annotations, reduced to a panicking signature.
+mod types_parsing;
+/// DELETED star-tuple text helpers, reduced to panicking signatures.
+mod types_star_tuples;
 
 pub use cached::CachedDiagnostic;
 pub use diagnostic::{Diagnostic, ErrorCode, Severity};
@@ -114,14 +120,7 @@ pub fn check_with_config(
     // [CHKARCH-VERSION-TARGET] every rule sees the configured target, plus a
     // shared line index so offset→line lookups (here and in rules) stay O(log n)
     // instead of rescanning the source per diagnostic / per function.
-    // Only starred-tuple analysis and inline suppression need byte→line
-    // lookups. Avoid allocating and populating an O(lines) index for the common
-    // case where neither feature appears.
-    let ctx = if has_inline_overrides || source.contains("*tuple[") {
-        context::CheckContext::from_config_with_source(config, source)
-    } else {
-        context::CheckContext::from_config(config)
-    };
+    let ctx = context::CheckContext::from_config_with_source(config, source);
     let raw = rules::run_all(module, &ctx);
 
     // Build the set of symbol names imported from unresolved modules.
@@ -375,7 +374,6 @@ fn is_cascade_suppressible(code: &str) -> bool {
         "calls_argument_type"  // wrong call
         | "returns_compatibility_2" // attribute not found
         | "assignment_compatibility" // type mismatch
-        | "callables_annotation" // missing return type
         | "names_undefined" // undefined variable
         | "calls_argument_count" // too few arguments
         | "directives_assert_type_2" // assert_type mismatch

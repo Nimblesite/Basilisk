@@ -20,14 +20,11 @@
 
 use std::collections::HashMap;
 
-use basilisk_resolver::{
-    AttributeInfo, ClassInfo, FunctionInfo, NamedTupleDefInfo, ResolvedModule, RhsKind,
-};
+use basilisk_resolver::{AttributeInfo, ClassInfo, FunctionInfo, ResolvedModule, RhsKind};
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
 
-use super::shared::annotation_is_classvar;
 use super::Rule;
 
 mod method_binding;
@@ -135,7 +132,17 @@ pub(super) fn stub_arity_accepts(
 }
 
 /// Check plain (non-constructor) function calls for too few arguments.
-fn check_plain_function_calls(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+fn check_plain_function_calls(_module: &ResolvedModule, _diagnostics: &mut Vec<Diagnostic>) {
+    // DELETED: this grouped definitions by `FunctionInfo::name` and joined
+    // calls through `CallSite::callee`, both renderings. Aliases, rebindings,
+    // and same-spelled definitions therefore changed the arity verdict.
+    panic!(
+        "basilisk-checker: `check_plain_function_calls` was DELETED because it joined \
+         calls to functions by rendered callee/definition names. The resolver must carry \
+         the callee's function definition site at the call offset. Do not restore the \
+         name map or silently skip the rule."
+    )
+    /*
     // Group functions by name (module-level functions only).
     let mut func_groups: HashMap<&str, Vec<&FunctionInfo>> = HashMap::new();
     for func in &module.functions {
@@ -236,35 +243,43 @@ fn check_plain_function_calls(module: &ResolvedModule, diagnostics: &mut Vec<Dia
             }
         }
     }
+    */
 }
 
-/// Returns `true` when the metaclass `__call__` method passes through arguments
-/// to the underlying `__new__`/`__init__` (i.e. its `__call__` uses `*args, **kwargs`
-/// and does not have a fixed return type that overrides the constructor).
-///
-/// When the metaclass `__call__` has a concrete, non-generic return type that is
-/// NOT the class being constructed (e.g. `-> NoReturn`, `-> int | Meta`), the
-/// metaclass fully controls the constructor call and we should NOT validate
-/// arguments against `__new__`/`__init__`.
-fn metaclass_passes_through(metaclass_name: &str, module: &ResolvedModule) -> bool {
-    // First check that the metaclass class exists
-    if !module.classes.iter().any(|c| c.name == metaclass_name) {
-        return false;
-    }
-
-    // Find the metaclass __call__ method
-    let call_method = module
-        .functions
-        .iter()
-        .find(|f| f.class_name.as_deref() == Some(metaclass_name) && f.name == "__call__");
-
-    let Some(call_fn) = call_method else {
-        // No __call__ method on metaclass — default type.__call__ passes through
+// ##########################################################################
+// # DELETED BODY — `metaclass_passes_through`. DO NOT RESTORE IT.
+// #
+// #   module.classes.iter().any(|c| c.name == metaclass_name)
+// #   f.class_name.as_deref() == Some(metaclass_name)
+// #
+// # `ClassInfo::metaclass_name` is the RENDERED text of a `metaclass=` value,
+// # matched against class names and method owners by string. An imported
+// # metaclass, one reached through an alias, or `metaclass=mod.Meta` all
+// # failed to resolve, and a local class sharing the rendered name matched.
+// #
+// # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
+// ##########################################################################
+fn metaclass_passes_through(
+    graph: &basilisk_resolver::ClassGraph<'_>,
+    method_map: &std::collections::HashMap<(basilisk_resolver::Span, &str), Vec<&FunctionInfo>>,
+    class_info: &ClassInfo,
+    module: &ResolvedModule,
+) -> bool {
+    // No `metaclass=` naming a class of this module: nothing here can
+    // intercept construction, so the ordinary constructor check applies.
+    let Some(meta) = class_info.metaclass_site.and_then(|site| graph.at(site)) else {
         return true;
     };
-
-    // The metaclass __call__ must use *args and **kwargs to pass through
-    call_fn.vararg.is_some() && call_fn.kwarg.is_some() && constructs_an_instance(call_fn, module)
+    // `__call__` may be declared by the metaclass or inherited by it.
+    let Some(call_fn) = graph
+        .ancestors(meta)
+        .into_iter()
+        .find_map(|ancestor| method_map.get(&(ancestor.name_span, "__call__")))
+        .and_then(|defs| defs.last().copied())
+    else {
+        return true;
+    };
+    constructs_an_instance(call_fn, module)
 }
 
 /// Does this metaclass `__call__` still yield an instance of the class being
@@ -272,27 +287,55 @@ fn metaclass_passes_through(metaclass_name: &str, module: &ResolvedModule) -> bo
 ///
 /// Per the [metaclass `__call__`](https://typing.python.org/en/latest/spec/constructors.html#metaclass-call-method)
 /// rules, a return annotated with a type variable
-/// (`def __call__(cls: type[T], ...) -> T`) or `Self` is the pass-through
-/// spelling. Any other concrete return — `NoReturn`, `int | Meta` — means the
-/// metaclass fully controls the call and the constructor signature is never
-/// consulted, so an arity judgment against `__new__` would be a false positive.
+/// (`def __call__(cls: type[T], ...) -> T`) is the pass-through form. Any other
+/// concrete return means the metaclass fully controls the call and the
+/// constructor signature is never consulted, so an arity judgment against
+/// `__new__` would be a false positive.
 ///
 /// An UNANNOTATED `__call__` is decided from its body instead of assumed, so
 /// this judgment survives [TYPEINF-TARGET-GRADUAL]: stripping the annotations
 /// off a metaclass must not turn a silent constructor call into an error.
-fn constructs_an_instance(call_fn: &FunctionInfo, module: &ResolvedModule) -> bool {
-    let Some(span) = call_fn.return_annotation_span else {
-        return body_delegates_construction(call_fn);
-    };
-    let Some(text) = slice_span(&module.source, span) else {
-        return body_delegates_construction(call_fn);
-    };
-    let returned = text.trim();
-    returned == "Self"
-        || module
-            .typevar_calls
-            .iter()
-            .any(|typevar| typevar.name == returned)
+///
+// ##########################################################################
+// # DELETED BODY — `constructs_an_instance`. DO NOT RESTORE IT.            #
+// #                                                                         #
+// #   let text = slice_span(&module.source, span)?;                        #
+// #   module.typevar_calls.iter().any(|tv| tv.name == text.trim())         #
+// #                                                                         #
+// # The return annotation was SLICED OUT OF THE FILE and its trimmed        #
+// # characters compared against the NAME a `TypeVar` was declared with.     #
+// # This decides whether a metaclass `__call__` passes construction through #
+// # to `__new__`/`__init__`, so it gates every constructor arity            #
+// # diagnostic on the class:                                                #
+// #                                                                         #
+// #   * `-> T` and `-> "T"` are the same annotation and compare unequal;    #
+// #   * `Alias = T` used as `-> Alias` denotes the SAME `TypeVar` object    #
+// #     and does not match, silently dropping the diagnostic;               #
+// #   * a class or variable merely SPELLED like a `TypeVar` matches;        #
+// #   * a qualified spelling, or whitespace the slice happens to include,   #
+// #     changes the answer.                                                 #
+// #                                                                         #
+// # The lawful replacement resolves the return annotation's `Expr` through  #
+// # the binding table and compares the resulting definition site against    #
+// # the `TypeVar` construction's own `TypeVarCallInfo::span` — the same     #
+// # mechanism `generics_basic_2` uses. `FunctionInfo` carries only a SPAN   #
+// # for the annotation, so the caller must first reach the node through     #
+// # `rules::shared::ExprIndex`.                                             #
+// #                                                                         #
+// # Pinned by: tests/constructor_identity_tests.rs                          #
+// ##########################################################################
+
+/// DELETED — panics; see the banner above.
+fn constructs_an_instance(_call_fn: &FunctionInfo, _module: &ResolvedModule) -> bool {
+    panic!(
+        "basilisk-checker: `constructs_an_instance` was DELETED because it decided \
+         whether a metaclass `__call__` passes construction through by SLICING the \
+         return annotation out of the source and comparing its characters to a \
+         `TypeVar`'s declared name. It panics because the real implementation — the \
+         annotation's `Expr` resolved through the binding table and compared against \
+         `TypeVarCallInfo::span` — DOES NOT EXIST YET. Do not restore the slice and do \
+         not return `true` or `false` in its place."
+    )
 }
 
 /// Does an unannotated metaclass `__call__` hand construction back to the
@@ -302,6 +345,15 @@ fn constructs_an_instance(call_fn: &FunctionInfo, module: &ResolvedModule) -> bo
 /// its signature governs. A body that returns a value of its own (`return 1`) or
 /// never returns at all (`raise TypeError(...)`) produces something that is not
 /// an instance of the class, so the constructor is never consulted.
+///
+/// ORPHANED, NOT DELETED. It reads `FunctionInfo::return_stmts` — resolver
+/// structure, no text — and does not have `constructs_an_instance`'s defect.
+/// The rebuild calls it unchanged for the unannotated case.
+#[expect(
+    dead_code,
+    reason = "caller deleted for slicing the return annotation; this structural helper \
+              is retained for the rebuild — see the `constructs_an_instance` banner"
+)]
 fn body_delegates_construction(call_fn: &FunctionInfo) -> bool {
     let mut returns_values = call_fn.return_stmts.iter().filter(|stmt| stmt.has_value);
     returns_values.clone().next().is_some() && returns_values.all(|stmt| stmt.value_is_call)
@@ -310,10 +362,7 @@ fn body_delegates_construction(call_fn: &FunctionInfo) -> bool {
 /// Collects the positional (non-kw_only, non-init_false, non-ClassVar) fields of a
 /// dataclass in declaration order. These are the fields that correspond positionally
 /// to constructor arguments when no keyword arguments are used.
-fn positional_dataclass_fields<'a>(
-    class_info: &'a ClassInfo,
-    source: &str,
-) -> Vec<&'a AttributeInfo> {
+fn positional_dataclass_fields(class_info: &ClassInfo) -> Vec<&AttributeInfo> {
     class_info
         .attributes
         .iter()
@@ -322,48 +371,83 @@ fn positional_dataclass_fields<'a>(
                 && !a.is_init_false
                 && !a.is_kw_only
                 && !a.is_init_var
-                && !annotation_is_classvar(source, a.annotation_span)
+                && !a.is_class_var
         })
         .collect()
 }
 
 /// Counts the required (no-default) positional dataclass fields.
-fn required_dataclass_field_count(class_info: &ClassInfo, source: &str) -> usize {
-    positional_dataclass_fields(class_info, source)
+fn required_dataclass_field_count(class_info: &ClassInfo) -> usize {
+    positional_dataclass_fields(class_info)
         .into_iter()
         .filter(|a| !a.has_value)
         .count()
 }
 
-/// Maps a [`RhsKind`] literal to its Python type name, or `None` for non-literals.
-fn rhs_kind_to_type_name(kind: &RhsKind) -> Option<&'static str> {
-    match kind {
-        RhsKind::IntLiteral => Some("int"),
-        RhsKind::FloatLiteral => Some("float"),
-        RhsKind::StrLiteral => Some("str"),
-        RhsKind::BoolLiteral => Some("bool"),
-        RhsKind::BytesLiteral => Some("bytes"),
-        _ => None,
-    }
+// ##########################################################################
+// # DELETED BODY — `rhs_kind_to_type_name`. DO NOT RESTORE IT.            #
+// #                                                                        #
+// #   RhsKind::IntLiteral => Some("int"), …                                #
+// #                                                                        #
+// # This is the BRIDGE that turned a fact the parser knew — the kind of    #
+// # literal node — back into a SPELLING, so that the comparison below      #
+// # could be done on characters. `RhsKind::IntLiteral` already says        #
+// # everything `"int"` says and cannot be confused with a user class of    #
+// # that name; rendering it discards exactly the identity that matters.    #
+// #                                                                        #
+// # Every deletion in this crate ends up here: some helper renders a       #
+// # resolved fact to text so that a `match` on string literals becomes     #
+// # possible. The rendering is the defect, not the `match`.                #
+// #                                                                        #
+// # Pinned by: tests/source_text_verdict_pin_tests.rs                      #
+// ##########################################################################
+fn rhs_kind_to_type_name(_kind: &RhsKind) -> Option<&'static str> {
+    panic!(
+        "basilisk-checker: `rhs_kind_to_type_name` was DELETED because it RENDERED a \
+         known literal kind back into a type SPELLING so the comparison downstream \
+         could be done on characters. It panics because the real implementation — \
+         carrying the literal's canonical `TypeNode` to the comparison instead of its \
+         name — DOES NOT EXIST YET. Do not restore the rendering and do not return \
+         `None` in its place."
+    )
 }
 
-/// Returns `true` when passing a value of `arg_type` to a parameter annotated
-/// `param_ann` is clearly a type mismatch.
-///
-/// Only flags clear incompatibilities between primitive literal types to avoid
-/// false positives on complex or unknown types.
-fn is_clearly_incompatible(arg_type: &str, param_ann: &str) -> bool {
-    let param = param_ann.trim();
-    // Remove optional suffix / union — only check the primary type name.
-    // e.g. "int | None" → still allow "int" args; "str" args would be wrong.
-    let primary = param.split('|').next().unwrap_or(param).trim();
-    match arg_type {
-        "str" => matches!(primary, "int" | "float" | "bool" | "bytes"),
-        "bytes" => matches!(primary, "int" | "float" | "bool" | "str"),
-        "int" => matches!(primary, "str" | "bytes"),
-        "float" => matches!(primary, "str" | "bytes"),
-        _ => false,
-    }
+// ##########################################################################
+// # DELETED BODY — `is_clearly_incompatible`. DO NOT RESTORE IT AND DO NOT #
+// # RETURN `false` IN ITS PLACE.                                           #
+// #                                                                        #
+// # `fn name_subtype` by another name — the exact construct the spelling   #
+// # guard forbids. It settled ASSIGNABILITY between two RENDERED           #
+// # SPELLINGS:                                                             #
+// #                                                                        #
+// #   let primary = param.split('|').next().unwrap_or(param).trim();       #
+// #   match arg_type {                                                     #
+// #       "str"   => matches!(primary, "int" | "float" | "bool" | "bytes"),#
+// #       "int"   => matches!(primary, "str" | "bytes"), …                 #
+// #   }                                                                    #
+// #                                                                        #
+// # Splitting on the `|` CHARACTER is not union decomposition: it cuts     #
+// # `Callable[[int | str], None]` at the wrong `|`, cuts inside a          #
+// # `Literal[\"a|b\"]`, and does not see `Optional[int]` or `Union[int,    #
+// # str]` as unions at all. The type names are builtin identity by         #
+// # spelling, so an aliased import was never incompatible and a module's   #
+// # own `class str` always was.                                            #
+// #                                                                        #
+// # Assignability is `assignable(&TypeNode, &TypeNode)`, which is          #
+// # three-valued and abstains with `None` instead of guessing.             #
+// #                                                                        #
+// # Pinned by: tests/source_text_verdict_pin_tests.rs                      #
+// ##########################################################################
+fn is_clearly_incompatible(_arg_type: &str, _param_ann: &str) -> bool {
+    panic!(
+        "basilisk-checker: `is_clearly_incompatible` was DELETED because it decided \
+         assignability by comparing two RENDERED TYPE SPELLINGS, splitting the \
+         annotation on the `|` character to approximate unions. It panics because the \
+         real implementation — `assignable(&TypeNode, &TypeNode)` on canonical types — \
+         DOES NOT EXIST YET at this call site. Do not restore the name match and do \
+         not return `false` in its place: `false` silences the rule while it still \
+         reports as implemented."
+    )
 }
 
 /// Check positional argument types against the dataclass field types.
@@ -388,7 +472,7 @@ fn check_dataclass_arg_types(
         return;
     }
 
-    let fields = positional_dataclass_fields(class_info, source);
+    let fields = positional_dataclass_fields(class_info);
 
     for (idx, (arg_kind, arg_span)) in call.args.iter().enumerate() {
         let Some(field) = fields.get(idx) else {
@@ -428,15 +512,21 @@ fn check_dataclass_arg_types(
 /// class's `__new__` or `__init__` method, but only if the metaclass `__call__`
 /// passes arguments through (uses `*args, **kwargs`).
 fn check_constructor_calls(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-    // Build a map of class names for quick lookup.
-    let class_map = super::shared::class_name_map(&module.classes);
+    // Bail on parse errors — those are reported separately as BSK-0000.
+    if crate::annotation::AnnotationResolver::for_module(module).is_none() {
+        return;
+    }
+    let graph = basilisk_resolver::ClassGraph::new(&module.classes);
 
-    // Build a map of (class_name, method_name) → FunctionInfo for methods.
+    // Build a map of (class definition site, method_name) → FunctionInfo.
     let method_map = super::shared::method_name_map(&module.functions);
 
     for call in &module.calls {
-        // Only process constructor calls (callee matches a class name)
-        let Some(class_info) = class_map.get(call.callee.as_str()) else {
+        // Only process constructor calls. Which class the callee names was
+        // RESOLVED at the call site, so `Shorthand = Widget; Shorthand()`
+        // checks `Widget`'s constructor and a callee whose name merely matches
+        // a class checks nothing ([RESOLV-CANONICAL-BINDING]).
+        let Some(class_info) = call.callee_class_site.and_then(|site| graph.at(site)) else {
             continue;
         };
 
@@ -450,10 +540,8 @@ fn check_constructor_calls(module: &ResolvedModule, diagnostics: &mut Vec<Diagno
 
         // Check metaclass: if the class has a metaclass that does NOT pass through
         // arguments, skip validation (the metaclass controls the call signature).
-        if let Some(ref meta_name) = class_info.metaclass_name {
-            if !metaclass_passes_through(meta_name, module) {
-                continue;
-            }
+        if !metaclass_passes_through(&graph, &method_map, class_info, module) {
+            continue;
         }
 
         // Find the constructor method to validate against.
@@ -547,7 +635,7 @@ fn check_dataclass_no_explicit_constructor(
     }
 
     // Normal synthesised __init__: check required field count.
-    let required_count = required_dataclass_field_count(class_info, source);
+    let required_count = required_dataclass_field_count(class_info);
 
     if provided_count < required_count {
         let missing = required_count - provided_count;
@@ -578,34 +666,25 @@ fn check_dataclass_no_explicit_constructor(
 /// (not just `*args, **kwargs`), otherwise falls back to `__init__`.
 fn find_constructor_method<'a>(
     class_info: &ClassInfo,
-    method_map: &HashMap<(&str, &str), Vec<&'a FunctionInfo>>,
+    method_map: &HashMap<(basilisk_resolver::Span, &str), Vec<&'a FunctionInfo>>,
 ) -> Option<&'a FunctionInfo> {
-    let class_name = class_info.name.as_str();
+    // Keyed on the class's DEFINITION SITE, so a module that declares two
+    // classes with the same name checks each call against its own class's
+    // constructor instead of collapsing both into one entry.
+    let site = class_info.name_span;
 
     // Try __new__ first
-    if let Some(new_methods) = method_map.get(&(class_name, "__new__")) {
-        // Use the first non-overload __new__, or the first one
-        let new_fn = new_methods
-            .iter()
-            .find(|f| !super::shared::decorator_spelled(&f.decorators, "overload"))
-            .or_else(|| new_methods.first());
-        if let Some(func) = new_fn {
-            return Some(func);
-        }
+    if let Some(func) = method_map
+        .get(&(site, "__new__"))
+        .and_then(|new_methods| new_methods.first().copied())
+    {
+        return Some(func);
     }
 
     // Fall back to __init__
-    if let Some(init_methods) = method_map.get(&(class_name, "__init__")) {
-        let init_fn = init_methods
-            .iter()
-            .find(|f| !super::shared::decorator_spelled(&f.decorators, "overload"))
-            .or_else(|| init_methods.first());
-        if let Some(func) = init_fn {
-            return Some(func);
-        }
-    }
-
-    None
+    method_map
+        .get(&(site, "__init__"))
+        .and_then(|init_methods| init_methods.first().copied())
 }
 
 /// Check calls to functional-form `NamedTuple` / `namedtuple` for argument count errors.
@@ -613,7 +692,17 @@ fn find_constructor_method<'a>(
 /// Validates:
 /// - Too few positional args (below required field count, considering defaults)
 /// - Too many positional args (above total field count)
-fn check_namedtuple_calls(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+fn check_namedtuple_calls(_module: &ResolvedModule, _diagnostics: &mut Vec<Diagnostic>) {
+    // DELETED: this joined `CallSite::callee` to `NamedTupleDefInfo::lhs_name`
+    // through a string map. Which factory result a call invokes is binding
+    // identity, not the current spelling of either name.
+    panic!(
+        "basilisk-checker: `check_namedtuple_calls` was DELETED because it matched a \
+         call to a NamedTuple definition by rendered name. Rebuild it on the resolved \
+         value-definition site at the call offset; do not restore the map or return \
+         without checking."
+    )
+    /*
     let nt_map: HashMap<&str, &NamedTupleDefInfo> = module
         .namedtuple_defs
         .iter()
@@ -668,4 +757,5 @@ fn check_namedtuple_calls(module: &ResolvedModule, diagnostics: &mut Vec<Diagnos
             ));
         }
     }
+    */
 }

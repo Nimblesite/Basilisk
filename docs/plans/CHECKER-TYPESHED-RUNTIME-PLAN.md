@@ -133,9 +133,10 @@ for human review; MCP status carries active source, full commit/tree identity,
 license status/reference, and ordered warnings with no separate provenance field;
 the forbidden-policy guard rejects analysis-path network calls, automatic
 downloads, unnamed-SHA fallbacks, verification waivers, Python-version-to-SHA
-maps, fixed Python defaults, and `git clone`; the unmodified `python/typing@main`
-harness passes at 100% with zero false positives against the clean release
-binary; and the documentation integrity gate validates the six-step flow,
+maps, fixed Python defaults, and `git clone`; the clean release binary records
+no regression in either the pristine historical `python/typing` fixture
+snapshot or its AST-preserving mutations (neither is a current conformance
+claim); and the documentation integrity gate validates the six-step flow,
 anchors, links, and the pin.
 
 - [ ] **Every artifact:** exact bundled-SHA composite LICENSE (including MIT notice), conditional root/nested NOTICE/license files, retained notices, and modified-file marks ship in every binary/package/VSIX. `scripts/verify_release_attribution.py` verifies the binary archives (`--kind binary`) and the wheels (`--kind wheel`) byte-exactly; the VSIX is still only name-presence-checked by `unzip -l`, so it needs the same exact-content verification.

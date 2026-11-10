@@ -283,6 +283,14 @@ pub(super) fn check_type_alias_in_function(
 /// ground-argument applications — is the PEP 695-mandated valid form and
 /// produces NO diagnostic
 /// ([#371](https://github.com/Nimblesite/Basilisk/issues/371)).
+///
+/// Important contract gap: [PEP 695 § Generic type alias](https://peps.python.org/pep-0695/#generic-type-alias)
+/// does not classify non-regular recursion as a scoping error or require
+/// recursive applications to reuse identical arguments. Emitting the default
+/// `generics_syntax_scoping` diagnostic for `Acceptance::NonRegular` is tracked
+/// as [#383](https://github.com/Nimblesite/Basilisk/issues/383) and pinned red
+/// in `tests/checker/aliases_recursive_tests.rs`; any rejection must be a
+/// separately named, opt-in Basilisk policy.
 pub(super) fn check_type_alias_circular(
     module: &basilisk_resolver::ResolvedModule,
     scoping: &Pep695Scoping,

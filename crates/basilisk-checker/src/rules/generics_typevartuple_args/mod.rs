@@ -16,16 +16,20 @@
 
 use std::collections::HashMap;
 
-use basilisk_resolver::{ResolvedModule, Span};
+use basilisk_resolver::{equivalent, BindingTable, ResolvedModule, Span, TypeNode};
 use ruff_python_ast::{Expr, Stmt};
 use ruff_text_size::Ranged as _;
 
 use super::Rule;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
-use crate::span_util::slice_span;
 
 mod star_args;
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 const CODE: ErrorCode = ErrorCode {
     code: "generics_typevartuple_args",
     docs_url: "https://www.basilisk-python.dev/errors/generics_typevartuple_args",
@@ -35,90 +39,47 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct TypeVarTupleArgCountMismatch;
 
 impl Rule for TypeVarTupleArgCountMismatch {
+    // ##########################################################################
+    // # DELETED BODY. DO NOT RESTORE IT AND DO NOT RETURN A DEFAULT.
+    // #
+    // # `ClassInfo::base_expression_names` is a `Vec<String>` of RENDERED simple
+    // # names harvested from base-class expressions. This code matched those
+    // # strings against a set of TypeVar names collected the same way, so:
+    // #
+    // #   T = TypeVar("T")
+    // #   Alias = T
+    // #   class Foo(Generic[Alias]): ...      # TypeVar NOT recognised
+    // #
+    // #   class T: ...                        # unrelated class
+    // #   class Foo(Base[T]): ...             # treated as a TypeVar use
+    // #
+    // # Whether a base-expression name denotes a TypeVar is a question about the
+    // # binding it resolves to, not about the characters written.
+    // #
+    // # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
+    // ##########################################################################
     fn check(
         &self,
-        module: &ResolvedModule,
+        _module: &ResolvedModule,
         _ctx: &super::CheckContext,
-        diagnostics: &mut Vec<Diagnostic>,
+        _diagnostics: &mut Vec<Diagnostic>,
     ) {
-        let Some(parsed) = super::shared::parse_module(module) else {
-            return;
-        };
-
-        // Collect TypeVarTuple names. Needed by the unpacked-tuple `*args`
-        // validation to recognise the `*args: tuple[*Ts]` shared-binding form.
-        let tvt_names = super::shared::typevar_tuple_names(&module.typevar_calls);
-
-        // Unpacked-tuple `*args` validation applies with or without any
-        // `TypeVarTuple` declarations in the module (the `*tuple[...]` forms need
-        // none; the `tuple[*Ts]` form consults `tvt_names`).
-        star_args::check_star_args_calls(&parsed.ast.body, &tvt_names, &module.path, diagnostics);
-
-        if tvt_names.is_empty() {
-            return;
-        }
-
-        check_shared_tvt_call_consistency(module, &parsed.ast.body, &tvt_names, diagnostics);
-
-        // Find classes that use TypeVarTuple in their generic params.
-        let tvt_classes: HashMap<&str, &basilisk_resolver::ClassInfo> = module
-            .classes
-            .iter()
-            .filter(|cls| {
-                cls.generic_params.iter().any(|p| p.is_typevartuple)
-                    || cls
-                        .base_expression_names
-                        .iter()
-                        .any(|n| tvt_names.contains(n.as_str()))
-            })
-            .map(|cls| (cls.name.as_str(), cls))
-            .collect();
-
-        if tvt_classes.is_empty() {
-            return;
-        }
-
-        // Collect __init__ parameter info for TypeVarTuple classes.
-        // We need to know which params use `tuple[*Ts]`.
-        let mut tvt_init_info: HashMap<&str, bool> = HashMap::new();
-        for func in &module.functions {
-            let Some(ref class_name) = func.class_name else {
-                continue;
-            };
-            if !tvt_classes.contains_key(class_name.as_str()) {
-                continue;
-            }
-            if func.name == "__init__" {
-                // Check if any parameter annotation contains a TypeVarTuple reference.
-                let has_tvt_param = func.parameters.iter().any(|p| {
-                    if let Some(ref ann_span) = p.annotation_span {
-                        let ann_text = slice_span(&module.source, *ann_span).unwrap_or("");
-                        tvt_names.iter().any(|tvt| ann_text.contains(tvt))
-                    } else {
-                        false
-                    }
-                });
-                let _ = tvt_init_info.insert(class_name.as_str(), has_tvt_param);
-            }
-        }
-
-        walk_stmts_for_tvt_calls(
-            &parsed.ast.body,
-            &tvt_classes,
-            &tvt_init_info,
-            &module.path,
-            diagnostics,
-        );
-        check_bare_constructor_shapes(
-            &parsed.ast.body,
-            &tvt_classes,
-            &tvt_init_info,
-            &module.path,
-            diagnostics,
-        );
+        panic!(
+        "basilisk-checker: `generics_typevartuple_args::check` was DELETED because it matched TypeVar identity by \
+         RENDERED NAME against `base_expression_names`, so an aliased TypeVar was \
+         invisible and any unrelated symbol spelled like one matched. It panics \
+         because the real implementation — base expressions resolved through the \
+         binding table — DOES NOT EXIST YET. Do not restore the name matching and \
+         do not substitute a default answer."
+    )
     }
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 /// `var: C[A1, ..., An] = C(shape)` — when `C` is generic over a `TypeVarTuple`
 /// and its `__init__` takes a `tuple[*Ts]`-typed argument, the constructor
 /// argument must be a tuple expression of arity `n`.
@@ -201,6 +162,11 @@ fn check_bare_constructor_shapes(
     });
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 /// The simple name of a declared type-argument element (`Height` → `"Height"`).
 fn type_arg_name(expr: &Expr) -> Option<&str> {
     match expr {
@@ -209,6 +175,11 @@ fn type_arg_name(expr: &Expr) -> Option<&str> {
     }
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 /// The simple name of a constructor-tuple element: the callee of `Height(1)` or
 /// a bare `Height` (`"Height"`).
 fn ctor_elt_name(expr: &Expr) -> Option<&str> {
@@ -219,6 +190,11 @@ fn ctor_elt_name(expr: &Expr) -> Option<&str> {
     }
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 /// When the constructor tuple has the right arity but its element types are a
 /// *permutation* of the declared specialization (`Array[A, B] = Array((B(), A()))`),
 /// the dimensions are out of order. Only a pure reordering is flagged — a
@@ -278,34 +254,50 @@ fn check_element_order(
     ));
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 /// When a function binds the same `TypeVarTuple` in several parameters
 /// (`def f(a: tuple[*Ts], b: tuple[*Ts])`), every call must bind it
 /// identically: tuple-literal arguments must have equal lengths, and
-/// parameter-reference arguments must carry identical annotations.
+/// parameter-reference arguments must carry provably-equivalent annotations.
+///
+/// A parameter participates when its annotation is exactly the resolved
+/// tuple form subscripted by one unpacked `TypeVarTuple` — decided through
+/// the binding table and the AST, never annotation text ([ASTREBUILD-LAW]).
+/// Annotations that merely mention a `TypeVarTuple` in a wider shape
+/// (`tuple[int, *Ts]`) are outside this check's model and abstain
+/// ([ASTREBUILD-PHASE-RESOLVER]).
 fn check_shared_tvt_call_consistency(
     module: &ResolvedModule,
     stmts: &[Stmt],
     tvt_names: &std::collections::HashSet<&str>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    // Functions with two or more identically-annotated `*Ts` parameters:
-    // name → positions of those parameters.
+    // Module-level functions binding the same `TypeVarTuple` in two or more
+    // positional parameters: name → positions of those parameters.
     let mut shared: HashMap<&str, Vec<usize>> = HashMap::new();
-    for func in &module.functions {
-        if func.class_name.is_some() {
+    for stmt in stmts {
+        let Stmt::FunctionDef(func) = stmt else {
             continue;
-        }
-        let mut by_annotation: HashMap<&str, Vec<usize>> = HashMap::new();
-        for (idx, param) in func.parameters.iter().enumerate() {
-            let Some(ann) = param.annotation_text.as_deref() else {
+        };
+        let mut by_tvt: HashMap<&str, Vec<usize>> = HashMap::new();
+        let positional = func
+            .parameters
+            .posonlyargs
+            .iter()
+            .chain(func.parameters.args.iter());
+        for (idx, param) in positional.enumerate() {
+            let Some(ann) = param.parameter.annotation.as_deref() else {
                 continue;
             };
-            let binds_tvt = tvt_names.iter().any(|tvt| ann.contains(&format!("*{tvt}")));
-            if binds_tvt {
-                by_annotation.entry(ann).or_default().push(idx);
+            if let Some(tvt) = star_args::shared_tvt_name(&module.bindings, ann, tvt_names) {
+                by_tvt.entry(tvt).or_default().push(idx);
             }
         }
-        if let Some(positions) = by_annotation.into_values().find(|p| p.len() >= 2) {
+        if let Some(positions) = by_tvt.into_values().find(|p| p.len() >= 2) {
             let _ = shared.insert(func.name.as_str(), positions);
         }
     }
@@ -314,55 +306,66 @@ fn check_shared_tvt_call_consistency(
     }
 
     let scope = HashMap::new();
-    walk_calls_with_scope(stmts, &scope, &shared, &module.path, diagnostics);
+    walk_calls_with_scope(
+        stmts,
+        &scope,
+        &shared,
+        &module.bindings,
+        &module.path,
+        diagnostics,
+    );
 }
 
-/// Parameter-name → annotation-text scope for one function.
-type ParamScope = HashMap<String, String>;
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
+/// Parameter-name → resolved annotation scope for one function.
+type ParamScope = HashMap<String, TypeNode>;
 
-/// Walk statements tracking the enclosing function's parameter annotations,
-/// checking shared-`TypeVarTuple` calls in expression positions.
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
+/// Walk statements tracking the enclosing function's parameter annotations
+/// (lowered through the binding table), checking shared-`TypeVarTuple` calls
+/// in expression positions.
 fn walk_calls_with_scope(
     stmts: &[Stmt],
     scope: &ParamScope,
     shared: &HashMap<&str, Vec<usize>>,
+    bindings: &BindingTable,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     for stmt in stmts {
         match stmt {
             Stmt::FunctionDef(func) => {
-                let inner: ParamScope = func
-                    .parameters
-                    .posonlyargs
-                    .iter()
-                    .chain(func.parameters.args.iter())
-                    .chain(func.parameters.kwonlyargs.iter())
+                let inner: ParamScope = basilisk_resolver::iter_all_params(&func.parameters)
                     .filter_map(|p| {
                         p.parameter.annotation.as_deref().map(|ann| {
-                            (
-                                p.parameter.name.to_string(),
-                                crate::rules::shared::ann_str(ann),
-                            )
+                            (p.parameter.name.to_string(), TypeNode::lower(bindings, ann))
                         })
                     })
                     .collect();
-                walk_calls_with_scope(&func.body, &inner, shared, path, diagnostics);
+                walk_calls_with_scope(&func.body, &inner, shared, bindings, path, diagnostics);
             }
             Stmt::ClassDef(cls) => {
-                walk_calls_with_scope(&cls.body, scope, shared, path, diagnostics);
+                walk_calls_with_scope(&cls.body, scope, shared, bindings, path, diagnostics);
             }
             Stmt::If(if_stmt) => {
-                walk_calls_with_scope(&if_stmt.body, scope, shared, path, diagnostics);
+                walk_calls_with_scope(&if_stmt.body, scope, shared, bindings, path, diagnostics);
                 for clause in &if_stmt.elif_else_clauses {
-                    walk_calls_with_scope(&clause.body, scope, shared, path, diagnostics);
+                    walk_calls_with_scope(&clause.body, scope, shared, bindings, path, diagnostics);
                 }
             }
             Stmt::For(for_stmt) => {
-                walk_calls_with_scope(&for_stmt.body, scope, shared, path, diagnostics);
+                walk_calls_with_scope(&for_stmt.body, scope, shared, bindings, path, diagnostics);
             }
             Stmt::While(while_stmt) => {
-                walk_calls_with_scope(&while_stmt.body, scope, shared, path, diagnostics);
+                walk_calls_with_scope(&while_stmt.body, scope, shared, bindings, path, diagnostics);
             }
             Stmt::Expr(node) => scan_expr_calls(&node.value, scope, shared, path, diagnostics),
             Stmt::Assign(node) => scan_expr_calls(&node.value, scope, shared, path, diagnostics),
@@ -381,6 +384,11 @@ fn walk_calls_with_scope(
     }
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 /// Recursively check call expressions (including nested call arguments).
 fn scan_expr_calls(
     expr: &Expr,
@@ -400,6 +408,11 @@ fn scan_expr_calls(
     }
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 /// Validate one call against the shared-`TypeVarTuple` parameter positions.
 fn check_call_binding_consistency(
     call: &ruff_python_ast::ExprCall,
@@ -444,6 +457,11 @@ fn check_call_binding_consistency(
     ));
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 /// How a call argument binds a `TypeVarTuple`.
 enum Binding {
     /// A tuple literal of the given length.
@@ -454,6 +472,11 @@ enum Binding {
     Opaque,
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 fn arg_binding(arg: &Expr) -> Binding {
     match arg {
         Expr::Tuple(t) => Binding::TupleLen(t.elts.len()),
@@ -462,7 +485,17 @@ fn arg_binding(arg: &Expr) -> Binding {
     }
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 /// `true` when two bindings are provably consistent (or not provably wrong).
+///
+/// Two name references are inconsistent only when the relation REFUTES the
+/// equivalence of their resolved annotations; an abstention (`None`) — e.g.
+/// annotations with unresolved parts — never produces a verdict
+/// ([ASTREBUILD-LAW]).
 fn binding_matches(a: &Binding, b: &Binding, scope: &ParamScope) -> bool {
     match (a, b) {
         (Binding::TupleLen(la), Binding::TupleLen(lb)) => la == lb,
@@ -471,7 +504,7 @@ fn binding_matches(a: &Binding, b: &Binding, scope: &ParamScope) -> bool {
                 return true;
             }
             match (scope.get(na), scope.get(nb)) {
-                (Some(ann_a), Some(ann_b)) => ann_a == ann_b,
+                (Some(node_a), Some(node_b)) => equivalent(node_a, node_b) != Some(false),
                 _ => true,
             }
         }
@@ -479,6 +512,11 @@ fn binding_matches(a: &Binding, b: &Binding, scope: &ParamScope) -> bool {
     }
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 /// Walk statements looking for calls to TypeVarTuple-specialized classes.
 fn walk_stmts_for_tvt_calls(
     stmts: &[Stmt],
@@ -571,6 +609,11 @@ fn walk_stmts_for_tvt_calls(
     }
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 /// Check an expression for a call to a TypeVarTuple-specialized class.
 fn check_expr_for_tvt_call(
     expr: &Expr,
@@ -640,10 +683,44 @@ fn check_expr_for_tvt_call(
     }
 }
 
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 /// Extract a simple name from an expression.
 fn expr_simple_name(expr: &Expr) -> Option<&str> {
     match expr {
         Expr::Name(name) => Some(name.id.as_str()),
         _ => None,
+    }
+}
+
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
+/// Does a type expression reference one of the module's `TypeVarTuple`s?
+///
+/// Walks the annotation's AST looking for a `Name` node whose identifier is a
+/// declared `TypeVarTuple` — the structural positions a type expression can
+/// carry one in (subscript slices, starred unpacks, unions, tuples) — never
+/// the annotation's source text ([ASTREBUILD-LAW]).
+fn expr_references_tvt(expr: &Expr, tvt_names: &std::collections::HashSet<&str>) -> bool {
+    match expr {
+        Expr::Name(name) => tvt_names.contains(name.id.as_str()),
+        Expr::Starred(starred) => expr_references_tvt(&starred.value, tvt_names),
+        Expr::Subscript(sub) => {
+            expr_references_tvt(&sub.value, tvt_names) || expr_references_tvt(&sub.slice, tvt_names)
+        }
+        Expr::Tuple(tuple) => tuple
+            .elts
+            .iter()
+            .any(|element| expr_references_tvt(element, tvt_names)),
+        Expr::BinOp(op) => {
+            expr_references_tvt(&op.left, tvt_names) || expr_references_tvt(&op.right, tvt_names)
+        }
+        _ => false,
     }
 }

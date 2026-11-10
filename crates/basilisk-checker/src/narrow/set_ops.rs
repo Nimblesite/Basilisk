@@ -53,6 +53,9 @@ fn intersect_atom(atom: &InferredType, guard: &InferredType) -> InferredType {
             intersect_atom(atom, inner),
             intersect_atom(atom, &InferredType::None_),
         ),
+        // Two nominal leaves: no hierarchy here, so abstain rather than
+        // compare renderings (see [`nominal_pair`]).
+        _ if nominal_pair(atom, guard) => atom.clone(),
         _ if atom.is_assignable_to(guard) => {
             // The declared side is at least as precise — keep it (`Literal[1]`
             // narrowed by `int` stays `Literal[1]`).
@@ -80,12 +83,14 @@ pub fn subtract(declared: &InferredType, guard: &InferredType) -> InferredType {
         InferredType::Any | InferredType::Unknown => declared.clone(),
         InferredType::Union(members) => members
             .iter()
-            .filter(|member| !member.is_assignable_to(guard))
+            // A member that is a nominal leaf against a nominal guard cannot
+            // be shown to overlap here, so it is KEPT (see [`nominal_pair`]).
+            .filter(|member| nominal_pair(member, guard) || !member.is_assignable_to(guard))
             .cloned()
             .fold(InferredType::Never, InferredType::union),
         InferredType::Optional(inner) => {
             let none_removed = InferredType::None_.is_assignable_to(guard);
-            let inner_removed = inner.is_assignable_to(guard);
+            let inner_removed = !nominal_pair(inner, guard) && inner.is_assignable_to(guard);
             match (inner_removed, none_removed) {
                 (true, true) => InferredType::Never,
                 (true, false) => InferredType::None_,
@@ -93,9 +98,39 @@ pub fn subtract(declared: &InferredType, guard: &InferredType) -> InferredType {
                 (false, false) => declared.clone(),
             }
         }
+        atom if nominal_pair(atom, guard) => atom.clone(),
         atom if atom.is_assignable_to(guard) => InferredType::Never,
         atom => atom.clone(),
     }
+}
+
+/// Whether a set operation between these two types is a NOMINAL question this
+/// module cannot answer.
+///
+/// `InferredType::Named` carries a RENDERING, not a resolved class
+/// ([TYPEINF-LEGACY]). Deciding whether `Weir` overlaps `Sluice` needs the
+/// module's class hierarchy — which classes those names denote, and whether
+/// one derives from the other — and this module has none: it is a pure
+/// function of two types.
+///
+/// `InferredType::is_assignable_to` deliberately PANICS on such a pair rather
+/// than compare the two strings, and its banner permits a caller to be
+/// "rebuilt on the resolved AST ... or made to abstain". This is the
+/// abstention: the caller keeps its declared type and no narrowing happens.
+/// Narrowing less is conservative — it widens what the checker will accept and
+/// invents no diagnostic ([CHKARCH-CONFORMANCE-MODE]) — whereas answering from
+/// the spellings would silently equate two distinct classes that share a name
+/// and separate one class reached under two.
+///
+/// The fix is the one [TYPEINF-SUBTYPING-NOMINAL] names: carry a definition
+/// site on the leaf instead of a rendering, so this becomes an identity
+/// comparison rather than a hierarchy lookup. Until then, narrowing over
+/// user-defined classes is INERT, and `narrow_flow_tests` pins that.
+fn nominal_pair(left: &InferredType, right: &InferredType) -> bool {
+    matches!(
+        (left, right),
+        (InferredType::Named(_), InferredType::Named(_))
+    )
 }
 
 #[cfg(test)]

@@ -54,10 +54,10 @@ impl Rule for NoMatchingOverload {
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        // Overload membership is a binding question ([#380]).
-        let Some(resolver) = types.annotations() else {
+        // Bail on parse errors — those are reported separately as BSK-0000.
+        if types.annotations().is_none() {
             return;
-        };
+        }
         let source = &module.source;
         let path = &module.path;
 
@@ -70,17 +70,9 @@ impl Rule for NoMatchingOverload {
             .filter_map(|v| {
                 let rhs_span = v.rhs_span?;
                 let rhs_text = slice_span(source, rhs_span)?;
-                // Extract class name from "ClassName()" or "ClassName(args)"
-                let class_name = rhs_text.split('(').next()?;
-                let class_name = class_name.trim();
-                if class_name.is_empty() {
-                    return None;
-                }
-                // Verify it starts with uppercase (heuristic for class constructors)
-                if !class_name.starts_with(|c: char| c.is_ascii_uppercase()) {
-                    return None;
-                }
-                Some((v.name.as_str(), class_name))
+                // Call site of the DELETED capitalisation heuristic — see the
+                // banner on `constructed_class_name` below.
+                Some((v.name.as_str(), constructed_class_name(rhs_text)?))
             })
             .collect();
 
@@ -95,7 +87,7 @@ impl Rule for NoMatchingOverload {
             if func.name != "__getitem__" {
                 continue;
             }
-            if !super::shared::overload_decorated(resolver, &func.decorators) {
+            if !func.is_overload {
                 continue;
             }
             let Some(class_name) = func.class_name.as_deref() else {
@@ -231,80 +223,77 @@ fn classify_expr_type(expr: &ruff_python_ast::Expr) -> Option<&'static str> {
     }
 }
 
-/// Check if a Python type name is compatible with an annotation.
-/// This is a simplified check that handles common cases.
-fn type_matches_annotation(type_name: &str, annotation: &str) -> bool {
-    let ann = annotation.trim();
-
-    // Direct match
-    if ann == type_name {
-        return true;
-    }
-
-    // `Any` matches everything
-    if ann == "Any" {
-        return true;
-    }
-
-    // `object` matches everything
-    if ann == "object" {
-        return true;
-    }
-
-    // Union types: `X | Y`
-    if ann.contains('|') {
-        return ann
-            .split('|')
-            .any(|part| type_matches_annotation(type_name, part.trim()));
-    }
-
-    // `Union[X, Y]`
-    if let Some(inner) = ann.strip_prefix("Union[").and_then(|s| s.strip_suffix(']')) {
-        return split_union_args(inner)
-            .iter()
-            .any(|part| type_matches_annotation(type_name, part.trim()));
-    }
-
-    // `Optional[X]` is `X | None`
-    if let Some(inner) = ann
-        .strip_prefix("Optional[")
-        .and_then(|s| s.strip_suffix(']'))
-    {
-        return type_matches_annotation(type_name, inner.trim()) || type_name == "None";
-    }
-
-    // `bool` is a subtype of `int`
-    if ann == "int" && type_name == "bool" {
-        return true;
-    }
-
-    // `int` is a subtype of `float` (numeric tower)
-    if ann == "float" && (type_name == "int" || type_name == "bool") {
-        return true;
-    }
-
-    false
+// ##########################################################################
+// # DELETED BODY — the constructed-class extraction. DO NOT RESTORE IT AND #
+// # DO NOT RETURN `None` IN ITS PLACE.                                     #
+// #                                                                        #
+// #   let class_name = rhs_text.split('(').next()?;                        #
+// #   // Verify it starts with uppercase (heuristic for class constructors)#
+// #   if !class_name.starts_with(|c: char| c.is_ascii_uppercase()) {       #
+// #       return None;                                                     #
+// #   }                                                                    #
+// #                                                                        #
+// # This is the defect at its plainest, and the comment said so: the rule  #
+// # decided WHETHER A CALLEE IS A CLASS FROM ITS CAPITALISATION. Python    #
+// # has no such rule. `int`, `str`, `bool`, `list`, `dict`,                #
+// # `collections.OrderedDict` reached as `od`, and every class in a        #
+// # snake_case codebase are all classes and all failed the test; a call to #
+// # a FUNCTION named `Parse` passed it. And `is_ascii_uppercase` means a   #
+// # class named `Ünicode` is not a class.                                  #
+// #                                                                        #
+// # The callee was also cut out of RAW SOURCE at the first `(`.            #
+// #                                                                        #
+// # Whether the RHS constructs a class is a question about what            #
+// # `ExprCall::func` resolves to.                                          #
+// #                                                                        #
+// # Pinned by: tests/source_text_verdict_pin_tests.rs                      #
+// ##########################################################################
+fn constructed_class_name(_rhs_text: &str) -> Option<&str> {
+    panic!(
+        "basilisk-checker: the constructed-class extraction in `overloads_basic` was \
+         DELETED because it cut the callee out of RAW SOURCE at the first `(` and then \
+         decided the callee was a class BY ITS CAPITALISATION — an explicit heuristic \
+         on spelling, with no basis in Python. It panics because the real \
+         implementation — resolving `ExprCall::func` through the binding table — DOES \
+         NOT EXIST YET. Do not restore the heuristic and do not return `None` in its \
+         place."
+    )
 }
 
-/// Split `Union[X, Y, Z]` inner arguments respecting bracket nesting.
-fn split_union_args(inner: &str) -> Vec<&str> {
-    let mut parts = Vec::new();
-    let mut depth = 0u32;
-    let mut start = 0;
-    for (idx, ch) in inner.char_indices() {
-        match ch {
-            '[' => depth = depth.saturating_add(1),
-            ']' => depth = depth.saturating_sub(1),
-            ',' if depth == 0 => {
-                parts.push(inner[start..idx].trim());
-                start = idx + 1;
-            }
-            _ => {}
-        }
-    }
-    let remainder = inner[start..].trim();
-    if !remainder.is_empty() {
-        parts.push(remainder);
-    }
-    parts
+// ##########################################################################
+// # DELETED BODY — `type_matches_annotation`. DO NOT RESTORE IT. DO NOT    #
+// # SUBSTITUTE A PLACEHOLDER THAT RETURNS `true` OR `false`.               #
+// #                                                                        #
+// # The ENTIRE function was string comparison. Every line:                 #
+// #                                                                        #
+// #   if ann == type_name           — type identity by rendered equality   #
+// #   if ann == "object"            — the top type by builtin spelling     #
+// #   if ann.contains('|') { ann.split('|') … }  — union decomposition by  #
+// #                                  splitting source text on a character  #
+// #   if ann == "int" && type_name == "bool"     — the numeric tower as    #
+// #   if ann == "float" && …                       two literal spellings   #
+// #                                                                        #
+// # Its own doc comment called it "a simplified check that handles common  #
+// # cases". It was not a simplified subtype check; it was no subtype check #
+// # at all. `A | B` written across two lines, `int` imported under an      #
+// # alias, or a user class named `object` each broke it, and a class       #
+// # merely spelled the same as another satisfied it.                       #
+// #                                                                        #
+// # Union decomposition, the numeric tower, and the top type are all       #
+// # properties of RESOLVED types. Ask the binding table.                   #
+// #                                                                        #
+// # Pinned by: tests/no_type_spelling_surgery_tests.rs                     #
+// ##########################################################################
+
+/// DELETED — panics. The signature survives only so its callers stay visible
+/// as the rebuild map; see the banner above.
+fn type_matches_annotation(_type_name: &str, _annotation: &str) -> bool {
+    panic!(
+        "basilisk-checker: `type_matches_annotation` was DELETED because it compared \
+         TYPE SPELLINGS end to end — `ann == type_name`, `ann == \"object\"`, \
+         `ann.split('|')` for unions, and `\"int\"`/`\"float\"`/`\"bool\"` literals for \
+         the numeric tower. It panics because the real implementation — relating two \
+         resolved types — DOES NOT EXIST YET. Do not restore the comparisons and do \
+         not answer `true`/`false` in its place."
+    )
 }

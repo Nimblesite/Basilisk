@@ -16,6 +16,10 @@ use crate::types::{InferredType, LiteralValue};
 /// `str` itself qualifies — iterating a string yields strings. Everything this
 /// module could not resolve qualifies too; only a positively-known mismatch is
 /// rejected.
+#[expect(
+    dead_code,
+    reason = "semantic predicate over engine-resolved types, preserved for its rebuilt consumer ([ASTREBUILD-PHASE-RESOLVER]); the text-matched caller was deleted under [ASTREBUILD-LAW]"
+)]
 pub(crate) fn satisfies_str_iterable(argument: &InferredType) -> bool {
     match argument {
         InferredType::Literal(value) => matches!(value, LiteralValue::Str(_)),

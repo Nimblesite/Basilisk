@@ -1,5 +1,8 @@
 //! Tests for [`directives_cast`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
-// Integration tests for directives_cast: Invalid `cast()` call.
+//!
+//! The behavior is defined by [PEP 484 casts](https://peps.python.org/pep-0484/#casts),
+//! and the every-expression-position regressions reference
+//! [#335](https://github.com/Nimblesite/Basilisk/issues/335).
 
 use super::common::*;
 

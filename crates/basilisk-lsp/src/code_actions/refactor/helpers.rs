@@ -64,115 +64,12 @@ pub(super) fn leading_indent_of_line(source: &str, line: u32) -> String {
 }
 
 /// Find the position of the closing `]` that matches the bracket at `start`.
-pub(super) fn find_matching_bracket(text: &str, start: usize) -> Option<usize> {
-    let mut depth: u32 = 1;
-    for (offset, ch) in text.get(start..)?.char_indices() {
-        match ch {
-            '[' => depth += 1,
-            ']' => {
-                depth -= 1;
-                if depth == 0 {
-                    return Some(start + offset);
-                }
-            }
-            _ => {}
-        }
-    }
-    None
-}
-
 /// Split type arguments at top-level commas (respecting bracket nesting).
-pub(super) fn split_type_args(text: &str) -> Vec<&str> {
-    let mut parts = Vec::new();
-    let mut depth: u32 = 0;
-    let mut start = 0;
-
-    for (idx, ch) in text.char_indices() {
-        match ch {
-            '[' | '(' => depth += 1,
-            ']' | ')' => depth = depth.saturating_sub(1),
-            ',' if depth == 0 => {
-                if let Some(part) = text.get(start..idx) {
-                    parts.push(part);
-                }
-                start = idx + 1;
-            }
-            _ => {}
-        }
-    }
-    if let Some(part) = text.get(start..) {
-        parts.push(part);
-    }
-    parts
-}
-
 /// Find the byte offset where the type annotation begins (after `: ` or `-> `).
-pub(super) fn find_annotation_start(line: &str) -> Option<usize> {
-    // Try `-> ` first (return annotation).
-    if let Some(arrow_pos) = line.find("-> ") {
-        return Some(arrow_pos + 3);
-    }
-    // Try `: ` (variable/parameter annotation).
-    if let Some(colon_pos) = line.find(": ") {
-        return Some(colon_pos + 2);
-    }
-    None
-}
-
 /// Find the length of the annotation portion of a string, stopping before a
 /// bare `=` (assignment) or `#` (comment) that is not inside brackets.
-pub(super) fn find_annotation_end(text: &str) -> usize {
-    let mut depth: u32 = 0;
-    for (idx, ch) in text.char_indices() {
-        match ch {
-            '[' | '(' => depth += 1,
-            ']' | ')' => depth = depth.saturating_sub(1),
-            '=' | '#' if depth == 0 => return idx,
-            _ => {}
-        }
-    }
-    text.len()
-}
-
 /// Check if the text contains a `|` that is not nested inside brackets.
-pub(super) fn contains_bare_pipe(text: &str) -> bool {
-    let mut depth: u32 = 0;
-    for ch in text.chars() {
-        match ch {
-            '[' | '(' => depth += 1,
-            ']' | ')' => depth = depth.saturating_sub(1),
-            '|' if depth == 0 => return true,
-            _ => {}
-        }
-    }
-    false
-}
-
 /// Split text on bare `|` characters (not nested inside brackets).
-pub(super) fn split_on_bare_pipe(text: &str) -> Vec<&str> {
-    let mut parts = Vec::new();
-    let mut depth: u32 = 0;
-    let mut start = 0;
-
-    for (idx, ch) in text.char_indices() {
-        match ch {
-            '[' | '(' => depth += 1,
-            ']' | ')' => depth = depth.saturating_sub(1),
-            '|' if depth == 0 => {
-                if let Some(part) = text.get(start..idx) {
-                    parts.push(part);
-                }
-                start = idx + 1;
-            }
-            _ => {}
-        }
-    }
-    if let Some(part) = text.get(start..) {
-        parts.push(part);
-    }
-    parts
-}
-
 /// Convert a byte offset to a 0-based line number.
 pub(super) fn byte_offset_to_line(source: &str, offset: u32) -> u32 {
     let offset_usize = usize::try_from(offset)
@@ -330,4 +227,34 @@ fn format_inserted_text(text: &str) -> String {
         result.push('\n');
     }
     result
+}
+
+/// CONDEMNED under [ASTREBUILD-LAW]: bracket matching over rendered type
+/// text was a banned recognition mechanism and its body was deleted. This
+/// inert stub answers nothing; the callers rebuild on AST nodes
+/// ([ASTREBUILD-PHASE-RESOLVER]). Its unit test remains and FAILS.
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "condemned text mechanism, body deleted under [ASTREBUILD-LAW]; only its failing unit test still calls it ([ASTREBUILD-PHASE-RESOLVER])"
+    )
+)]
+pub(super) fn find_matching_bracket(_text: &str, _open_after: usize) -> Option<usize> {
+    None
+}
+
+/// CONDEMNED under [ASTREBUILD-LAW]: splitting rendered type argument text
+/// on top-level commas was a banned recognition mechanism and its body was
+/// deleted. This inert stub answers nothing; the callers rebuild on AST
+/// nodes ([ASTREBUILD-PHASE-RESOLVER]). Its unit test remains and FAILS.
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "condemned text mechanism, body deleted under [ASTREBUILD-LAW]; only its failing unit test still calls it ([ASTREBUILD-PHASE-RESOLVER])"
+    )
+)]
+pub(super) fn split_type_args(_text: &str) -> Vec<String> {
+    Vec::new()
 }

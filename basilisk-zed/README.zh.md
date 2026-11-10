@@ -49,7 +49,7 @@ Basilisk 是用 Rust 打造的开源 Python 类型检查器与语言服务器：
 在 monorepo 检出中，构建扩展并配置本地开发循环：
 
 ```sh
-make package-zed
+make _package_zed
 ```
 
 独立仓库（仅本仓库）中，构建命令与发布流水线用于放行发布的那一条完全相同：

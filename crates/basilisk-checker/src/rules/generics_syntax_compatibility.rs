@@ -14,13 +14,18 @@
 //! class ClassA[V](dict[K, V]):  # E: traditional TypeVar K used with PEP 695 syntax
 //!     ...
 //! ```
-
-use std::collections::HashSet;
+//!
+//! # Coverage
+//!
+//! CLASSES ONLY. The PEP's rule covers functions too — `def foo[T](x: K)`
+//! with an outer `K = TypeVar("K")` is the same error — and this rule never
+//! looks at a function. The check below iterates `module.classes` and filters
+//! on `has_pep695_type_params`; there is no function counterpart, and none is
+//! stubbed out, so the omission is silent.
 
 use basilisk_resolver::ResolvedModule;
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
-use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -48,38 +53,49 @@ fn make_diagnostic(message: String, span: basilisk_resolver::Span, path: &str) -
     )
 }
 
-/// Returns `true` when `needle` appears as a whole identifier in `haystack`.
-fn is_word_boundary_match(haystack: &str, needle: &str) -> bool {
-    let needle_bytes = needle.as_bytes();
-    let haystack_bytes = haystack.as_bytes();
-    let needle_len = needle_bytes.len();
-
-    if needle_len > haystack_bytes.len() {
-        return false;
-    }
-
-    haystack_bytes
-        .windows(needle_len)
-        .enumerate()
-        .any(|(i, window)| {
-            if window != needle_bytes {
-                return false;
-            }
-            let before_ok = i == 0
-                || !haystack_bytes
-                    .get(i - 1)
-                    .is_some_and(|&b| b.is_ascii_alphanumeric() || b == b'_');
-            let after_ok = i + needle_len >= haystack_bytes.len()
-                || !haystack_bytes
-                    .get(i + needle_len)
-                    .is_some_and(|&b| b.is_ascii_alphanumeric() || b == b'_');
-            before_ok && after_ok
-        })
-}
+// ##########################################################################
+// # `is_word_boundary_match` IS GONE. DO NOT RECREATE IT.                  #
+// #                                                                       #
+// # It was a HAND-WRITTEN REGEX over Python source bytes: it slid a window #
+// # across `haystack.as_bytes()`, matched `needle` byte-for-byte, then     #
+// # checked the neighbouring bytes for `is_ascii_alphanumeric() || b'_'`   #
+// # to fake an identifier boundary. CLAUDE.md forbids this outright —      #
+// # "Any regex over Python source" and "Never parse with strings or        #
+// # regex". It also could not be right: it matched inside string literals, #
+// # comments, and attribute paths, and its ASCII-only boundary test splits #
+// # non-ASCII identifiers, which Python permits.                           #
+// #                                                                       #
+// # The question it was faking — "does this base expression reference that #
+// # TypeVar?" — is answered by the AST: the resolver records               #
+// # `ClassInfo::base_name_value_sites`, every name inside a base           #
+// # expression resolved through the binding table to the value it denotes. #
+// #                                                                       #
+// # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs             #
+// ##########################################################################
 
 /// Emits `generics_syntax_compatibility` when PEP 695 syntax is mixed with traditional `TypeVars`.
 pub(crate) struct Pep695TraditionalTypeVarMix;
 
+// ##########################################################################
+// # REBUILT ON RESOLVED VALUE IDENTITY.                                    #
+// #                                                                       #
+// # `ClassInfo::base_expression_names` is a `Vec<String>` of RENDERED      #
+// # simple names harvested from base-class expressions. The deleted body   #
+// # matched those strings against a set of TypeVar names collected the     #
+// # same way, so:                                                          #
+// #                                                                       #
+// #   T = TypeVar("T")                                                     #
+// #   Alias = T                                                            #
+// #   class Foo(Generic[Alias]): ...      # TypeVar NOT recognised         #
+// #                                                                       #
+// #   class T: ...                        # unrelated class                #
+// #   class Foo(Base[T]): ...             # treated as a TypeVar use       #
+// #                                                                       #
+// # Whether a base-expression name denotes a TypeVar is a question about   #
+// # the binding it resolves to, not about the characters written.          #
+// #                                                                       #
+// # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs             #
+// ##########################################################################
 impl Rule for Pep695TraditionalTypeVarMix {
     fn check(
         &self,
@@ -87,122 +103,34 @@ impl Rule for Pep695TraditionalTypeVarMix {
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        // Build a set of all module-level traditional TypeVar names.
-        let traditional_typevars: HashSet<&str> =
-            basilisk_resolver::collect_name_set(&module.typevar_calls);
-
-        // Check classes: if a class uses PEP 695 syntax and references a traditional
-        // TypeVar in its base expressions that is NOT one of its own PEP 695 params.
-        // Also check for redundant `Generic[T]` or `Protocol[T]` with PEP 695 syntax.
-        for cls in &module.classes {
-            if !cls.has_pep695_type_params {
-                continue;
-            }
-
-            // PEP 695: using Generic[T] or Protocol[T] with bracket syntax is invalid —
-            // the class already declares its type params with [T, ...] syntax.
-            // Detect this by checking if Generic/Protocol appears in base_expression_names
-            // but NOT in bases (meaning it's subscripted, not bare).
-            let bases_set: HashSet<&str> = cls.bases.iter().map(String::as_str).collect();
-            for generic_name in &["Generic", "Protocol"] {
-                let in_expressions = cls
-                    .base_expression_names
-                    .iter()
-                    .any(|n| n.as_str() == *generic_name);
-                let in_bases = bases_set.contains(*generic_name);
-                if in_expressions && !in_bases {
-                    diagnostics.push(make_diagnostic(
-                        format!(
-                            "Class `{}` uses PEP 695 type parameter syntax but also \
-                             inherits from parameterized `{}[...]`; use bare `{}` instead",
-                            cls.name, generic_name, generic_name
-                        ),
-                        cls.name_span,
-                        &module.path,
-                    ));
-                }
-            }
-
-            if traditional_typevars.is_empty() {
-                continue;
-            }
-
-            let own_params: HashSet<&str> = cls
-                .pep695_type_param_names
-                .iter()
-                .map(String::as_str)
-                .collect();
-
-            let offending: Vec<&str> = cls
-                .base_expression_names
-                .iter()
-                .filter(|name| {
-                    traditional_typevars.contains(name.as_str())
-                        && !own_params.contains(name.as_str())
-                })
-                .map(String::as_str)
-                .collect();
-
-            for typevar_name in offending {
-                diagnostics.push(make_diagnostic(
-                    format!(
-                        "Class `{}` uses PEP 695 type parameter syntax but references \
-                         traditional TypeVar `{}` from outer scope",
-                        cls.name, typevar_name
-                    ),
-                    cls.name_span,
-                    &module.path,
-                ));
-            }
+        // A `TypeVar(...)` call is identified by the span of the call
+        // expression itself, which is exactly what an assignment binds.
+        let typevar_sites: std::collections::HashMap<basilisk_resolver::Span, &str> = module
+            .typevar_calls
+            .iter()
+            .map(|tv| (tv.span, tv.name.as_str()))
+            .collect();
+        if typevar_sites.is_empty() {
+            return;
         }
 
-        // Check functions/methods: if a function uses PEP 695 syntax and references a
-        // traditional TypeVar in its annotations that is NOT one of its own PEP 695 params.
-        for func in &module.functions {
-            if !func.has_pep695_type_params {
+        for class in &module.classes {
+            if !class.has_pep695_type_params {
                 continue;
             }
-            let own_params: HashSet<&str> = func
-                .pep695_type_param_names
-                .iter()
-                .map(String::as_str)
-                .collect();
-
-            // Collect annotation texts to scan.
-            let annotation_texts: Vec<&str> = func
-                .parameters
-                .iter()
-                .filter_map(|p| {
-                    p.annotation_span
-                        .and_then(|s| slice_span(&module.source, s))
-                })
-                .chain(
-                    func.return_annotation_span
-                        .and_then(|s| slice_span(&module.source, s)),
-                )
-                .collect();
-
-            for typevar_name in &traditional_typevars {
-                if own_params.contains(typevar_name) {
+            for (reference, value_site) in &class.base_name_value_sites {
+                let Some(typevar_name) = typevar_sites.get(value_site) else {
                     continue;
-                }
-                let appears = annotation_texts
-                    .iter()
-                    .any(|text| is_word_boundary_match(text, typevar_name));
-
-                if appears {
-                    diagnostics.push(make_diagnostic(
-                        format!(
-                            "Function `{}` uses PEP 695 type parameter syntax but references \
-                             traditional TypeVar `{}` from outer scope",
-                            func.name, typevar_name
-                        ),
-                        func.name_span,
-                        &module.path,
-                    ));
-                    // One diagnostic per function is sufficient.
-                    break;
-                }
+                };
+                diagnostics.push(make_diagnostic(
+                    format!(
+                        "Class `{}` uses PEP 695 type parameter syntax but its bases \
+                         reference the traditional TypeVar `{typevar_name}`",
+                        class.name
+                    ),
+                    *reference,
+                    &module.path,
+                ));
             }
         }
     }

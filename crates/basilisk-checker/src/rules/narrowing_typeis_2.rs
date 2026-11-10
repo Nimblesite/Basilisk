@@ -1,3 +1,27 @@
+// ############################################################################
+// # BROKEN — THIS FILE DOES NOT COMPILE. DO NOT "FIX" IT BY RESTORING TEXT   #
+// # MATCHING.                                                                #
+// #                                                                          #
+// # Deleted helper this file called:                                         #
+// #   crate::subtyping (SubtypingContext::is_subtype / name_subtype)
+// #                                                                          #
+// # That helper decided types from the SPELLING of source text (lowercased   #
+// # annotation strings, `"int"`/`"str"`/`"object"` literal matching, `|`     #
+// # splitting, `starts_with("tuple[")`). It was deleted, not replaced.       #
+// #                                                                          #
+// # The call sites below are LEFT BROKEN ON PURPOSE. They are the map of     #
+// # what must be rebuilt on the resolved AST — resolved bindings, canonical  #
+// # `TypeNode`, and `assignable`/`equivalent` — or made to abstain.          #
+// #                                                                          #
+// # Restoring the deleted helper, vendoring a copy of it, or re-deriving a   #
+// # type from source text anywhere below is FORBIDDEN.                       #
+// #                                                                          #
+// # Evidence and the failing tests that pin the real behaviour:              #
+// #   docs/RULE-VALIDITY-REPORT.md                                           #
+// #   crates/basilisk-checker/tests/legacy_annotation_text_parser_pin_tests.rs
+// #   crates/basilisk-checker/tests/pep_spelling_invariance_pin_tests.rs     #
+// ############################################################################
+
 //! Implements [`narrowing_typeis_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `narrowing_typeis_2`: `TypeIs` narrows to a type inconsistent with the input type.
 //!
@@ -10,7 +34,6 @@ use basilisk_resolver::ResolvedModule;
 use super::Rule;
 use crate::annotation::AnnotationResolver;
 use crate::diagnostic::{error_diag_help_note, Diagnostic, ErrorCode};
-use crate::subtyping::SubtypingContext;
 use crate::types::InferredType;
 
 const CODE: ErrorCode = ErrorCode {
@@ -41,38 +64,26 @@ enum Verdict {
     Unknown,
 }
 
-/// The leaf name a type compares nominally by, or `None` when the type is not
-/// a groundable leaf (so the judgment must abstain or recurse structurally).
-fn leaf_name(resolver: &AnnotationResolver<'_>, ty: &InferredType) -> Option<String> {
-    match ty {
-        InferredType::Int => Some("int".to_owned()),
-        InferredType::Str | InferredType::LiteralString => Some("str".to_owned()),
-        InferredType::Float => Some("float".to_owned()),
-        InferredType::Bool => Some("bool".to_owned()),
-        InferredType::Bytes => Some("bytes".to_owned()),
-        InferredType::None_ => Some("None".to_owned()),
-        InferredType::Literal(value) => Some(
-            match value {
-                crate::types::LiteralValue::Int(_) => "int",
-                crate::types::LiteralValue::Str(_) => "str",
-                crate::types::LiteralValue::Float(_) => "float",
-                crate::types::LiteralValue::Bool(_) => "bool",
-                crate::types::LiteralValue::Bytes(_) => "bytes",
-            }
-            .to_owned(),
-        ),
-        InferredType::Named(name) => resolver.is_grounded_name(name).then(|| name.clone()),
-        _ => None,
-    }
-}
-
 /// Consistency of `narrowed` with `input` on RESOLVED types.
 fn consistency(
     resolver: &AnnotationResolver<'_>,
-    ctx: &SubtypingContext,
+    ctx: &crate::rules::shared::nominal::NominalHierarchy<'_>,
     narrowed: &InferredType,
     input: &InferredType,
 ) -> Verdict {
+    // DELETED PATH: derived equality on `InferredType::Named(String)` made
+    // `TypeIs` consistency depend on a nominal type's rendering, including at
+    // arbitrary container depth. The resolved-identity leaf required to make
+    // this comparison does not exist yet, so fail loudly before equality can
+    // manufacture a verdict.
+    if narrowed.contains_legacy_named() || input.contains_legacy_named() {
+        panic!(
+            "basilisk-checker: `narrowing_typeis_2::consistency` was DELETED for types \
+             containing `Named(String)` because it compared rendered nominal spellings. The \
+             real implementation requires resolved definition identity on the leaf. Do not \
+             restore derived string equality or return a placeholder verdict."
+        );
+    }
     if narrowed == input
         || matches!(narrowed, InferredType::Any | InferredType::Never)
         || matches!(input, InferredType::Any)
@@ -119,27 +130,43 @@ fn consistency(
             &[bk.as_ref().clone(), bv.as_ref().clone()],
         ),
         (InferredType::Tuple(a), InferredType::Tuple(b)) => invariant(resolver, ctx, a, b),
-        _ => leaf_consistency(resolver, ctx, narrowed, input),
+        _ => leaf_consistency(ctx, narrowed, input),
     }
 }
 
-/// Both sides as nominal leaves through the shared subtype walk; anything
-/// either side cannot ground abstains.
+/// Both sides as nominal leaves; anything either side cannot ground abstains.
+///
+/// PARTIALLY REBUILT, AND CURRENTLY UNREACHABLE FOR ITS MAIN CASE. The deleted
+/// version rendered both `InferredType`s back into `String`s so a string-keyed
+/// hierarchy could compare the spellings — `judge::nominal_leaf` under another
+/// name. The `is_subclass` call below does resolve each `Named` leaf through
+/// the module's binding table to a class definition.
+///
+/// It never gets there. The first statement calls
+/// [`InferredType::is_assignable_to`], which PANICS on a `(Named, Named)` pair
+/// by design — that panic is the deletion boundary standing in for the
+/// comparison that was removed. So for exactly the inputs this function exists
+/// to judge, it aborts the process instead of returning a verdict. Every other
+/// pair returns [`Verdict::Unknown`] here, which is correct.
+///
+/// The ordering is the bug and swapping it is not the fix: `is_assignable_to`
+/// has to be able to answer a nominal pair itself, which needs a leaf carrying
+/// its definition site. Until then this path is live and fatal.
 fn leaf_consistency(
-    resolver: &AnnotationResolver<'_>,
-    ctx: &SubtypingContext,
+    ctx: &crate::rules::shared::nominal::NominalHierarchy<'_>,
     narrowed: &InferredType,
     input: &InferredType,
 ) -> Verdict {
-    match (leaf_name(resolver, narrowed), leaf_name(resolver, input)) {
-        (Some(sub), Some(sup)) => {
-            if ctx.is_subtype(&sub, &sup) {
-                Verdict::Consistent
-            } else {
-                Verdict::Inconsistent
-            }
-        }
-        _ => Verdict::Unknown,
+    if narrowed.is_assignable_to(input) {
+        return Verdict::Consistent;
+    }
+    let (InferredType::Named(sub), InferredType::Named(sup)) = (narrowed, input) else {
+        return Verdict::Unknown;
+    };
+    match ctx.is_subclass(sub, sup) {
+        Some(true) => Verdict::Consistent,
+        Some(false) => Verdict::Inconsistent,
+        None => Verdict::Unknown,
     }
 }
 
@@ -147,7 +174,7 @@ fn leaf_consistency(
 /// difference in either direction is inconsistent, arity mismatch too.
 fn invariant(
     resolver: &AnnotationResolver<'_>,
-    ctx: &SubtypingContext,
+    ctx: &crate::rules::shared::nominal::NominalHierarchy<'_>,
     a: &[InferredType],
     b: &[InferredType],
 ) -> Verdict {
@@ -214,7 +241,7 @@ impl Rule for TypeIsInconsistentNarrowing {
         let Some(resolver) = types.annotations() else {
             return;
         };
-        let subtyping = types.subtyping();
+        let nominal = types.nominal();
 
         for func in &module.functions {
             let Some(ann_span) = func.return_annotation_span else {
@@ -235,12 +262,20 @@ impl Rule for TypeIsInconsistentNarrowing {
                 continue;
             };
 
-            // Find the first non-self/cls parameter (the one being narrowed).
-            let first_param = func
+            // PEP 742: "The type narrowing behavior is applied to the first
+            // positional argument" — for a method or classmethod, the one
+            // after the implicit receiver. Receiver-ness is the function's
+            // KIND (a method that is not a staticmethod), never a parameter's
+            // name: `def is_wide(self: object) -> TypeIs[int]` at module
+            // scope has no receiver, whatever its parameter is called.
+            let receiver_count = usize::from(func.class_name.is_some() && !func.is_staticmethod);
+            let Some(param) = func
                 .parameters
-                .iter()
-                .find(|param| param.name != "self" && param.name != "cls");
-            let Some(param) = first_param else {
+                .get(..func.positional_count)
+                .and_then(|positional| positional.get(receiver_count))
+            else {
+                // No positional parameter to narrow — that defect belongs to
+                // `narrowing_typeguard`, not this consistency rule.
                 continue;
             };
             let Some(param_ann_span) = param.annotation_span else {
@@ -256,7 +291,7 @@ impl Rule for TypeIsInconsistentNarrowing {
                 continue;
             }
 
-            if consistency(resolver, subtyping, &inner, &input) == Verdict::Inconsistent {
+            if consistency(resolver, nominal, &inner, &input) == Verdict::Inconsistent {
                 diagnostics.push(error_diag_help_note(
                     CODE.clone(),
                     format!(

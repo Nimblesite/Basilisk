@@ -109,43 +109,34 @@ impl Rule for DataclassKwOnlyViolation {
 
 /// Build a map from dataclass name -> number of positional (non-kw_only, non-init_false) fields,
 /// including inherited positional fields from base dataclasses.
-fn build_positional_counts(classes: &[ClassInfo]) -> HashMap<&str, usize> {
-    let own_counts: HashMap<&str, usize> = classes
-        .iter()
-        .filter(|c| c.is_dataclass)
-        .map(|c| {
-            let own = c
-                .attributes
-                .iter()
-                .filter(|a| a.has_annotation && !a.is_kw_only && !a.is_init_false)
-                .count();
-            (c.name.as_str(), own)
-        })
-        .collect();
-
-    let class_map: HashMap<&str, &ClassInfo> =
-        classes.iter().map(|c| (c.name.as_str(), c)).collect();
-
-    classes
-        .iter()
-        .filter(|c| c.is_dataclass)
-        .map(|c| {
-            let own = own_counts.get(c.name.as_str()).copied().unwrap_or(0);
-            let inherited: usize = c
-                .bases
-                .iter()
-                .filter_map(|base| class_map.get(base.as_str()))
-                .filter(|base_class| base_class.is_dataclass)
-                .map(|base_class| {
-                    own_counts
-                        .get(base_class.name.as_str())
-                        .copied()
-                        .unwrap_or(0)
-                })
-                .sum();
-            (c.name.as_str(), own + inherited)
-        })
-        .collect()
+// ##########################################################################
+// # DELETED BODY — `build_positional_counts`. DO NOT RESTORE IT AND DO NOT RETURN A DEFAULT.
+// #
+// # `.bases.iter().filter_map(|base| class_map.get(base.as_str()))` summed inherited dataclass field counts by rendered base name.
+// #
+// # A base class's identity came from its RENDERED NAME, looked up in a map
+// # keyed on `ClassInfo::name`. `ClassInfo::bases` is a `Vec<String>` the
+// # resolver fills with "simple names only; complex expressions ignored", so:
+// #   * a base reached through an alias  ->  MISSED
+// #   * a dotted base (`httpx.Client`)   ->  collides with any local class
+// #                                          sharing its trailing word
+// #   * two classes with one rendered name -> a single map entry
+// #
+// # The replacement resolves each base EXPRESSION through the binding table
+// # and keys the hierarchy on definition site. That needs base SPANS on
+// # `ClassInfo`, which the resolver does not record yet.
+// #
+// # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
+// ##########################################################################
+fn build_positional_counts(_classes: &[ClassInfo]) -> HashMap<&str, usize> {
+    panic!(
+        "basilisk-checker: `build_positional_counts` was DELETED because it identified base classes by \
+         their RENDERED NAMES in a name-keyed map, so an aliased base missed and a \
+         dotted base collided with any local class sharing its trailing word. It panics \
+         because the real implementation — base expressions resolved through the binding \
+         table — DOES NOT EXIST YET. Do not restore the name lookup and do not \
+         substitute a default answer in its place."
+    )
 }
 
 /// Build a map from dataclass name -> set of field names that have `init=False`.

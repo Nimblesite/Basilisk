@@ -1,5 +1,11 @@
 //! Tests for [`assignment_compatibility`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
-// Integration tests for assignment_compatibility: Assignment type incompatibility.
+//!
+//! Assignment compatibility follows [PEP 484](https://peps.python.org/pep-0484/)
+//! and [PEP 526](https://peps.python.org/pep-0526/#specification). Enum-literal
+//! equivalence regressions reference
+//! [#374](https://github.com/Nimblesite/Basilisk/issues/374),
+//! [PEP 586](https://peps.python.org/pep-0586/), and the canonical
+//! [enum literal expansion specification](https://typing.python.org/en/latest/spec/enums.html#enum-literal-expansion).
 
 use super::common::*;
 

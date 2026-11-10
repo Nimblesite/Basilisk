@@ -43,6 +43,10 @@ fn resolve_test_module(
 /// This mirrors production, whose only entry point is
 /// [`basilisk_checker::check_with_config`] — config in, diagnostics out. See
 /// [CHKARCH-CONFIGURATION-ONLY].
+#[allow(
+    dead_code,
+    reason = "shared harness: each test binary uses the subset of helpers it needs"
+)]
 pub fn run_with_config(
     source: &str,
     config: &basilisk_config::BasiliskConfig,
@@ -60,6 +64,10 @@ pub fn run_with_config(
 /// rules under test fire exactly as they would for a user who set that key, and
 /// nothing else turns on. See [CHKARCH-CONFIGURATION-ONLY].
 #[must_use]
+#[allow(
+    dead_code,
+    reason = "shared harness: each test binary uses the subset of helpers it needs"
+)]
 pub fn annotation_rules_config() -> basilisk_config::BasiliskConfig {
     use basilisk_config::RuleSeverity::{Error, Warning};
 
@@ -81,22 +89,55 @@ pub fn annotation_rules_config() -> basilisk_config::BasiliskConfig {
     )
 }
 
+#[allow(
+    dead_code,
+    reason = "shared harness: each test binary uses the subset of helpers it needs"
+)]
 pub fn codes(diags: &[Diagnostic]) -> Vec<&str> {
     diags.iter().map(|d| d.code.code).collect()
 }
 
+#[allow(
+    dead_code,
+    reason = "shared harness: each test binary uses the subset of helpers it needs"
+)]
 pub fn codes_owned(diags: &[Diagnostic]) -> Vec<String> {
     diags.iter().map(|d| d.code.code.to_string()).collect()
 }
 
+#[allow(
+    dead_code,
+    reason = "shared harness: each test binary uses the subset of helpers it needs"
+)]
 pub fn has_code(diags: &[Diagnostic], code: &str) -> bool {
     diags.iter().any(|d| d.code.code == code)
 }
 
+#[allow(
+    dead_code,
+    reason = "shared harness: each test binary uses the subset of helpers it needs"
+)]
 pub fn messages_for<'a>(diags: &'a [Diagnostic], code: &str) -> Vec<&'a str> {
     diags
         .iter()
         .filter(|d| d.code.code == code)
         .map(|d| d.message.as_str())
         .collect()
+}
+
+/// Assert one isolated typing-spec obligation against one diagnostic family.
+///
+/// Unlike `!diagnostics.is_empty()`, this cannot pass because an unrelated rule
+/// happened to reject the fixture.
+pub fn assert_rule_count(diags: &[Diagnostic], code: &str, expected: usize, obligation: &str) {
+    let matching: Vec<&Diagnostic> = diags
+        .iter()
+        .filter(|diagnostic| diagnostic.code.code == code)
+        .collect();
+    assert_eq!(
+        matching.len(),
+        expected,
+        "{obligation}: expected {expected} `{code}` diagnostic(s), got {}: {matching:#?}",
+        matching.len(),
+    );
 }

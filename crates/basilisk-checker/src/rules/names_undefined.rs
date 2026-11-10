@@ -83,6 +83,7 @@ impl Rule for UndefinedVariable {
             });
 
         let scope = ModuleScope {
+            builtin_names: module.builtin_names.as_deref(),
             import_names: &import_names,
             module_var_names: &module_var_names,
             class_names: &class_names,
@@ -135,10 +136,7 @@ fn check_module_level_callees(
         }
         if module.module_bindings.contains_key(callee)
             || scope.imported_symbols.contains_key(callee)
-            || BUILTINS.contains(&callee)
-            // `reveal_type` is special-cased by type checkers per the typing
-            // spec and needs no import.
-            || callee == "reveal_type"
+            || is_builtin_name(scope.builtin_names, callee)
         {
             continue;
         }
@@ -154,29 +152,94 @@ fn check_module_level_callees(
 /// which case the base legally resolves to that earlier binding. The binding
 /// census counts sites, so a count of exactly 1 means the class statement is
 /// the sole binder and the base reference cannot resolve.
+// ##########################################################################
+// # DELETED BODY — `check_self_inheriting_classes`. DO NOT RESTORE IT.
+// #
+// #   class.bases.iter().any(|base| base == name)   && is_builtin_name(name)
+// #
+// # Two spelling tests. The first compared a base's RENDERED TEXT to the
+// # class's own rendered name, which is not the question: Python evaluates
+// # the bases tuple against the bindings in force BEFORE the class statement,
+// # so
+// #
+// #   class Foo: ...
+// #   class Foo(Foo): ...      # LEGAL — the base is the FIRST Foo
+// #
+// # is fine, and the old check leaned on a binding-count census to guess
+// # around that rather than resolving the base. The second suppressed the
+// # diagnostic whenever the class's name appeared in a hard-coded BUILTINS
+// # spelling list, so `class ascii(ascii)` was silently exempt while the
+// # identical `class Foo(Foo)` was reported.
+// #
+// # The replacement resolves the base expression through the binding table at
+// # its own offset — exactly what `BindingTable::binding_at` already models.
+// #
+// # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
+// ##########################################################################
 fn check_self_inheriting_classes(module: &ResolvedModule, out: &mut Vec<Diagnostic>) {
     for class in &module.classes {
-        let name = class.name.as_str();
-        let sole_binding = module.module_bindings.get(name) == Some(&1);
-        if !sole_binding || !class.bases.iter().any(|base| base == name) || BUILTINS.contains(&name)
-        {
-            continue;
+        for base in &class.resolved_bases {
+            // ##############################################################
+            // # THIS CONDITION CANNOT FIRE. THE RULE IS DEAD.
+            // #
+            // # An earlier comment here explained how the check "comes out
+            // # right". It does not come out anything: it never runs.
+            // #
+            // # `resolved_bases` resolves each base POSITIONALLY, at the base
+            // # expression's own offset. A class does not bind its own name
+            // # until its statement completes — the resolver says so in as
+            // # many words at `visitor/class_info_ext.rs::resolved_bases`:
+            // # "A class never resolves to itself." So for `class Foo(Foo)`
+            // # with no earlier `Foo`, the base resolves to
+            // # `ResolvedBase::Unknown`, `local_site()` is `None`, and the
+            // # comparison below is `None == Some(..)` — false, every time,
+            // # on every input.
+            // #
+            // # The text-matching version this replaced DID report
+            // # `class Foo(Foo)`. Replacing it with an identity comparison
+            // # that cannot hold did not rebuild the rule; it deleted the
+            // # diagnostic while leaving something that reads like a rule.
+            // # That is worse than the panic the deletion protocol asks for,
+            // # because silence looks like a clean file.
+            // #
+            // # What a real implementation needs: the resolver must model the
+            // # PENDING class binder — the fact that a base expression named
+            // # `Foo` inside `class Foo`'s own base list refers to a name
+            // # that this statement is in the middle of binding and that
+            // # nothing else has bound. `ResolvedBase::Unknown` throws that
+            // # away. Until it is modelled, `class Foo(Foo)` goes unreported.
+            // #
+            // # Do not "fix" this by comparing `class.name` to the base's
+            // # spelling. That is the defect that was deleted, and it is what
+            // # made `class ascii(ascii)` need a builtin-spelling exemption.
+            // ##############################################################
+            if base.resolved.local_site() == Some(class.name_span) {
+                out.push(self_inheritance_diagnostic(
+                    &class.name,
+                    base.span,
+                    &module.path,
+                ));
+            }
         }
-        out.push(error_diagnostic_owned(
-            CODE.clone(),
-            format!("Class `{name}` lists itself as a base, but `{name}` is not bound until the class statement completes"),
-            class.name_span,
-            &module.path,
-            Some(format!(
-                "Inherit from a different class, or bind another `{name}` (import or definition) before this one"
-            )),
-            Some(
-                "Python evaluates base classes before binding the class name, so this raises \
-                 NameError when the module is imported"
-                    .to_owned(),
-            ),
-        ));
     }
+}
+
+/// `class Foo(Foo)` with no earlier binding for `Foo`.
+fn self_inheritance_diagnostic(name: &str, span: Span, path: &str) -> Diagnostic {
+    error_diagnostic_owned(
+        CODE.clone(),
+        format!("`{name}` is used as its own base class but is not defined yet"),
+        span,
+        path,
+        Some(format!(
+            "A class cannot inherit from itself; the base list is evaluated before `{name}` is bound"
+        )),
+        Some(
+            "The bases tuple is evaluated before the class statement binds its name, so a \
+             self-reference raises NameError"
+                .to_owned(),
+        ),
+    )
 }
 
 fn module_level_diagnostic(name: &str, span: Span, path: &str) -> Diagnostic {
@@ -198,6 +261,11 @@ fn module_level_diagnostic(name: &str, span: Span, path: &str) -> Diagnostic {
 
 /// Module-scope names visible to every function body.
 struct ModuleScope<'a> {
+    /// The BUILTIN SCOPE: every name `builtins` binds, from the active
+    /// typeshed generation, or `None` when it could not be established.
+    /// `None` means "unknown", which suppresses rather than reports; an EMPTY
+    /// `Some` is a real answer and reports (see [`is_builtin_name`]).
+    builtin_names: Option<&'a std::collections::HashSet<String>>,
     import_names: &'a [&'a str],
     module_var_names: &'a [&'a str],
     class_names: &'a [&'a str],
@@ -225,180 +293,69 @@ fn is_in_enclosing_scope(name: &str, func: &FunctionInfo, all_functions: &[Funct
     })
 }
 
-/// Python builtin names that are always in scope.
+// ##########################################################################
+// # DELETED — the `BUILTINS` NAME WHITELIST — the whole table. DO NOT        #
+// # RESTORE IT AND DO NOT REPLACE IT WITH A SMALLER LIST.                  #
+// #                                                                        #
+// # It was a hard-coded table of builtin SPELLINGS, consulted as           #
+// # `BUILTINS.contains(&name)` at three sites, to decide whether a name    #
+// # was defined. CLAUDE.md names this construct explicitly: "a whitelist   #
+// # of `int`/`str`/`isinstance` names. Builtins are not an exception —     #
+// # Python lets any name be shadowed, rebound, or aliased, so builtin uses #
+// # resolve through the binding table like everything else."               #
+// #                                                                        #
+// # Both directions were wrong. A module that rebinds a builtin name kept  #
+// # the whitelist's blessing, and any user symbol that happened to be      #
+// # SPELLED like a builtin inherited it too:                               #
+// #                                                                        #
+// #   class ascii(ascii): ...   # self-referencing base — suppressed only  #
+// #                             # because "ascii" is in the list, while    #
+// #                             # `class Foo(Foo)` is correctly reported    #
+// #                                                                        #
+// # `BindingTable::binds_name` / `form_of_with_builtins` already answer    #
+// # this lawfully: a bare name the module never rebinds resolves to its    #
+// # `builtins` definition, and a rebinding at or before the use site stops  #
+// # it. That is the replacement — resolution, not membership.              #
+// #                                                                        #
+// # Pinned by:                                                             #
+// #   crates/basilisk-checker/tests/string_keyed_class_hierarchy_pin_tests.rs
+// ##########################################################################
+
+/// Whether `name` is bound in the BUILTIN SCOPE this module is checked
+/// against, and not shadowed by the module itself.
 ///
-/// When code references one of these names (e.g. `return int`, a module-level
-/// `divmod(...)`), it is not an undefined-variable error — it is a reference
-/// to a builtin type/function. The list is the complete `builtins` module
-/// surface (union across supported Python versions, so version-gated names
-/// like `anext` or `PythonFinalizationError` never false-positive), plus the
-/// module-level dunder globals every module receives and the `site`-installed
-/// interactive helpers (`help`, `exit`, ...).
-const BUILTINS: &[&str] = &[
-    "aiter",
-    "anext",
-    "ascii",
-    "breakpoint",
-    "compile",
-    "copyright",
-    "credits",
-    "divmod",
-    "eval",
-    "exec",
-    "exit",
-    "globals",
-    "help",
-    "license",
-    "locals",
-    "quit",
-    "__import__",
-    "__build_class__",
-    "__debug__",
-    "__name__",
-    "__file__",
-    "__doc__",
-    "__package__",
-    "__spec__",
-    "__loader__",
-    "__builtins__",
-    "__annotations__",
-    "__dict__",
-    "BaseExceptionGroup",
-    "ExceptionGroup",
-    "BlockingIOError",
-    "BrokenPipeError",
-    "ChildProcessError",
-    "ConnectionAbortedError",
-    "ConnectionError",
-    "ConnectionRefusedError",
-    "ConnectionResetError",
-    "EncodingWarning",
-    "EnvironmentError",
-    "FileExistsError",
-    "FloatingPointError",
-    "InterruptedError",
-    "IsADirectoryError",
-    "MemoryError",
-    "NotADirectoryError",
-    "PermissionError",
-    "ProcessLookupError",
-    "PythonFinalizationError",
-    "ReferenceError",
-    "TimeoutError",
-    "WindowsError",
-    "int",
-    "str",
-    "float",
-    "bool",
-    "bytes",
-    "complex",
-    "list",
-    "dict",
-    "set",
-    "tuple",
-    "frozenset",
-    "bytearray",
-    "memoryview",
-    "type",
-    "object",
-    "range",
-    "slice",
-    "property",
-    "staticmethod",
-    "classmethod",
-    "super",
-    "None",
-    "True",
-    "False",
-    "Ellipsis",
-    "NotImplemented",
-    "len",
-    "print",
-    "repr",
-    "hash",
-    "id",
-    "isinstance",
-    "issubclass",
-    "callable",
-    "iter",
-    "next",
-    "enumerate",
-    "zip",
-    "map",
-    "filter",
-    "reversed",
-    "sorted",
-    "min",
-    "max",
-    "sum",
-    "abs",
-    "round",
-    "pow",
-    "any",
-    "all",
-    "dir",
-    "vars",
-    "getattr",
-    "setattr",
-    "delattr",
-    "hasattr",
-    "open",
-    "input",
-    "chr",
-    "ord",
-    "hex",
-    "oct",
-    "bin",
-    "format",
-    "Exception",
-    "BaseException",
-    "TypeError",
-    "ValueError",
-    "KeyError",
-    "IndexError",
-    "AttributeError",
-    "RuntimeError",
-    "StopIteration",
-    "OSError",
-    "IOError",
-    "FileNotFoundError",
-    "NotImplementedError",
-    "OverflowError",
-    "ZeroDivisionError",
-    "ImportError",
-    "ModuleNotFoundError",
-    "NameError",
-    "UnboundLocalError",
-    "LookupError",
-    "ArithmeticError",
-    "AssertionError",
-    "BufferError",
-    "EOFError",
-    "GeneratorExit",
-    "KeyboardInterrupt",
-    "SystemExit",
-    "SystemError",
-    "RecursionError",
-    "StopAsyncIteration",
-    "SyntaxError",
-    "IndentationError",
-    "TabError",
-    "UnicodeError",
-    "UnicodeDecodeError",
-    "UnicodeEncodeError",
-    "UnicodeTranslateError",
-    "Warning",
-    "DeprecationWarning",
-    "PendingDeprecationWarning",
-    "RuntimeWarning",
-    "SyntaxWarning",
-    "ResourceWarning",
-    "FutureWarning",
-    "ImportWarning",
-    "UnicodeWarning",
-    "BytesWarning",
-    "UserWarning",
-];
+/// REBUILT from a hard-coded whitelist of builtin SPELLINGS. That list decided
+/// whether a name was defined by looking its characters up in a table, so a
+/// module that rebound a builtin name kept the whitelist's blessing, and any
+/// user symbol merely SPELLED like a builtin inherited one:
+///
+/// ```python
+/// class ascii(ascii): ...   # self-referencing base, suppressed only because
+///                           # "ascii" was in the list, while the identical
+///                           # `class Foo(Foo)` was correctly reported
+/// ```
+///
+/// `ResolvedModule::builtin_names` is the `builtins` module's own namespace,
+/// read from the active typeshed generation, so the answer tracks the
+/// configured target version instead of a table in this file. A name the
+/// module binds itself is NOT resolved here — Python looks in the module scope
+/// first, and the callers have already checked it.
+///
+/// `None` — the builtin scope could not be established — means "unknown", not
+/// "no builtins": every caller uses this to SUPPRESS a diagnostic, so an
+/// unknown scope suppresses rather than inventing a report about a name it
+/// cannot see ([CHKARCH-CONFORMANCE-MODE]).
+///
+/// An EMPTY `Some` is a different fact: the scope WAS read and binds nothing.
+/// That is not the same as not knowing, and it does not suppress. The two used
+/// to share one value, and a loader bug that produced the empty one on every
+/// run silently disabled this rule everywhere.
+fn is_builtin_name(builtin_names: Option<&std::collections::HashSet<String>>, name: &str) -> bool {
+    match builtin_names {
+        Some(names) => names.contains(name),
+        None => true,
+    }
+}
 
 fn check_function(
     func: &FunctionInfo,
@@ -425,7 +382,7 @@ fn check_function(
             // `return helper` must not be flagged for a real `def helper`.
             || all_functions.iter().any(|f| f.name == name_str)
             || is_in_enclosing_scope(name_str, func, all_functions)
-            || BUILTINS.contains(&name_str)
+            || is_builtin_name(scope.builtin_names, name_str)
         {
             continue;
         }

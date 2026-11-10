@@ -1,24 +1,57 @@
 //! Implements [`assignment_compatibility`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! Signature model for structural callable/protocol subtyping: parameter and
 //! signature types, plus extraction from `ruff` AST class/function definitions.
+//!
+//! Every parameter and return annotation is LOWERED through the module's
+//! binding table into a resolved [`TypeNode`] at extraction time
+//! ([ASTREBUILD-LAW], [RESOLV-CANONICAL-RELATION]) — the model never stores
+//! rendered annotation text, so an aliased import or a reformatted spelling
+//! produces an identical signature model.
 
 use std::collections::{HashMap, HashSet};
 
+use basilisk_resolver::{BindingTable, TypeNode};
 use ruff_python_ast::{Expr, Stmt};
-
-use crate::rules::shared::ann_str;
 
 /// One callable parameter.
 #[derive(Debug, Clone)]
 pub(super) struct Param {
     pub(super) name: String,
-    pub(super) ty: Option<String>,
+    /// The lowered annotation; `None` when unannotated (gradual).
+    pub(super) ty: Option<TypeNode>,
     pub(super) has_default: bool,
     /// `true` for positional-or-keyword ("standard") parameters.
     pub(super) is_standard: bool,
 }
 
-pub(super) use crate::rules::shared::StarParam;
+/// A `*args` or `**kwargs` slot with its annotation lowered to a resolved
+/// [`TypeNode`] — the semantic replacement for the text-carrying shared
+/// `StarParam` ([ASTREBUILD-LAW]).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(super) enum SigStar {
+    /// The signature has no such parameter.
+    #[default]
+    Absent,
+    /// Present without an annotation (implicitly `Any`).
+    Untyped,
+    /// Present with a lowered annotation.
+    Typed(TypeNode),
+}
+
+impl SigStar {
+    /// `true` when the parameter exists in the signature.
+    pub(super) fn is_present(&self) -> bool {
+        !matches!(self, SigStar::Absent)
+    }
+
+    /// The lowered annotation; `None` for absent or untyped (gradual `Any`).
+    pub(super) fn ty(&self) -> Option<&TypeNode> {
+        match self {
+            SigStar::Typed(ty) => Some(ty),
+            SigStar::Absent | SigStar::Untyped => None,
+        }
+    }
+}
 
 /// A parsed callable signature.
 #[derive(Debug, Clone, Default)]
@@ -27,10 +60,11 @@ pub(super) struct Sig {
     pub(super) positional: Vec<Param>,
     pub(super) kwonly: Vec<Param>,
     /// The `*args` parameter slot.
-    pub(super) vararg: StarParam,
+    pub(super) vararg: SigStar,
     /// The `**kwargs` parameter slot.
-    pub(super) kwarg: StarParam,
-    pub(super) ret: Option<String>,
+    pub(super) kwarg: SigStar,
+    /// The lowered return annotation; `None` when unannotated (gradual).
+    pub(super) ret: Option<TypeNode>,
     /// `true` when the parameter list is gradual (`...`): `positional` then
     /// holds the required `Concatenate` prefix and `kwonly` any retained
     /// keyword-only parameters.
@@ -39,20 +73,12 @@ pub(super) struct Sig {
 
 /// The resolved signatures of a type expression.
 pub(super) enum TypeSigs {
-    /// Involves a `ParamSpec` or another non-evaluable form — treat as compatible.
+    /// Involves a `ParamSpec`, an unspecializable generic, or another
+    /// non-evaluable form — every verdict over it abstains
+    /// ([ASTREBUILD-PHASE-RESOLVER]).
     Unknown,
     /// Concrete overload set.
     Sigs(Vec<Sig>),
-}
-
-/// An anonymous positional-only parameter of type `ty`.
-pub(super) fn posonly_param(ty: String) -> Param {
-    Param {
-        name: String::new(),
-        ty: Some(ty),
-        has_default: false,
-        is_standard: false,
-    }
 }
 
 /// A class indexed for structural comparison: its method signatures,
@@ -61,16 +87,21 @@ pub(super) struct ClassEntry {
     /// Method name → overload signatures.
     pub(super) methods: HashMap<String, Vec<Sig>>,
     /// Annotated attribute names declared in the class body.
+    #[expect(
+        dead_code,
+        reason = "read only by the inert protocol_members scaffolding ([ASTREBUILD-PHASE-RESOLVER])"
+    )]
     pub(super) attrs: HashSet<String>,
-    /// Base class names (subscripts stripped, `Protocol`/`Generic` excluded).
-    pub(super) bases: Vec<String>,
-    pub(super) is_protocol: bool,
-    /// Generic parameter names (PEP 695 or `Protocol[...]`/`Generic[...]`).
+    /// Generic parameter names.
     pub(super) generic_params: Vec<String>,
 }
 
-/// Build a [`ClassEntry`] from a class definition.
-pub(super) fn class_entry(cls: &ruff_python_ast::StmtClassDef) -> ClassEntry {
+/// Build a [`ClassEntry`] from a class definition, lowering every method
+/// annotation through `bindings`.
+pub(super) fn class_entry(
+    cls: &ruff_python_ast::StmtClassDef,
+    bindings: &BindingTable,
+) -> ClassEntry {
     let mut methods: HashMap<String, Vec<&ruff_python_ast::StmtFunctionDef>> = HashMap::new();
     let mut attrs = HashSet::new();
     for stmt in &cls.body {
@@ -89,52 +120,69 @@ pub(super) fn class_entry(cls: &ruff_python_ast::StmtClassDef) -> ClassEntry {
 
     let method_sigs = methods
         .into_iter()
-        .map(|(name, defs)| (name, overload_sigs(&defs)))
+        .map(|(name, defs)| (name, overload_sigs(&defs, bindings)))
         .collect();
-
-    let mut is_protocol = false;
-    let mut bases = Vec::new();
-    for base in cls.bases() {
-        let base_name = match base {
-            Expr::Subscript(sub) => ann_str(&sub.value),
-            other => ann_str(other),
-        };
-        match base_name.as_str() {
-            "Protocol" => is_protocol = true,
-            "Generic" => {}
-            _ => bases.push(base_name),
-        }
-    }
 
     ClassEntry {
         methods: method_sigs,
         attrs,
-        bases,
-        is_protocol,
         generic_params: crate::rules::shared::class_generic_param_names(cls),
     }
 }
 
-/// Reduce a method's definitions to its effective overload set.
-fn overload_sigs(defs: &[&ruff_python_ast::StmtFunctionDef]) -> Vec<Sig> {
-    let is_overload = |f: &ruff_python_ast::StmtFunctionDef| {
-        f.decorator_list
-            .iter()
-            .any(|d| matches!(&d.expression, Expr::Name(n) if n.id.as_str() == "overload"))
-    };
-    let has_overloads = defs.iter().any(|f| is_overload(f));
+// ##########################################################################
+// # `base_name` AND THE `ClassEntry::bases` FIELD IT FED ARE GONE.
+// #
+// # `base_name` reduced a base-class EXPRESSION to a `String` identifier, and
+// # that string became `ClassEntry::bases` — the key every protocol/member
+// # walk then looked classes up by. Reading the identifier off the AST node
+// # is lawful; THROWING AWAY THE RESOLUTION and keeping only the rendered
+// # word is not. Its own doc comment conceded that an attribute path or a
+// # call "yields an empty string, which never names an indexed class" — i.e.
+// # every dotted base silently disappeared from the hierarchy.
+// #
+// # The field was `#[expect(dead_code)]`: NOTHING read it. It was reachable
+// # only as work done on the way to being discarded, so a loud boundary there
+// # guarded no verdict — it just killed every analysis of every module to
+// # populate an unread `Vec<String>`.
+// #
+// # The replacement for the hierarchy it was standing in for already exists
+// # and is definition-site keyed: `basilisk_resolver::ClassGraph`, built from
+// # `ClassInfo::resolved_bases`. A consumer that needs a class's bases takes
+// # them from there, where a dotted or aliased base resolves to the class it
+// # actually denotes instead of vanishing.
+// #
+// # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
+// ##########################################################################
+
+/// The signatures of every definition of a method.
+fn overload_sigs(defs: &[&ruff_python_ast::StmtFunctionDef], bindings: &BindingTable) -> Vec<Sig> {
     defs.iter()
-        .filter(|f| !has_overloads || is_overload(f))
-        .map(|f| sig_from_function(f))
+        .map(|f| sig_from_function(f, bindings))
         .collect()
 }
 
-/// Build a [`Sig`] from a method definition (drops `self`).
-pub(super) fn sig_from_function(func: &ruff_python_ast::StmtFunctionDef) -> Sig {
+/// The slot for a present `*`/`**` parameter.
+fn star_slot(bindings: &BindingTable, annotation: Option<&Expr>) -> SigStar {
+    annotation.map_or(SigStar::Untyped, |ann| {
+        SigStar::Typed(TypeNode::lower(bindings, ann))
+    })
+}
+
+/// Build a [`Sig`] from a method definition (drops `self`), lowering every
+/// annotation through `bindings`.
+pub(super) fn sig_from_function(
+    func: &ruff_python_ast::StmtFunctionDef,
+    bindings: &BindingTable,
+) -> Sig {
     let params = &func.parameters;
     let to_param = |pwd: &ruff_python_ast::ParameterWithDefault, is_standard: bool| Param {
         name: pwd.parameter.name.to_string(),
-        ty: pwd.parameter.annotation.as_deref().map(ann_str),
+        ty: pwd
+            .parameter
+            .annotation
+            .as_deref()
+            .map(|ann| TypeNode::lower(bindings, ann)),
         has_default: pwd.default.is_some(),
         is_standard,
     };
@@ -152,29 +200,23 @@ pub(super) fn sig_from_function(func: &ruff_python_ast::StmtFunctionDef) -> Sig 
         .iter()
         .map(|p| to_param(p, false))
         .collect();
-    let vararg = params.vararg.as_ref().map_or(StarParam::Absent, |v| {
-        StarParam::from_annotation(v.annotation.as_deref().map(ann_str))
+    let vararg = params.vararg.as_ref().map_or(SigStar::Absent, |v| {
+        star_slot(bindings, v.annotation.as_deref())
     });
-    let kwarg = params.kwarg.as_ref().map_or(StarParam::Absent, |k| {
-        StarParam::from_annotation(k.annotation.as_deref().map(ann_str))
+    let kwarg = params.kwarg.as_ref().map_or(SigStar::Absent, |k| {
+        star_slot(bindings, k.annotation.as_deref())
     });
-    let ret = func.returns.as_deref().map(ann_str);
+    let ret = func
+        .returns
+        .as_deref()
+        .map(|r| TypeNode::lower(bindings, r));
 
-    let mut sig = Sig {
+    Sig {
         positional,
         kwonly,
         vararg,
         kwarg,
         ret,
         gradual: false,
-    };
-    // `*args: Any, **kwargs: Any` (literally annotated or unannotated) is
-    // equivalent to `...` per the typing spec; other parameters are retained.
-    let is_any = |param: &StarParam| param.is_present() && param.ty().is_none_or(|ty| ty == "Any");
-    if is_any(&sig.vararg) && is_any(&sig.kwarg) {
-        sig.gradual = true;
-        sig.vararg = StarParam::Absent;
-        sig.kwarg = StarParam::Absent;
     }
-    sig
 }

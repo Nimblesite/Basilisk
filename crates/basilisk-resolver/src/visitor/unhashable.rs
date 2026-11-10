@@ -124,8 +124,6 @@ pub(super) fn collect_unhashable_keys_from_expr(expr: &Expr, out: &mut Vec<Unhas
 // Module-level call site collection
 // ---------------------------------------------------------------------------
 
-/// Returns the TypeVar-like callee name (`"TypeVar"`, `"TypeVarTuple"`, or `"ParamSpec"`),
-/// or `None` if the expression is not a TypeVar-like call.
 pub(super) fn collect_unhashable_hash_calls(
     stmts: &[Stmt],
     classes: &[crate::scope::ClassInfo],

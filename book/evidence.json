@@ -142,7 +142,7 @@
         "Python 3.14.6 ran the Chapter 7 Signal Box checkpoint: 4 tests passed on 2026-07-28",
         "The Chapter 7 runtime tests exercised required, optional, and invalid input; enum conversion; scalar and batch overload paths; two structural protocol implementations; and Page[Reading] on 2026-07-28",
         "target/debug/basilisk check --color never . reported no issues across the Chapter 7 source and tests on 2026-07-28; this was working-tree evidence from a binary identifying itself as 0.0.0-PLACEHOLDER, not release evidence",
-        "The real python/typing harness report for upstream commit 39164cd2c5b4e2608cb8b5d2fc8af9ae6f0c0fe8 records 141 of 141 files passing, 970 required errors caught, 0 missed, and 0 false positives; every Chapter 7 category row is PASS: dataclasses 16 of 16, enums 6 of 6, generics 30 of 30, overloads 5 of 5, protocols 11 of 11, and TypedDicts 14 of 14"
+        "The historical python/typing harness result has been withdrawn as evidence: the conformance integrity audit found fixture-fitted behaviour that the pristine suite did not expose. Current conformance is unknown until the affected logic is rebuilt and independently validated with AST-preserving mutations and off-suite tests."
       ],
       "omitted": [
         "Exact diagnostic wording and identifiers are omitted until the edition pins a released Basilisk binary.",

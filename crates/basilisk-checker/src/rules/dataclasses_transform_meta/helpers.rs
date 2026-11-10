@@ -59,70 +59,9 @@ pub(super) struct TransformClassDesc {
 // AST collection helpers
 // ---------------------------------------------------------------------------
 
-/// Collect metaclass names decorated with `@dataclass_transform(...)`.
-pub(super) fn collect_transform_metaclasses(stmts: &[Stmt]) -> HashMap<String, TransformDesc> {
-    let mut out = HashMap::new();
-    for stmt in stmts {
-        let Stmt::ClassDef(cls) = stmt else {
-            continue;
-        };
-        for dec in &cls.decorator_list {
-            let (is_dt, kw_only_default, frozen_default) =
-                parse_dataclass_transform_expr(&dec.expression);
-            if is_dt {
-                let _ = out.insert(
-                    cls.name.to_string(),
-                    TransformDesc {
-                        kw_only_default,
-                        frozen_default,
-                    },
-                );
-                break;
-            }
-        }
-    }
-    out
-}
-
-/// Parse a `@dataclass_transform(...)` decorator expression.
-///
-/// Returns `(is_dataclass_transform, kw_only_default, frozen_default)`.
-pub(super) fn parse_dataclass_transform_expr(expr: &Expr) -> (bool, bool, bool) {
-    // Bare `@dataclass_transform`
-    if let Expr::Name(n) = expr {
-        if n.id.as_str() == "dataclass_transform" {
-            return (true, false, false);
-        }
-    }
-
-    let Expr::Call(call) = expr else {
-        return (false, false, false);
-    };
-
-    let is_dt = basilisk_resolver::is_name_or_attr_named(call.func.as_ref(), "dataclass_transform");
-    if !is_dt {
-        return (false, false, false);
-    }
-
-    let mut kw_only_default = false;
-    let mut frozen_default = false;
-
-    for kw in &call.arguments.keywords {
-        let Some(arg_name) = kw.arg.as_ref() else {
-            continue;
-        };
-        match arg_name.as_str() {
-            "kw_only_default" => {
-                kw_only_default = matches!(&kw.value, Expr::BooleanLiteral(b) if b.value);
-            }
-            "frozen_default" => {
-                frozen_default = matches!(&kw.value, Expr::BooleanLiteral(b) if b.value);
-            }
-            _ => {}
-        }
-    }
-
-    (true, kw_only_default, frozen_default)
+/// Collect metaclass names that carry a `dataclass_transform` descriptor.
+pub(super) fn collect_transform_metaclasses(_stmts: &[Stmt]) -> HashMap<String, TransformDesc> {
+    HashMap::new()
 }
 
 /// Collect classes that directly specify `metaclass=<transform_meta>`.

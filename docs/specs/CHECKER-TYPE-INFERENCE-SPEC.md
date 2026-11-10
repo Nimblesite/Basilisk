@@ -12,6 +12,14 @@ require or discourage annotations without changing PEP behavior (see
 >
 > **Implementation**: the engine is `crates/basilisk-checker/src/bidir/` (synthesis, checking, constraints, solver, generics), `src/narrow/` (flow-sensitive narrowing and inference-driven reachability), and `src/subtyping.rs` (`SubtypingContext`). The pre-engine remnants (`inference.rs`, `collection_inference.rs`, `types_parsing.rs`, per-rule text matching) are **legacy under demolition** — see [TYPEINF-LEGACY](#TYPEINF-LEGACY); nothing in this spec licenses new code against them.
 
+> **Integrity status (2026-08-06):** Basilisk's former conformance result and
+> every Basilisk-generated benchmark, scorecard, and competitor ranking in this
+> document are withdrawn historical research notes. The current conformance
+> level is temporarily unknown while fitted logic is deleted and rebuilt from
+> the specification. External figures remain attributed vendor or third-party
+> claims, not Basilisk measurements. No figure here may be republished until its
+> methodology and robustness have been independently reviewed.
+
 ---
 
 ## [TYPEINF-REDUNDANT] Redundant Annotation Principle {#TYPEINF-REDUNDANT}
@@ -108,17 +116,42 @@ and no new code may be written against any of them:
   the annotation as a type expression through the resolution cascade
   ([TYPEINF-ANNOTATION-RESOLUTION](#TYPEINF-ANNOTATION-RESOLUTION)) into the
   engine.
+- `InferredType::Named(String)` — identifying a type by the characters it was
+  spelled with rather than by the declaration it resolves to. This is the root
+  the two entries above grow from: while a type *is* a string, comparing types
+  can only ever be comparing strings.
 - `RhsKind` shape dispatch in rules — superseded by synthesized types.
-- Rule-local subtype/text helpers — superseded by
-  `subtyping::SubtypingContext` as the **single** subtyping judgment.
+- Rule-local subtype/text helpers — were to be superseded by
+  `subtyping::SubtypingContext` as the **single** subtyping judgment. That
+  never happened: `SubtypingContext` was itself deleted as a string-keyed
+  layer and is now a panic-only shell, so these helpers were superseded by
+  nothing and the rule-local paths that survive are unreplaced.
 
-While a legacy path still exists in the tree it is an implementation debt, not
-a design. Removing it must not silently drop a diagnostic from a rule that
-genuinely analyses code — if the engine cannot yet carry such a rule, the engine
-gets fixed first. A rule whose verdict came from the text all along is a
-different case: it is deleted, with a failing test left behind and the loss
-reported ([CHKARCH-TEXT-MATCHED-LOGIC](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TEXT-MATCHED-LOGIC)).
-Neither case is decided by what it costs a conformance run
+**This is the same defect as the symbol-naming ban, one level down.** The names
+these paths match on are true builtins, so
+[CHKARCH-RECOGNITION-PERMITTED](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-RECOGNITION-PERMITTED)
+allows naming them — but the *mechanism* is string matching on code, and it
+produces the same failure: a verdict that depends on how the file was written
+instead of on what it means. `slice_span(src, span).starts_with("tuple[")` is
+banned by
+[CHKARCH-RECOGNITION-BANNED](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-RECOGNITION-BANNED)
+whatever the name inside the brackets is.
+
+As of 2026-08-06 this layer is roughly 130 sites — 94 `slice_span` and 36
+`from_annotation` in `crates/basilisk-checker/src`. Because it is the checker's
+entire type representation, it comes out by scheduled demolition, not by ad-hoc
+edits: [ASTREBUILD-PHASE-TYPEEXPR](../plans/CHECKER-AST-RECONSTRUCTION-PLAN.md#ASTREBUILD-PHASE-TYPEEXPR).
+
+**No production verdict may continue through text while waiting for its
+replacement.** There is one rule, and it is
+[CHKARCH-TEXT-MATCHED-LOGIC](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TEXT-MATCHED-LOGIC):
+on discovery, pin the defect with a failing test, delete the text path, and
+report — the rule abstains (emits nothing) until its semantic replacement
+exists. "The engine gets fixed first while the legacy path keeps answering"
+was a tolerance policy and is withdrawn; a diagnostic that a text path was
+carrying was never a diagnostic. Fewer answers with visible failing tests is
+the correct intermediate state, and neither direction is decided by what it
+costs a conformance run
 ([CHKARCH-CONFORMANCE](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE)).
 
 ### [TYPEINF-ANNOTATION-RESOLUTION] Annotation name resolution {#TYPEINF-ANNOTATION-RESOLUTION}
@@ -498,6 +531,17 @@ z: float = first([1, 2, 3])  # T solved to int; int assignable to float ✓
 
 > **Authority**: [PEP 484 §Generics](https://peps.python.org/pep-0484/#generics).
 
+PEP 695 generic function calls must solve a type parameter from the argument
+and substitute it recursively through the complete return annotation. The
+required `tuple[T, T]`, `list[T]`, union, and lowercase-parameter cases are
+tracked by [#419](https://github.com/Nimblesite/Basilisk/issues/419) and pinned
+by `crates/basilisk-checker/tests/runtime_type_safety_regressions_tests.rs`.
+Abstaining from `assert_type` is not implementation of this obligation: the
+same fixture pairs an exact accepted assertion with a deliberately wrong
+assertion that must emit exactly one diagnostic.
+
+> **Authority**: [PEP 695 § Generic functions](https://peps.python.org/pep-0695/#generic-functions), [typing spec — `assert_type`](https://typing.python.org/en/latest/spec/directives.html#assert-type).
+
 ### [TYPEINF-GENERICS-CONSTRAINED] Constrained TypeVars {#TYPEINF-GENERICS-CONSTRAINED}
 
 The current call-rule path validates that an argument is compatible with one
@@ -743,9 +787,13 @@ tested FIRST so the two forms never collapse into each other:
 | `X` <: `Guard` | `X` <: `bool` | the body of a narrowing function returns an ordinary bool (`return False`) |
 
 **Consistency precondition.** `TypeIs[X]` additionally requires `X` to be
-consistent with the input parameter type — judged on RESOLVED types through
-`SubtypingContext`, three-valued, abstaining when either side is not grounded
-(`rules/narrowing_typeis_2.rs`). Invariant container positions are compared in
+consistent with the input parameter type — three-valued, abstaining when
+either side is not grounded (`rules/narrowing_typeis_2.rs`). NOT through
+`SubtypingContext`, which is a panic-only shell; the rule resolves each
+nominal leaf through `rules/shared/nominal.rs`. That path is currently
+unreachable for two nominal leaves: `leaf_consistency` calls
+`InferredType::is_assignable_to` first, which panics on `(Named, Named)`. See
+the function's own doc comment. Invariant container positions are compared in
 BOTH directions, which is why `object` must stay distinct from `Any`
 ([TYPEINF-SUBTYPING-NOMINAL](#TYPEINF-SUBTYPING-NOMINAL)): narrowing
 `list[object]` to `list[int]` is an error, narrowing `list[Any]` is not.
@@ -828,9 +876,12 @@ Nominal-subtyping rules may walk `ClassInfo.bases` transitively; the shared MRO
 model remains tracked by
 [NARROWPLAN-SUBTYPING](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-SUBTYPING).
 
+
+> **STATUS 2026-08-09 — `subtyping.rs` IS A PANIC-ONLY SHELL.** Every body in that file was deleted for deciding subtyping from the SPELLING of type names; `SubtypingContext::is_subtype` took two annotation STRINGS. The struct, `name_subtype`, and every `register_*` method now panic when called. Nothing in the paragraphs below describes running code: read them as the OBLIGATION a replacement must meet, not as a description of this checker. The replacement is a relation over resolved identities — `basilisk-canonical`'s `TypeNode` + `assignable`, and `rules/shared/nominal.rs`'s definition-site class graph — not a revived string layer.
+
 **Builtin numeric tower.** The typing-spec promotions ([Special cases for float and complex](https://typing.python.org/en/latest/spec/special-types.html#special-cases-for-float-and-complex)) hold: `bool`/`int` are accepted where `float` is expected, and `bool`/`int`/`float` where `complex` is expected.
 
-The single home for this judgment is `crates/basilisk-checker/src/subtyping.rs` — `name_subtype` encodes the full `bool <: int <: float <: complex` chain, `SubtypingContext` is the judgment every consumer must go through, and the accepted/rejected table is pinned in `tests/subtyping_context_tests.rs` ([NARROWPLAN-SUBTYPING](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-SUBTYPING)). The rule-local delegates still calling `name_subtype` directly (`rules/shared.rs::is_numeric_subtype` and the helpers in `narrowing_typeis`, `narrowing_typeis_2`, `overloads_evaluation`, `generics_typevartuple_callable`, `aliases_implicit`, `generics_syntax_scoping`, `callables_subtyping`, `generics_defaults_referential`) are legacy shims on the demolition list ([TYPEINF-LEGACY](#TYPEINF-LEGACY)); the `types_parsing.rs` fold of `complex` into `Float` is a legacy-parser artifact that dies with that parser. One subtyping implementation — not two layers.
+This judgment has NO home. `crates/basilisk-checker/src/subtyping.rs` was intended to be it — `name_subtype` encoding the full `bool <: int <: float <: complex` chain, `SubtypingContext` as the judgment every consumer goes through — but that file is now a panic-only shell, because `name_subtype` compared type NAMES and `is_subtype` took two annotation strings. The numeric tower that survives is the hard-coded arm in `InferredType::is_assignable_to`; the accepted/rejected table was pinned in `tests/subtyping_context_tests.rs` ([NARROWPLAN-SUBTYPING](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-SUBTYPING)). The rule-local delegates still calling `name_subtype` directly (`rules/shared.rs::is_numeric_subtype` and the helpers in `narrowing_typeis`, `narrowing_typeis_2`, `overloads_evaluation`, `generics_typevartuple_callable`, `aliases_implicit`, `generics_syntax_scoping`, `callables_subtyping`, `generics_defaults_referential`) are legacy shims on the demolition list ([TYPEINF-LEGACY](#TYPEINF-LEGACY)); the `types_parsing.rs` fold of `complex` into `Float` is a legacy-parser artifact that dies with that parser. One subtyping implementation — not two layers.
 
 **Other builtin relations:**
 - All classes <: `object`. The cascade resolves `object` to the named TOP type, not to `Any`:
@@ -974,18 +1025,16 @@ g: Callable[[Dog], Animal]  # accepts Dog, returns Animal
 Subtyping is decided by `InferredType::is_assignable_to(&self, other)` in `crates/basilisk-checker/src/types.rs` — a pure structural match over the `InferredType` enum, called on production paths by the compatibility rules (e.g. `rules/assignment_compatibility`, `rules/returns_compatibility`). It implements:
 
 - `Any` / `Unknown` bidirectional compatibility and `Never` as bottom ([TYPEINF-SPECIAL-ANY](#TYPEINF-SPECIAL-ANY), [TYPEINF-SPECIAL-NEVER](#TYPEINF-SPECIAL-NEVER)).
-- Partial, literal-level numeric relations: `int` (and `Literal` ints/floats) <: `float`, `Literal[True/False]` <: `bool`/`int`, plus `Literal`/`LiteralString`/`str` relations ([TYPEINF-SUBTYPING-NOMINAL](#TYPEINF-SUBTYPING-NOMINAL), [TYPEINF-SPECIAL-LITERALSTRING](#TYPEINF-SPECIAL-LITERALSTRING)). The full `bool <: int <: float <: complex` tower lives in `subtyping.rs::name_subtype`, behind `SubtypingContext` ([TYPEINF-SUBTYPING-NOMINAL](#TYPEINF-SUBTYPING-NOMINAL)).
+- Partial, literal-level numeric relations: `int` (and `Literal` ints/floats) <: `float`, `Literal[True/False]` <: `bool`/`int`, plus `Literal`/`LiteralString`/`str` relations ([TYPEINF-SUBTYPING-NOMINAL](#TYPEINF-SUBTYPING-NOMINAL), [TYPEINF-SPECIAL-LITERALSTRING](#TYPEINF-SPECIAL-LITERALSTRING)). The numeric tower and `object`-as-top relations over RESOLVED nodes live in `basilisk-canonical`'s relation layer (`TypeNode` + `assignable`/`equivalent`, [RESOLV-CANONICAL-RELATION]) — that is the sanctioned home. `subtyping.rs::name_subtype` receives NAMES rather than resolved identities; centralising text matching does not make it semantic, so `name_subtype` is condemned under [TYPEINF-LEGACY](#TYPEINF-LEGACY): no new caller may be added, and existing callers migrate to the relation layer or abstain.
 - `Optional`/`Union` decomposition: `A | B <: C` iff both sides do; `A <: A | B` ([TYPEINF-SUBTYPING-UNION](#TYPEINF-SUBTYPING-UNION)).
 - Bidirectional element compatibility (invariance, with gradual `Any`/`Unknown` consistency) for mutable `list`/`set`/`dict`; fixed-length, homogeneous `tuple[X, ...]`, and PEP 646 unpacked (`*tuple[...]`/`*Ts`) tuple matching ([TYPEINF-SUBTYPING-GENERIC](#TYPEINF-SUBTYPING-GENERIC), [TYPEINF-COLLECTIONS-TUPLES](#TYPEINF-COLLECTIONS-TUPLES)).
 - Callable contravariant parameters / covariant return, with `...` params gradual ([TYPEINF-SUBTYPING-CALLABLE](#TYPEINF-SUBTYPING-CALLABLE)); `TypeForm` covariance.
 
 Module-context equivalences that `is_assignable_to` cannot see run as ordered rescues in `rules/assignment_compatibility` after it returns false: expected-type literal-collection checking, the enum literal expansion (`enum_expand.rs`, needing the module's enum-member environment), then callable-signature rescue — all over the skip/alias/schema environment built once per module by `skip_names::SkipNames::collect`.
 
-`Named` types (user classes and unparameterised imports) compare **by the source text before the `[`**: `Foo[int]` and `Foo[float]` are treated as compatible. Stated plainly, that is not a subtyping judgment — it is a string prefix comparison over a rendered type, and generic argument compatibility is **unimplemented**. It is a `_ => true` in different clothing: every mismatch inside the brackets is accepted, so `list[int]` assigned from `list[str]` passes.
+`Named` types (user classes and unparameterised imports) have **no lawful comparison**: a name is a spelling, not an identity, so any answer computed from it — including the historical "compare the source text before the `[`" — is text matching by [CHKARCH-TEXT-MATCHED-LOGIC](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TEXT-MATCHED-LOGIC) and is FORBIDDEN to execute, not merely documented as weak. The REQUIRED behaviour until resolved generic subtyping exists is abstention: a relation involving a `Named` leaf the module cannot ground answers `Unknown`/no-verdict, never a string-prefix `true` and never a spelling-difference `false`. **The implementation does not do this.** `InferredType::is_assignable_to` PANICS on a `(Named, Named)` pair rather than abstaining, because the text comparison was deleted and the deletion protocol requires the gap to be loud rather than defaulted. Abstention is what the replacement must do once a nominal leaf carries its definition site; the panic is what happens today, on production paths, including every nested pair (`list[A]` vs `list[B]`, dict values, tuple elements, callable parameters and returns). (The prior justification — that stricter matching would raise false positives against a zero-false-positive conformance gate — was a reason the gate was the wrong instrument, not a licence for the text verdict.)
 
-Two things about it are on the record. First, it is text matching by [CHKARCH-TEXT-MATCHED-LOGIC](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TEXT-MATCHED-LOGIC): the verdict follows the spelling of the type, and an alias or a re-export changes it. Second, the justification previously given here — that stricter matching would raise false positives against a zero-false-positive conformance gate — is not a reason to leave a check unimplemented; it is a reason the gate was the wrong instrument. Whole-program variance analysis is the real fix, and until it exists this comparison must be described as missing rather than as deliberate conservatism.
-
-Nominal MRO walking and structural Protocol/TypedDict compatibility are decided today by the per-conformance-area rule modules (`rules/protocols_*`, `rules/typeddicts_*`, and the class-bases-walking `is_subtype_of` helper in `rules/generics_basic_3/helpers.rs`). The shared home now exists — `crates/basilisk-checker/src/subtyping.rs` (`SubtypingContext`: cycle-guarded nominal walk, structural Protocol satisfaction, `TypedDict` schemas, declared variance, `Callable` kinds) — and the rule modules migrate onto it behind the parity pins in `tests/subtyping_context_tests.rs` and the in-module `helper_parity_tests` at the Integration stage ([NARROWPLAN-SUBTYPING](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-SUBTYPING)).
+Nominal MRO walking and structural Protocol/TypedDict compatibility are decided today by the per-conformance-area rule modules (`rules/protocols_*`, `rules/typeddicts_*`, and the class-bases-walking `is_subtype_of` helper in `rules/generics_basic_3/helpers.rs`). There is no shared home: `crates/basilisk-checker/src/subtyping.rs` was to be it, and is a panic-only shell. Nothing walks a real MRO anywhere in this checker — `ClassGraph::ancestors` is depth-first reachability, not C3. The rule modules were to migrate onto `SubtypingContext` behind the parity pins in `tests/subtyping_context_tests.rs` and the in-module `helper_parity_tests` at the Integration stage ([NARROWPLAN-SUBTYPING](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-SUBTYPING)).
 
 ---
 
@@ -1138,7 +1187,8 @@ The engine lives in `basilisk-checker`:
 - `narrow/` — the flow walker (`flow.rs`), scoped environment (`env.rs`),
   guard interpretation (`guards.rs`), inference-driven reachability
   (`reachability.rs`), and set operations (`set_ops.rs`).
-- `subtyping.rs` — `SubtypingContext`, the single subtyping judgment.
+- `subtyping.rs` — `SubtypingContext`. **Panic-only shell**; deleted for
+  string-keyed subtyping. Not a judgment, single or otherwise.
 - `types.rs` — `InferredType`, the ground-type vocabulary the engine solves
   into.
 

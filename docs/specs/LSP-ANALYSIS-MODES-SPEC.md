@@ -216,6 +216,13 @@ pub struct ImportGraph {
 
 `build_from_index()` walks `ImportInfo.resolved_path` for every file in the `WorkspaceIndex`, populating forward and reverse edges. It is rebuilt after every workspace-wide re-analysis in `crossModule` mode.
 
+`ImportInfo.resolved_path` is produced from the complete import AST semantics.
+For `from ..sub.mod import Foo`, the stored leading-dot level is applied before
+module lookup as required by [PEP 328](https://peps.python.org/pep-0328/#guido-s-decision);
+it is never discarded and reinterpreted as absolute `sub.mod`. The end-to-end
+regressions for [#369](https://github.com/Nimblesite/Basilisk/issues/369) live in
+`crates/basilisk-checker/tests/import_apply_tests.rs`.
+
 ---
 
 ## Cross-Module Symbol Sharing {#ANALYSIS-SYMBOLS}

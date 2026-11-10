@@ -60,34 +60,124 @@ def func(**kwargs) -> None:
     Ok(())
 }
 
-// ============================================================================
-// Undefined variable
-// ============================================================================
-
+/// PEP 484 requires the body of a checked function to be checked against its
+/// annotations. Returning an unresolved name cannot satisfy that contract.
+/// <https://peps.python.org/pep-0484/#the-meaning-of-annotations>
 #[test]
-fn undefined_var_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
-def func() -> None:
-    x = undefined_name
-";
-    // Just exercise the code path
-    let _diags = run(source)?;
+fn pep_484_checked_return_rejects_undefined_names() -> Result<(), Box<dyn std::error::Error>> {
+    let rejected = [
+        (
+            "canonical name",
+            "def calculate() -> int:\n    return missing_total\n",
+        ),
+        (
+            "renamed symbol",
+            "def navigate() -> str:\n    return absent_harbour\n",
+        ),
+        (
+            "nested expression",
+            "def assemble() -> list[int]:\n    return [unknown_piece]\n",
+        ),
+        (
+            "reformatted return",
+            "def observe(\n) -> int:\n    return (\n        unavailable_measurement\n    )\n",
+        ),
+    ];
+
+    for (mutation, source) in rejected {
+        let diagnostics = run(source)?;
+        assert_eq!(
+            diagnostics.len(),
+            1,
+            "{mutation}: one undefined return name must produce one isolated diagnostic: {diagnostics:#?}"
+        );
+        assert_eq!(
+            codes(&diagnostics),
+            vec!["names_undefined"],
+            "{mutation}: the undefined-name rule itself must reject the body"
+        );
+        assert_rule_count(
+            &diagnostics,
+            "names_undefined",
+            1,
+            "PEP 484 checked body returning an undefined name",
+        );
+    }
+
     Ok(())
 }
 
-// ============================================================================
-// Unbound variable
-// ============================================================================
-
+/// A checked return expression must be valid on every reachable path. Merely
+/// assigning a name in one conditional branch does not bind it on the other.
+/// <https://peps.python.org/pep-0484/#the-meaning-of-annotations>
 #[test]
-fn unbound_variable_exercise() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
-def func() -> None:
-    if False:
-        x: int = 1
-    y: int = x
-";
-    let _diags = run(source)?;
+fn pep_484_checked_return_rejects_possibly_unbound_names() -> Result<(), Box<dyn std::error::Error>>
+{
+    let rejected = [
+        (
+            "canonical branch",
+            r#"
+def calculate(enabled: bool) -> int:
+    if enabled:
+        total = 1
+    return total
+"#,
+        ),
+        (
+            "renamed symbols",
+            r#"
+def navigate(tide_is_high: bool) -> str:
+    if tide_is_high:
+        harbour = "north"
+    return harbour
+"#,
+        ),
+        (
+            "inverted branch",
+            r#"
+def assemble(missing: bool) -> list[int]:
+    if not missing:
+        pieces = [1]
+    return pieces
+"#,
+        ),
+        (
+            "reformatted branch",
+            r#"
+def observe(
+    calibrated: bool,
+) -> int:
+    if (
+        calibrated
+    ):
+        measurement = 1
+    return (
+        measurement
+    )
+"#,
+        ),
+    ];
+
+    for (mutation, source) in rejected {
+        let diagnostics = run(source)?;
+        assert_eq!(
+            diagnostics.len(),
+            1,
+            "{mutation}: one possibly-unbound return must produce one isolated diagnostic: {diagnostics:#?}"
+        );
+        assert_eq!(
+            codes(&diagnostics),
+            vec!["names_unbound"],
+            "{mutation}: the definite-assignment rule itself must reject the body"
+        );
+        assert_rule_count(
+            &diagnostics,
+            "names_unbound",
+            1,
+            "PEP 484 checked body returning a possibly-unbound name",
+        );
+    }
+
     Ok(())
 }
 

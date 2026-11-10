@@ -61,130 +61,41 @@ struct TypeArity {
     max: Option<usize>,
 }
 
-/// Computes arity bounds for every class and `TypeAlias` in `module`.
-fn compute_arities<'a>(module: &'a ResolvedModule) -> HashMap<&'a str, TypeArity> {
-    let tv_defaults: HashMap<&str, bool> = module
-        .typevar_calls
-        .iter()
-        .map(|tv| (tv.name.as_str(), tv.has_default))
-        .collect();
-
-    let all_typevar_names: HashSet<&str> =
-        basilisk_resolver::collect_name_set(&module.typevar_calls);
-
-    let paramspec_names: HashSet<&str> =
-        basilisk_resolver::collect_name_set_where(&module.typevar_calls, |tv| tv.is_paramspec);
-
-    let tvt_names = super::shared::typevar_tuple_names(&module.typevar_calls);
-
-    let mut arities: HashMap<&'a str, TypeArity> = HashMap::new();
-
-    // Class arities.
-    for cls in &module.classes {
-        if !cls.generic_params.is_empty() {
-            if is_single_paramspec_generic(cls, &paramspec_names) {
-                // A class generic over exactly one `ParamSpec` accepts any
-                // number of type arguments: `ClassC[int, str]` means
-                // `ClassC[[int, str]]` (PEP 612 unparenthesized shorthand).
-                let _ = arities.insert(
-                    cls.name.as_str(),
-                    TypeArity {
-                        min: None,
-                        max: None,
-                    },
-                );
-                continue;
-            }
-            let has_tvt = cls.generic_params.iter().any(|p| p.is_typevartuple);
-            let required = cls
-                .generic_params
-                .iter()
-                .filter(|p| {
-                    !p.is_typevartuple
-                        && !tv_defaults.get(p.name.as_str()).copied().unwrap_or(false)
-                })
-                .count();
-            let total = cls.generic_params.len();
-            let _ = arities.insert(
-                cls.name.as_str(),
-                TypeArity {
-                    min: (required > 0).then_some(required),
-                    max: (!has_tvt).then_some(total),
-                },
-            );
-        } else if !cls.base_expression_names.is_empty() {
-            let has_tvt = cls
-                .base_expression_names
-                .iter()
-                .any(|n| tvt_names.contains(n.as_str()));
-            if !has_tvt {
-                let implicit_arity = cls
-                    .base_expression_names
-                    .iter()
-                    .filter(|n| all_typevar_names.contains(n.as_str()))
-                    .collect::<HashSet<_>>()
-                    .len();
-                if implicit_arity > 0 {
-                    let _ = arities.insert(
-                        cls.name.as_str(),
-                        TypeArity {
-                            min: None,
-                            max: Some(implicit_arity),
-                        },
-                    );
-                } else if cls.has_subscript_base && !cls.has_pep695_type_params {
-                    // All TypeVars in this class's bases are fully specialised with
-                    // concrete types. The class itself has no free TypeVar parameters
-                    // and must not be further subscripted.
-                    // Exclude PEP 695 classes (`class Foo[T]`) because their type
-                    // params don't appear in `base_expression_names`.
-                    let _ = arities.insert(
-                        cls.name.as_str(),
-                        TypeArity {
-                            min: None,
-                            max: Some(0),
-                        },
-                    );
-                }
-            }
-        }
-    }
-
-    // TypeAlias arities.
-    for alias in &module.type_alias_defs {
-        let has_tvt = alias
-            .rhs_names
-            .iter()
-            .any(|n| tvt_names.contains(n.as_str()));
-        if has_tvt {
-            continue;
-        }
-        let free_tvs: HashSet<&str> = alias
-            .rhs_names
-            .iter()
-            .filter(|n| all_typevar_names.contains(n.as_str()))
-            .map(String::as_str)
-            .collect();
-        let total = free_tvs.len();
-        let required = free_tvs
-            .iter()
-            .filter(|&&n| !tv_defaults.get(n).copied().unwrap_or(false))
-            .count();
-        let _ = arities.insert(
-            alias.name.as_str(),
-            TypeArity {
-                min: (required > 0 && required < total).then_some(required),
-                max: Some(total),
-            },
-        );
-    }
-
-    arities
+// ##########################################################################
+// # DELETED BODY. DO NOT RESTORE IT AND DO NOT RETURN A DEFAULT.
+// #
+// # `ClassInfo::base_expression_names` is a `Vec<String>` of RENDERED simple
+// # names harvested from base-class expressions. This code matched those
+// # strings against a set of TypeVar names collected the same way, so:
+// #
+// #   T = TypeVar("T")
+// #   Alias = T
+// #   class Foo(Generic[Alias]): ...      # TypeVar NOT recognised
+// #
+// #   class T: ...                        # unrelated class
+// #   class Foo(Base[T]): ...             # treated as a TypeVar use
+// #
+// # Whether a base-expression name denotes a TypeVar is a question about the
+// # binding it resolves to, not about the characters written.
+// #
+// # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
+// ##########################################################################
+fn compute_arities<'a>(_module: &'a ResolvedModule) -> HashMap<&'a str, TypeArity> {
+    panic!(
+        "basilisk-checker: `compute_arities` was DELETED because it matched TypeVar identity by \
+         RENDERED NAME against `base_expression_names`, so an aliased TypeVar was \
+         invisible and any unrelated symbol spelled like one matched. It panics \
+         because the real implementation — base expressions resolved through the \
+         binding table — DOES NOT EXIST YET. Do not restore the name matching and \
+         do not substitute a default answer."
+    )
 }
 
-/// Built-in generic names with a fixed exact arity.
-const BUILTIN_EXACT_ARITY: &[(&str, usize)] = &[("type", 1)];
-
+#[expect(
+    dead_code,
+    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
+              tests/string_keyed_class_hierarchy_pin_tests.rs"
+)]
 /// `true` when the class's only generic parameter is a `ParamSpec`.
 fn is_single_paramspec_generic(
     cls: &basilisk_resolver::ClassInfo,
@@ -196,91 +107,6 @@ fn is_single_paramspec_generic(
     )
 }
 
-/// A type argument occupying a `ParamSpec` parameter slot must be a
-/// parameters form: a list (`[int, str]`), `...`, another `ParamSpec`, or
-/// `Concatenate[...]`.  A plain type (`ClassA[int, int]`) is an error.
-///
-/// Only multi-parameter generics are checked: a class generic over a single
-/// `ParamSpec` treats all arguments as the implicit parameter list (PEP 612).
-fn check_paramspec_slot_args(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
-    let paramspec_names: HashSet<&str> =
-        basilisk_resolver::collect_name_set_where(&module.typevar_calls, |tv| tv.is_paramspec);
-    if paramspec_names.is_empty() {
-        return;
-    }
-    // Positional zip is only sound for fixed-arity generics: a TypeVarTuple
-    // absorbs a variable number of arguments, so those classes are skipped.
-    let class_params: HashMap<&str, Vec<&str>> = module
-        .classes
-        .iter()
-        .filter(|cls| {
-            cls.generic_params.len() > 1 && !cls.generic_params.iter().any(|p| p.is_typevartuple)
-        })
-        .map(|cls| {
-            let names = cls.generic_params.iter().map(|p| p.name.as_str()).collect();
-            (cls.name.as_str(), names)
-        })
-        .collect();
-
-    for site in &module.generic_subscript_sites {
-        let Some(params) = class_params.get(site.base_name.as_str()) else {
-            continue;
-        };
-        let Some(text) = crate::span_util::slice_span(&module.source, site.span) else {
-            continue;
-        };
-        let Some(args) = subscript_arg_texts(text) else {
-            continue;
-        };
-        if args.len() != params.len() {
-            continue;
-        }
-        for (param_name, arg) in params.iter().zip(args.iter()) {
-            if !paramspec_names.contains(param_name) {
-                continue;
-            }
-            if is_parameters_form(arg, &paramspec_names) {
-                continue;
-            }
-            diagnostics.push(error_diagnostic_owned(
-                CODE.clone(),
-                format!(
-                    "Type argument `{arg}` is not valid for `ParamSpec` parameter \
-                     `{param_name}` of `{}`",
-                    site.base_name
-                ),
-                site.span,
-                &module.path,
-                Some(
-                    "A ParamSpec must be specialized with a parameter list (`[int, str]`), \
-                     `...`, another ParamSpec, or `Concatenate[...]`"
-                        .to_owned(),
-                ),
-                None,
-            ));
-        }
-    }
-}
-
-/// Split `Base[a, b, ...]` into its top-level argument texts.
-fn subscript_arg_texts(text: &str) -> Option<Vec<&str>> {
-    let inner = text.trim().split_once('[')?.1.strip_suffix(']')?;
-    Some(
-        super::shared::split_top_level_commas(inner)
-            .into_iter()
-            .map(str::trim)
-            .collect(),
-    )
-}
-
-/// `true` when `arg` is a valid specialization for a `ParamSpec` slot.
-fn is_parameters_form(arg: &str, paramspec_names: &HashSet<&str>) -> bool {
-    arg.starts_with('[')
-        || arg == "..."
-        || paramspec_names.contains(arg)
-        || arg.starts_with("Concatenate[")
-}
-
 impl Rule for TooFewTypeArguments {
     fn check(
         &self,
@@ -289,28 +115,8 @@ impl Rule for TooFewTypeArguments {
         diagnostics: &mut Vec<Diagnostic>,
     ) {
         let arities = compute_arities(module);
-        check_paramspec_slot_args(module, diagnostics);
 
         for site in &module.generic_subscript_sites {
-            // Check built-in types with fixed arity (e.g. `type[int, str]` is invalid).
-            for &(builtin, exact) in BUILTIN_EXACT_ARITY {
-                if site.base_name == builtin && site.arg_count > exact {
-                    diagnostics.push(error_diagnostic_owned(
-                        CODE.clone(),
-                        format!(
-                            "`{}` accepts exactly {exact} type argument, but {} {} provided",
-                            site.base_name,
-                            site.arg_count,
-                            if site.arg_count == 1 { "was" } else { "were" }
-                        ),
-                        site.span,
-                        &module.path,
-                        Some("`type` takes exactly one type argument: `type[T]`".to_string()),
-                        None,
-                    ));
-                }
-            }
-
             let Some(arity) = arities.get(site.base_name.as_str()) else {
                 continue;
             };

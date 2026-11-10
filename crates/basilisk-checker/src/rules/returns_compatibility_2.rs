@@ -47,7 +47,7 @@ impl Rule for ReturnTypeMismatch {
         let Some(resolver) = types.annotations() else {
             return;
         };
-        let judge = TypeJudge::new(types.oracle(), resolver, types.subtyping());
+        let judge = TypeJudge::new(types.oracle(), resolver, types.nominal());
         module
             .functions
             .iter()

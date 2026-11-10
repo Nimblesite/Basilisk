@@ -828,14 +828,100 @@ def f(x: int | str) -> int:
     );
 }
 
+/// The `type(x) is C` guard carries RESOLVED identity across the resolver
+/// boundary: the span of the compared-against type expression, and that
+/// class's definition site.
+///
+/// The deleted consumer rendered the class to a simple name, reparsed it with
+/// the text parser, and decided `@final`-ness with
+/// `final_classes.contains(&name.to_ascii_lowercase())`. This pins the
+/// replacement at the boundary itself, independent of what the narrowing
+/// engine can currently do with it.
+#[test]
+fn type_of_is_guard_carries_the_resolved_class_identity() {
+    let source = r"
+from typing import final
+
+@final
+class Sluice:
+    pass
+
+Penstock = Sluice
+
+class Weir:
+    pass
+
+def f(x: Sluice | Weir) -> None:
+    if type(x) is Penstock:
+        p = x
+";
+    let parsed = basilisk_parser::parse_source(source.to_owned(), "t.py".to_owned())
+        .expect("fixture parses");
+    let resolved = basilisk_resolver::resolve(&parsed).expect("fixture resolves");
+    let function = resolved
+        .functions
+        .iter()
+        .find(|f| f.name == "f")
+        .expect("function `f`");
+    let sluice = resolved
+        .classes
+        .iter()
+        .find(|c| c.name == "Sluice")
+        .expect("class `Sluice`");
+
+    let type_class_site = function
+        .narrowing_guards
+        .iter()
+        .find_map(|guard| match &guard.kind {
+            basilisk_resolver::NarrowingGuardKind::TypeOfIs {
+                type_class_site, ..
+            } => Some(*type_class_site),
+            _ => None,
+        })
+        .expect("the fixture contains a `type(x) is C` guard");
+
+    assert_eq!(
+        type_class_site,
+        Some(sluice.name_span),
+        "`Penstock` is one more name for `Sluice`; the guard must carry the \
+         class it denotes, not the word written at the comparison"
+    );
+    assert!(
+        sluice.is_final,
+        "`@final` resolves through the binding table, so the aliased `final` \
+         import still marks the class"
+    );
+}
+
 /// `type(x) is C` implies `isinstance(x, C)` positively; the negative branch
 /// excludes `C` only when `C` is `@final` ([TYPEINF-NARROWING-TYPEOF]).
+///
+/// RED, ON PURPOSE. `InferredType::Named` carries a RENDERING, so the set
+/// operations behind narrowing have no way to tell whether `Weir` overlaps
+/// `Sluice` — that is a question about the module's class hierarchy, which
+/// they do not have. Rather than compare the two strings they abstain
+/// (`narrow/set_ops.rs::nominal_pair`), which leaves narrowing over
+/// user-defined classes INERT.
+///
+/// This test is the accurate map of that gap. It passes when a nominal leaf
+/// carries its definition site instead of its spelling
+/// ([TYPEINF-SUBTYPING-NOMINAL]). Do not delete it, and do not make it pass by
+/// comparing renderings in `set_ops`.
 #[test]
 fn type_of_is_narrows_with_final_awareness() {
     use basilisk_checker::narrow::{analyse_function_in, NarrowContext};
     let source = r"
-def f(x: A | B) -> None:
-    if type(x) is A:
+from typing import final
+
+@final
+class Sluice:
+    pass
+
+class Weir:
+    pass
+
+def f(x: Sluice | Weir) -> None:
+    if type(x) is Sluice:
         p = x
     else:
         q = x
@@ -843,12 +929,16 @@ def f(x: A | B) -> None:
     let parsed = basilisk_parser::parse_source(source.to_owned(), "t.py".to_owned())
         .expect("fixture parses");
     let resolved = basilisk_resolver::resolve(&parsed).expect("fixture resolves");
-    let function = resolved.functions.first().expect("function");
+    let function = resolved
+        .functions
+        .iter()
+        .find(|f| f.name == "f")
+        .expect("function `f`");
     let declared: HashMap<String, InferredType> = [(
         "x".to_owned(),
         InferredType::Union(vec![
-            InferredType::Named("a".to_owned()),
-            InferredType::Named("b".to_owned()),
+            InferredType::Named("Sluice".to_owned()),
+            InferredType::Named("Weir".to_owned()),
         ]),
     )]
     .into_iter()
@@ -859,17 +949,36 @@ def f(x: A | B) -> None:
         .body
         .iter()
         .find_map(|stmt| match stmt {
-            Stmt::FunctionDef(def) => Some(def.body.clone()),
+            Stmt::FunctionDef(def) if def.name.as_str() == "f" => Some(def.body.clone()),
             _ => None,
         })
         .expect("body");
+
+    let type_span = function
+        .narrowing_guards
+        .iter()
+        .find_map(|guard| match &guard.kind {
+            basilisk_resolver::NarrowingGuardKind::TypeOfIs { type_span, .. } => Some(*type_span),
+            _ => None,
+        })
+        .expect("the fixture contains a `type(x) is C` guard");
+    let sluice = resolved
+        .classes
+        .iter()
+        .find(|c| c.name == "Sluice")
+        .expect("class `Sluice`");
+
+    let mut base_ctx = NarrowContext::default();
+    let _ = base_ctx
+        .type_targets
+        .insert(type_span, InferredType::Named("Sluice".to_owned()));
 
     // Without @final knowledge, the negative branch stays unchanged.
     let plain = analyse_function_in(
         &body,
         NarrowEnv::new(declared.clone()),
         &function.narrowing_guards,
-        &NarrowContext::default(),
+        &base_ctx,
     );
     let plain_uses: Vec<&InferredType> = plain
         .narrowed_uses
@@ -878,18 +987,19 @@ def f(x: A | B) -> None:
         .map(|u| &u.narrowed)
         .collect();
     assert!(
-        plain_uses.contains(&&InferredType::Named("a".to_owned())),
-        "positive branch narrows to A: {plain_uses:?}"
+        plain_uses.contains(&&InferredType::Named("Sluice".to_owned())),
+        "positive branch narrows to Sluice: {plain_uses:?}"
     );
     assert_eq!(
         plain_uses.len(),
         1,
-        "non-final A must not be excluded in the negative branch: {plain_uses:?}"
+        "without @final knowledge Sluice must not be excluded in the negative \
+         branch: {plain_uses:?}"
     );
 
-    // With A known @final, the negative branch excludes it.
-    let mut ctx = NarrowContext::default();
-    let _ = ctx.final_classes.insert("a".to_owned());
+    // With Sluice known @final, the negative branch excludes it.
+    let mut ctx = base_ctx;
+    let _ = ctx.final_class_sites.insert(sluice.name_span);
     let with_final = analyse_function_in(
         &body,
         NarrowEnv::new(declared),
@@ -903,8 +1013,8 @@ def f(x: A | B) -> None:
         .map(|u| &u.narrowed)
         .collect();
     assert!(
-        final_uses.contains(&&InferredType::Named("b".to_owned())),
-        "with @final A, the complement must be B: {final_uses:?}"
+        final_uses.contains(&&InferredType::Named("Weir".to_owned())),
+        "with @final Sluice, the complement must be Weir: {final_uses:?}"
     );
 }
 

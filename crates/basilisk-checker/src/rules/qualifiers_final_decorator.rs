@@ -1,22 +1,25 @@
 //! Implements [`qualifiers_final_decorator`] from [CHKARCH-DIAG-OWNERSHIP]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-OWNERSHIP
 //! `qualifiers_final_decorator`: `@final` decorator violations.
 //!
-//! Three violations are detected:
+//! Two violations are detected:
 //!
 //! 1. **Inheriting from a `@final` class** — a class decorated with `@final`
 //!    cannot be subclassed.
 //!
-//! 2. **`@final` on a non-method function** — `@final` is only valid on
-//!    methods defined inside a class body, not on module-level functions.
-//!
-//! 3. **Overriding a `@final` method** — a method decorated with `@final`
+//! 2. **Overriding a `@final` method** — a method decorated with `@final`
 //!    in a base class cannot be overridden in a subclass.
+//!
+//! [PEP 591](https://peps.python.org/pep-0591/). Every decision here is made
+//! on resolved identity: `@final` is recognised by the decorator expression
+//! resolving to `typing.final` (so `@typing.final` and `from typing import
+//! final as sealed` behave identically, and a local `def final` does not
+//! answer at all), and a base class is the class its expression RESOLVES to.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
-use basilisk_resolver::{FunctionInfo, ResolvedModule};
+use basilisk_resolver::{ClassGraph, ClassInfo, FunctionInfo, ResolvedBase, ResolvedModule, Span};
 
-use crate::diagnostic::{error_diag_help_note, error_diagnostic_owned, Diagnostic, ErrorCode};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
@@ -25,14 +28,25 @@ const CODE: ErrorCode = ErrorCode {
     docs_url: "https://www.basilisk-python.dev/errors/qualifiers_final_decorator",
 };
 
-/// Returns `true` if the decorator name is `final` or `typing.final`.
-fn is_final_decorator(d: &str) -> bool {
-    d == "final" || d.rsplit('.').next() == Some("final")
-}
-
 /// Emits `qualifiers_final_decorator` for `@final` decorator violations.
 pub(crate) struct FinalViolation;
 
+// ##################################################################
+// # REBUILT ON DEFINITION-SITE IDENTITY.                           #
+// #                                                                #
+// # The deleted body decided PEP 591 `@final` inheritance with     #
+// # `class_map.get(base_name.as_str())`, and `@final` methods with #
+// # `imported_final_methods.get(base_name.as_str())`.              #
+// #                                                                #
+// # `ClassInfo::bases` holds RENDERED SIMPLE NAMES ("complex       #
+// # expressions ignored") and the lookup map was keyed on          #
+// # `ClassInfo::name`, so an aliased base MISSED — silently        #
+// # permitting `Sealed = Locked; class Escape(Sealed)` — a dotted  #
+// # base collided with any local class sharing its trailing word,  #
+// # and two classes with one rendered name were a single entry.    #
+// #                                                                #
+// # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs     #
+// ##################################################################
 impl Rule for FinalViolation {
     fn check(
         &self,
@@ -40,111 +54,108 @@ impl Rule for FinalViolation {
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        // Build a map of class name → ClassInfo for fast lookup.
-        let class_map = super::shared::class_name_map(&module.classes);
+        let graph = ClassGraph::new(&module.classes);
+        let final_methods = final_methods_by_owner(&module.functions);
 
-        // Build a map of (class_name, method_name) → FunctionInfo for span lookup.
-        let method_map: HashMap<(&str, &str), &FunctionInfo> = module
-            .functions
-            .iter()
-            .filter_map(|f| {
-                f.class_name
-                    .as_deref()
-                    .map(|cls| ((cls, f.name.as_str()), f))
-            })
-            .collect();
-
-        // Check 1: Inheriting from a @final class.
-        for child in &module.classes {
-            for base_name in &child.bases {
-                if let Some(base_cls) = class_map.get(base_name.as_str()) {
-                    if base_cls.is_final {
-                        diagnostics.push(error_diagnostic_owned(
-                            CODE.clone(),
-                            format!("Cannot inherit from final class `{}`", base_cls.name),
-                            child.name_span,
-                            &module.path,
-                            Some(format!(
-                                "Remove `{}` from the base classes of `{}`",
-                                base_cls.name, child.name
-                            )),
-                            Some("`@final` (PEP 591) prohibits subclassing".to_owned()),
-                        ));
-                    }
-                }
-            }
+        for class in &module.classes {
+            check_final_base(&graph, class, &module.path, diagnostics);
         }
-
-        // Check 2: @final on a module-level (non-method) function.
-        for func in &module.functions {
-            if func.class_name.is_none() && func.decorators.iter().any(|d| is_final_decorator(d)) {
-                diagnostics.push(error_diag_help_note(
-                    CODE.clone(),
-                    format!(
-                        "`@final` is not allowed on non-method function `{}`",
-                        func.name
-                    ),
-                    func.name_span,
-                    &module.path,
-                    "`@final` may only be applied to methods inside a class body".to_owned(),
-                    "PEP 591: `@final` on a non-method function is an error",
-                ));
-            }
+        for method in &module.functions {
+            check_final_override(&graph, method, &final_methods, &module.path, diagnostics);
         }
+    }
+}
 
-        // Check 3: Overriding a @final method in a derived class.
-        //
-        // For each child class, collect all @final method names from each same-module
-        // base class, then flag any child method that shadows a @final base method.
-        for child in &module.classes {
-            // Accumulate all @final method names from all same-module bases.
-            let mut final_base_methods: HashSet<&str> = HashSet::new();
-            for base_name in &child.bases {
-                if let Some(base_cls) = class_map.get(base_name.as_str()) {
-                    for (method_name, decs) in &base_cls.method_decorators {
-                        if decs.iter().any(|d| is_final_decorator(d)) {
-                            let _ = final_base_methods.insert(method_name.as_str());
-                        }
-                    }
-                }
-                // Bases imported from a sibling module (e.g. a `.pyi` stub) carry
-                // their `@final` methods in `imported_final_methods`.
-                if let Some(methods) = module.imported_final_methods.get(base_name.as_str()) {
-                    for method_name in methods {
-                        let _ = final_base_methods.insert(method_name.as_str());
-                    }
-                }
-            }
+/// Every `@final` method in the module, keyed by its owning class's DEFINITION
+/// SITE and its own name.
+fn final_methods_by_owner(functions: &[FunctionInfo]) -> HashMap<(Span, &str), &FunctionInfo> {
+    functions
+        .iter()
+        .filter(|func| func.is_final)
+        .filter_map(|func| Some(((func.class_site?, func.name.as_str()), func)))
+        .collect()
+}
 
-            // Emit an error for each child method that overrides a @final base method.
-            // Deduplicate method_names to avoid multiple errors for overloaded methods.
-            let mut seen_methods: HashSet<&str> = HashSet::new();
-            for method_name in &child.method_names {
-                if !seen_methods.insert(method_name.as_str()) {
-                    continue;
-                }
-                if final_base_methods.contains(method_name.as_str()) {
-                    // Look up the span from module.functions.
-                    let span = method_map
-                        .get(&(child.name.as_str(), method_name.as_str()))
-                        .map_or(child.name_span, |f| f.name_span);
-                    diagnostics.push(error_diagnostic_owned(
-                        CODE.clone(),
-                        format!(
-                            "Method `{method_name}` in `{}` overrides a `@final` method",
-                            child.name
-                        ),
-                        span,
-                        &module.path,
-                        Some(format!(
-                            "Remove or rename `{method_name}` — it overrides a `@final` method in a base class"
-                        )),
-                        Some(
-                            "`@final` (PEP 591) prohibits overriding this method".to_owned(),
-                        ),
-                    ));
-                }
-            }
+/// A class may not name a `@final` class among its bases.
+fn check_final_base(
+    graph: &ClassGraph<'_>,
+    class: &ClassInfo,
+    path: &str,
+    out: &mut Vec<Diagnostic>,
+) {
+    for base in &class.resolved_bases {
+        let ResolvedBase::LocalClass(site) = base.resolved else {
+            // A base from another module: this module cannot see whether it is
+            // `@final`, and must not guess ([CHKARCH-CONFORMANCE-MODE]).
+            continue;
+        };
+        let Some(base_class) = graph.at(site) else {
+            continue;
+        };
+        if !base_class.is_final {
+            continue;
         }
+        out.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
+                "`{}` cannot inherit from `{}`, which is decorated with `@final`",
+                class.name, base_class.name
+            ),
+            base.span,
+            path,
+            Some(format!(
+                "Remove `@final` from `{}` or stop subclassing it",
+                base_class.name
+            )),
+            Some("PEP 591: a class decorated with `@final` cannot be subclassed".to_owned()),
+        ));
+    }
+}
+
+/// A method may not redefine one an ancestor of its class declared `@final`.
+fn check_final_override(
+    graph: &ClassGraph<'_>,
+    method: &FunctionInfo,
+    final_methods: &HashMap<(Span, &str), &FunctionInfo>,
+    path: &str,
+    out: &mut Vec<Diagnostic>,
+) {
+    // Not a method, or its own class is not one this module defines.
+    let Some(owner) = method.class_site.and_then(|site| graph.at(site)) else {
+        return;
+    };
+    // A `@final` method IS the declaration, not an override of one.
+    if method.is_final {
+        return;
+    }
+    // `ancestors` yields `owner` first; a class does not override its own
+    // method, so its own declarations are not candidates.
+    for ancestor in graph
+        .ancestors(owner)
+        .into_iter()
+        .filter(|ancestor| ancestor.name_span != owner.name_span)
+    {
+        let Some(sealed) = final_methods.get(&(ancestor.name_span, method.name.as_str())) else {
+            continue;
+        };
+        out.push(error_diagnostic_owned(
+            CODE.clone(),
+            format!(
+                "`{}.{}` overrides `{}.{}`, which is decorated with `@final`",
+                owner.name, method.name, ancestor.name, sealed.name
+            ),
+            method.def_span,
+            path,
+            Some(format!(
+                "Remove `@final` from `{}.{}` or do not override it",
+                ancestor.name, sealed.name
+            )),
+            Some(
+                "PEP 591: a method decorated with `@final` cannot be overridden in a \
+                 subclass"
+                    .to_owned(),
+            ),
+        ));
+        return;
     }
 }

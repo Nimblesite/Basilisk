@@ -5,7 +5,9 @@
 // A function assigned in a class body (`m = f`) is a method like any `def`:
 // instance access binds the receiver, class access does not, and
 // `staticmethod` / `classmethod` wrappers shift which parameter the binding
-// consumes (Refs #382). These tests pin the assigned spelling to the exact
+// consumes ([#382](https://github.com/Nimblesite/Basilisk/issues/382)). This is
+// Python descriptor semantics consumed by the [PEP 484 callable model](https://peps.python.org/pep-0484/#callable).
+// These tests pin the assigned spelling to the exact
 // diagnostics the equivalent `def` in the class body draws.
 
 use super::common::*;

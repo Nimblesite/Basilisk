@@ -34,22 +34,68 @@ fn messages_for(diags: &[basilisk_checker::Diagnostic], code: &str) -> Vec<Strin
 // ============================================================================
 
 #[test]
-fn type_alias_type_wrong_args() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
-from typing import TypeAliasType
-Bad = TypeAliasType("Bad")
-"#;
-    let _diags = run(source)?;
+fn type_alias_type_requires_a_value_across_symbol_spellings(
+) -> Result<(), Box<dyn std::error::Error>> {
+    // `TypeAliasType(name, value, *, type_params=())` requires both positional
+    // arguments. See PEP 695's runtime type-alias class and the stdlib API:
+    // https://peps.python.org/pep-0695/#runtime-type-alias-class
+    // https://docs.python.org/3/library/typing.html#typing.TypeAliasType
+    let mutations = [
+        r#"from typing import TypeAliasType
+MissingValue = TypeAliasType("MissingValue")
+"#,
+        r#"from typing import TypeAliasType as AliasConstructor
+RenamedAlias = AliasConstructor("RenamedAlias")
+"#,
+        r#"import typing as type_support
+QualifiedAlias = type_support.TypeAliasType("QualifiedAlias")
+"#,
+        r#"import typing
+FormattedAlias = typing.TypeAliasType(
+    "FormattedAlias",
+)
+"#,
+    ];
+
+    for source in mutations {
+        let messages = messages_for(&run(source)?, "aliases_typealiastype");
+        assert_eq!(
+            messages.len(),
+            1,
+            "a missing TypeAliasType value must be rejected independently of symbol spelling: \
+             {source}\n{messages:#?}"
+        );
+    }
     Ok(())
 }
 
 #[test]
 fn pep695_type_statement() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
-type Vector = list[float]
-type Matrix = list[Vector]
-";
-    let _diags = run(source)?;
+    // PEP 695 permits type expressions, including resolved aliases and dotted
+    // names, on the RHS of a `type` statement:
+    // https://peps.python.org/pep-0695/#generic-type-alias
+    let mutations = [
+        "type Vector = list[float]\ntype Matrix = list[Vector]\n",
+        "from builtins import list as SequenceBox\ntype Samples = SequenceBox[float]\n",
+        "import builtins as core_types\ntype Measurements = core_types.list[core_types.float]\n",
+        "type Formatted = list[\n    float\n]\n",
+    ];
+
+    for source in mutations {
+        let diagnostics = run(source)?;
+        let alias_messages = messages_for(&diagnostics, "aliases_type_statement");
+        let undefined_messages = messages_for(&diagnostics, "names_undefined");
+        assert!(
+            alias_messages.is_empty(),
+            "a PEP 695 alias RHS must be judged by its resolved type expression, not its \
+             spelling or formatting: {source}\n{alias_messages:#?}"
+        );
+        assert!(
+            undefined_messages.is_empty(),
+            "symbols imported under alternate spellings must still resolve in a type alias: \
+             {source}\n{undefined_messages:#?}"
+        );
+    }
     Ok(())
 }
 
@@ -335,18 +381,44 @@ class Config:
 
 #[test]
 fn protocol_with_non_protocol_base() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
-from typing import Protocol
+    // PEP 544 requires every other base of a class explicitly marked as a
+    // Protocol to be a protocol:
+    // https://peps.python.org/pep-0544/#merging-and-extending-protocols
+    let mutations = [
+        r"from typing import Protocol
+class ConcreteBase: pass
+class Readable(Protocol, ConcreteBase):
+    def read(self) -> bytes: ...
+",
+        r"from typing import Protocol as StructuralContract
+class StorageParent: pass
+class Writable(StructuralContract, StorageParent):
+    def write(self, data: bytes) -> None: ...
+",
+        r"import typing as type_support
+class RuntimeBase: pass
+class Closable(type_support.Protocol, RuntimeBase):
+    def close(self) -> None: ...
+",
+        r"import typing
+class FormattedParent: pass
+class Flushable(
+    typing.Protocol,
+    FormattedParent,
+):
+    def flush(self) -> None: ...
+",
+    ];
 
-class Base:
-    pass
-
-class MyProto(Protocol, Base):
-    def method(self) -> None: ...
-";
-    let msgs = messages_for(&run(source)?, "protocols_merging");
-    // Exercises the rule whether or not it fires
-    let _ = msgs;
+    for source in mutations {
+        let messages = messages_for(&run(source)?, "protocols_merging");
+        assert_eq!(
+            messages.len(),
+            1,
+            "PEP 544 must reject a concrete base independently of how Protocol is spelled: \
+             {source}\n{messages:#?}"
+        );
+    }
     Ok(())
 }
 
@@ -356,16 +428,49 @@ class MyProto(Protocol, Base):
 
 #[test]
 fn protocol_instantiation() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
-from typing import Protocol
-
+    // PEP 544 states that protocol classes cannot be instantiated:
+    // https://peps.python.org/pep-0544/#subtyping-relationships-with-other-types
+    let mutations = [
+        r"from typing import Protocol
 class Drawable(Protocol):
     def draw(self) -> None: ...
+instance = Drawable()
+",
+        r"from typing import Protocol as StructuralContract
+class Paintable(StructuralContract):
+    def paint(self) -> None: ...
+value = Paintable()
+",
+        r"import typing as type_support
+class Serializable(type_support.Protocol):
+    def serialize(self) -> bytes: ...
+created = Serializable()
+",
+        r"import typing
+class FormattedContract(
+    typing.Protocol,
+):
+    def execute(self) -> None: ...
+result = FormattedContract(
+)
+",
+    ];
 
-d = Drawable()
-";
-    let msgs = messages_for(&run(source)?, "protocols_explicit");
-    let _ = msgs;
+    for source in mutations {
+        let messages = messages_for(&run(source)?, "protocols_explicit");
+        assert_eq!(
+            messages.len(),
+            1,
+            "PEP 544 must reject direct protocol instantiation independently of symbol spelling: \
+             {source}\n{messages:#?}"
+        );
+        assert!(
+            messages
+                .iter()
+                .all(|message| message.contains("Cannot instantiate")),
+            "the diagnostic must identify the prohibited instantiation: {messages:#?}"
+        );
+    }
     Ok(())
 }
 
@@ -629,36 +734,111 @@ def iter_gen() -> Iterator[int]:
 
 #[test]
 fn protocol_conformance_check() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r#"
-from typing import Protocol
-
+    // PEP 544 defines protocol compatibility structurally: an unrelated class
+    // with all required members and compatible signatures is assignable.
+    // https://peps.python.org/pep-0544/#subtyping-relationships-with-other-types
+    let mutations = [
+        r#"from typing import Protocol
 class Renderable(Protocol):
     def render(self) -> str: ...
-
 class Widget:
-    def render(self) -> str:
-        return "<widget>"
+    def render(self) -> str: return "<widget>"
+target: Renderable = Widget()
+"#,
+        r#"from typing import Protocol as StructuralContract
+class Encodable(StructuralContract):
+    def encode(self) -> bytes: ...
+class Packet:
+    def encode(self) -> bytes: return b"packet"
+destination: Encodable = Packet()
+"#,
+        r#"import typing as type_support
+class Counted(type_support.Protocol):
+    def count(self) -> int: ...
+class Inventory:
+    def count(self) -> int: return 3
+result: Counted = Inventory()
+"#,
+        r#"import typing
+class FormattedContract(
+    typing.Protocol,
+):
+    def label(
+        self,
+    ) -> str: ...
+class Label:
+    def label(self) -> str:
+        return "ok"
+accepted: FormattedContract = Label(
+)
+"#,
+    ];
 
-w: Renderable = Widget()
-"#;
-    let _diags = run(source)?;
+    for source in mutations {
+        let diagnostics = run(source)?;
+        let protocol_messages = messages_for(&diagnostics, "protocols_definition_2");
+        let assignment_messages = messages_for(&diagnostics, "assignment_compatibility");
+        assert!(
+            protocol_messages.is_empty(),
+            "PEP 544 structural conformance must survive Protocol aliases and formatting: \
+             {source}\n{protocol_messages:#?}"
+        );
+        assert!(
+            assignment_messages.is_empty(),
+            "a structurally conforming object is assignment-compatible with its protocol: \
+             {source}\n{assignment_messages:#?}"
+        );
+    }
     Ok(())
 }
 
 #[test]
 fn protocol_missing_method() -> Result<(), Box<dyn std::error::Error>> {
-    let source = r"
-from typing import Protocol
-
+    // PEP 544 also requires every protocol member to be present with a
+    // compatible type. These mutations all omit the sole required member.
+    // https://peps.python.org/pep-0544/#protocol-members
+    let mutations = [
+        r"from typing import Protocol
 class Renderable(Protocol):
     def render(self) -> str: ...
-
-class BadWidget:
+class BadWidget: pass
+target: Renderable = BadWidget()
+",
+        r"from typing import Protocol as StructuralContract
+class Encodable(StructuralContract):
+    def encode(self) -> bytes: ...
+class EmptyPacket: pass
+destination: Encodable = EmptyPacket()
+",
+        r"import typing as type_support
+class Counted(type_support.Protocol):
+    def count(self) -> int: ...
+class Uncounted: pass
+result: Counted = Uncounted()
+",
+        r"import typing
+class FormattedContract(
+    typing.Protocol,
+):
+    def execute(
+        self,
+    ) -> None: ...
+class MissingExecutor:
     pass
+rejected: FormattedContract = MissingExecutor(
+)
+",
+    ];
 
-w: Renderable = BadWidget()
-";
-    let _diags = run(source)?;
+    for source in mutations {
+        let messages = messages_for(&run(source)?, "protocols_definition_2");
+        assert_eq!(
+            messages.len(),
+            1,
+            "PEP 544 must reject a class missing a protocol member independently of symbol \
+             spelling: {source}\n{messages:#?}"
+        );
+    }
     Ok(())
 }
 

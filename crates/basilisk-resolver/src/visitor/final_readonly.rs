@@ -1,203 +1,75 @@
 //! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
 //! Final Readonly visitor functions.
 
-use ruff_python_ast::{Expr, Stmt, StmtFunctionDef};
+use ruff_python_ast::{Expr, Stmt};
 use ruff_text_size::Ranged;
 
 use crate::scope::{ClassInfo, ReadOnlyViolationInfo, ReadOnlyViolationKind};
 
-use super::annotations::{ann_text_is_final, annotation_contains_readonly_expr};
-use super::class_info_ext::expr_simple_name;
-use super::core::{source_slice_range, text_range_to_span};
+use crate::canonical::BindingTable;
 
-pub(super) fn collect_final_string_constants<'a>(
-    stmts: &'a [Stmt],
-    source: &'a str,
-) -> std::collections::HashMap<&'a str, &'a str> {
-    let mut map = std::collections::HashMap::new();
-    for stmt in stmts {
-        let Stmt::AnnAssign(ann) = stmt else { continue };
-        let Expr::Name(n) = ann.target.as_ref() else {
-            continue;
-        };
-        let range = ann.annotation.range();
-        let Some(ann_text) = source_slice_range(source, range) else {
-            continue;
-        };
-        if !ann_text_is_final(ann_text) {
-            continue;
-        }
-        // RHS must be a string literal.
-        let Some(val) = ann.value.as_deref() else {
-            continue;
-        };
-        let Expr::StringLiteral(s) = val else {
-            continue;
-        };
-        let _ = map.insert(n.id.as_str(), s.value.to_str());
-    }
-    map
-}
+use super::annotations::annotation_is_final;
+use super::core::text_range_to_span;
 
-// ---------------------------------------------------------------------------
-// Shared utilities
-// ---------------------------------------------------------------------------
+// ##########################################################################
+// # DELETED BODIES — `build_typeddict_readonly_map` and                     #
+// # `build_var_type_map`. DO NOT RESTORE THEM AND DO NOT RETURN AN EMPTY    #
+// # MAP.                                                                    #
+// #                                                                         #
+// #   Some((cls.name.as_str(), fields))                                     #
+// #   td_readonly_fields.get_key_value(type_name.id.as_str())               #
+// #                                                                         #
+// # A `ReadOnly` VIOLATION DECIDED BY MATCHING AN ANNOTATION'S SPELLING     #
+// # AGAINST A CLASS'S SPELLING. The `TypedDict` chain and the effective     #
+// # field set were both computed on the definition-site class graph, and    #
+// # then the class was reduced to `ClassInfo::name` so an annotation's      #
+// # `Expr::Name` could be looked up by its characters. So:                  #
+// #                                                                         #
+// #   * `Alias = Album; a: Alias` never matches, and every `a["x"] = ...`   #
+// #     assignment to a read-only field goes unreported;                    #
+// #   * `import other; a: other.Album` is not an `Expr::Name` at all and    #
+// #     falls out silently;                                                 #
+// #   * an ordinary class and a `TypedDict` sharing one name in the same    #
+// #     module collapse onto one entry, so a plain `a["x"] = 1` is          #
+// #     REPORTED against a class that has no read-only anything.            #
+// #                                                                         #
+// # The annotation and the target are both `Expr` nodes with real offsets   #
+// # at the point they are read here. The rebuild resolves each through the  #
+// # module's binding table to the `class` statement it denotes and keys the #
+// # map on `ClassInfo::name_span`. `collect_readonly_violations` is kept as #
+// # the map of what has to be rebuilt.                                      #
+// ##########################################################################
 
-/// Collects the field names wrapped in `ReadOnly[...]` from a functional
-/// `TypedDict(...)` fields dict expression.
-pub(super) fn functional_typeddict_readonly_fields(
-    dict_expr: &Expr,
-) -> std::collections::HashSet<&str> {
-    let Expr::Dict(dict) = dict_expr else {
-        return std::collections::HashSet::new();
-    };
-    dict.items
-        .iter()
-        .filter_map(|item| {
-            let key_expr = item.key.as_ref()?;
-            let Expr::StringLiteral(key) = key_expr else {
-                return None;
-            };
-            if annotation_contains_readonly_expr(&item.value) {
-                Some(key.value.to_str())
-            } else {
-                None
-            }
-        })
-        .collect()
-}
-
-/// Scan function body for `kwargs["key"] = val` where key is a `ReadOnly` field.
-pub(super) fn check_kwargs_readonly_violations(
-    func: &StmtFunctionDef,
-    td_readonly_fields: &std::collections::HashMap<&str, std::collections::HashSet<&str>>,
-    out: &mut Vec<ReadOnlyViolationInfo>,
-) {
-    let Some(kwarg) = &func.parameters.kwarg else {
-        return;
-    };
-    let Some(ann_expr) = kwarg.annotation.as_deref() else {
-        return;
-    };
-    // Match Unpack[TypedDictName]
-    let Expr::Subscript(sub) = ann_expr else {
-        return;
-    };
-    if !matches!(sub.value.as_ref(), Expr::Name(n) if n.id == "Unpack") {
-        return;
-    }
-    let Some(td_name) = expr_simple_name(&sub.slice) else {
-        return;
-    };
-    let Some(readonly_fields) = td_readonly_fields.get(td_name.as_str()) else {
-        return;
-    };
-    let kwarg_name = kwarg.name.as_str();
-    for stmt in &func.body {
-        let Stmt::Assign(assign) = stmt else {
-            continue;
-        };
-        for target in &assign.targets {
-            let Expr::Subscript(tsub) = target else {
-                continue;
-            };
-            let Some(var_name) = expr_simple_name(&tsub.value) else {
-                continue;
-            };
-            if var_name != kwarg_name {
-                continue;
-            }
-            let Expr::StringLiteral(key_str) = tsub.slice.as_ref() else {
-                continue;
-            };
-            let key = key_str.value.to_str();
-            if readonly_fields.contains(key) {
-                out.push(ReadOnlyViolationInfo {
-                    var_name,
-                    field_name: Some(key.to_owned()),
-                    kind: ReadOnlyViolationKind::SubscriptAssign,
-                    span: text_range_to_span(assign.range()),
-                });
-            }
-        }
-    }
-}
-
-/// Build a map from `TypedDict` class name to its `ReadOnly` field names.
+/// DELETED — panics; see the banner above.
 pub(super) fn build_typeddict_readonly_map<'a>(
-    stmts: &'a [Stmt],
-    classes: &'a [ClassInfo],
-    source: &'a str,
+    _classes: &'a [ClassInfo],
+    _source: &'a str,
 ) -> std::collections::HashMap<&'a str, std::collections::HashSet<&'a str>> {
-    use std::collections::{HashMap, HashSet};
-    let class_map = crate::scope::class_by_name(classes);
-    // Use the effective (post-inheritance) field set so a subclass that does NOT
-    // redeclare an inherited `ReadOnly` field still treats it as read-only
-    // (`class Album2(NamedDict): year: int` keeps `name: ReadOnly[str]`), while a
-    // subclass that redeclares it as mutable drops the read-only status (the
-    // most-derived declaration wins).
-    let mut map: HashMap<&str, HashSet<&str>> = classes
-        .iter()
-        .filter(|cls| crate::scope::is_transitive_typeddict(cls.name.as_str(), &class_map))
-        .filter_map(|cls| {
-            let fields: HashSet<&str> =
-                super::typeddict_schema::effective_fields(cls, &class_map, source)
-                    .into_iter()
-                    .filter(|f| f.readonly)
-                    .map(|f| f.name)
-                    .collect();
-            if fields.is_empty() {
-                None
-            } else {
-                Some((cls.name.as_str(), fields))
-            }
-        })
-        .collect();
-    // Functional form: `Name = TypedDict("Name", {"field": ReadOnly[...]})`
-    for stmt in stmts {
-        let Stmt::Assign(assign) = stmt else { continue };
-        let Some(Expr::Name(lhs_name)) = assign.targets.first() else {
-            continue;
-        };
-        let Expr::Call(call) = assign.value.as_ref() else {
-            continue;
-        };
-        if !matches!(call.func.as_ref(), Expr::Name(n) if n.id == "TypedDict") {
-            continue;
-        }
-        if let Some(second_arg) = call.arguments.args.get(1) {
-            let fields = functional_typeddict_readonly_fields(second_arg);
-            if !fields.is_empty() {
-                let _ = map.insert(lhs_name.id.as_str(), fields);
-            }
-        }
-    }
-    map
+    panic!(
+        "basilisk-resolver: `build_typeddict_readonly_map` was DELETED because it resolved \
+         the `TypedDict` chain on the definition-site class graph and then keyed the \
+         read-only field sets by CLASS NAME, so an annotation was matched to a class by \
+         its characters. It panics because the real implementation — the annotation \
+         expression resolved through the module's binding table, keyed on \
+         `ClassInfo::name_span` — DOES NOT EXIST YET. Do not restore the name key and do \
+         not return an empty map in its place."
+    )
 }
 
-/// Build a borrowed map from variable names to their declared `TypedDict`.
-///
-/// The resolver only needs these names while walking the AST. Borrowing them
-/// avoids allocating two strings per annotated variable in large `TypedDict`
-/// modules; only names that become diagnostics are copied into the result.
+/// DELETED — panics; see the banner above.
 fn build_var_type_map<'a>(
-    stmts: &'a [Stmt],
-    td_readonly_fields: &std::collections::HashMap<&'a str, std::collections::HashSet<&'a str>>,
+    _stmts: &'a [Stmt],
+    _td_readonly_fields: &std::collections::HashMap<&'a str, std::collections::HashSet<&'a str>>,
 ) -> std::collections::HashMap<&'a str, &'a str> {
-    let mut map = std::collections::HashMap::new();
-    for stmt in stmts {
-        let Stmt::AnnAssign(ann) = stmt else { continue };
-        let Expr::Name(var_name) = ann.target.as_ref() else {
-            continue;
-        };
-        let Expr::Name(type_name) = ann.annotation.as_ref() else {
-            continue;
-        };
-        if let Some((&key, _)) = td_readonly_fields.get_key_value(type_name.id.as_str()) {
-            let _ = map.insert(var_name.id.as_str(), key);
-        }
-    }
-    map
+    panic!(
+        "basilisk-resolver: `build_var_type_map` was DELETED because it decided which \
+         `TypedDict` a variable was annotated with by looking the ANNOTATION'S SPELLING up \
+         in a map keyed by CLASS SPELLING, so an aliased or dotted annotation was invisible \
+         and a same-named ordinary class inherited another class's read-only fields. It \
+         panics because the real implementation — both expressions resolved through the \
+         binding table at their own offsets — DOES NOT EXIST YET. Do not restore the name \
+         lookup and do not return an empty map in its place."
+    )
 }
 
 /// Build a map from variable name to its declared `TypedDict` type name.
@@ -206,7 +78,7 @@ pub(super) fn collect_readonly_violations(
     classes: &[ClassInfo],
     source: &str,
 ) -> Vec<ReadOnlyViolationInfo> {
-    let td_readonly_fields = build_typeddict_readonly_map(stmts, classes, source);
+    let td_readonly_fields = build_typeddict_readonly_map(classes, source);
     if td_readonly_fields.is_empty() {
         return Vec::new();
     }
@@ -264,9 +136,6 @@ pub(super) fn collect_readonly_violations(
                     });
                 }
             }
-            Stmt::FunctionDef(func) => {
-                check_kwargs_readonly_violations(func, &td_readonly_fields, &mut out);
-            }
             _ => {}
         }
     }
@@ -280,21 +149,17 @@ pub(super) fn collect_readonly_violations(
 /// Collect module-level bare assignments (`name = expr`).
 ///
 /// Used by the checker to detect re-assignments to `Final`-annotated variables.
-pub(super) fn collect_file_final_names(
-    stmts: &[Stmt],
-    source: &str,
-) -> std::collections::HashSet<String> {
+pub(super) fn collect_file_final_names(stmts: &[Stmt]) -> std::collections::HashSet<String> {
+    // These statements are a whole module's body — its own imports decide what
+    // the qualifier binds to there, so the table is built from them.
+    let bindings = BindingTable::from_module(stmts);
     let mut names = std::collections::HashSet::new();
     for stmt in stmts {
         let Stmt::AnnAssign(ann) = stmt else { continue };
         let Expr::Name(n) = ann.target.as_ref() else {
             continue;
         };
-        let range = ann.annotation.range();
-        let Some(ann_text) = source_slice_range(source, range) else {
-            continue;
-        };
-        if ann_text_is_final(ann_text) {
+        if annotation_is_final(&bindings, &ann.annotation) {
             let _ = names.insert(n.id.to_string());
         }
     }
@@ -333,7 +198,7 @@ pub(super) fn collect_imported_final_names(
         let Ok(sibling) = basilisk_parser::parse_file(sibling_path_str) else {
             continue;
         };
-        let sibling_finals = collect_file_final_names(&sibling.ast.body, &sibling.source);
+        let sibling_finals = collect_file_final_names(&sibling.ast.body);
         let is_star = import_from.names.iter().any(|a| a.name.as_str() == "*");
         if is_star {
             out.extend(sibling_finals);
@@ -343,92 +208,6 @@ pub(super) fn collect_imported_final_names(
                 if sibling_finals.contains(name) {
                     let _ = out.insert(name.to_owned());
                 }
-            }
-        }
-    }
-    out
-}
-
-/// `true` when a decorator names `final` / `typing.final`.
-fn decorator_is_final(dec: &ruff_python_ast::Decorator) -> bool {
-    match &dec.expression {
-        Expr::Name(n) => n.id.as_str() == "final",
-        Expr::Attribute(a) => a.attr.as_str() == "final",
-        _ => false,
-    }
-}
-
-/// The `@final` method names of every class defined in `body`. A method counts
-/// as `@final` when *any* of its definitions (e.g. the first overload of a stub)
-/// carries `@final`.
-fn collect_file_final_methods(
-    body: &[Stmt],
-) -> std::collections::HashMap<String, std::collections::HashSet<String>> {
-    let mut out: std::collections::HashMap<String, std::collections::HashSet<String>> =
-        std::collections::HashMap::new();
-    for stmt in body {
-        let Stmt::ClassDef(cls) = stmt else {
-            continue;
-        };
-        let finals: std::collections::HashSet<String> = cls
-            .body
-            .iter()
-            .filter_map(|s| match s {
-                Stmt::FunctionDef(func) if func.decorator_list.iter().any(decorator_is_final) => {
-                    Some(func.name.to_string())
-                }
-                _ => None,
-            })
-            .collect();
-        if !finals.is_empty() {
-            let _ = out.insert(cls.name.to_string(), finals);
-        }
-    }
-    out
-}
-
-/// Map each imported class to its `@final` method names, read from a sibling
-/// module (`.pyi` preferred, then `.py`). Mirrors [`collect_imported_final_names`]
-/// but records per-class method sets so cross-module `@final`-override checks
-/// (`qualifiers_final_decorator`) can see base methods declared `@final` in an imported stub.
-pub(super) fn collect_imported_final_methods(
-    stmts: &[Stmt],
-    module_path: &str,
-) -> std::collections::HashMap<String, std::collections::HashSet<String>> {
-    let mut out: std::collections::HashMap<String, std::collections::HashSet<String>> =
-        std::collections::HashMap::new();
-    let Some(module_dir) = std::path::Path::new(module_path).parent() else {
-        return out;
-    };
-    for stmt in stmts {
-        let Stmt::ImportFrom(import_from) = stmt else {
-            continue;
-        };
-        let Some(module_name) = import_from.module.as_ref() else {
-            continue;
-        };
-        let module_str = module_name.to_string();
-        if module_str.contains('.') {
-            continue;
-        }
-        let sibling = ["pyi", "py"].iter().find_map(|ext| {
-            let path = module_dir.join(format!("{module_str}.{ext}"));
-            path.to_str()
-                .and_then(|s| basilisk_parser::parse_file(s).ok())
-        });
-        let Some(sibling) = sibling else {
-            continue;
-        };
-        let class_finals = collect_file_final_methods(&sibling.ast.body);
-        let is_star = import_from.names.iter().any(|a| a.name.as_str() == "*");
-        for (class_name, methods) in class_finals {
-            let imported = is_star
-                || import_from
-                    .names
-                    .iter()
-                    .any(|a| a.name.as_str() == class_name);
-            if imported {
-                out.entry(class_name).or_default().extend(methods);
             }
         }
     }

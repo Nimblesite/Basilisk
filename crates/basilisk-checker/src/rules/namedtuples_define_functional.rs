@@ -48,21 +48,22 @@ fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
 /// Returns a human-readable literal-type name when `rhs` is incompatible
 /// with the declared field type annotation text, or `None` when the pairing
 /// is acceptable.
-fn keyword_rhs_mismatch(annotation: &str, rhs: &RhsKind) -> Option<&'static str> {
-    let base = annotation
-        .split('[')
-        .next()
-        .unwrap_or(annotation)
-        .trim()
-        .to_ascii_lowercase();
-
-    match (base.as_str(), rhs) {
-        ("int" | "bool" | "float" | "bytes", RhsKind::StrLiteral) => Some("str"),
-        ("int" | "str" | "float", RhsKind::BytesLiteral) => Some("bytes"),
-        ("int" | "str" | "bool", RhsKind::FloatLiteral) => Some("float"),
-        ("str" | "bytes", RhsKind::IntLiteral) => Some("int"),
-        _ => None,
-    }
+///
+/// DELETED — panics. The body split the annotation TEXT at `[`, trimmed it,
+/// LOWER-CASED it, and matched the result against the literal strings `"int"`,
+/// `"bool"`, `"float"`, `"bytes"`, `"str"` — a third copy of the same builtin
+/// spelling table that `dataclass_check` and `calls_argument_type` carried.
+/// Lower-casing alone means a `NamedTuple` field annotated with a user class
+/// `Str` was judged as builtin `str`.
+fn keyword_rhs_mismatch(_annotation: &str, _rhs: &RhsKind) -> Option<&'static str> {
+    panic!(
+        "basilisk-checker: `keyword_rhs_mismatch` was DELETED because it lower-cased \
+         the field's annotation TEXT, split it at `[`, and matched the result against \
+         a whitelist of builtin name spellings. It panics because the real \
+         implementation — resolving the declared field type through the binding table \
+         and asking the ordinary assignability question — DOES NOT EXIST YET. Do not \
+         restore the table and do not return `None` in its place."
+    )
 }
 
 /// Emits `namedtuples_define_functional` for `NamedTuple` call sites with unknown fields or type mismatches.
