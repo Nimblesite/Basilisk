@@ -22,7 +22,9 @@ use crate::span_util::slice_span;
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
+use super::shared::overload_decorated;
 use super::Rule;
+use crate::annotation::AnnotationResolver;
 
 const CODE: ErrorCode = ErrorCode {
     code: "overloads_consistency_3",
@@ -36,7 +38,13 @@ const CODE: ErrorCode = ErrorCode {
 fn is_type_only_decorator(decorator: &str) -> bool {
     matches!(
         decorator.rsplit('.').next().unwrap_or(decorator),
-        "staticmethod" | "classmethod" | "property"
+        "overload"
+            | "final"
+            | "override"
+            | "staticmethod"
+            | "classmethod"
+            | "abstractmethod"
+            | "property"
     )
 }
 
@@ -94,10 +102,10 @@ impl Rule for OverloadImplConsistency {
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        // Bail on parse errors — those are reported separately as BSK-0000.
-        if types.annotations().is_none() {
+        // Overload membership is a binding question ([#380]).
+        let Some(resolver) = types.annotations() else {
             return;
-        }
+        };
         let mut groups: HashMap<(Option<&str>, &str), Vec<&FunctionInfo>> = HashMap::new();
         for func in &module.functions {
             groups
@@ -106,14 +114,26 @@ impl Rule for OverloadImplConsistency {
                 .push(func);
         }
         for funcs in groups.values() {
-            check_group(funcs, &module.source, &module.path, diagnostics);
+            check_group(funcs, resolver, &module.source, &module.path, diagnostics);
         }
     }
 }
 
-fn check_group(funcs: &[&FunctionInfo], source: &str, path: &str, out: &mut Vec<Diagnostic>) {
-    let overloads: Vec<&&FunctionInfo> = funcs.iter().filter(|f| f.is_overload).collect();
-    let Some(impl_fn) = funcs.iter().find(|f| !f.is_overload) else {
+fn check_group(
+    funcs: &[&FunctionInfo],
+    resolver: &AnnotationResolver<'_>,
+    source: &str,
+    path: &str,
+    out: &mut Vec<Diagnostic>,
+) {
+    let overloads: Vec<&&FunctionInfo> = funcs
+        .iter()
+        .filter(|f| overload_decorated(resolver, &f.decorators))
+        .collect();
+    let Some(impl_fn) = funcs
+        .iter()
+        .find(|f| !overload_decorated(resolver, &f.decorators))
+    else {
         return;
     };
     if overloads.len() < 2 || group_is_transformed(funcs) {

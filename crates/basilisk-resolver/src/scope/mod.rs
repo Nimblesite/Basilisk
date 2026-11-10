@@ -42,13 +42,14 @@ pub use pep695_scoping::{
     AttrAccess, DecoratorRef, GenericDefKind, Pep695AliasDef, Pep695Def, Pep695Param,
     Pep695ParamKind, Pep695Scoping,
 };
-pub use resolved_module::{LazyAst, ModuleBindings, ResolvedModule};
+pub use resolved_module::{LazyAst, ResolvedModule};
 pub use rhs::RhsKind;
 pub use span::Span;
 pub use typeddict_meta::{
-    class_by_name, has_extra_items_transitive, is_transitive_typeddict, transitive_typeddict_names,
+    class_by_name, has_extra_items_transitive, is_transitive_typeddict, strip_typeddict_qualifiers,
+    transitive_typeddict_names,
 };
-pub use variable_types::{AttributeInfo, DescriptorKind, VariableInfo};
+pub use variable_types::{AttributeInfo, VariableInfo};
 pub use violations::{
     BoundedTypeVarAttrViolation, EnumValueTypeViolationInfo, EnumValueTypeViolationKind,
     FinalViolationInfo, FinalViolationKind, GeneratorViolation, GeneratorViolationKind,

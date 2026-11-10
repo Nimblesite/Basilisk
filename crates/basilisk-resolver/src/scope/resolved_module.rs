@@ -64,47 +64,9 @@ impl PartialEq for LazyAst {
     }
 }
 
-/// The module's import-resolution table, carried beside the records that were
-/// derived through it so consumers can ask what an expression *refers to*
-/// without re-walking the AST. Implements [RESOLV-CANONICAL-BINDING].
-///
-/// Wraps [`basilisk_canonical::BindingTable`] only to give it the same
-/// equality treatment as [`LazyAst`]: the table is a pure function of
-/// [`ResolvedModule::source`], so it carries no independent identity.
-#[derive(Debug, Clone, Default)]
-pub struct ModuleBindings(basilisk_canonical::BindingTable);
-
-impl ModuleBindings {
-    /// Wrap the table built by `visitor::collect` for storage on the module.
-    #[must_use]
-    pub fn new(table: basilisk_canonical::BindingTable) -> Self {
-        Self(table)
-    }
-}
-
-impl std::ops::Deref for ModuleBindings {
-    type Target = basilisk_canonical::BindingTable;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl PartialEq for ModuleBindings {
-    /// The table is derived from `source`, so it carries no independent
-    /// identity: module equality is decided entirely by the other fields.
-    fn eq(&self, _other: &Self) -> bool {
-        true
-    }
-}
-
 /// The complete resolved view of a parsed module.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ResolvedModule {
-    /// The module's import-resolution table ([RESOLV-CANONICAL-BINDING]):
-    /// every recognition question a consumer asks goes through this, never
-    /// through spellings.
-    pub bindings: ModuleBindings,
     /// All function definitions found at any nesting level.
     pub functions: Vec<FunctionInfo>,
     /// All class definitions found at module level.
@@ -398,12 +360,19 @@ impl ResolvedModule {
         let Some((class, literal_receiver)) = self.builtin_class_for_receiver(receiver) else {
             return Vec::new();
         };
-        let _ = literal_receiver;
         class
             .declaration
             .methods
             .iter()
             .filter(|method| method.name == call.callee)
+            .filter(|method| {
+                literal_receiver
+                    || method
+                        .receiver
+                        .as_ref()
+                        .and_then(|receiver| receiver.annotation.as_deref())
+                        .is_none_or(|annotation| !annotation.contains("LiteralString"))
+            })
             .collect()
     }
 
@@ -438,6 +407,7 @@ impl ResolvedModule {
 fn builtin_annotation(annotation: &str) -> Option<(&str, bool)> {
     match annotation.trim() {
         "str" => Some(("str", false)),
+        "LiteralString" | "typing.LiteralString" => Some(("str", true)),
         "bytes" => Some(("bytes", false)),
         _ => None,
     }

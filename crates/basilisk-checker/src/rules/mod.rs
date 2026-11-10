@@ -20,6 +20,7 @@ pub(crate) mod annotations_generators_2;
 pub(crate) mod annotations_generators_helpers;
 pub(crate) mod annotations_typeexpr;
 pub(crate) mod assignment_compatibility;
+pub(crate) mod callables_annotation;
 pub(crate) mod callables_kwargs;
 pub(crate) mod callables_protocol;
 pub(crate) mod callables_protocol_2;
@@ -33,6 +34,7 @@ pub(crate) mod classes_override_3;
 pub(crate) mod constructors_call_init;
 pub(crate) mod constructors_call_new;
 pub(crate) mod constructors_call_type;
+pub(crate) mod constructors_callable;
 pub(crate) mod dataclasses_frozen;
 pub(crate) mod dataclasses_hash;
 pub(crate) mod dataclasses_inheritance;
@@ -71,6 +73,7 @@ pub(crate) mod generics_defaults_referential;
 pub(crate) mod generics_defaults_referential_2;
 pub(crate) mod generics_defaults_referential_2_helpers;
 pub(crate) mod generics_defaults_specialization;
+pub(crate) mod generics_scoping;
 pub(crate) mod generics_self_attributes;
 pub(crate) mod generics_self_basic;
 pub(crate) mod generics_self_protocols;
@@ -88,6 +91,7 @@ pub(crate) mod generics_typevartuple_callable;
 pub(crate) mod generics_typevartuple_specialization;
 pub(crate) mod generics_typevartuple_specialization_2;
 pub(crate) mod generics_typevartuple_unpack;
+pub(crate) mod generics_upper_bound;
 pub(crate) mod generics_upper_bound_2;
 pub(crate) mod generics_variance;
 pub(crate) mod generics_variance_inference;
@@ -162,11 +166,14 @@ pub(crate) mod suppression_blanket;
 pub(crate) mod suppression_malformed;
 pub(crate) mod suppression_unused;
 pub(crate) mod tuples_index;
+pub(crate) mod tuples_index_2;
+pub(crate) mod tuples_type_compat;
 pub(crate) mod tuples_type_form;
 pub(crate) mod tuples_type_form_2;
 pub(crate) mod typeddicts_alt_syntax;
 pub(crate) mod typeddicts_class_syntax;
 pub(crate) mod typeddicts_class_syntax_2;
+pub(crate) mod typeddicts_extra_items;
 pub(crate) mod typeddicts_inheritance;
 pub(crate) mod typeddicts_operations;
 pub(crate) mod typeddicts_readonly;
@@ -240,6 +247,7 @@ fn all_rules() -> &'static [&'static dyn Rule] {
         &calls_argument_type::ArgumentTypeMismatch,
         &returns_compatibility_2::ReturnTypeMismatch,
         &assignment_compatibility::AssignmentTypeMismatch,
+        &callables_annotation::InvalidTypeArgCount,
         &classes_override::IncompatibleOverride,
         &classes_override_2::IncompatibleVariableOverride,
         &names_undefined::UndefinedVariable,
@@ -304,6 +312,7 @@ fn all_rules() -> &'static [&'static dyn Rule] {
         &generics_self_protocols::ProtocolSelfViolation,
         &generics_self_basic::SelfTypeViolation,
         &protocols_modules::ModuleProtocolIncompatible,
+        &generics_upper_bound::TypeVarBoundViolation,
         &generics_typevartuple_unpack::TypeVarTupleUnpackViolation,
         &generics_typevartuple_callable::TypeVarTupleCallableMismatch,
         &generics_typevartuple_basic_2::TypeVarTupleUnpackRequired,
@@ -340,6 +349,7 @@ fn all_rules() -> &'static [&'static dyn Rule] {
         &directives_deprecated::DeprecatedUsage,
         &directives_disjoint_base::DisjointBaseViolation,
         &namedtuples_define_class::NamedTupleDefError,
+        &generics_scoping::UnboundTypeVarScope,
         &protocols_explicit_2::SuperAbstractCall,
         &protocols_runtime_checkable_2::ProtocolUnsafeOverlap,
         &annotations_generators::GeneratorReturnTypeViolation,
@@ -349,6 +359,7 @@ fn all_rules() -> &'static [&'static dyn Rule] {
         &protocols_subtyping::ProtocolTupleElementMismatch,
         &generics_type_erasure::InstanceAttrOnClass,
         &literals_literalstring::LiteralStringAssignment,
+        &tuples_index_2::TupleIndexOutOfRange,
         &generics_defaults_referential_2::TypeVarDefaultReferential,
         &literals_semantics_2::LiteralValueIncompatible,
         &generics_variance_inference::TypeVarScopeViolation,
@@ -367,13 +378,16 @@ fn all_rules() -> &'static [&'static dyn Rule] {
         &constructors_call_type::TypeCallConstructorViolation,
         &specialtypes_type::TypeBracketViolation,
         &protocols_class_objects_2::ProtocolClassObjectViolation,
+        &tuples_type_compat::TupleStarredUnpackCompatibility,
         &generics_basic_3::GenericTypeArgViolation,
         &generics_syntax_scoping::Pep695TypeParamScopingViolation,
         &directives_version_platform::DeadBranchVariable,
         &aliases_typealiastype::TypeAliasTypeViolation,
         &missing_type_stubs::MissingTypeStubs,
+        &constructors_callable::ConstructorCallableMisuse,
         &imports_module_attribute::ModuleAttributeUndefined,
         &version_target_syntax::Pep695BelowTargetViolation,
+        &typeddicts_extra_items::TypedDictExtraItemsViolation,
         &dataclasses_inheritance::DataclassFieldOrder,
         &overloads_consistency_2::OverloadDecoratorConsistency,
         &classes_override_3::OverrideWithoutBaseMethod,

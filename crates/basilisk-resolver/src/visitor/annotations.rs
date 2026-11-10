@@ -4,7 +4,6 @@
 use ruff_python_ast::{Expr, Stmt, StmtAnnAssign};
 use ruff_text_size::Ranged;
 
-use crate::canonical::{BindingTable, TypingForm};
 use crate::scope::{
     InvalidStringAnnotation, InvalidStringAnnotationKind, RhsKind, Span, VariableInfo,
 };
@@ -12,62 +11,16 @@ use crate::scope::{
 use super::class_info_ext::expr_simple_name;
 use super::core::{classify_rhs, text_range_to_span};
 
-// ---------------------------------------------------------------------------
-// Annotation qualifiers
-//
-// Each of these asks the binding table which DEFINITION an annotation refers
-// to. None of them looks at the characters at the use site, so an aliased
-// import (`from dataclasses import InitVar as IV`), a module-qualified use
-// (`dataclasses.InitVar[int]`), and a locally shadowed name are all answered
-// correctly. Implements [RESOLV-CANONICAL-BINDING].
-// ---------------------------------------------------------------------------
-
-/// Whether an annotation is the dataclass keyword-only sentinel.
-pub(super) fn annotation_is_kw_only(bindings: &BindingTable, ann: &Expr) -> bool {
-    bindings.is_form(ann, TypingForm::KwOnlySentinel)
-}
-
-/// Whether an annotation is `InitVar` or `InitVar[T]`.
-pub(super) fn annotation_is_init_var(bindings: &BindingTable, ann: &Expr) -> bool {
-    bindings.is_form(ann, TypingForm::InitVar)
-}
-
-/// Whether an annotation is the `Final` qualifier, bare or subscripted.
-pub(super) fn annotation_is_final(bindings: &BindingTable, ann: &Expr) -> bool {
-    bindings.is_form(ann, TypingForm::FinalQualifier)
-}
-
-/// Whether an annotation is the `ClassVar` qualifier, bare or subscripted.
-pub(super) fn annotation_is_class_var(bindings: &BindingTable, ann: &Expr) -> bool {
-    bindings.is_form(ann, TypingForm::ClassVar)
-}
-
-/// Whether a `ReadOnly` qualifier appears anywhere within an annotation.
-///
-/// Recurses through the composition forms an item type can be built from, so
-/// `Required[ReadOnly[int]]` and `ReadOnly[int] | None` are both found.
-pub(super) fn annotation_contains_readonly_expr(bindings: &BindingTable, expr: &Expr) -> bool {
-    if bindings.is_form(expr, TypingForm::ReadOnly) {
-        return true;
-    }
-    match expr {
-        Expr::Subscript(sub) => annotation_contains_readonly_expr(bindings, &sub.slice),
-        Expr::BinOp(bin) => {
-            annotation_contains_readonly_expr(bindings, &bin.left)
-                || annotation_contains_readonly_expr(bindings, &bin.right)
-        }
-        Expr::Tuple(tuple) => tuple
-            .elts
-            .iter()
-            .any(|element| annotation_contains_readonly_expr(bindings, element)),
-        _ => false,
-    }
-}
-
 pub(super) fn annotation_flags(expr: &Expr) -> (bool, bool, bool) {
     match expr {
-        Expr::Name(name) => (false, name.id.as_str() == "None", false),
-        Expr::Attribute(attr) => (false, attr.attr.as_str() == "None", false),
+        Expr::Name(name) => {
+            let s = name.id.as_str();
+            (s == "Any", s == "None", false)
+        }
+        Expr::Attribute(attr) => {
+            let s = attr.attr.as_str();
+            (s == "Any", s == "None", false)
+        }
         Expr::NoneLiteral(_) => (false, true, false),
         Expr::NumberLiteral(_) | Expr::BooleanLiteral(_) => (false, false, true),
         _ => (false, false, false),
@@ -93,6 +46,29 @@ pub(super) fn ann_assign_info_from(node: &StmtAnnAssign) -> Option<VariableInfo>
     })
 }
 
+pub(super) fn annotation_is_kw_only(ann: &Expr) -> bool {
+    matches!(ann, Expr::Name(n) if n.id.as_str() == "KW_ONLY")
+}
+
+/// Returns `true` when the annotation expression is `InitVar[T]`.
+///
+/// Matches both `InitVar[T]` and `dataclasses.InitVar[T]`.
+pub(super) fn annotation_is_init_var(ann: &Expr) -> bool {
+    match ann {
+        Expr::Subscript(sub) => {
+            // Check if the base is "InitVar" or "dataclasses.InitVar"
+            match sub.value.as_ref() {
+                Expr::Name(n) => n.id.as_str() == "InitVar",
+                Expr::Attribute(attr) => attr.attr.as_str() == "InitVar",
+                _ => false,
+            }
+        }
+        _ => false,
+    }
+}
+
+/// For a field value expression, returns `Some(true)` when it is `field(kw_only=True, ...)`,
+/// `Some(false)` when it is `field(kw_only=False, ...)`, and `None` otherwise.
 pub(super) fn count_unbounded_in_tuple_slice(slice: &Expr) -> usize {
     let elements: &[Expr] = match slice {
         Expr::Tuple(t) => &t.elts,
@@ -107,7 +83,8 @@ pub(super) fn count_unbounded_in_tuple_slice(slice: &Expr) -> usize {
 
 /// Returns `true` if this expression is an unbounded tuple component:
 /// - `*tuple[T, ...]` — starred subscript with an ellipsis last element
-/// - `*Name` — starred name (type-variable-tuple unpack)
+/// - `*Name` — starred name (`TypeVarTuple` unpack)
+/// - `Unpack[tuple[T, ...]]` — legacy form
 pub(super) fn is_unbounded_component(expr: &Expr) -> bool {
     match expr {
         Expr::Starred(starred) => match starred.value.as_ref() {
@@ -118,10 +95,21 @@ pub(super) fn is_unbounded_component(expr: &Expr) -> bool {
                 }
                 inner_tuple_is_unbounded(&sub.slice)
             }
-            // `*Ts` — type-variable-tuple unpack
+            // `*Ts` — TypeVarTuple unpack
             Expr::Name(_) => true,
             _ => false,
         },
+        // `Unpack[tuple[T, ...]]` — legacy unpack form
+        Expr::Subscript(sub) if expr_simple_name(&sub.value).as_deref() == Some("Unpack") => {
+            match sub.slice.as_ref() {
+                Expr::Subscript(inner_sub)
+                    if expr_simple_name(&inner_sub.value).as_deref() == Some("tuple") =>
+                {
+                    inner_tuple_is_unbounded(&inner_sub.slice)
+                }
+                _ => false,
+            }
+        }
         _ => false,
     }
 }
@@ -272,7 +260,86 @@ pub(super) fn collect_multi_unbounded_from_stmt(stmt: &Stmt, out: &mut Vec<Span>
     }
 }
 
-/// Recursively walk statements collecting invalid annotation patterns.
+// ---------------------------------------------------------------------------
+// assert_type type-aware collection
+// ---------------------------------------------------------------------------
+
+/// Strip `Annotated[T, ...]` wrapper, returning just `T`.
+pub(super) fn strip_annotated_wrapper(ann: &str) -> Option<&str> {
+    let ann = ann.trim();
+    if !ann.starts_with("Annotated[") {
+        return None;
+    }
+    let inner_start = "Annotated[".len();
+    let inner = &ann[inner_start..];
+    // Find the end of the first argument (handle nested brackets).
+    let mut depth = 0i32;
+    let mut end = inner.len();
+    for (i, ch) in inner.char_indices() {
+        match ch {
+            '[' | '(' | '{' => depth += 1,
+            ']' | ')' | '}' => {
+                if depth == 0 {
+                    // Hit closing ] of Annotated without a comma — whole inner is one arg.
+                    end = i;
+                    break;
+                }
+                depth -= 1;
+            }
+            ',' if depth == 0 => {
+                end = i;
+                break;
+            }
+            _ => {}
+        }
+    }
+    Some(inner[..end].trim())
+}
+
+/// Returns `true` when `actual` type is a user-defined type alias that cannot be
+/// resolved without a full type engine. These produce false positives because we
+/// compare annotation text without expanding aliases.
+///
+/// A type is a user-defined alias when its base identifier (the part before `[`)
+/// starts with an uppercase letter and is not a known typing special form.
+pub(super) fn annotation_contains_readonly_expr(expr: &Expr) -> bool {
+    match expr {
+        Expr::Name(name) => name.id.as_str() == "ReadOnly",
+        Expr::Attribute(attr) => attr.attr.as_str() == "ReadOnly",
+        Expr::Subscript(sub) => {
+            annotation_contains_readonly_expr(&sub.value)
+                || annotation_contains_readonly_expr(&sub.slice)
+        }
+        Expr::BinOp(bin) => {
+            annotation_contains_readonly_expr(&bin.left)
+                || annotation_contains_readonly_expr(&bin.right)
+        }
+        Expr::Tuple(tuple) => tuple.elts.iter().any(annotation_contains_readonly_expr),
+        _ => false,
+    }
+}
+
+/// Extract `ReadOnly` field names from a functional `TypedDict(...)` call's dict literal.
+///
+/// Returns a set of field names that have `ReadOnly[...]` annotations.
+pub(super) fn ann_text_is_final(text: &str) -> bool {
+    let t = text.trim();
+    t == "Final" || t.starts_with("Final[") || t == "typing.Final" || t.starts_with("typing.Final[")
+}
+
+/// Collect the names of module-level `Final`-annotated variables from a statement list.
+pub(super) fn is_classvar_annotation(expr: &Expr) -> bool {
+    match expr {
+        Expr::Name(name) => name.id.as_str() == "ClassVar",
+        Expr::Subscript(sub) => {
+            matches!(&*sub.value, Expr::Name(name) if name.id.as_str() == "ClassVar")
+        }
+        _ => false,
+    }
+}
+
+/// Recursively walk statements finding call expressions that instantiate
+/// protocols or abstract classes.
 pub(super) fn collect_invalid_annotations(stmts: &[Stmt]) -> Vec<InvalidStringAnnotation> {
     let mut out = Vec::new();
     for stmt in stmts {

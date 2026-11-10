@@ -15,6 +15,7 @@ use std::collections::{HashMap, HashSet};
 
 use basilisk_resolver::{ClassInfo, FunctionInfo, ResolvedModule};
 
+use super::guards::is_protocol_class;
 use super::Rule;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 use crate::span_util::slice_span;
@@ -27,12 +28,22 @@ const CODE: ErrorCode = ErrorCode {
 /// Methods exempt from variance inference per the typing spec.
 const EXEMPT_METHODS: &[&str] = &["__init__", "__new__"];
 
-/// Builtin covariant containers -- a `TypeVar` inside one of these in a return
-/// annotation is still purely in output position. Only builtins are listed:
-/// they need no import, so matching their name is not import resolution. The
-/// `typing` and `collections.abc` counterparts must be resolved through the
-/// annotation cascade ([TYPEINF-ANNOTATION-RESOLUTION]), never by spelling.
-const COVARIANT_CONTAINERS: &[&str] = &["type", "tuple", "frozenset"];
+/// Known covariant containers -- a `TypeVar` inside one of these in a return
+/// annotation is still purely in output position.
+const COVARIANT_CONTAINERS: &[&str] = &[
+    "type",
+    "Type",
+    "tuple",
+    "Tuple",
+    "FrozenSet",
+    "frozenset",
+    "Sequence",
+    "Iterator",
+    "Iterable",
+    "Mapping",
+    "AbstractSet",
+    "Collection",
+];
 
 /// The variance of a `TypeVar`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -347,7 +358,7 @@ impl Rule for ProtocolVarianceViolation {
             .collect();
 
         for cls in &module.classes {
-            if !cls.is_protocol || cls.generic_params.is_empty() {
+            if !is_protocol_class(cls) || cls.generic_params.is_empty() {
                 continue;
             }
 

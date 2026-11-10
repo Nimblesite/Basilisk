@@ -250,11 +250,11 @@ publishing on a compatible host:
 4. [ ] `python3 scripts/verify_release_attribution.py --policy-only` passes and
    licence manifests are current (`npm run licenses:check` in
    `vscode-extension/`).
-6. [ ] Draft notes from `git log <prev-tag>..HEAD`, create the tag locally, and
+5. [ ] Draft notes from `git log <prev-tag>..HEAD`, create the tag locally, and
    run [RELEASE-PROVENANCE-TAG](#RELEASE-PROVENANCE-TAG) without pushing it.
-7. [ ] `make reinstall-vsix-macos` (or `make reinstall-vsix`) — installs the
+6. [ ] `make reinstall-vsix-macos` (or `make reinstall-vsix`) — installs the
    candidate built through the release packaging path.
-8. [ ] [RELEASE-PROVENANCE-BINARY](#RELEASE-PROVENANCE-BINARY) and
+7. [ ] [RELEASE-PROVENANCE-BINARY](#RELEASE-PROVENANCE-BINARY) and
    [RELEASE-PROVENANCE-ARTIFACT](#RELEASE-PROVENANCE-ARTIFACT) against the
    installed binary.
 8. [ ] [RELEASE-RESPONSIVENESS](#RELEASE-RESPONSIVENESS).

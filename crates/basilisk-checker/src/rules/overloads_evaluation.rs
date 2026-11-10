@@ -52,10 +52,10 @@ impl Rule for OverloadUnionExpansionFailure {
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        // Bail on parse errors — those are reported separately as BSK-0000.
-        if types.annotations().is_none() {
+        // Overload membership is a binding question ([#380]).
+        let Some(resolver) = types.annotations() else {
             return;
-        }
+        };
         let source = &module.source;
         let path = &module.path;
 
@@ -68,7 +68,7 @@ impl Rule for OverloadUnionExpansionFailure {
             if !func.is_stub_body {
                 continue;
             }
-            if !func.is_overload {
+            if !super::shared::overload_decorated(resolver, &func.decorators) {
                 continue;
             }
             overload_groups
@@ -370,9 +370,20 @@ fn resolve_arg_union_types(
 
 /// Split a union type annotation into its constituent members.
 ///
-/// Handles `X | Y` syntax.
+/// Handles both `X | Y` syntax and `Union[X, Y]` syntax.
 fn split_union_type(annotation: &str) -> Vec<String> {
     let trimmed = annotation.trim();
+
+    // Try `Union[X, Y]` syntax first.
+    if let Some(inner) = trimmed
+        .strip_prefix("Union[")
+        .and_then(|s| s.strip_suffix(']'))
+    {
+        return split_type_args(inner)
+            .into_iter()
+            .map(str::to_owned)
+            .collect();
+    }
 
     // Try `X | Y` syntax.
     if trimmed.contains('|') {
@@ -412,6 +423,32 @@ fn split_pipe_union(annotation: &str) -> Vec<&str> {
     parts
 }
 
+/// Split type arguments respecting bracket nesting.
+fn split_type_args(inner: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut depth = 0u32;
+    let mut start = 0;
+    for (idx, ch) in inner.char_indices() {
+        match ch {
+            '[' => depth = depth.saturating_add(1),
+            ']' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => {
+                let part = inner[start..idx].trim();
+                if !part.is_empty() {
+                    parts.push(part);
+                }
+                start = idx + 1;
+            }
+            _ => {}
+        }
+    }
+    let remainder = inner[start..].trim();
+    if !remainder.is_empty() {
+        parts.push(remainder);
+    }
+    parts
+}
+
 /// Check if a type is assignable to an annotation.
 ///
 /// Bracket-aware union decomposition stays here (the context's `|` split is
@@ -428,6 +465,13 @@ fn is_type_assignable(
     // Union in target: X | Y
     if tgt.contains('|') {
         return split_pipe_union(tgt)
+            .iter()
+            .any(|part| is_type_assignable(subtyping, src, part));
+    }
+
+    // `Union[X, Y]` in target.
+    if let Some(inner) = tgt.strip_prefix("Union[").and_then(|s| s.strip_suffix(']')) {
+        return split_type_args(inner)
             .iter()
             .any(|part| is_type_assignable(subtyping, src, part));
     }

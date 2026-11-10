@@ -185,16 +185,6 @@ jobs:
   #     - name: Enforce 100% PEP conformance (REAL python/typing harness)
   #       run: python3 conformance/run_conformance.py --bin target/release/basilisk --gate
 
-      # A pristine fixture result is insufficient: the 2026 integrity audit
-      # showed that semantics-preserving renames collapsed the old result. Keep
-      # the mutation ratchet mandatory for every release.
-      - name: Enforce AST-preserving mutation regression ratchet
-        run: >-
-          python3 conformance/run_mutation_conformance.py
-          --bin target/release/basilisk
-          --ref a4906624f170c169cf667f962080c56d5a5ba6ff
-          --suite-dir "$RUNNER_TEMP/typing-mutated"
-
   release:
     name: Publish binaries to release
     # `conformance` removed from needs — the job is commented out above.

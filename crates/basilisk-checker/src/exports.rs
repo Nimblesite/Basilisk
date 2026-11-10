@@ -696,7 +696,7 @@ pub fn flattened_class_methods(
                 .bases
                 .iter()
                 .map(|base| crate::stub_constructor::base_head(base).to_owned())
-                .filter(|head| head != "object")
+                .filter(|head| head != "object" && head != "Any")
                 .collect()
         })
     });

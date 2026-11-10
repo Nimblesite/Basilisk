@@ -61,9 +61,7 @@ impl StubExtractor {
     ) {
         for stmt in stmts {
             match stmt {
-                Stmt::FunctionDef(function) => {
-                    methods.push(stub_method(function, class_name, &self.bindings));
-                }
+                Stmt::FunctionDef(function) => methods.push(stub_method(function, class_name)),
                 Stmt::AnnAssign(annotation) => {
                     if let Some(name) = ann_assign_target_name(annotation) {
                         attributes.push(StubVariable {
@@ -87,7 +85,7 @@ impl StubExtractor {
         methods: &mut Vec<StubFunction>,
         attributes: &mut Vec<StubVariable>,
     ) {
-        let branches = feasible_branches(&self.bindings, if_stmt, self.target.as_ref());
+        let branches = feasible_branches(if_stmt, self.target.as_ref());
         // Fast path for the dominant `if sys.version_info >= (3, X): …` shape
         // (one guarded body, implicit empty else): collect the body straight
         // into the class vectors, then keep an addition only when the members

@@ -48,6 +48,13 @@ pub(in crate::code_actions) fn implement_abstract_methods(
             if fn_class != &base_class.name {
                 continue;
             }
+            if !func
+                .decorators
+                .iter()
+                .any(|d| d.rsplit('.').next() == Some("abstractmethod"))
+            {
+                continue;
+            }
             // Skip if already implemented in the current class.
             if current_class.method_names.contains(&func.name) {
                 continue;

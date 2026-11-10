@@ -51,7 +51,7 @@ Review AI-authored PRs against the bar in [`CLAUDE.md`](CLAUDE.md): *code here s
 
 Coverage percentage is the floor, not the goal. Judge whether assertions actually *prove* something or just execute lines. Push for stronger assertions, widen the mutation-testing scope ([CHKARCH-TESTING-MUTATION-RATCHET]), and call out tests that would still pass if the code were broken. Both ratchets move one way only.
 
-### 5. Audit performance measurements
+### 5. Guard the performance numbers
 
 Performance is a feature, but the benchmark is **indicative, not a gate** ([CHKARCH-TESTING-BENCH]). It runs on a workstation against whatever else that machine is doing, so background load moves every tool together. Nothing in CI passes or fails on a benchmark number, and no gate is to be reintroduced.
 

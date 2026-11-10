@@ -1,25 +1,8 @@
 //! Conversion of parsed Python syntax into stub declaration values.
 
-use basilisk_canonical::{BindingTable, TypingForm};
 use ruff_python_ast::{self as ast, Decorator, Expr, Parameters, StmtAnnAssign, StmtFunctionDef};
 
 use crate::types::{StubFunction, StubParam, StubParamKind, StubSpan};
-
-/// Does any decorator on this definition denote `form`?
-///
-/// The question is the decorator **node**; the answer is a [`TypingForm`]. A
-/// stub writing `from typing import overload as _ov` resolves identically to
-/// one writing `@overload`, and a stub that defines its own `overload` does
-/// not resolve at all.
-pub(super) fn has_decorator_form(
-    bindings: &BindingTable,
-    decorators: &[Decorator],
-    form: TypingForm,
-) -> bool {
-    decorators
-        .iter()
-        .any(|decorator| bindings.form_of(&decorator.expression) == Some(form))
-}
 
 pub(super) fn ann_assign_target_name(ann: &StmtAnnAssign) -> Option<String> {
     if let Expr::Name(name_expr) = ann.target.as_ref() {
@@ -29,16 +12,14 @@ pub(super) fn ann_assign_target_name(ann: &StmtAnnAssign) -> Option<String> {
     }
 }
 
-pub(super) fn stub_method(
-    function: &StmtFunctionDef,
-    class_name: &str,
-    bindings: &BindingTable,
-) -> StubFunction {
+pub(super) fn stub_method(function: &StmtFunctionDef, class_name: &str) -> StubFunction {
     let decorators = extract_decorator_names(&function.decorator_list);
     let mut params = extract_params(&function.parameters);
-    // A static method has no receiver to strip; every other method binds its
-    // first parameter as one.
-    let receiver = if params.is_empty() {
+    let receiver = if decorators
+        .iter()
+        .any(|decorator| decorator.ends_with("staticmethod"))
+        || params.is_empty()
+    {
         None
     } else {
         Some(params.remove(0))
@@ -51,8 +32,8 @@ pub(super) fn stub_method(
             .returns
             .as_ref()
             .map(|annotation| expr_to_annotation(annotation)),
+        is_overload: decorators.iter().any(|decorator| decorator == "overload"),
         is_async: function.is_async,
-        is_overload: has_decorator_form(bindings, &function.decorator_list, TypingForm::Overload),
         decorators,
         class_name: Some(class_name.to_owned()),
         source_span: StubSpan {

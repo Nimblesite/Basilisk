@@ -3,16 +3,6 @@
 
 use super::{rhs::RhsKind, span::Span};
 
-/// The builtin descriptor a class-body assignment's RHS call applies, decided
-/// from the callee's resolved binding — never from its spelling.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DescriptorKind {
-    /// The wrapped callable consumes no implicit receiver.
-    StaticMethod,
-    /// The wrapped callable consumes `cls` on every access path.
-    ClassMethod,
-}
-
 /// A module-level or class-body variable assignment.
 #[derive(Debug, Clone, PartialEq)]
 pub struct VariableInfo {
@@ -60,16 +50,14 @@ pub struct AttributeInfo {
     ///
     /// In enum class bodies, lambda attributes are non-members.
     pub rhs_is_lambda: bool,
-    /// The descriptor wrapper when the right-hand-side is a call whose callee
-    /// resolves to the builtin `staticmethod` or `classmethod`, else `None`.
+    /// The descriptor wrapper name when the right-hand-side is a call to
+    /// `staticmethod(...)` or `classmethod(...)`, else `None`.
     ///
-    /// Resolved through the module's bindings with the builtin fallback, so an
-    /// aliased import is recognised and a module-local shadow is not
-    /// ([RESOLV-CANONICAL-BINDING]). In enum class bodies, static/class method
-    /// descriptors are non-members; in ordinary class bodies the wrapper
-    /// decides which implicit receiver a bound callable consumes
+    /// In enum class bodies, static/class method descriptors are non-members;
+    /// in ordinary class bodies the wrapper decides which implicit receiver a
+    /// bound callable consumes
     /// ([#382](https://github.com/Nimblesite/Basilisk/issues/382)).
-    pub rhs_descriptor: Option<DescriptorKind>,
+    pub rhs_descriptor: Option<String>,
     /// The simple name of the callable this attribute binds, when the
     /// right-hand-side is a bare name (`m = f`) or a descriptor wrapper around
     /// one (`s = staticmethod(g)`), else `None`. Class-body assignments of
@@ -79,16 +67,6 @@ pub struct AttributeInfo {
     ///
     /// Used by `typeddicts_readonly` to detect mutation of read-only `TypedDict` fields.
     pub is_readonly: bool,
-    /// `true` when the annotation is the `Final` qualifier, bare or subscripted.
-    ///
-    /// Resolved through the module's bindings at collection time, so consumers
-    /// never re-derive it from annotation text. Implements [RESOLV-CANONICAL-BINDING].
-    pub is_final: bool,
-    /// `true` when the annotation is the `ClassVar` qualifier, bare or subscripted.
-    ///
-    /// Resolved through the module's bindings at collection time, so consumers
-    /// never re-derive it from annotation text. Implements [RESOLV-CANONICAL-BINDING].
-    pub is_class_var: bool,
     /// `true` when the field is keyword-only in a dataclass `__init__`.
     ///
     /// A field is `kw_only` when:

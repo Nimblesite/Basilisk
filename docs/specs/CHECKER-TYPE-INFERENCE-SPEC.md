@@ -12,14 +12,6 @@ require or discourage annotations without changing PEP behavior (see
 >
 > **Implementation**: the engine is `crates/basilisk-checker/src/bidir/` (synthesis, checking, constraints, solver, generics), `src/narrow/` (flow-sensitive narrowing and inference-driven reachability), and `src/subtyping.rs` (`SubtypingContext`). The pre-engine remnants (`inference.rs`, `collection_inference.rs`, `types_parsing.rs`, per-rule text matching) are **legacy under demolition** — see [TYPEINF-LEGACY](#TYPEINF-LEGACY); nothing in this spec licenses new code against them.
 
-> **Integrity status (2026-08-06):** Basilisk's former conformance result and
-> every Basilisk-generated benchmark, scorecard, and competitor ranking in this
-> document are withdrawn historical research notes. The current conformance
-> level is temporarily unknown while fitted logic is deleted and rebuilt from
-> the specification. External figures remain attributed vendor or third-party
-> claims, not Basilisk measurements. No figure here may be republished until its
-> methodology and robustness have been independently reviewed.
-
 ---
 
 ## [TYPEINF-REDUNDANT] Redundant Annotation Principle {#TYPEINF-REDUNDANT}
@@ -116,28 +108,9 @@ and no new code may be written against any of them:
   the annotation as a type expression through the resolution cascade
   ([TYPEINF-ANNOTATION-RESOLUTION](#TYPEINF-ANNOTATION-RESOLUTION)) into the
   engine.
-- `InferredType::Named(String)` — identifying a type by the characters it was
-  spelled with rather than by the declaration it resolves to. This is the root
-  the two entries above grow from: while a type *is* a string, comparing types
-  can only ever be comparing strings.
 - `RhsKind` shape dispatch in rules — superseded by synthesized types.
 - Rule-local subtype/text helpers — superseded by
   `subtyping::SubtypingContext` as the **single** subtyping judgment.
-
-**This is the same defect as the symbol-naming ban, one level down.** The names
-these paths match on are true builtins, so
-[CHKARCH-RECOGNITION-PERMITTED](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-RECOGNITION-PERMITTED)
-allows naming them — but the *mechanism* is string matching on code, and it
-produces the same failure: a verdict that depends on how the file was written
-instead of on what it means. `slice_span(src, span).starts_with("tuple[")` is
-banned by
-[CHKARCH-RECOGNITION-BANNED](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-RECOGNITION-BANNED)
-whatever the name inside the brackets is.
-
-As of 2026-08-06 this layer is roughly 130 sites — 94 `slice_span` and 36
-`from_annotation` in `crates/basilisk-checker/src`. Because it is the checker's
-entire type representation, it comes out by scheduled demolition, not by ad-hoc
-edits: [ASTREBUILD-PHASE-TYPEEXPR](../plans/CHECKER-AST-RECONSTRUCTION-PLAN.md#ASTREBUILD-PHASE-TYPEEXPR).
 
 While a legacy path still exists in the tree it is an implementation debt, not
 a design. Removing it must not silently drop a diagnostic from a rule that

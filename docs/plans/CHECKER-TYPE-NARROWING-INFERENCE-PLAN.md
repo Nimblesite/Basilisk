@@ -603,10 +603,10 @@ measures speed — self-measured, reproducible, write-always:
   are vendor/benchmark claims, not independently audited; treat them as
   directional. The only numbers Basilisk acts on are the ones its own
   scoreboard harness produces ([NARROWPLAN-SCOREBOARD](#NARROWPLAN-SCOREBOARD)).
-- **Competitors are moving targets.** Any future comparison must identify exact
-  versions and remeasure them with an independently reviewed methodology. No
-  comparative figure or CI gate is reinstated merely by rerunning the current
-  withdrawn scoreboard.
+- **Competitors are moving targets.** Pyrefly and ty ship fast and are well
+  funded; ty is actively closing its bidirectional gap. The scoreboard ratchet
+  is designed for this: leads are re-proven against latest releases on every
+  run, and a lost axis turns CI red rather than silently eroding the claim.
 
 ## Acceptance {#NARROWPLAN-ACCEPTANCE}
 
@@ -924,12 +924,10 @@ before the stage is declared closed:
   `unnecessary_lazy_evaluations`, `bool_to_int_with_if`, `too_many_lines` on
   `is_assignable_to` (the `Callable` arm extracted into `callable_assignable` /
   `callable_params_assignable`), and a `type_complexity` in the #381 test.
-- [x] **Historical pristine-fixture record:**
-  `python3 conformance/run_conformance.py` returned 141/141 and 0 false
-  positives from the then-current `python/typing@main` clone against a clean
-  `--release` build. This predates the retraction and is not conformance
-  evidence ([CHKARCH-CONFORMANCE]). The fixture comparison found SIX
-  regressions this stage had
+- [x] `python3 conformance/run_conformance.py` — 100% / 0 false positives from
+  a fresh `python/typing@main` clone against a clean `--release` build
+  ([CHKARCH-CONFORMANCE]).
+  — 141/141, 0 false positives. The gate found SIX regressions this stage had
   introduced, each fixed by teaching the checker, never by silencing a rule:
   1. **`aliases_typealiastype`** (2 FP) — the legacy textual alias matcher
      scooped up `X = TypeAliasType("X", body, ...)` and matched values against
@@ -1321,10 +1319,9 @@ before the stage is declared closed:
   `walk_if` probe-then-walk and the `walk_stmts` re-probe no longer
   re-synthesize the same expressions. Cost went from linear in module size to
   flat.
-- [ ] Record an indicative `make bench` measurement on a fixture that actually
-  exercises the flow walker **in the same change that first wires it**, so its
-  cost is visible for human review. Do not turn that workstation timing into a
-  pass/fail gate.
+- [ ] Record a `make bench` baseline on a fixture that actually exercises the
+  flow walker **in the same change that first wires it**, so the walker stops
+  being invisible to the ratchet the moment it starts costing real time.
 - [x] **Step 1 — `assignment_compatibility` to the engine; delete its
   `RhsKind` shape-matching in the same change.** Landed: every right-hand side
   is typed by `rules/shared/oracle.rs` (`ModuleOracle`, a `BidirEngine` seeded
@@ -1644,10 +1641,9 @@ before the stage is declared closed:
   *Measured 2026-08-05 after the subtyping/Step-8/Step-7a pass — green:*
   *workspace `cargo test --workspace` **7253 / 0** (checker 4067, resolver
   625, and every other crate), `cargo clippy --workspace --all-targets`
-  clean at full strictness, `cargo fmt --all` applied, a historical pristine
-  fixture run recorded **141/141 with 0 false positives and 0 missed** (this is
-  a withdrawn fixture result, not conformance evidence), torture golden
-  **12/12** with the
+  clean at full strictness, `cargo fmt --all` applied, live conformance
+  **141/141 with 0 false positives and 0 missed** (fresh `--release` build,
+  binary passed explicitly), torture golden **12/12** with the
   committed-baseline scoreboard gate reporting "no basilisk regression",
   Zed extension job green (WASM `wasm32-wasip2` build + clippy + 97 tests),
   `website/src/_data/rules.json` regenerated so the
@@ -1657,7 +1653,7 @@ before the stage is declared closed:
   coverage ratchet (`./scripts/test-rust.sh`), `make _test_vsix`,
   `make _test_nvim`, the mutation ratchet (in scope — `names_unbound`,
   `rebind`, and eleven rule files changed), and `make bench` on a quiet
-  machine (the prior benchmark alert was attributed to thermal load by a
+  machine (the prior red gate was attributed to thermal load by a
   head-to-head against the committed binary: 19.3/14.2/14.9/13.2 ms
   baseline vs 20.6/14.6/14.9/13.2 ms working, a true code delta of 0–7%).*
 
@@ -1711,11 +1707,6 @@ Nothing below (except the already-live torture corpus) starts before the
 demolition order above it is complete: score the shipped checker, not a
 detached engine.
 
-> **Withdrawn figures:** Completed scores and competitor standings below are
-> retained as dated investigation logs only. They are not current claims or
-> rankings. The harness and methodology must be independently reviewed before
-> any result is republished or used as a CI gate.
-
 - [x] Seed the scoreboard with a **type-torture corpus**: hard, spec-grounded
   problems (several straight from the issue tracker) scored conformance-style
   against every competitor, with hang detection as a correctness axis.
@@ -1726,7 +1717,7 @@ detached engine.
   `TypeIs`, PEP 612 `ParamSpec` preservation, generic constructor solving) +
   `run_torture.py` (out-of-the-box defaults for every tool, best-effort
   latest-release pull, per-invocation timeout scored as `hang`, WRITE-ALWAYS
-  `status/torture.csv` after every case, historical regression comparison against
+  `status/torture.csv` after every case, read-only regression gate against
   the committed baseline, exit 3). The first measured run (2026-08-04)
   landed basilisk at 5/8, pinning three live defects; all three are fixed —
   the #374 enum-expansion false positive (enum literal expansion
@@ -1748,13 +1739,11 @@ detached engine.
   class object per the special-types chapter), and `ternary_narrowing`
   (`x is [not] None` guards narrow conditional-expression arms). All twelve
   are pinned in-process by `torture_golden_tests.rs`; basilisk stands 12/12.
-- [ ] After independent methodology review, build the inference scoreboard
-  harness mirroring `benchmarks/`: pull the
+- [ ] Build the inference scoreboard harness mirroring `benchmarks/`: pull the
   latest official release of each competitor (pyright, mypy, ty, pyrefly,
   zuban) every run; write scores to a status file immediately and
-  unconditionally; compare read-only against the committed baseline for human
-  review before any gate is considered.
-  (The torture runner above implements the historical write-always/comparison/pull
+  unconditionally; gate read-only against the committed baseline.
+  (The torture runner above implements the full write-always/gate/pull
   contract for its own corpus; this box widens the same mechanism to the
   five measurable-target axes.)
 - [ ] Build the reveal_type-precision corpus

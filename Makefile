@@ -5,7 +5,7 @@
 # Exactly 7 standard targets: build, test, lint, fmt, clean, ci, setup
 # =============================================================================
 
-.PHONY: build test lint fmt clean ci setup book mutation-test conformance mutation-conformance bench bench-basilisk reinstall-vsix reinstall-vsix-macos reinstall-vsix-prerelease package-zed
+.PHONY: build test lint fmt clean ci setup book mutation-test conformance bench bench-basilisk reinstall-vsix reinstall-vsix-macos reinstall-vsix-prerelease package-zed
 
 # ---------------------------------------------------------------------------
 # OS Detection
@@ -238,23 +238,12 @@ mutation-test:
 		fi; \
 	'
 
-## conformance: Run the pristine fixture regression check with python/typing's
-## unmodified harness at the last revision carrying its Basilisk adapter. Writes
-## internal evidence only; it is not a current official conformance score.
-## Clones FRESH every run (no cache); needs network + git.
+## conformance: Score basilisk by RUNNING the REAL python/typing harness and
+## write conformance/conformance_status.csv + the website report. Clones the
+## suite FRESH every run (no cache); needs network + git. See [CHKARCH-CONFORMANCE].
 conformance:
 	@cargo build -p basilisk-cli --bin basilisk
 	@python3 conformance/run_conformance.py --bin target/debug/basilisk
-
-## mutation-conformance: Gate basilisk on the AST-PRESERVING MUTATED fixtures
-## (consistent import renames + whitespace reformatting; sharkdp's harness,
-## vendored verbatim). Identical semantics, so a structural checker must hold
-## its verdicts; the internal pass-rate ratchet may only rise. Neither this nor
-## the pristine result is a current official conformance score. See
-## conformance/run_mutation_conformance.py and docs/CONFORMANCE-INTEGRITY-AUDIT.md.
-mutation-conformance:
-	@cargo build --release -p basilisk-cli --bin basilisk
-	@python3 conformance/run_mutation_conformance.py --bin target/release/basilisk
 
 ## bench: Benchmark Basilisk vs pyright/mypy/ty/pyrefly/zuban on the fixture suite.
 ## INDICATIVE ONLY — this runs on a developer workstation under whatever else it
@@ -440,6 +429,7 @@ _lint_rust:
 	cargo clippy --workspace --all-targets -- -D warnings && \
 	cargo audit && \
 	bash scripts/check-dependency-shape.sh && \
+	bash scripts/check-illegal-tags.sh && \
 	echo -e '\033[0;32m✓ Rust lint passed\033[0m'
 
 _lint_vsix:

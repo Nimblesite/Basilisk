@@ -204,7 +204,12 @@ async fn diagnostic_codes_for_file(server: &LspServer, path: &Path) -> Option<BT
 fn error_codes(diagnostics: &[basilisk_checker::Diagnostic]) -> BTreeSet<String> {
     diagnostics
         .iter()
-        .filter(|diagnostic| diagnostic.severity == basilisk_checker::Severity::Error)
+        .filter(|diagnostic| {
+            matches!(
+                diagnostic.severity,
+                basilisk_checker::Severity::Error | basilisk_checker::Severity::SafetyViolation
+            )
+        })
         .map(|diagnostic| diagnostic.code.code.to_owned())
         .collect()
 }

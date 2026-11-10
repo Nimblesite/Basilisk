@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 # Implements [CHKARCH-CONFORMANCE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md
-"""Maintain generated conformance references and published README copies.
+"""Stamp the live conformance score + graded commit into the README and spec.
 
-The former public score is withdrawn, so the canonical README sources and checker
-architecture spec intentionally contain no live score markers. Historical harness
-output remains in `website/src/_data/conformance_report.json` as audit evidence,
-not as a publishable conformance claim. If independently validated figures are
-restored later, this generator is the single stamping path: it refreshes explicit
-markers from the recorded upstream output before regenerating every README target.
+Static docs (README.md, README.zh.md, the checker-architecture spec) quote the
+conformance score and the exact `python/typing` commit it was measured against.
+Those drift as the checker improves and `main` advances. This generator reads
+`website/src/_data/conformance_report.json` — written by
+`conformance/run_conformance.py` on every run from the REAL python/typing harness
+output — and refreshes the quoted values in place, so the docs can never silently
+contradict the self-measured number.
 
 It updates two kinds of spot, both render-safe (the markers are invisible HTML
 comments, so they work mid-sentence, inside a list item, or inside a table cell):
@@ -33,10 +34,10 @@ import gen_readmes
 ROOT = Path(__file__).resolve().parents[1]
 REPORT = ROOT / "website" / "src" / "_data" / "conformance_report.json"
 BENCH_STATUS_DIR = ROOT / "benchmarks" / "status"
-# Only ONE README per language is authored. During the metrics withdrawal these
-# sources carry no score/benchmark markers. If publication is restored after
-# validation, markers live here and `gen_readmes.py` propagates them to GitHub,
-# the VSIX (Marketplace + Open VSX), and PyPI ([README-STAMPED]).
+# Every published README quotes the same score, but only ONE file per language
+# is authored: the READMEs are generated from these sources ([README]), so the
+# markers are stamped here and `gen_readmes.py` propagates them to GitHub, the
+# VSIX (Marketplace + Open VSX), and PyPI.
 TARGETS = (
     ROOT / "docs" / "readme" / "README.src.md",
     ROOT / "docs" / "readme" / "README.zh.src.md",

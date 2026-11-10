@@ -379,137 +379,52 @@ accepted by the Python parser in Python 3.12 and later"
 
 Tests: `crates/basilisk-checker/tests/checker/version_target_tests.rs`.
 
-## Symbol recognition — AST and resolution only {#CHKARCH-RECOGNITION}
-
-**Normative, and it overrides every other section of this specification.** No
-part of Basilisk may decide what a Python expression *means* by examining the
-characters written at the use site. Meaning is a property of the **definition**
-an expression resolves to, and it is derived from the parsed AST plus binding
-resolution — in the checker, in the resolver, in the LSP, in stub parsing, in
-every crate, without exception.
-
-This is not a style preference. Character matching is wrong on the language's
-own terms: `from typing import ClassVar as CV` is a `ClassVar` though the
-characters differ, and a module's own `class ClassVar:` is not one though the
-characters match. Basilisk previously scored 100% on the `python/typing`
-conformance suite with recognition fitted to the fixtures' spellings; the score
-collapsed under AST-preserving mutation, the claim was withdrawn, and the
-project was removed from the official results table. That failure is the reason
-this section is normative — see the
-[integrity audit](../CONFORMANCE-INTEGRITY-AUDIT.md) and the
-[spelling-cheat inventory](../CONFORMANCE-SPELLING-CHEAT-INVENTORY.md).
-
-### Canonical resolution {#RESOLV-CANONICAL}
-
-The single lawful mechanism, implemented in `basilisk-resolver`'s `canonical`
-module. Recognition is a two-step question, and both steps are mandatory:
-
-1. **Which definition does this expression refer to?** Answered from the
-   module's own imports and bindings ([RESOLV-CANONICAL-BINDING](#RESOLV-CANONICAL-BINDING)),
-   producing a `CanonicalSymbol` — a fully-qualified `(module, name)` definition
-   site.
-2. **What does the specification define at that site?** Answered by the registry
-   ([RESOLV-CANONICAL-REGISTRY](#RESOLV-CANONICAL-REGISTRY)), producing a
-   `TypingForm`.
-
-`TypingForm` is **Basilisk's own vocabulary**. Every variant is the *answer*
-resolution produces, never the *question* a caller asks. A caller that can pass
-a name has already broken the contract, so no API in this path accepts one.
-
-### Binding resolution {#RESOLV-CANONICAL-BINDING}
-
-`BindingTable` is built once per module from its AST and records what each local
-name refers to: symbols bound by `from X import A [as B]`, modules bound by
-`import X [as Y]`, star-imported modules, and names **shadowed** by a local
-`class`, `def`, or assignment. Imports are collected at any nesting depth,
-because an import under `if TYPE_CHECKING:` or inside a `try`/`except
-ImportError` fallback still binds at module level.
-
-Lookups unwrap the forms a symbol is used through — subscript (`Final[int]`),
-call (`TypeVar("T")`), and dotted module access (`t.ClassVar`) — and follow
-dotted paths so `collections.abc.Callable` resolves through the `collections`
-binding. A shadowed name resolves to nothing, which is the correct answer: it is
-not the specification's symbol.
-
-### The specification registry {#RESOLV-CANONICAL-REGISTRY}
-
-The mapping from definition site to `TypingForm` lives in
-`crates/basilisk-resolver/resources/typing_symbols.toml` **as data**. Python
-spellings appear in that file and in no Rust source file.
-
-Adding or changing a recognised symbol is a data edit. If implementing a rule
-appears to require typing a Python symbol name into Rust, the correct fix is a
-registry entry — never a comparison, however it is wrapped.
-
-`crates/basilisk-resolver/tests/canonical_registry.rs` validates that every
-registry entry resolves to a real declaration in bundled typeshed. An entry
-naming a symbol typeshed does not declare is a **build failure**; that test is
-what prevents the registry itself from degenerating into a spelling table.
-
-### Banned mechanisms {#CHKARCH-RECOGNITION-BANNED}
-
-Illegal in production code in every crate, in every form — as a comparison, a
-match arm, a constant array, a function argument, or behind any API that takes
-one. Delete on sight:
-
-| Mechanism | Example |
-|---|---|
-| Comparing a use-site name to a typing symbol | `name.id.as_str() == "TypeVar"` |
-| Matching a base or decorator spelling | `matches!(base, "Protocol" \| "Generic")` |
-| A constant table of spellings | `const FORMS: &[&str] = &["Final", …]` |
-| Passing the name into a resolver API | `denotes(resolver, expr, "ClassVar")` |
-| Scanning raw source for language vocabulary | `source.lines()` + `starts_with("def ")` |
-| Hand-lexing Python | manual quote/comment skipping to find `yield` |
-| Matching rendered annotation text | `slice_span(src, span).starts_with("tuple[")` |
-
-The last row is the same defect one level down and is condemned by
-[TYPEINF-LEGACY](CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-LEGACY); its removal is
-[ASTREBUILD-PHASE-TYPEEXPR](../plans/CHECKER-AST-RECONSTRUCTION-PLAN.md#ASTREBUILD-PHASE-TYPEEXPR).
-
-Wrapping a banned mechanism in a helper, a trait, or a resolver does not launder
-it. The test is whether the code works only because a human typed Python's
-vocabulary into Rust.
-
-### Permitted {#CHKARCH-RECOGNITION-PERMITTED}
-
-These decide nothing about typing, so naming them is lawful:
-
-- **True builtins** (`int`, `str`, `list`, `isinstance`, `object`) and dunder
-  names — they need no import, so a name cannot be rebound by one.
-- **Keyword-argument names at call sites** (`bound=`, `kw_only=`, `total=`) —
-  part of a signature already identified by resolution.
-- **Basilisk's own directive syntax** (`# basilisk:`, `# type:`) — genuinely
-  comments, which the AST does not carry, so parsing them from text is the only
-  possible mechanism.
-- **Basilisk's own rendered output** — text this codebase produced, such as a
-  stub signature it formatted, parsed back for display.
-- **Line geometry** — computing a span or indentation for a diagnostic's
-  location, provided no Python structure is inferred from it.
-- **Diagnostic message text** shown to users.
-
-### Abstention over guessing {#CHKARCH-RECOGNITION-ABSTAIN}
-
-When resolution cannot answer, the rule emits nothing. A silent rule is a
-tracked gap; a rule that guesses from spelling is a false conformance claim. A
-rule may never be disabled, unregistered, or deleted to move a number
-([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)) — an unimplementable
-rule stays registered and inert until it can be built lawfully.
-
-### Verification {#CHKARCH-RECOGNITION-VERIFY}
-
-Conformance on pristine fixtures cannot distinguish lawful recognition from
-fitted recognition — that is precisely how the withdrawn claim survived review.
-Every rule therefore carries tests that a spelling-based implementation fails:
-the same program with the import **aliased**, accessed **dotted** through a
-module, **shadowed** by a local definition, and **reformatted**. A verdict that
-changes under any of these is a defect, whatever the fixture score says. The
-suite-level equivalent is the mutation gate
-([CHKARCH-CONFORMANCE-MUTATION](#CHKARCH-CONFORMANCE-MUTATION)).
-
-Current implementation status and the rebuild order are tracked in
-[ASTREBUILD](../plans/CHECKER-AST-RECONSTRUCTION-PLAN.md#ASTREBUILD).
-
 ---
+
+## Ownership and safety analysis {#CHKARCH-SAFETY}
+
+Status: planned, opt-in, and not wired into the checker pipeline. The
+scaffolding lives in `basilisk-checker`'s `ownership` module — there is no
+separate crate for it, and it registers no rule; shipping PEP rules must not
+reuse these anchors or diagnostic descriptions. Its scan is textual, so it must
+be rebuilt on the Ruff AST before any rule is registered against it.
+
+These are Basilisk rules. The concepts are borrowed from
+[Mojo's ownership model](https://docs.modular.com/mojo/manual/values/ownership),
+but the analysis is Basilisk's own, expressed in standard Python `Annotated`
+conventions — not a port of Mojo's checker. `mojo` is therefore not a legal
+identifier here: it must never appear in a spec ID, module path, file name, or
+rule name. Prose may credit the inspiration; tags may not carry it.
+
+Because none of it works today it is also **not advertised**: it stays out of
+the README, the website, and the user-facing docs until it ships as a working,
+opt-in rule set. Only complete, production-ready features are advertised.
+
+### Ownership tracking {#CHKARCH-SAFETY-OWNERSHIP}
+
+The target is explicit `Annotated[T, Borrowed|InOut|Owned]` analysis for
+mutation-of-borrowed and use-after-transfer diagnostics.
+
+### Parameter immutability {#CHKARCH-SAFETY-IMMUTABLE}
+
+The target is an opt-in rule that treats mutable parameters as read-only unless
+marked `InOut`; it does not change Python runtime semantics.
+
+### Structural discipline {#CHKARCH-SAFETY-STRUCTURAL}
+
+The target is opt-in checks for dynamic attributes and related typed-class
+structure. Existing PEP/dataclass rules remain separate.
+
+### Explicit coercion {#CHKARCH-SAFETY-COERCION}
+
+The target is opt-in diagnostics for selected implicit conversions. It must not
+contradict the typing-spec numeric tower used by default PEP rules.
+
+### Compatibility contract {#CHKARCH-SAFETY-COMPAT}
+
+All metadata uses standard Python typing constructs, all rules are off by
+default, and the implementation plan is
+[CHECKER-ADVANCED-FEATURES-PLAN.md](../plans/CHECKER-ADVANCED-FEATURES-PLAN.md).
 
 ## Diagnostic Rules {#CHKARCH-DIAG}
 
@@ -767,6 +682,9 @@ Source Files (.py)
   VS Code / Cursor /      Terminal / CI
   Windsurf / Zed /
   Neovim
+
+  (planned: basilisk-checker::ownership — ownership / immutability /
+   coercion analysis — is not yet wired into the pipeline.)
 ```
 
 All stages are backed by:
@@ -775,17 +693,6 @@ All stages are backed by:
 | basilisk-db      |  Salsa incremental computation database
 +------------------+
 ```
-
-**The AST is the only input to every stage below the parser.** Source text
-enters this pipeline exactly once, at `ruff_python_parser`. Downstream stages
-consume the parsed tree, the symbol table, and the binding table
-([RESOLV-CANONICAL-BINDING](#RESOLV-CANONICAL-BINDING)); they do not re-read the
-file to reconstruct what the parser already produced. `ResolvedModule::source`
-exists to render diagnostic spans and quote code back to the user, not to reach
-a verdict. Any stage that re-derives structure from characters is duplicating
-the parser and will disagree with it — inside string literals, inside comments,
-across line continuations, and under reformatting
-([CHKARCH-RECOGNITION-BANNED](#CHKARCH-RECOGNITION-BANNED)).
 
 ### Parse Nesting-Depth Guard {#CHKARCH-ARCH-PARSEDEPTH}
 
@@ -831,9 +738,9 @@ real-binary crash-safety tests in
 basilisk/
   crates/
     basilisk-parser/       # Python AST parsing (wraps or extends ruff_python_parser)
-    basilisk-resolver/     # Name resolution, scope analysis, import resolution,
-                           #   canonical symbol recognition (RESOLV-CANONICAL)
-    basilisk-checker/      # Core type checking engine
+    basilisk-resolver/     # Name resolution, scope analysis, import resolution
+    basilisk-checker/      # Core type checking engine (incl. ownership:
+                           #   planned safety analysis, unwired)
     basilisk-lsp/          # Language Server Protocol implementation
     basilisk-cli/          # Command-line interface
     basilisk-stubs/        # Stub generation, loading, registry client
@@ -862,9 +769,7 @@ basilisk-stubs (standalone, used by basilisk-resolver)
 
 - **Cargo workspace** with all crates
 - Cross-compilation targets: `x86_64-linux`, `aarch64-linux`, `x86_64-darwin`, `aarch64-darwin`, `x86_64-windows`
-- CI: `cargo clippy`, `cargo test`, pristine/mutated conformance regression
-  suites, and fuzzing (nightly). Developer-machine benchmarks are recorded
-  manually and do not gate CI.
+- CI: `cargo clippy`, `cargo test`, conformance suite, benchmarks, fuzzing (nightly)
 - Release: pre-compiled binaries for all platforms (no build dependencies for users)
 
 #### Shared build-info emitter {#CHKARCH-ARCH-BUILD-VERSIONINFO}
@@ -1625,13 +1530,16 @@ adapter, cached fixtures, or a committed result standing in for a live run is a
 > is dishonest. If the rule genuinely analyses code and merely fires on valid input,
 > that is a real gap to fix in the checker, not to silence.
 
-- **Runner — the upstream snapshot's real harness, nothing else**:
+- **Runner — the real harness, nothing else**:
   [`conformance/run_conformance.py`](../../conformance/run_conformance.py) is the
-  ONE pristine-fixture path. While `python/typing@main` has no Basilisk adapter,
-  every run clones the declared historical upstream snapshot fresh and runs
-  that snapshot's **own unmodified `conformance/src/main.py --only-run
-  basilisk`** against the compiled binary (via `BASILISK_BIN`). Nothing of ours
-  is injected, adapted, or used to rescore the outcome. The
+  ONE conformance path. Every run it clones the
+  **latest [`python/typing@main`](https://github.com/python/typing/tree/main/conformance)**
+  FRESH (we shoot for the current spec suite, not a frozen commit) and runs the
+  suite's **OWN unmodified `conformance/src/main.py --only-run basilisk`** against
+  the real compiled binary (via `BASILISK_BIN`). The suite already ships the
+  official Basilisk adapter — `BasiliskTypeChecker` in
+  [`conformance/src/type_checker.py`](https://github.com/python/typing/blob/main/conformance/src/type_checker.py) —
+  so **nothing of ours is injected, vendored, adapted, or reimplemented**. The
   harness writes `results/basilisk/*.toml`; every `Pass`/`Fail` verdict and every
   `errors_diff` is the harness's OWN, produced by the same code that grades pyright,
   mypy, pyrefly, ty, zuban and pycroscope. From those real results the runner only
@@ -1852,23 +1760,21 @@ re-timed. Nothing measured is ever carried, so the write-always rule is
 untouched. CI never runs benchmarks at all; **a number published as a full
 benchmark must come from `make bench`** — this mode is for iteration.
 
-**Publication.** Every existing figure and ranking is withdrawn. The website
-may read the status CSV only to render a clearly labelled historical audit
-record; direct ingestion prevents transcription errors but does not validate
-the method or make a figure current. A controlled, repeatable environment,
-same-run comparisons, stated limitations, and independent methodology review
-are prerequisites for any future publication. No developer-workstation number
-is authoritative.
+**Publication.** The website reads the status CSV directly, so published figures
+are never hand-typed and never stale relative to the last committed run. The
+benchmark page carries the indicative-only caveat and the measured tool versions
+next to the table (`website/src/docs/benchmarks.njk`). Moving the benchmark onto
+dedicated, isolated hardware is the prerequisite for treating any of these
+numbers as authoritative.
 
 ### CI Artifact Storage Policy {#GITHUB-NO-ARTIFACTS}
 
 Basilisk is **public**: GitHub-hosted runner compute (all `ubuntu-24.04`) is free and unlimited; GitHub bills for **stored Actions artifacts** (GB-days). Therefore:
 
 - **CI stores no artifacts.** No `actions/upload-artifact` for coverage HTML,
-  mutation reports, logs, screenshots. Coverage and mutation gates enforce
-  in-job, and reports reproduce locally (`make test`, `make mutation-test`).
-  Benchmarks do not run or gate in CI. Codecov consumes `lcov.info` directly
-  without GitHub storage.
+  mutation reports, logs, screenshots. Gates enforce in-job (coverage, mutation
+  merge, benchmarks) and reports reproduce locally (`make test`, `make
+  mutation-test`). Codecov consumes `lcov.info` directly without GitHub storage.
 - **The only permanent store is the GitHub Release.** Release assets (binaries,
   per-platform VSIX) are free and unlimited; never retained Actions artifacts.
 - **Transient cross-job hand-offs are the sole exception** (matrix jobs on separate

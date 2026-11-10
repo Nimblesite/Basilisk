@@ -9,13 +9,14 @@ use super::sig_model::{ClassEntry, Sig};
 
 /// Member names contributed by well-known external protocol bases.
 ///
-/// `Sized`, `Hashable` and their kin all require an import, so mapping a base's
-/// SOURCE SPELLING to its members is not import resolution — a local class
-/// named `Sized` was treated as the stdlib protocol, and
-/// `from collections.abc import Sized as S` was not. That table is deleted;
-/// rebuild it on the annotation cascade ([TYPEINF-ANNOTATION-RESOLUTION]).
-fn well_known_member_names(_base: &str) -> &'static [&'static str] {
-    &[]
+/// These are presence-checked only: their signatures are standardized and a
+/// mismatch would be caught by other rules.
+fn well_known_member_names(base: &str) -> &'static [&'static str] {
+    match base {
+        "Sized" => &["__len__"],
+        "Hashable" => &["__hash__"],
+        _ => &[],
+    }
 }
 
 /// A class's full member surface: method overload sets and attribute names.

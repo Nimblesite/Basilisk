@@ -7,10 +7,10 @@
 //! declared type obtains that type here — from the Ruff AST annotation node,
 //! resolved through the cascade
 //!
-//! 1. type-alias table (PEP 695 `type X = ..`, and implicit `X = ..`),
+//! 1. type-alias table (PEP 695 `type X = ..`, `X: TypeAlias = ..`, implicit),
 //! 2. same-file class table,
 //! 3. import table,
-//! 4. builtins,
+//! 4. typeshed / builtins,
 //! 5. forward reference (a string annotation, parsed and resolved by 1–4),
 //!
 //! — never by pattern-matching annotation source text. Aliases are
@@ -68,14 +68,6 @@ pub struct AnnotationResolver<'m> {
     /// resulting type. The cascade is pure, so the second answer is the first
     /// one ([CHKARCH-TESTING-BENCH]).
     resolved: RefCell<HashMap<(u32, u32), InferredType>>,
-    /// Names of the STRUCTURAL classes this module declares — `Protocol` and
-    /// `TypedDict` subclasses, from the resolver's binding-resolved flags
-    /// ([RESOLV-CANONICAL-BINDING]). Structural types are satisfied by shape,
-    /// not identity, so nominal judgments abstain on them.
-    structural: std::collections::HashSet<&'m str>,
-    /// The module's binding table ([RESOLV-CANONICAL-BINDING]) — the ONE
-    /// lawful answer to "which typing symbol does this expression denote?".
-    bindings: &'m basilisk_resolver::BindingTable,
 }
 
 /// One step of resolution: the alias parameters currently bound, the aliases
@@ -121,48 +113,7 @@ impl<'m> AnnotationResolver<'m> {
             tables: Tables::build(&parsed.ast),
             annotations: index::annotation_nodes(&parsed.ast),
             resolved: RefCell::default(),
-            structural: module
-                .classes
-                .iter()
-                .filter(|class| class.is_protocol || class.is_typed_dict)
-                .map(|class| class.name.as_str())
-                .collect(),
-            bindings: &module.bindings,
         })
-    }
-
-    /// The module's binding table, for callers that resolve typing symbols
-    /// on expression nodes ([RESOLV-CANONICAL-BINDING]).
-    #[must_use]
-    pub fn bindings(&self) -> &basilisk_resolver::BindingTable {
-        self.bindings
-    }
-
-    /// Does this type mention a STRUCTURAL class this module declares — a
-    /// `Protocol` or `TypedDict` — at any depth? Structural targets need
-    /// member-level judgment, so nominal assignability rules abstain when
-    /// this answers `true`.
-    ///
-    /// The leaf test is set membership of the engine's `Named` leaf — the
-    /// [TYPEINF-LEGACY] boundary — against binding-resolved class nature; no
-    /// source text is consulted.
-    #[must_use]
-    pub fn is_structural_target(&self, ty: &InferredType) -> bool {
-        match ty {
-            InferredType::Named(name) => self.structural.contains(name.as_str()),
-            InferredType::Union(arms) => arms.iter().any(|arm| self.is_structural_target(arm)),
-            InferredType::Optional(inner)
-            | InferredType::List(inner)
-            | InferredType::Set(inner)
-            | InferredType::TypeForm(inner) => self.is_structural_target(inner),
-            InferredType::Dict(key, value) => {
-                self.is_structural_target(key) || self.is_structural_target(value)
-            }
-            InferredType::Tuple(elements) => {
-                elements.iter().any(|element| self.is_structural_target(element))
-            }
-            _ => false,
-        }
     }
 
     /// Resolve an annotation expression to the type it denotes.
@@ -208,6 +159,78 @@ impl<'m> AnnotationResolver<'m> {
     pub fn resolve_text(&self, text: &str) -> Option<InferredType> {
         let parsed = ruff_python_parser::parse_expression(text.trim()).ok()?;
         Some(self.resolve(parsed.expr()))
+    }
+
+    /// Does `spelling` — a decorator expression rendered as a dotted name —
+    /// denote the typing-module member `member`?
+    ///
+    /// The same binding question an annotation asks, answered by the same
+    /// tables ([#380](https://github.com/Nimblesite/Basilisk/issues/380)):
+    /// value re-bindings are followed first (`o = overload`, chains included),
+    /// then the import tables decide. `from typing import overload as ov`
+    /// and `t.overload` under `import typing as t` are the member; the same
+    /// spellings bound from any OTHER module are not — a decorator merely
+    /// *named* `overload` must not conjure an overload group. A bare unbound
+    /// spelling equal to `member` is accepted, matching Python's tolerance of
+    /// the name arriving via re-exports the table cannot see.
+    #[must_use]
+    pub fn decorator_denotes(&self, spelling: &str, member: &str) -> bool {
+        let mut current = spelling.to_owned();
+        for _ in 0..MAX_DEPTH {
+            match self.tables.values.get(&current) {
+                Some(next) => current = next.clone(),
+                None => break,
+            }
+        }
+        match current.split_once('.') {
+            Some((head, attr)) => attr == member && self.head_is_typing_module(head),
+            None => match self.tables.imports.get(&current) {
+                Some(imported) => {
+                    imported.original == member && builtins::is_typing_module(&imported.module)
+                }
+                None => current == member,
+            },
+        }
+    }
+
+    /// Is `head` a binding of (or literally) the typing module?
+    fn head_is_typing_module(&self, head: &str) -> bool {
+        match self.tables.modules.get(head) {
+            Some(module) => builtins::is_typing_module(module),
+            // Unbound heads keep the literal spellings only, so a foreign
+            // module aliased to `typing` cannot smuggle members in.
+            None => builtins::is_typing_module(head),
+        }
+    }
+
+    /// Does this type name a class whose assignability is **structural** — a
+    /// `Protocol` or a `TypedDict`?
+    ///
+    /// A rule that compares only *nominally* must abstain on such a target:
+    /// the name resolved fine, but "is this value that shape?" is a question
+    /// nominal comparison cannot answer, and answering it anyway is a false
+    /// positive on spec-valid code. Unions and containers are searched too, so
+    /// `list[P]` and `P | None` abstain exactly as `P` does.
+    #[must_use]
+    pub fn is_structural_target(&self, ty: &InferredType) -> bool {
+        match ty {
+            InferredType::Named(name) => self
+                .tables
+                .structural
+                .contains(name.split('[').next().unwrap_or(name)),
+            InferredType::Union(arms) => arms.iter().any(|arm| self.is_structural_target(arm)),
+            InferredType::Optional(inner)
+            | InferredType::List(inner)
+            | InferredType::Set(inner)
+            | InferredType::TypeForm(inner) => self.is_structural_target(inner),
+            InferredType::Dict(key, value) => {
+                self.is_structural_target(key) || self.is_structural_target(value)
+            }
+            InferredType::Tuple(elements) => {
+                elements.iter().any(|el| self.is_structural_target(el))
+            }
+            _ => false,
+        }
     }
 
     /// Is `name` a leaf the module GROUNDS — a class declared here or a
@@ -256,10 +279,10 @@ impl<'m> AnnotationResolver<'m> {
         if let Some(imported) = self.imported_leaf(name) {
             return imported;
         }
-        builtins::leaf(name).unwrap_or(InferredType::Unknown)
+        builtins::leaf(&name.to_ascii_lowercase()).unwrap_or(InferredType::Unknown)
     }
 
-    /// A dotted name: `mod.Class`.
+    /// A dotted name: `typing.Sequence`, `t.Optional`, `mod.Class`.
     fn attribute(&self, expr: &Expr, frame: &Frame) -> InferredType {
         let Some(dotted) = tables::dotted_name(expr) else {
             return InferredType::Unknown;
@@ -286,7 +309,8 @@ impl<'m> AnnotationResolver<'m> {
         };
         let nested = frame.nested();
         if !self.shadows_special_form(&head) {
-            if let Some(ty) = forms::special_form(self, &head, &args, &nested) {
+            if let Some(ty) = forms::special_form(self, &head.to_ascii_lowercase(), &args, &nested)
+            {
                 return ty;
             }
         }
@@ -353,23 +377,24 @@ impl<'m> AnnotationResolver<'m> {
         Some(self.eval(entry.value, &frame.expanding(name, bindings)))
     }
 
-    /// A name bound by a `from`-import of a typing module resolves to that
-    /// member as a **nominal** type: it is a name the cascade *did* resolve,
-    /// and calling it gradual would silence judgments the nominal comparison
-    /// can still make
-    /// ([#378](https://github.com/Nimblesite/Basilisk/issues/378)). What the
-    /// member MEANS is not decided here and must not be: that is a question
-    /// about its declaration, and the mechanism that answers it lawfully does
-    /// not exist yet. Project and third-party symbols stay gradual until the
-    /// import cascade covers them — the seam
-    /// [#324](https://github.com/Nimblesite/Basilisk/issues/324) fills, behind
-    /// this same entry point.
+    /// A name bound by `from typing import X` resolves to the special form it
+    /// names, or — for a member with no modelled form, such as the ABCs
+    /// `Iterable` and `Hashable` — to that member as a **nominal** type: it is
+    /// a name the cascade *did* resolve, and calling it gradual would silence
+    /// judgments the nominal comparison can still make
+    /// ([#378](https://github.com/Nimblesite/Basilisk/issues/378)). Project and
+    /// third-party symbols stay gradual until the import cascade covers them —
+    /// the seam [#324](https://github.com/Nimblesite/Basilisk/issues/324)
+    /// fills, behind this same entry point.
     fn imported_leaf(&self, name: &str) -> Option<InferredType> {
         let imported = self.tables.imports.get(name)?;
         if !builtins::is_typing_module(&imported.module) {
             return Some(InferredType::Unknown);
         }
-        Some(InferredType::Named(imported.original.clone()))
+        Some(
+            builtins::leaf(&imported.original.to_ascii_lowercase())
+                .unwrap_or_else(|| InferredType::Named(imported.original.clone())),
+        )
     }
 
     /// Rewrite a spelling into the name the cascade knows it by: an
@@ -389,8 +414,8 @@ impl<'m> AnnotationResolver<'m> {
         builtins::is_typing_module(module).then(|| member.to_owned())
     }
 
-    /// A module-level declaration of the same name wins over a special form:
-    /// a class declared in this file means *this* class.
+    /// A module-level declaration of the same name wins over the typing
+    /// special form: `class Literal: ...` in this file means *this* class.
     fn shadows_special_form(&self, head: &str) -> bool {
         self.tables.nominal.contains(head) || self.tables.aliases.contains_key(head)
     }

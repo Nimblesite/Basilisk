@@ -42,12 +42,7 @@ finds rules that slice a span out of the source and pattern-match the resulting
 net and returns the most: text predicates appear in the large majority of rule
 files, so the inventory below is a starting set, not the full extent.
 
-Expression-text scanners — **RESOLVED** (see
-[`CONFORMANCE-INTEGRITY-AUDIT.md`](../CONFORMANCE-INTEGRITY-AUDIT.md)). The
-shared structural judge lives in `rules/shared/type_expr.rs`
-([LINESCANPLAN-AST-MIGRATION]); `tests/type_expr_structural_tests.rs` pins the
-verdicts under import renames and whitespace mutation, with `red_pin_` tests
-holding the remaining honest gaps open:
+Expression-text scanners:
 
 - `aliases_type_statement.rs` — `is_invalid_rhs` classifies the RHS of a
   `type X = ...` statement by substring and prefix tests (`starts_with('[')`,
@@ -83,30 +78,25 @@ holding the remaining honest gaps open:
   [NARROWPLAN-ANNOTATION-RESOLUTION](CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-ANNOTATION-RESOLUTION)
   rather than this plan, but it is the same root cause and the same disposal.
 
-Structural keyword scanners **were** in the list below. All are now deleted; the
-rules are registered and inert pending
-[ASTREBUILD-PHASE-RULES](CHECKER-AST-RECONSTRUCTION-PLAN.md#ASTREBUILD-PHASE-RULES):
+Structural keyword scanners remain in:
 
-- `generics_variance_inference/` — six submodules deleted
-- `annotations_generators_2/` — `annotation.rs`, `type_check.rs`, `yield_scan.rs`
-  deleted; the last was a hand-rolled Python lexer hunting the characters
-  `yield`
+- `generics_variance_inference/`
+- `annotations_generators_2/mod.rs`
 - `literals_literalstring_helpers.rs`
 - `dataclasses_order.rs`
 - `generics_defaults_referential_2.rs`
-- `dataclasses_slots.rs` and `dataclasses_transform_class/` — the first keeps
-  its resolver-derived half
-- `protocols_subtyping.rs`, `tuples_index_2.rs`, `literals_semantics_2.rs`,
-  `specialtypes_never_2.rs`
-- `generics_type_erasure.rs` — keeps its `module_attr_assignments` half
 
-Also deleted outside this plan's original scope: `basilisk-checker/src/ownership.rs`,
-whose own module documentation conceded its scan was textual and matched inside
-comments and strings.
+Other statement/body reconstruction remains in:
 
-`rules/shared/text_scan.rs` retains `leading_indent`, `span_for_line`, and
-`split_top_level_commas` — line **geometry** for diagnostic placement, inferring
-no Python structure. `identifiers_followed_by` is deleted.
+- `dataclasses_slots.rs` and `dataclasses_transform_class/helpers.rs`
+- `protocols_subtyping.rs`
+- `tuples_index_2.rs`
+- `literals_semantics_2.rs`
+- `specialtypes_never_2.rs`
+- `generics_type_erasure.rs`
+
+`rules/shared.rs::span_for_line` may read a line for diagnostic geometry. It must
+not infer Python structure.
 
 ## Disposal {#LINESCANPLAN-DISPOSAL}
 
@@ -146,23 +136,13 @@ on the strength of a fixture alone.
 
 ## Enforcement {#LINESCANPLAN-ENFORCEMENT}
 
-The rule is now normative in the specification
-([CHKARCH-RECOGNITION-BANNED](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-RECOGNITION-BANNED)),
-which is what review enforces against. Automated enforcement remains open:
-
-- [ ] Reject new `.lines()` calls and keyword-prefix parsing of Python structure
-  in production code across **all** crates — not only `basilisk-checker/rules`,
-  which is the scoping error that let the LSP accumulate the same mechanism
-  unnoticed.
-- [ ] Wire it into the existing lint/CI path; do not add a Make target.
-- [ ] Keep the allowlist explicit, documented, and reviewed so it cannot grow
-  silently. Current lawful entries: line geometry, `# basilisk:` directive
-  parsing, and Basilisk's own rendered stub-signature output.
-
-A lint cannot catch the semantic form of this defect — the deleted
-`denotes(expr, "TypeVar")` API would pass any text-based check. Behavioural
-tests are the real gate:
-[CHKARCH-RECOGNITION-VERIFY](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-RECOGNITION-VERIFY).
+- [ ] Add a lint script that rejects new `.lines()` calls beneath
+  `crates/basilisk-checker/src/rules/`, with a narrow allowlist for documented
+  geometry helpers.
+- [ ] Reject keyword-prefix parsing of Python structure in checker production
+  code.
+- [ ] Wire the lint into the existing lint/CI path; do not add a Make target.
+- [ ] Keep the allowlist explicit and reviewed so it cannot grow silently.
 
 ## Acceptance {#LINESCANPLAN-ACCEPTANCE}
 

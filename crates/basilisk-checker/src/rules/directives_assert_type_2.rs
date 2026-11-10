@@ -63,7 +63,7 @@ impl Rule for AssertTypeMismatch {
                 continue;
             }
             // The resolver compared declared types; when it typed the value it
-            // has already answered.
+            // has already answered. Only an untyped value asks the engine.
             if call.actual_type.is_some() {
                 continue;
             }
