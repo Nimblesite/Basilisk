@@ -25,6 +25,9 @@ Desktop.ini
 # Rust
 # =============================================================================
 target/
+# `make clean` / `make distclean` rename heavy dirs here before unlinking them
+# in the background; they are transient and must never appear in git status.
+.trash-*
 *.wasm
 
 # =============================================================================

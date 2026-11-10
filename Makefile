@@ -16,7 +16,7 @@
 #   conformance MUTATED=1       _mutation_test PKG=... ALL=1 SHARD=...
 # =============================================================================
 
-.PHONY: build test test-checker test-checker-all lint fmt clean ci setup conformance
+.PHONY: build test test-checker test-checker-all lint fmt clean distclean ci setup conformance
 
 # ---------------------------------------------------------------------------
 # OS Detection
@@ -34,6 +34,13 @@ endif
 # Configuration
 # ---------------------------------------------------------------------------
 _EXTENSION_DIR             := vscode-extension
+
+# Directories large enough that unlinking them in place stalls the terminal for
+# minutes (`target/` alone runs to ~19G). `_purge_heavy` renames each one aside
+# with a single syscall and unlinks it off the critical path instead.
+_HEAVY_DIRS                := target $(_EXTENSION_DIR)/node_modules \
+                              website/node_modules website/_site \
+                              book/dist mutants.out
 _ZED_DIR                   := basilisk-zed
 _NVIM_DIR                  := basilisk.nvim
 _BOOK_DIR                  := book
@@ -206,6 +213,14 @@ fmt: _fmt_rust _fmt_python _fmt_vsix
 
 ## clean: Remove all build artifacts
 clean: _clean_rust _clean_vsix
+
+## distclean: Remove every ignored and untracked file (`git clean -xfd`),
+## without the multi-minute stall — the heavy directories are renamed aside
+## and unlinked in the background before git walks the tree.
+distclean: _purge_heavy
+	@echo -e '\033[1m\033[0;36m▶ Removing untracked + ignored files\033[0m' && \
+	git clean -x -f -d -e '.trash-*' && \
+	echo -e '\033[0;32m✓ Working tree clean\033[0m'
 
 ## ci: lint + test + build (full CI simulation)
 ci: lint test build
@@ -427,11 +442,35 @@ _reinstall_vsix: _clean_rust _clean_vsix _release_vsix _uninstall_vsix _install_
 # Internal Recipes
 # =============================================================================
 
-_clean_rust:
+# `cargo clean` unlinks target/ synchronously and blocks for minutes on a large
+# tree. _purge_target has already renamed it aside, so this only sweeps the
+# leftovers and re-runs cargo for a non-default CARGO_TARGET_DIR.
+_clean_rust: _purge_target
 	@echo -e '\033[1m\033[0;36m▶ Cleaning Rust artifacts\033[0m' && \
-	cargo clean && \
+	if [ -n "$$CARGO_TARGET_DIR" ]; then cargo clean; fi && \
 	$(RM) lcov.info && \
 	echo -e '\033[0;32m✓ Rust clean complete\033[0m'
+
+# Rename each named directory to a repo-root .trash-* entry (one atomic rename,
+# same filesystem) and unlink it in a detached background job. The caller gets
+# an empty tree immediately; the kernel does the slow part unattended.
+#
+# _purge_target is deliberately narrower than _purge_heavy: _clean_rust feeds
+# _reinstall_vsix, which still needs node_modules on disk afterwards.
+_purge_target:
+	@$(MAKE) --no-print-directory _purge DIRS="target"
+
+_purge_heavy:
+	@$(MAKE) --no-print-directory _purge DIRS="$(_HEAVY_DIRS)"
+
+_purge:
+	@n=0; for d in $(DIRS); do \
+		[ -d "$$d" ] || continue; \
+		n=$$((n+1)); trash=".trash-$$$$-$$n"; \
+		mv "$$d" "$$trash" 2>/dev/null || continue; \
+		( rm -rf "$$trash" >/dev/null 2>&1 & ); \
+		printf '\033[0;36m  ▸ %s unlinking in background\033[0m\n' "$$d"; \
+	done
 
 _clean_vsix:
 	@echo -e '\033[1m\033[0;36m▶ Cleaning VSIX artifacts\033[0m' && \
