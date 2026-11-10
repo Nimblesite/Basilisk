@@ -64,47 +64,9 @@ impl PartialEq for LazyAst {
     }
 }
 
-/// The module's import-resolution table, carried beside the records that were
-/// derived through it so consumers can ask what an expression *refers to*
-/// without re-walking the AST. Implements [RESOLV-CANONICAL-BINDING].
-///
-/// Wraps [`basilisk_canonical::BindingTable`] only to give it the same
-/// equality treatment as [`LazyAst`]: the table is a pure function of
-/// [`ResolvedModule::source`], so it carries no independent identity.
-#[derive(Debug, Clone, Default)]
-pub struct ModuleBindings(basilisk_canonical::BindingTable);
-
-impl ModuleBindings {
-    /// Wrap the table built by `visitor::collect` for storage on the module.
-    #[must_use]
-    pub fn new(table: basilisk_canonical::BindingTable) -> Self {
-        Self(table)
-    }
-}
-
-impl std::ops::Deref for ModuleBindings {
-    type Target = basilisk_canonical::BindingTable;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl PartialEq for ModuleBindings {
-    /// The table is derived from `source`, so it carries no independent
-    /// identity: module equality is decided entirely by the other fields.
-    fn eq(&self, _other: &Self) -> bool {
-        true
-    }
-}
-
 /// The complete resolved view of a parsed module.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ResolvedModule {
-    /// The module's import-resolution table ([RESOLV-CANONICAL-BINDING]):
-    /// every recognition question a consumer asks goes through this, never
-    /// through spellings.
-    pub bindings: ModuleBindings,
     /// All function definitions found at any nesting level.
     pub functions: Vec<FunctionInfo>,
     /// All class definitions found at module level.
@@ -120,12 +82,6 @@ pub struct ResolvedModule {
     /// Consumers that need genuinely module-level calls must filter by span
     /// against `functions`/`classes` `def_span`s.
     pub calls: Vec<CallSite>,
-    /// Every `cast(...)` call site in the module, in **any** expression
-    /// position — `return cast(...)`, `f(cast(...))`, and nested expressions
-    /// included. `cast()` is invalid wherever it appears, so `directives_cast`
-    /// needs a complete view that [`Self::calls`] deliberately does not give
-    /// (issue #335).
-    pub cast_calls: Vec<CallSite>,
     /// Every name bound at module scope, whatever the binding form: `=`,
     /// tuple/star unpacking, `for`/`with`/`except ... as` targets, walrus,
     /// `match` captures, `def`/`class`/`type` names, and import bindings —
@@ -340,28 +296,6 @@ pub struct ResolvedModule {
     /// so editor features and diagnostics never consult a compiled hand table
     /// or another generation's `builtins.pyi`.
     pub builtin_classes: std::sync::Arc<std::collections::HashMap<String, super::IndexedStubClass>>,
-    /// Every name the `builtins` module binds — classes, functions, and
-    /// module-level variables — from the active typeshed generation.
-    ///
-    /// This is the BUILTIN SCOPE: the namespace Python consults when a bare
-    /// name is bound nowhere in the module. It replaces the hard-coded
-    /// spelling whitelists rules used to carry, which blessed any user symbol
-    /// that happened to be spelled like a builtin and kept blessing a builtin
-    /// name the module had rebound.
-    ///
-    /// `None` when the builtin scope could NOT be established — no typeshed
-    /// generation is active, or the one that is could not be read. That is a
-    /// different fact from "the builtin scope binds nothing", and the two must
-    /// never share a value: a rule reading this suppresses on `None` and is
-    /// entitled to report on a name a `Some` scope does not contain
-    /// ([CHKARCH-CONFORMANCE-MODE]).
-    ///
-    /// An earlier revision typed this as a bare set whose EMPTINESS meant
-    /// "unknown". A loader bug then produced an empty set on every run, every
-    /// rule read it as "unknown", and every undefined-name diagnostic in every
-    /// module vanished while the checker reported success. A failure that is
-    /// indistinguishable from an answer is not a failure anyone can see.
-    pub builtin_names: Option<std::sync::Arc<std::collections::HashSet<String>>>,
     /// Public member API of plain-imported modules backed by a user/local stub,
     /// keyed by local binding name (`X` for `import X`).
     ///
@@ -399,9 +333,6 @@ impl ResolvedModule {
             super::CallReceiver::StringLiteral => ("str", true),
             super::CallReceiver::BytesLiteral => ("bytes", true),
             super::CallReceiver::Name(name) => self.builtin_type_of_name(name)?,
-            // A constructed instance's methods are resolved against the user
-            // class, not the builtin stub index ([#382]).
-            super::CallReceiver::Constructor(_) => return None,
         };
         self.builtin_classes
             .get(type_name)
@@ -420,12 +351,19 @@ impl ResolvedModule {
         let Some((class, literal_receiver)) = self.builtin_class_for_receiver(receiver) else {
             return Vec::new();
         };
-        let _ = literal_receiver;
         class
             .declaration
             .methods
             .iter()
             .filter(|method| method.name == call.callee)
+            .filter(|method| {
+                literal_receiver
+                    || method
+                        .receiver
+                        .as_ref()
+                        .and_then(|receiver| receiver.annotation.as_deref())
+                        .is_none_or(|annotation| !annotation.contains("LiteralString"))
+            })
             .collect()
     }
 
@@ -460,6 +398,7 @@ impl ResolvedModule {
 fn builtin_annotation(annotation: &str) -> Option<(&str, bool)> {
     match annotation.trim() {
         "str" => Some(("str", false)),
+        "LiteralString" | "typing.LiteralString" => Some(("str", true)),
         "bytes" => Some(("bytes", false)),
         _ => None,
     }

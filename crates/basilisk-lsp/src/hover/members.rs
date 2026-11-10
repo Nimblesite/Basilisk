@@ -95,7 +95,7 @@ fn local_member_hover(
                     })
             })
     })?;
-    let signature = crate::util::format_type_signature(&hit, resolved);
+    let signature = crate::util::format_type_signature(&hit, &resolved.source);
     let docstring = match hit {
         crate::util::SymbolHit::Function(func) => func.docstring.clone(),
         _ => None,
@@ -280,13 +280,21 @@ pub(crate) fn builtin_member_declarations<'a>(
     &'a basilisk_resolver::scope::IndexedStubClass,
     Vec<&'a basilisk_stubs::StubFunction>,
 )> {
-    let (type_name, _literal_receiver) = dot_receiver_builtin_type(resolved, source, byte_offset)?;
+    let (type_name, literal_receiver) = dot_receiver_builtin_type(resolved, source, byte_offset)?;
     let class = resolved.builtin_classes.get(&type_name)?;
     let declarations = class
         .declaration
         .methods
         .iter()
         .filter(|method| method.name == member)
+        .filter(|method| {
+            literal_receiver
+                || method
+                    .receiver
+                    .as_ref()
+                    .and_then(|receiver| receiver.annotation.as_deref())
+                    .is_none_or(|annotation| !annotation.contains("LiteralString"))
+        })
         .collect::<Vec<_>>();
     (!declarations.is_empty()).then_some((class, declarations))
 }
@@ -330,7 +338,7 @@ fn expression_receiver_type(
     let expression = receiver_scope::receiver_expression(before_dot)?;
     let scope = receiver_scope::scope_at(resolved, source, before_dot.len());
     let inferred =
-        basilisk_checker::expr_type::infer_expression_source_in_scope(expression, &scope);
+        basilisk_checker::inference::infer_expression_source_in_scope(expression, &scope);
     basilisk_checker::class_naming::class_name_of_type(&inferred)
 }
 

@@ -5,7 +5,7 @@
 //!
 //! 1. **`__post_init__` signature mismatch**: A dataclass with `InitVar` fields
 //!    must declare a `__post_init__` method whose parameters (after `self`)
-//!    match the `InitVar` fields in count.
+//!    match the `InitVar` fields in count and type.
 //!
 //! 2. **Access to `InitVar` fields as instance attributes**: `InitVar[T]` fields
 //!    are constructor-only parameters passed to `__post_init__`; they are not
@@ -19,7 +19,7 @@
 //!     x: InitVar[int]
 //!     y: InitVar[str]
 //!
-//!     def __post_init__(self, x: int) -> None:  # E: one parameter, two fields
+//!     def __post_init__(self, x: int, y: int) -> None:  # E: y should be str
 //!         pass
 //!
 //! dc1 = DC1(1, "")
@@ -31,7 +31,9 @@ use std::collections::{HashMap, HashSet};
 use basilisk_resolver::{ResolvedModule, Span};
 
 use crate::diagnostic::{error_diagnostic, Diagnostic, ErrorCode};
+use crate::span_util::slice_span;
 
+use super::shared::extract_callee_name;
 use super::Rule;
 
 const CODE: ErrorCode = ErrorCode {
@@ -52,6 +54,21 @@ fn make_diagnostic(message: String, span: Span, path: &str) -> Diagnostic {
     )
 }
 
+fn span_text(source: &str, span: Option<Span>) -> Option<&str> {
+    let span = span?;
+    slice_span(source, span)
+}
+
+/// Extract the inner type from an `InitVar[T]` annotation text.
+/// Returns `Some("T")` for `InitVar[T]` or `dataclasses.InitVar[T]`.
+fn extract_initvar_inner(ann: &str) -> Option<&str> {
+    let s = ann.trim();
+    let rest = s
+        .strip_prefix("InitVar[")
+        .or_else(|| s.strip_prefix("dataclasses.InitVar["))?;
+    rest.strip_suffix(']').map(str::trim)
+}
+
 /// Emits `dataclasses_postinit` for `InitVar` field violations in dataclasses.
 pub(crate) struct InitVarViolation;
 
@@ -67,42 +84,96 @@ impl Rule for InitVarViolation {
     }
 }
 
-// ##########################################################################
-// # DELETED BODY — `check_post_init_signatures`. DO NOT RESTORE IT AND DO  #
-// # NOT REPLACE IT WITH A PLACEHOLDER THAT RETURNS WITHOUT CHECKING.       #
-// #                                                                        #
-// # The rule's gate — "does a base class already declare `InitVar` fields, #
-// # so this subclass legitimately inherits them?" — was answered by        #
-// # looking the base up by its SOURCE TEXT:                                #
-// #                                                                        #
-// #   let base_name = base_expr.split('[').next().unwrap_or(base).trim();  #
-// #   class_map.get(base_name)                                             #
-// #                                                                        #
-// # A base written `Parent [T]`, reached under an alias, or merely sharing #
-// # a rendered name with an unrelated class produced the wrong answer, and #
-// # the wrong answer here decides whether the rule fires at all. That is   #
-// # not a detail inside a working rule; it IS the rule.                    #
-// #                                                                        #
-// # `InitVar` inheritance is a question about resolved base classes and    #
-// # the fields they declare. Ask the binding table.                        #
-// #                                                                        #
-// # Pinned by: tests/no_type_spelling_surgery_tests.rs                     #
-// ##########################################################################
+/// Validate `__post_init__` signatures against the class's `InitVar` fields.
+fn check_post_init_signatures(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    let source = &module.source;
+    let path = &module.path;
 
-/// DELETED — panics. The signature survives only so its caller stays visible
-/// as the rebuild map; see the banner above.
-fn check_post_init_signatures(_module: &ResolvedModule, _diagnostics: &mut Vec<Diagnostic>) {
-    panic!(
-        "basilisk-checker: `check_post_init_signatures` was DELETED because its \
-         inherited-`InitVar` gate looked a base class up by splitting its SOURCE TEXT \
-         at `[`. It panics because the real implementation — resolving each base \
-         expression to a class symbol through the binding table — DOES NOT EXIST YET. \
-         Do not restore the split and do not return without checking in its place."
-    )
+    let class_map: HashMap<&str, _> = module
+        .classes
+        .iter()
+        .map(|c| (c.name.as_str(), c))
+        .collect();
+
+    for cls in &module.classes {
+        if !cls.is_dataclass {
+            continue;
+        }
+
+        let initvar_fields: Vec<_> = cls.attributes.iter().filter(|a| a.is_init_var).collect();
+        if initvar_fields.is_empty() {
+            continue;
+        }
+
+        // Skip classes that inherit InitVar fields to avoid false positives.
+        let has_parent_with_initvar = cls.bases.iter().any(|base_expr| {
+            let base_name = base_expr.split('[').next().unwrap_or(base_expr).trim();
+            class_map
+                .get(base_name)
+                .is_some_and(|base_cls| base_cls.attributes.iter().any(|a| a.is_init_var))
+        });
+        if has_parent_with_initvar {
+            continue;
+        }
+
+        let post_init = module.functions.iter().find(|f| {
+            f.class_name.as_deref() == Some(cls.name.as_str()) && f.name == "__post_init__"
+        });
+
+        let Some(post_init_fn) = post_init else {
+            continue;
+        };
+
+        let params: Vec<_> = post_init_fn.parameters.iter().skip(1).collect();
+
+        if params.len() != initvar_fields.len() {
+            diagnostics.push(make_diagnostic(
+                format!(
+                    "`__post_init__` in `{}` has {} parameter{} after `self`, \
+                     but {} `InitVar` field{} declared",
+                    cls.name,
+                    params.len(),
+                    if params.len() == 1 { "" } else { "s" },
+                    initvar_fields.len(),
+                    if initvar_fields.len() == 1 { "" } else { "s" },
+                ),
+                post_init_fn.name_span,
+                path,
+            ));
+            continue;
+        }
+
+        for (param, field) in params.iter().zip(initvar_fields.iter()) {
+            let Some(field_ann) = span_text(source, field.annotation_span) else {
+                continue;
+            };
+            let Some(inner_type) = extract_initvar_inner(field_ann.trim()) else {
+                continue;
+            };
+            let Some(param_ann) = span_text(source, param.annotation_span) else {
+                continue;
+            };
+            if inner_type != param_ann.trim() {
+                diagnostics.push(make_diagnostic(
+                    format!(
+                        "`__post_init__` parameter `{}` has type `{}` but `InitVar` field \
+                         `{}` declares inner type `{}`",
+                        param.name,
+                        param_ann.trim(),
+                        field.name,
+                        inner_type,
+                    ),
+                    param.name_span,
+                    path,
+                ));
+            }
+        }
+    }
 }
 
 /// Check for access to `InitVar` fields as instance attributes at module level.
 fn check_initvar_attribute_access(module: &ResolvedModule, diagnostics: &mut Vec<Diagnostic>) {
+    let source = &module.source;
     let path = &module.path;
 
     let initvar_field_map: HashMap<&str, HashSet<&str>> = module
@@ -124,34 +195,14 @@ fn check_initvar_attribute_access(module: &ResolvedModule, diagnostics: &mut Vec
         return;
     }
 
-    let Some(parsed) = super::shared::parse_module(module) else {
-        return;
-    };
-    let index = super::shared::ExprIndex::build(&parsed.ast);
-
-    // Map module variables to the dataclass they instantiate. The callee is
-    // identified from the AST call node behind the resolver's RHS span and
-    // must be a bare name referring to this module's own class definition —
-    // never a parse of the right-hand side's source text ([ASTREBUILD-LAW]).
     let var_class_map: HashMap<&str, &str> = module
         .module_vars
         .iter()
         .filter(|v| v.rhs_kind == basilisk_resolver::RhsKind::CallExpr)
         .filter_map(|v| {
             let rhs_span = v.rhs_span?;
-            let Some(ruff_python_ast::Expr::Call(call)) = index.expr(rhs_span) else {
-                return None;
-            };
-            let ruff_python_ast::Expr::Name(callee) = call.func.as_ref() else {
-                return None;
-            };
-            if !module
-                .bindings
-                .refers_to_local_definition(call.func.as_ref())
-            {
-                return None;
-            }
-            let class_name = callee.id.as_str();
+            let rhs_text = slice_span(source, rhs_span)?;
+            let class_name = extract_callee_name(rhs_text)?;
             if initvar_field_map.contains_key(class_name) {
                 Some((v.name.as_str(), class_name))
             } else {
@@ -163,6 +214,10 @@ fn check_initvar_attribute_access(module: &ResolvedModule, diagnostics: &mut Vec
     if var_class_map.is_empty() {
         return;
     }
+
+    let Some(parsed) = super::shared::parse_module(module) else {
+        return;
+    };
 
     for stmt in &parsed.ast.body {
         check_stmt_for_initvar_access(stmt, path, &var_class_map, &initvar_field_map, diagnostics);

@@ -1,23 +1,18 @@
 //! Implements [`callables_protocol`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `callables_protocol`: Callable call-site arity and argument validation.
 //!
-//! Calls to a callable member of a `ParamSpec`-generic class specialization must
-//! match the parameter list the class was specialized with. Such members are
-//! implicitly positional-only, so keyword arguments are not allowed.
-//!
-//! Every verdict comes from the resolved semantic model ([ASTREBUILD-LAW]):
-//! `Callable` heads resolve through the binding table, specialization
-//! arguments lower to [`TypeNode`]s, and argument compatibility is decided by
-//! [`assignable`] — a diagnostic is emitted only on a definite `Some(false)`.
-//! Source text appears in diagnostic messages only.
+//! When a parameter is annotated as `Callable[[int, str], T]`, calls to that
+//! parameter must match the expected argument count. Additionally, `Callable`
+//! parameters are implicitly positional-only, so keyword arguments are not
+//! allowed.
 
 use ruff_python_ast::{self as ast, Expr, Stmt};
 use ruff_text_size::Ranged;
 
-use basilisk_resolver::{assignable, ResolvedModule, Span, TypeNode, TypingForm};
+use basilisk_resolver::{ResolvedModule, Span};
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
-use crate::span_util::node_message_text;
+use crate::rules::shared::{infer_expr_literal_type, is_type_compatible};
 
 use super::Rule;
 
@@ -44,7 +39,7 @@ impl Rule for CallableCallSiteViolation {
         };
         let attr_callables = collect_paramspec_attr_callables(module, &parsed.ast.body);
         for stmt in &parsed.ast.body {
-            walk_stmt_for_functions(stmt, &attr_callables, module, diagnostics);
+            walk_stmt_for_functions(stmt, &attr_callables, &module.path, diagnostics);
         }
         hof_paramspec::check_hof_paramspec_args(module, &parsed.ast.body, diagnostics);
         paramspec_components::check_paramspec_components(module, &parsed.ast.body, diagnostics);
@@ -54,7 +49,7 @@ impl Rule for CallableCallSiteViolation {
 /// Index of `ParamSpec`-generic classes with callable attributes.
 #[derive(Default)]
 struct AttrCallables {
-    /// Class name → `ParamSpec`-binding attribute names.
+    /// Class name → `Callable[P, R]`-annotated attribute names.
     classes: std::collections::HashMap<String, Vec<String>>,
     /// Declared `ParamSpec` names in the module.
     paramspec_names: std::collections::HashSet<String>,
@@ -63,14 +58,14 @@ struct AttrCallables {
 fn walk_stmt_for_functions(
     stmt: &Stmt,
     attr_callables: &AttrCallables,
-    module: &ResolvedModule,
+    path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     match stmt {
-        Stmt::FunctionDef(func) => check_function(func, attr_callables, module, diagnostics),
+        Stmt::FunctionDef(func) => check_function(func, attr_callables, path, diagnostics),
         Stmt::ClassDef(cls) => {
             for s in &cls.body {
-                walk_stmt_for_functions(s, attr_callables, module, diagnostics);
+                walk_stmt_for_functions(s, attr_callables, path, diagnostics);
             }
         }
         _ => {}
@@ -80,28 +75,43 @@ fn walk_stmt_for_functions(
 struct CallableParam {
     name: String,
     expected_args: Option<usize>,
-    /// Resolved parameter types of the specialization — the verdict source
-    /// ([ASTREBUILD-LAW]).
-    arg_nodes: Vec<TypeNode>,
-    /// Source renderings of the parameter types, diagnostic messages only.
-    arg_display: Vec<String>,
+    arg_types: Vec<String>,
 }
 
 fn check_function(
     func: &ast::StmtFunctionDef,
     attr_callables: &AttrCallables,
-    module: &ResolvedModule,
+    path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let callable_params = collect_paramspec_member_params(func, attr_callables, module);
+    let mut callable_params = collect_callable_params(func);
+    callable_params.extend(collect_paramspec_member_params(func, attr_callables));
     if callable_params.is_empty() {
         return;
     }
-    check_body_calls(&func.body, &callable_params, module, diagnostics);
+    check_body_calls(&func.body, &callable_params, path, diagnostics);
+}
+
+fn collect_callable_params(func: &ast::StmtFunctionDef) -> Vec<CallableParam> {
+    let mut result = Vec::new();
+    let params = &func.parameters;
+    let all_params = params
+        .posonlyargs
+        .iter()
+        .chain(params.args.iter())
+        .chain(params.kwonlyargs.iter());
+    for param in all_params {
+        if let Some(annotation) = &param.parameter.annotation {
+            if let Some(cp) = parse_callable_annotation(param.parameter.name.as_str(), annotation) {
+                result.push(cp);
+            }
+        }
+    }
+    result
 }
 
 /// Find classes generic over exactly one `ParamSpec` and collect their
-/// callable attributes.
+/// `Callable[P, R]`-annotated attributes.
 fn collect_paramspec_attr_callables(module: &ResolvedModule, stmts: &[Stmt]) -> AttrCallables {
     let mut result = AttrCallables {
         classes: std::collections::HashMap::new(),
@@ -128,7 +138,7 @@ fn collect_paramspec_attr_callables(module: &ResolvedModule, stmts: &[Stmt]) -> 
         let attrs: Vec<String> = cls
             .body
             .iter()
-            .filter_map(|s| paramspec_callable_attr(module, s, single))
+            .filter_map(|s| paramspec_callable_attr(s, single))
             .collect();
         if !attrs.is_empty() {
             let _ = result.classes.insert(cls.name.to_string(), attrs);
@@ -137,14 +147,8 @@ fn collect_paramspec_attr_callables(module: &ResolvedModule, stmts: &[Stmt]) -> 
     result
 }
 
-/// Name of an attribute whose `Callable[P, R]` annotation binds `ParamSpec`
-/// `P`, if any. The `Callable` head is recognised by what it RESOLVES to
-/// ([ASTREBUILD-LAW]), never by its spelling.
-fn paramspec_callable_attr(
-    module: &ResolvedModule,
-    stmt: &Stmt,
-    paramspec: &str,
-) -> Option<String> {
+/// Name of an attribute annotated `Callable[P, R]` for `ParamSpec` `P`, if any.
+fn paramspec_callable_attr(stmt: &Stmt, paramspec: &str) -> Option<String> {
     let Stmt::AnnAssign(ann) = stmt else {
         return None;
     };
@@ -154,7 +158,7 @@ fn paramspec_callable_attr(
     let Expr::Subscript(sub) = ann.annotation.as_ref() else {
         return None;
     };
-    if module.bindings.form_of_with_builtins(&sub.value) != Some(TypingForm::Callable) {
+    if !basilisk_resolver::is_name_or_attr_named(sub.value.as_ref(), "Callable") {
         return None;
     }
     let Expr::Tuple(tup) = sub.slice.as_ref() else {
@@ -168,12 +172,10 @@ fn paramspec_callable_attr(
 
 /// Build `obj.attr` callable entries for parameters typed as a
 /// ParamSpec-generic class specialization (`x: ClassC[[int, str]]` or the
-/// PEP 612 shorthand `x: ClassC[int, str]`), lowering each specialization
-/// argument through the module's bindings.
+/// PEP 612 shorthand `x: ClassC[int, str]`).
 fn collect_paramspec_member_params(
     func: &ast::StmtFunctionDef,
     attr_callables: &AttrCallables,
-    module: &ResolvedModule,
 ) -> Vec<CallableParam> {
     let mut result = Vec::new();
     let params = &func.parameters;
@@ -198,20 +200,15 @@ fn collect_paramspec_member_params(
         else {
             continue;
         };
-        let arg_nodes: Vec<TypeNode> = specialization
+        let arg_types: Vec<String> = specialization
             .iter()
-            .map(|e| TypeNode::lower(&module.bindings, e))
-            .collect();
-        let arg_display: Vec<String> = specialization
-            .iter()
-            .map(|e| node_message_text(&module.source, *e).to_owned())
+            .map(|e| annotation_to_string(e))
             .collect();
         for attr in attrs {
             result.push(CallableParam {
                 name: format!("{}.{attr}", param.parameter.name),
-                expected_args: Some(arg_nodes.len()),
-                arg_nodes: arg_nodes.clone(),
-                arg_display: arg_display.clone(),
+                expected_args: Some(arg_types.len()),
+                arg_types: arg_types.clone(),
             });
         }
     }
@@ -220,13 +217,16 @@ fn collect_paramspec_member_params(
 
 /// The parameter list a ParamSpec-generic class is specialized with:
 /// `C[[int, str]]` (explicit list) or `C[int, str]` (implicit shorthand).
-/// `None` for non-concrete forms (`...`, a bare `ParamSpec`).
+/// `None` for non-concrete forms (`...`, a bare `ParamSpec`, `Concatenate[...]`).
 fn paramspec_specialization_args<'a>(
     slice: &'a Expr,
     paramspec_names: &std::collections::HashSet<String>,
 ) -> Option<Vec<&'a Expr>> {
     let is_concrete_type = |e: &Expr| match e {
         Expr::Name(n) => !paramspec_names.contains(n.id.as_str()),
+        Expr::Subscript(sub) => {
+            !basilisk_resolver::is_name_or_attr_named(sub.value.as_ref(), "Concatenate")
+        }
         Expr::NoneLiteral(_) | Expr::BinOp(_) => true,
         _ => false,
     };
@@ -242,46 +242,101 @@ fn paramspec_specialization_args<'a>(
     }
 }
 
-fn check_body_calls(
-    stmts: &[Stmt],
-    cp: &[CallableParam],
-    module: &ResolvedModule,
-    diag: &mut Vec<Diagnostic>,
-) {
+fn parse_callable_annotation(param_name: &str, annotation: &Expr) -> Option<CallableParam> {
+    let Expr::Subscript(subscript) = annotation else {
+        return None;
+    };
+    let is_callable =
+        basilisk_resolver::is_name_or_attr_named(subscript.value.as_ref(), "Callable");
+    if !is_callable {
+        return None;
+    }
+    let tuple_elts = match subscript.slice.as_ref() {
+        Expr::Tuple(tup) => &tup.elts,
+        _ => return None,
+    };
+    if tuple_elts.len() != 2 {
+        return None;
+    }
+    let first_arg = tuple_elts.first()?;
+    if matches!(first_arg, Expr::EllipsisLiteral(_)) {
+        return Some(CallableParam {
+            name: param_name.to_owned(),
+            expected_args: None,
+            arg_types: Vec::new(),
+        });
+    }
+    if matches!(first_arg, Expr::Subscript(sub) if matches!(sub.value.as_ref(), Expr::Name(n) if n.id.as_str() == "Concatenate"))
+    {
+        return None;
+    }
+    let arg_list = match first_arg {
+        Expr::List(list) => &list.elts,
+        _ => return None,
+    };
+    let arg_types: Vec<String> = arg_list.iter().map(annotation_to_string).collect();
+    Some(CallableParam {
+        name: param_name.to_owned(),
+        expected_args: Some(arg_list.len()),
+        arg_types,
+    })
+}
+
+fn annotation_to_string(expr: &Expr) -> String {
+    match expr {
+        Expr::Name(name) => name.id.to_string(),
+        Expr::Subscript(sub) => format!(
+            "{}[{}]",
+            annotation_to_string(&sub.value),
+            annotation_to_string(&sub.slice)
+        ),
+        Expr::Attribute(attr) => format!("{}.{}", annotation_to_string(&attr.value), attr.attr),
+        Expr::Tuple(tup) => tup
+            .elts
+            .iter()
+            .map(annotation_to_string)
+            .collect::<Vec<_>>()
+            .join(", "),
+        Expr::BinOp(b) => format!(
+            "{} | {}",
+            annotation_to_string(&b.left),
+            annotation_to_string(&b.right)
+        ),
+        Expr::NoneLiteral(_) => "None".to_owned(),
+        _ => "...".to_owned(),
+    }
+}
+
+fn check_body_calls(stmts: &[Stmt], cp: &[CallableParam], path: &str, diag: &mut Vec<Diagnostic>) {
     basilisk_resolver::walk_function_stmts(stmts, &mut |stmt| match stmt {
-        Stmt::Expr(node) => check_expr_for_call(&node.value, cp, module, diag),
-        Stmt::Assign(node) => check_expr_for_call(&node.value, cp, module, diag),
+        Stmt::Expr(node) => check_expr_for_call(&node.value, cp, path, diag),
+        Stmt::Assign(node) => check_expr_for_call(&node.value, cp, path, diag),
         Stmt::AnnAssign(node) => {
             if let Some(v) = &node.value {
-                check_expr_for_call(v, cp, module, diag);
+                check_expr_for_call(v, cp, path, diag);
             }
         }
         Stmt::Return(node) => {
             if let Some(v) = &node.value {
-                check_expr_for_call(v, cp, module, diag);
+                check_expr_for_call(v, cp, path, diag);
             }
         }
         _ => {}
     });
 }
 
-fn check_expr_for_call(
-    expr: &Expr,
-    cp: &[CallableParam],
-    module: &ResolvedModule,
-    diag: &mut Vec<Diagnostic>,
-) {
+fn check_expr_for_call(expr: &Expr, cp: &[CallableParam], path: &str, diag: &mut Vec<Diagnostic>) {
     if let Expr::Call(call) = expr {
         if let Some(callee) = callee_key(call.func.as_ref()) {
             if let Some(param) = cp.iter().find(|p| p.name == callee) {
-                validate_call(call, param, module, diag);
+                validate_call(call, param, path, diag);
             }
         }
         for arg in &call.arguments.args {
-            check_expr_for_call(arg, cp, module, diag);
+            check_expr_for_call(arg, cp, path, diag);
         }
         for kw in &call.arguments.keywords {
-            check_expr_for_call(&kw.value, cp, module, diag);
+            check_expr_for_call(&kw.value, cp, path, diag);
         }
     }
 }
@@ -298,13 +353,7 @@ fn callee_key(func: &Expr) -> Option<String> {
     }
 }
 
-fn validate_call(
-    call: &ast::ExprCall,
-    cp: &CallableParam,
-    module: &ResolvedModule,
-    diag: &mut Vec<Diagnostic>,
-) {
-    let path = &module.path;
+fn validate_call(call: &ast::ExprCall, cp: &CallableParam, path: &str, diag: &mut Vec<Diagnostic>) {
     let span = Span::from(call.range());
     let positional_count = call.arguments.args.len();
     let has_kwargs = !call.arguments.keywords.is_empty();
@@ -340,7 +389,7 @@ fn validate_call(
                 Some(format!(
                     "`{}` is typed as `Callable[[{}], ...]`",
                     cp.name,
-                    cp.arg_display.join(", ")
+                    cp.arg_types.join(", ")
                 )),
                 None,
             ));
@@ -357,52 +406,48 @@ fn validate_call(
                 Some(format!(
                     "`{}` is typed as `Callable[[{}], ...]`",
                     cp.name,
-                    cp.arg_display.join(", ")
+                    cp.arg_types.join(", ")
                 )),
                 None,
             ));
         }
         std::cmp::Ordering::Equal => {
-            check_arg_types(call, cp, module, diag);
+            check_arg_types(call, cp, path, diag);
         }
     }
 }
 
-/// Relate each literal argument to the resolved specialization type via
-/// [`assignable`]; only a definite `Some(false)` reports
-/// ([RESOLV-CANONICAL-RELATION]). Non-literal arguments and unresolvable
-/// annotations abstain.
 fn check_arg_types(
     call: &ast::ExprCall,
     cp: &CallableParam,
-    module: &ResolvedModule,
+    path: &str,
     diag: &mut Vec<Diagnostic>,
 ) {
-    for (idx, (arg_expr, expected_node)) in call
+    for (idx, (arg_expr, expected_type)) in call
         .arguments
         .args
         .iter()
-        .zip(cp.arg_nodes.iter())
+        .zip(cp.arg_types.iter())
         .enumerate()
     {
-        let actual = TypeNode::of_literal_expr(arg_expr);
-        if assignable(&actual, expected_node) == Some(false) {
-            let span = Span::from(arg_expr.range());
-            let expected_display = cp.arg_display.get(idx).map_or("<type>", String::as_str);
-            diag.push(error_diagnostic_owned(
-                CODE.clone(),
-                format!(
-                    "Argument {} to `{}` (`{}`) is not assignable to `{}`",
-                    idx + 1,
-                    cp.name,
-                    node_message_text(&module.source, arg_expr),
-                    expected_display
-                ),
-                span,
-                &module.path,
-                None,
-                None,
-            ));
+        if let Some(actual) = infer_expr_literal_type(arg_expr) {
+            if !is_type_compatible(actual, expected_type) {
+                let span = Span::from(arg_expr.range());
+                diag.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
+                        "Argument {} to `{}` has incompatible type `{}`; expected `{}`",
+                        idx + 1,
+                        cp.name,
+                        actual,
+                        expected_type
+                    ),
+                    span,
+                    path,
+                    None,
+                    None,
+                ));
+            }
         }
     }
 }

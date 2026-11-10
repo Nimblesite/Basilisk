@@ -5,27 +5,27 @@
 //! type is checked against every applicable overload of the active
 //! `builtins.pyi` declaration ([STUBRES-PYI] #288) — never against a hand table.
 
-use basilisk_resolver::{CallSite, ResolvedModule};
+use basilisk_resolver::{CallSite, ResolvedModule, RhsKind};
 use basilisk_stubs::StubFunction;
 
 use crate::diagnostic::Diagnostic;
-use crate::rules::shared::judge::TypeJudge;
 use crate::types::InferredType;
 
-use super::make_diagnostic;
+use super::arg_types::{satisfies_str_iterable, ScopedTypes};
+use super::{arg_rhs_mismatch, make_diagnostic};
 
 /// Validate arguments to bound built-in methods against all applicable
 /// overloads from the active `builtins.pyi` declaration ([STUBRES-PYI] #288).
 ///
-/// Arguments are judged by the type the module's engine synthesises for them
-/// ([`TypeJudge`], [NARROWPLAN-INTEGRATION] Step 3), not by the syntactic
-/// shape of the expression, so a display of `str`-typed elements is accepted
-/// and a `list[int]` name is rejected (GitHub #356).
+/// Arguments are judged by their resolved *type* ([`ScopedTypes`]), not by the
+/// syntactic shape of the expression, so a display of `str`-typed elements is
+/// accepted and a `list[int]` name is rejected (GitHub #356).
 pub(super) fn check_builtin_method_argument_types(
     module: &ResolvedModule,
-    judge: &TypeJudge<'_, '_>,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
+    // Built once, and only for a module that actually calls a built-in method.
+    let mut scoped: Option<ScopedTypes<'_>> = None;
     for call in &module.calls {
         let declarations: Vec<_> = module
             .builtin_methods_for_call(call)
@@ -37,10 +37,11 @@ pub(super) fn check_builtin_method_argument_types(
         if declarations.is_empty() {
             continue;
         }
+        let types = scoped.get_or_insert_with(|| ScopedTypes::from_module(module));
         let argument_types: Vec<InferredType> = call
             .args
             .iter()
-            .map(|(_, span)| judge.inferred(Some(*span)))
+            .map(|(rhs, span)| types.argument_type(*span, rhs))
             .collect();
         diagnostics.extend(incompatible_argument(
             call,
@@ -65,17 +66,14 @@ fn incompatible_argument(
     {
         return None;
     }
-    let (index, ((_, span), argument)) =
-        call.args
-            .iter()
-            .zip(argument_types)
-            .enumerate()
-            .find(|(index, (_, argument))| {
-                declarations.iter().all(|declaration| {
-                    stub_parameter_annotation(declaration, *index)
-                        .is_some_and(|annotation| !stub_argument_compatible(annotation, argument))
-                })
-            })?;
+    let (index, ((_, span), argument)) = call.args.iter().zip(argument_types).enumerate().find(
+        |(index, ((rhs, _), argument))| {
+            declarations.iter().all(|declaration| {
+                stub_parameter_annotation(declaration, *index)
+                    .is_some_and(|annotation| !stub_argument_compatible(annotation, rhs, argument))
+            })
+        },
+    )?;
     let expected = expected_annotations(declarations, index);
     let description = describe_argument(argument, &expected);
     Some(make_diagnostic(
@@ -101,9 +99,9 @@ fn stub_accepts_call(
         .iter()
         .zip(argument_types)
         .enumerate()
-        .all(|(index, (_, argument))| {
+        .all(|(index, ((rhs, _), argument))| {
             stub_parameter_annotation(declaration, index)
-                .is_none_or(|annotation| stub_argument_compatible(annotation, argument))
+                .is_none_or(|annotation| stub_argument_compatible(annotation, rhs, argument))
         })
 }
 
@@ -136,31 +134,23 @@ fn describe_argument(argument: &InferredType, expected: &str) -> String {
     }
 }
 
-/// Is one argument's resolved type compatible with the annotation an overload
-/// declares for it? Only a positively-known mismatch rejects
-/// ([CHKARCH-CONFORMANCE-MODE]).
+/// Is one argument compatible with the annotation an overload declares for it?
 ///
-/// DELETED — panics. The body opened with
-/// `annotation.replace(' ', "") == "object"`: it STRIPPED WHITESPACE OUT OF
-/// THE SOURCE and then compared the remainder to a builtin's spelling, so the
-/// verdict depended on how the stub was formatted and a user class named
-/// `object` was treated as the top type.
-fn stub_argument_compatible(_annotation: &str, _argument: &InferredType) -> bool {
-    panic!(
-        "basilisk-checker: `stub_argument_compatible` was DELETED because it decided \
-         compatibility by deleting spaces from the annotation TEXT and comparing the \
-         result to `\"object\"`. It panics because the real implementation — resolving \
-         the stub's declared parameter type and asking the ordinary assignability \
-         question — DOES NOT EXIST YET. Do not restore the comparison and do not \
-         answer `true`/`false` in its place."
-    )
+/// `argument` is the resolved type of the expression; `rhs` its syntactic shape,
+/// still consulted by the literal-kind comparison in [`arg_rhs_mismatch`].
+fn stub_argument_compatible(annotation: &str, rhs: &RhsKind, argument: &InferredType) -> bool {
+    let normalized = annotation.replace(' ', "");
+    if normalized == "Any" || normalized == "object" {
+        return true;
+    }
+    if normalized.contains("Iterable[str]") || normalized.contains("Iterable[LiteralString]") {
+        return satisfies_str_iterable(argument);
+    }
+    if normalized.contains("LiteralString") {
+        return matches!(
+            rhs,
+            RhsKind::StrLiteral | RhsKind::Other | RhsKind::CallExpr
+        );
+    }
+    arg_rhs_mismatch(annotation, rhs, None).is_none()
 }
-
-// `scalar_annotation_mismatch` is GONE — no panic shell, because it has no
-// callers left to keep visible. The body split the annotation TEXT at `[`,
-// trimmed it, LOWER-CASED it, and matched the result against a table of builtin
-// name spellings paired with a second spelling rendered from the resolved type.
-// Two spelling tables meeting in a `matches!` is not a type judgment: a user
-// class `Str` was read as builtin `str`, an aliased import was read as nothing
-// at all, and `int [x]` disagreed with `int[x]`. The replacement resolves both
-// sides through the binding table and asks the ordinary assignability question.

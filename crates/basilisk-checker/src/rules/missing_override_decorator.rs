@@ -23,7 +23,7 @@ use basilisk_resolver::{ClassInfo, FunctionInfo, ResolvedModule};
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
-use super::Rule;
+use super::{guards::is_protocol_class, Rule};
 
 const CODE: ErrorCode = ErrorCode {
     code: "BSK-0025",
@@ -60,7 +60,8 @@ impl Rule for MissingOverrideDecorator {
             return;
         }
 
-        let graph = basilisk_resolver::ClassGraph::new(&module.classes);
+        // Build a raw class map first (name → ClassInfo).
+        let raw_map = super::shared::class_name_map(&module.classes);
 
         // Determine which classes are Protocol (transitively) — e.g.
         // `class MyProto(SomeBase)` where `SomeBase(Protocol)` is also Protocol.
@@ -70,7 +71,7 @@ impl Rule for MissingOverrideDecorator {
             .map(|cls| {
                 (
                     cls.name.as_str(),
-                    (cls, is_protocol_transitively(&graph, cls)),
+                    (cls, is_protocol_transitively(cls, &raw_map)),
                 )
             })
             .collect();
@@ -93,59 +94,114 @@ impl Rule for MissingOverrideDecorator {
     }
 }
 
-/// Returns `true` when `cls` is a Protocol class directly or transitively —
-/// i.e. any class it inherits from IN THIS MODULE is itself a `Protocol`.
-///
-/// The edges come from resolved base expressions keyed on definition site, so
-/// `class Client(httpx.Client)` no longer records its base under the trailing
-/// word `Client` and resolves back to the class itself (GitHub #278): a base
-/// from another module is simply no local edge.
-fn is_protocol_transitively(graph: &basilisk_resolver::ClassGraph<'_>, cls: &ClassInfo) -> bool {
-    super::shared::class_or_base_matches(graph, cls, |candidate| candidate.is_protocol)
+/// Returns `true` when `cls` is a Protocol class directly or transitively
+/// (i.e., any base class in `class_map` is itself a Protocol). The shared
+/// walk breaks base-name cycles (GitHub #278): `class Client(httpx.Client)`
+/// records its base under the attribute name `Client`, which the by-name
+/// class map resolves back to the class itself.
+fn is_protocol_transitively<'a>(
+    cls: &'a ClassInfo,
+    class_map: &HashMap<&str, &'a ClassInfo>,
+) -> bool {
+    super::shared::class_or_base_matches(cls, &|name| class_map.get(name).copied(), &|candidate| {
+        is_protocol_class(candidate)
+    })
 }
 
-// ##########################################################################
-// # DELETED BODY — `missing_override_decorator::check_class`. DO NOT RESTORE IT AND DO NOT RETURN A DEFAULT.
-// #
-// # `.filter(|base_name| base_name.as_str() != child.name)` — a SECOND string comparison papering over the first: it dropped any base sharing the child's rendered name to dodge the `class Client(httpx.Client)` self-ancestor bug (GitHub #278), which also drops legitimate inheritance from a same-named base.
-// #
-// # A base class's identity came from its RENDERED NAME, looked up in a map
-// # keyed on `ClassInfo::name`. `ClassInfo::bases` is a `Vec<String>` the
-// # resolver fills with "simple names only; complex expressions ignored", so:
-// #   * a base reached through an alias  ->  MISSED
-// #   * a dotted base (`httpx.Client`)   ->  collides with any local class
-// #                                          sharing its trailing word
-// #   * two classes with one rendered name -> a single map entry
-// #
-// # The replacement resolves each base EXPRESSION through the binding table
-// # and keys the hierarchy on definition site. That needs base SPANS on
-// # `ClassInfo`, which the resolver does not record yet.
-// #
-// # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
-// ##########################################################################
 fn check_class(
-    _child: &ClassInfo,
-    _class_map: &HashMap<&str, (&ClassInfo, bool)>,
-    _func_map: &HashMap<(&str, &str), &FunctionInfo>,
-    _path: &str,
-    _out: &mut Vec<Diagnostic>,
+    child: &ClassInfo,
+    class_map: &HashMap<&str, (&ClassInfo, bool)>,
+    func_map: &HashMap<(&str, &str), &FunctionInfo>,
+    path: &str,
+    out: &mut Vec<Diagnostic>,
 ) {
-    panic!(
-        "basilisk-checker: `missing_override_decorator::check_class` was DELETED because it identified base classes by \
-         their RENDERED NAMES in a name-keyed map, so an aliased base missed and a \
-         dotted base collided with any local class sharing its trailing word. It panics \
-         because the real implementation — base expressions resolved through the binding \
-         table — DOES NOT EXIST YET. Do not restore the name lookup and do not \
-         substitute a default answer in its place."
-    )
+    // Skip if this class itself is a Protocol.
+    if is_protocol_class(child) {
+        return;
+    }
+
+    // Collect base method names, skipping Protocol bases (Protocol methods
+    // need implementation, not @override). A base name that resolves to the
+    // class itself is a name collision with an external base (`class
+    // Client(httpx.Client)`), not inheritance — a class never overrides its
+    // own methods (GitHub #278).
+    let base_methods: Vec<&str> = child
+        .bases
+        .iter()
+        .filter(|base_name| base_name.as_str() != child.name)
+        .filter_map(|base_name| class_map.get(base_name.as_str()))
+        .filter(|(_, is_proto)| !is_proto)
+        .flat_map(|(cls, _)| cls.method_names.iter().map(String::as_str))
+        .collect();
+
+    if base_methods.is_empty() {
+        return;
+    }
+
+    // Deduplicate method names: overloaded methods appear once per overload
+    // variant.  We want exactly one diagnostic per unique method name.
+    let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
+    for method_name in &child.method_names {
+        let name = method_name.as_str();
+        if !seen.insert(name) {
+            continue; // already processed this name
+        }
+        if !base_methods.contains(&name) {
+            continue;
+        }
+        // Dunder methods (__init__, __post_init__, __eq__, etc.) are part of
+        // Python's data model and are expected to be overridden without @override.
+        if name.starts_with("__") && name.ends_with("__") {
+            continue;
+        }
+        // If ANY occurrence of this method name carries @override (e.g. the
+        // implementation or any overload variant), the whole group is covered.
+        if method_has_override_decorator(&child.method_decorators, name) {
+            continue;
+        }
+
+        // Overloaded methods: @override belongs on the implementation, not the
+        // overload variants.  If any occurrence is decorated with @overload,
+        // treat the whole group as present — the checker for override semantics
+        // on overload groups is handled by E0021/E0016, not BSK-0025.
+        if method_has_decorator(&child.method_decorators, name, "overload") {
+            continue;
+        }
+
+        // Report at the method's own span; fall back to the class name span.
+        let span = func_map
+            .get(&(child.name.as_str(), name))
+            .map_or(child.name_span, |f| f.name_span);
+        out.push(make_diagnostic(child, name, span, path));
+    }
 }
 
-#[expect(
-    dead_code,
-    reason = "caller deleted for spelling dependence; this diagnostic constructor is \
-              correct and is retained for the rebuild — see \
-              tests/string_keyed_class_hierarchy_pin_tests.rs"
-)]
+/// Returns `true` when `method_name` has an `@override` (or `typing.override`)
+/// decorator recorded in `method_decorators`.
+fn method_has_override_decorator(
+    method_decorators: &[(String, Vec<String>)],
+    method_name: &str,
+) -> bool {
+    method_decorators
+        .iter()
+        .filter(|(name, _)| name == method_name)
+        .flat_map(|(_, decorators)| decorators.iter())
+        .any(|d| d == "override" || d.ends_with(".override"))
+}
+
+/// Returns `true` when any occurrence of `method_name` carries the given decorator.
+fn method_has_decorator(
+    method_decorators: &[(String, Vec<String>)],
+    method_name: &str,
+    decorator: &str,
+) -> bool {
+    method_decorators
+        .iter()
+        .filter(|(name, _)| name == method_name)
+        .flat_map(|(_, decorators)| decorators.iter())
+        .any(|d| d == decorator || d.ends_with(&format!(".{decorator}")))
+}
+
 fn make_diagnostic(
     class: &ClassInfo,
     method_name: &str,

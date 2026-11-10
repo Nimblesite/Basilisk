@@ -48,6 +48,9 @@ pub(in crate::code_actions) fn implement_abstract_methods(
             if fn_class != &base_class.name {
                 continue;
             }
+            if !func.decorators.iter().any(|d| d == "abstractmethod") {
+                continue;
+            }
             // Skip if already implemented in the current class.
             if current_class.method_names.contains(&func.name) {
                 continue;
@@ -75,7 +78,7 @@ pub(in crate::code_actions) fn implement_abstract_methods(
         stubs.push_str("def ");
         stubs.push_str(&method.name);
         stubs.push('(');
-        stubs.push_str(&format_parameters(source, method));
+        stubs.push_str(&format_parameters(method));
         stubs.push_str("):");
         stubs.push('\n');
         stubs.push_str(&body_indent);
@@ -117,37 +120,27 @@ pub(in crate::code_actions) fn implement_abstract_methods(
 }
 
 /// Format function parameters for a stub implementation.
-///
-/// This RENDERS text for the user to read, and is the one legitimate reason to
-/// want an annotation's source: the generated stub should repeat the
-/// annotation exactly as the author wrote it. It replaces a read of the
-/// deleted `ParameterInfo::annotation_text` placeholder with a slice of the
-/// annotation's own span — the same characters, taken from the file rather
-/// than from a field that was always `None`. No verdict is derived from them.
-fn format_parameters(source: &str, func: &basilisk_resolver::FunctionInfo) -> String {
-    let annotation = |param: &basilisk_resolver::ParameterInfo| -> Option<String> {
-        let span = param.annotation_span?;
-        let start = usize::try_from(span.start).ok()?;
-        let end = usize::try_from(span.end).ok()?;
-        source.get(start..end).map(str::to_owned)
-    };
+fn format_parameters(func: &basilisk_resolver::FunctionInfo) -> String {
     let mut parts: Vec<String> = Vec::new();
     for param in &func.parameters {
-        match annotation(param) {
-            Some(ann) => parts.push(format!("{}: {ann}", param.name)),
-            None => parts.push(param.name.clone()),
+        if let Some(ref ann) = param.annotation_text {
+            parts.push(format!("{}: {ann}", param.name));
+        } else {
+            parts.push(param.name.clone());
         }
     }
     if let Some(ref vararg) = func.vararg {
-        match annotation(vararg) {
-            Some(ann) => parts.push(format!("*{}: {ann}", vararg.name)),
-            None => parts.push(format!("*{}", vararg.name)),
+        if let Some(ref ann) = vararg.annotation_text {
+            parts.push(format!("*{}: {ann}", vararg.name));
+        } else {
+            parts.push(format!("*{}", vararg.name));
         }
     }
     if let Some(ref kwarg) = func.kwarg {
-        match annotation(kwarg) {
-            Some(ann) => parts.push(format!("**{}: {ann}", kwarg.name)),
-            None => parts.push(format!("**{}", kwarg.name)),
+        if let Some(ref ann) = kwarg.annotation_text {
+            parts.push(format!("**{}: {ann}", kwarg.name));
+        } else {
+            parts.push(format!("**{}", kwarg.name));
         }
     }
     parts.join(", ")

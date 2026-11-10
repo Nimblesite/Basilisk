@@ -10,8 +10,8 @@
 use std::collections::{HashMap, HashSet};
 
 use super::{
-    AttributeInfo, ClassInfo, FunctionInfo, GenericParamInfo, ParameterInfo, Pep695AliasDef,
-    TypeAliasDefInfo, TypeVarCallInfo, VariableInfo,
+    AttributeInfo, ClassInfo, FunctionInfo, GenericParamInfo, ParameterInfo, TypeAliasDefInfo,
+    TypeVarCallInfo, VariableInfo,
 };
 
 /// Anything that exposes a `&str` name.
@@ -39,7 +39,6 @@ impl_named_for_string_field!(
     FunctionInfo,
     GenericParamInfo,
     ParameterInfo,
-    Pep695AliasDef,
     TypeAliasDefInfo,
     TypeVarCallInfo,
     VariableInfo,

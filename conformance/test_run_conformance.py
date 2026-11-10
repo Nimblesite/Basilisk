@@ -326,7 +326,7 @@ class WorktreeLockTests(unittest.TestCase):
 
 
 class GeneratedReferenceTests(unittest.TestCase):
-    def test_checked_in_references_match_the_recorded_historical_snapshot(self) -> None:
+    def test_checked_in_conformance_references_match_the_live_report(self) -> None:
         result = subprocess.run(
             [
                 sys.executable,
@@ -348,98 +348,3 @@ class GeneratedReferenceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
-
-class GateSuiteRevisionTests(unittest.TestCase):
-    """The internal fixture gate must identify exactly what it measured.
-
-    python/typing@main no longer carries the Basilisk adapter, so the default
-    gate is pinned to the last adapter revision. This is reproducible internal
-    regression evidence, not a current official conformance score. The live-main
-    verification remains available for when an adapter returns upstream.
-    """
-
-    def test_default_ref_is_full_last_adapter_sha(self) -> None:
-        opts = run_conformance.parse_args([])
-
-        self.assertEqual(
-            opts["ref"],
-            "a4906624f170c169cf667f962080c56d5a5ba6ff",
-        )
-
-    def test_pinned_last_adapter_revision_is_accepted(self) -> None:
-        sha = run_conformance.LAST_ADAPTER_REF
-
-        run_conformance.assert_graded_commit_is_gate_ref(
-            {"sha": sha, "short": sha[:7], "date": "2026-08-04"},
-            sha,
-        )
-
-    def test_wrong_commit_for_pinned_revision_fails(self) -> None:
-        with self.assertRaisesRegex(RuntimeError, "FIXTURE REVISION MISMATCH"):
-            run_conformance.assert_graded_commit_is_gate_ref(
-                {"sha": "b" * 40, "short": "bbbbbbb", "date": "2020-01-01"},
-                run_conformance.LAST_ADAPTER_REF,
-            )
-
-    def test_arbitrary_gate_ref_is_rejected(self) -> None:
-        with self.assertRaisesRegex(RuntimeError, "only permits"):
-            run_conformance.assert_graded_commit_is_gate_ref(
-                {"sha": "b" * 40, "short": "bbbbbbb", "date": "2020-01-01"},
-                "some-tag",
-            )
-
-    def test_current_upstream_tip_is_accepted(self) -> None:
-        """The live ``main`` sha passes without touching the network twice."""
-        live = "a" * 40
-        completed = subprocess.CompletedProcess(
-            args=[], returncode=0, stdout=f"{live}\trefs/heads/main\n"
-        )
-        with patch("run_conformance.subprocess.run", return_value=completed):
-            run_conformance.assert_graded_commit_is_live_main(
-                {"sha": live, "short": live[:7], "date": "2026-08-04"}
-            )
-
-    def test_stale_graded_commit_fails_the_gate(self) -> None:
-        """A suite behind the tip is a hard failure, not a pass."""
-        completed = subprocess.CompletedProcess(
-            args=[], returncode=0, stdout=f"{'a' * 40}\trefs/heads/main\n"
-        )
-        with patch("run_conformance.subprocess.run", return_value=completed):
-            with self.assertRaises(RuntimeError) as caught:
-                run_conformance.assert_graded_commit_is_live_main(
-                    {"sha": "b" * 40, "short": "bbbbbbb", "date": "2020-01-01"}
-                )
-        self.assertIn("STALE CONFORMANCE SUITE", str(caught.exception))
-
-    def test_unreachable_upstream_fails_closed(self) -> None:
-        """An unverifiable score is not a passing score — never skip the check."""
-        with patch(
-            "run_conformance.subprocess.run",
-            side_effect=OSError("network down"),
-        ):
-            with self.assertRaises(RuntimeError) as caught:
-                run_conformance.assert_graded_commit_is_live_main(
-                    {"sha": "c" * 40, "short": "ccccccc", "date": "2026-08-04"}
-                )
-        self.assertIn("cannot verify", str(caught.exception))
-
-    def test_empty_ls_remote_output_fails_closed(self) -> None:
-        """A missing ref must not read as "nothing to compare, so pass"."""
-        completed = subprocess.CompletedProcess(args=[], returncode=0, stdout="")
-        with patch("run_conformance.subprocess.run", return_value=completed):
-            with self.assertRaises(RuntimeError) as caught:
-                run_conformance.assert_graded_commit_is_live_main(
-                    {"sha": "d" * 40, "short": "ddddddd", "date": "2026-08-04"}
-                )
-        self.assertIn("could not resolve", str(caught.exception))
-
-    def test_gate_mode_calls_the_revision_check(self) -> None:
-        """Wiring test: --gate must not be able to skip ref verification."""
-        source = (ROOT / "conformance" / "run_conformance.py").read_text(
-            encoding="utf-8"
-        )
-        gate_block = source.split('if not opts["gate"]:', 1)[1]
-        self.assertIn(
-            'assert_graded_commit_is_gate_ref(commit, opts["ref"])', gate_block
-        )

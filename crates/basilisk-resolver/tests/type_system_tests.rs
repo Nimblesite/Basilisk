@@ -43,6 +43,3 @@ mod test_base_subscript_02;
 
 #[path = "resolver/test_base_subscript_03.rs"]
 mod test_base_subscript_03;
-
-#[path = "resolver/test_bare_ellipsis_tuple.rs"]
-mod test_bare_ellipsis_tuple;

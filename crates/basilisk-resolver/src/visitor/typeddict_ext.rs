@@ -3,42 +3,63 @@
 
 use ruff_python_ast::{Expr, Stmt, StmtAnnAssign, StmtAssign};
 
-use crate::scope::{ClassGraph, Span, TypedDictKeyViolation, TypedDictKeyViolationKind};
+use crate::scope::{Span, TypedDictKeyViolation, TypedDictKeyViolationKind};
 
 use super::class_info_ext::expr_simple_name;
 use super::core::text_range_to_span;
-use super::typeddict::{annotation_local_class, TdFieldMap};
+use super::typeddict::TdFieldMap;
+
+/// Determine whether a `TypedDict` field is required, accounting for
+/// `Required[...]`, `NotRequired[...]`, and `ReadOnly[...]` wrappers.
+///
+/// - `is_total=true` (default):  all fields are required unless wrapped in `NotRequired`.
+/// - `is_total=false`:  all fields are not-required unless wrapped in `Required`.
+pub(super) fn is_field_required(
+    field_name: &str,
+    field_types: &std::collections::HashMap<&str, String>,
+    is_total: bool,
+) -> bool {
+    let Some(ann) = field_types.get(field_name) else {
+        return is_total;
+    };
+    let ann_lower = ann.to_ascii_lowercase();
+    // Strip outer wrappers to find Required/NotRequired regardless of nesting.
+    if ann_lower.contains("notrequired") {
+        return false;
+    }
+    if ann_lower.contains("required") {
+        return true;
+    }
+    is_total
+}
 
 /// Resolved `TypedDict` class metadata used to validate a dict literal.
 struct TdSpec<'a> {
     class_name: &'a str,
     all_fields: &'a [&'a str],
-    /// The fields that must be present — per-field required-ness resolved by
-    /// the schema build (explicit qualifier, else declaring class's `total=`;
-    /// PEP 655).
-    required_fields: &'a std::collections::HashSet<&'a str>,
-    /// Field name → accepted primitive classes, for the judgeable fields.
-    field_accepts: &'a std::collections::HashMap<&'a str, &'a [crate::scope::PrimitiveKind]>,
+    field_types: &'a std::collections::HashMap<&'a str, String>,
+    is_total: bool,
     has_extra_items: bool,
 }
 
 /// Validate a dict literal against the `TypedDict` spec.
 ///
-/// Emits diagnostics for non-literal keys, invalid keys, and missing required
-/// keys. `span_range` is the range used for emitted spans; callers typically
-/// pass the enclosing statement's range so the diagnostic points at the whole
-/// assignment.
+/// Emits diagnostics for non-literal keys, invalid keys, missing required keys,
+/// and value-type mismatches. `span_range` is the range used for emitted spans;
+/// callers typically pass the enclosing statement's range so the diagnostic
+/// points at the whole assignment.
 fn check_dict_against_typeddict(
     dict: &ruff_python_ast::ExprDict,
     spec: &TdSpec<'_>,
     span_range: ruff_text_size::TextRange,
+    fields: &TdFieldMap<'_>,
     out: &mut Vec<TypedDictKeyViolation>,
 ) {
     let TdSpec {
         class_name,
         all_fields,
-        required_fields,
-        field_accepts,
+        field_types,
+        is_total,
         has_extra_items,
     } = *spec;
     // Flag any non-literal (variable) key in the dict — if found, return early
@@ -81,7 +102,7 @@ fn check_dict_against_typeddict(
     let missing_keys: Vec<String> = all_fields
         .iter()
         .filter(|&&f| !literal_keys.iter().any(|k| k == f))
-        .filter(|&&f| required_fields.contains(f))
+        .filter(|&&f| is_field_required(f, field_types, is_total))
         .map(|s| (*s).to_owned())
         .collect();
 
@@ -96,37 +117,20 @@ fn check_dict_against_typeddict(
         });
     }
 
-    // Value-class check per literal item: the field's accepted classes were
-    // resolved through the bindings, the value's class comes from its own
-    // node kind, so both sides are judged — never guessed. A field absent
-    // from `field_accepts` or a non-literal value is abstention.
-    for item in &dict.items {
-        let Some(Expr::StringLiteral(key)) = item.key.as_ref() else {
-            continue;
-        };
-        let key = key.value.to_string();
-        let Some(accepts) = field_accepts.get(key.as_str()) else {
-            continue;
-        };
-        let Some(value_kind) = super::typeddict::literal_primitive(&item.value) else {
-            continue;
-        };
-        if !value_kind.accepted_by(accepts) {
-            out.push(TypedDictKeyViolation {
-                span: text_range_to_span(span_range),
-                class_name: class_name.to_owned(),
-                kind: TypedDictKeyViolationKind::WrongSubscriptValueType {
-                    key,
-                    expected: super::typeddict::render_accepts(accepts),
-                },
-            });
-        }
-    }
+    check_dict_value_types(
+        dict,
+        field_types,
+        all_fields,
+        class_name,
+        span_range,
+        fields,
+        out,
+    );
 }
 
 pub(super) fn td_check_regular_assign(
     node: &StmtAssign,
-    var_type: &std::collections::HashMap<String, Span>,
+    var_type: &std::collections::HashMap<String, String>,
     fields: &TdFieldMap<'_>,
     out: &mut Vec<TypedDictKeyViolation>,
 ) {
@@ -135,10 +139,12 @@ pub(super) fn td_check_regular_assign(
         let Some(var_name) = expr_simple_name(target) else {
             continue;
         };
-        let Some(site) = var_type.get(&var_name) else {
+        let Some(class_name) = var_type.get(&var_name) else {
             continue;
         };
-        let Some(schema) = fields.get(site) else {
+        let Some((all_fields, field_types, is_total, has_extra_items)) =
+            fields.get(class_name.as_str())
+        else {
             continue;
         };
         let Expr::Dict(dict) = node.value.as_ref() else {
@@ -147,109 +153,159 @@ pub(super) fn td_check_regular_assign(
         check_dict_against_typeddict(
             dict,
             &TdSpec {
-                class_name: schema.class_name,
-                all_fields: &schema.all_fields,
-                required_fields: &schema.required_fields,
-                field_accepts: &schema.field_accepts,
-                has_extra_items: schema.has_extra_items,
+                class_name,
+                all_fields,
+                field_types,
+                is_total: *is_total,
+                has_extra_items: *has_extra_items,
             },
             node.range(),
+            fields,
             out,
         );
     }
 }
 
-/// Validate `var: Movie = {...}` against the schema of the class the
-/// ANNOTATION denotes.
-///
-/// The predecessor of this function was deleted for finding the schema by
-/// matching the annotation's characters against a class-name key, so an
-/// aliased or dotted annotation was never validated and an ordinary class
-/// sharing a `TypedDict`'s name had that schema's errors reported against it.
-/// Here the annotation resolves through the module's bindings —
-/// [`annotation_local_class`] follows assignment aliases and quoted forward
-/// references — and the schema lookup is the definition-site key
-/// ([RESOLV-CANONICAL-BINDING]). An annotation that resolves to no local
-/// `TypedDict` is abstention: nothing is validated and nothing is invented.
+/// Check annotated assignments `var: TypedDict = {...}`.
 pub(super) fn td_check_ann_assign(
-    bindings: &basilisk_canonical::BindingTable,
     node: &StmtAnnAssign,
     fields: &TdFieldMap<'_>,
     out: &mut Vec<TypedDictKeyViolation>,
 ) {
     use ruff_text_size::Ranged as _;
-    let Some(value) = node.value.as_deref() else {
+    let Some(value) = &node.value else { return };
+    let Expr::Name(ann_name) = node.annotation.as_ref() else {
         return;
     };
-    let Expr::Dict(dict) = value else {
+    let class_name = ann_name.id.as_str();
+    let Some((all_fields, field_types, is_total, has_extra_items)) = fields.get(class_name) else {
         return;
     };
-    let Some(site) = annotation_local_class(bindings, &node.annotation) else {
-        return;
-    };
-    let Some(schema) = fields.get(&text_range_to_span(site)) else {
+    let Expr::Dict(dict) = value.as_ref() else {
         return;
     };
     check_dict_against_typeddict(
         dict,
         &TdSpec {
-            class_name: schema.class_name,
-            all_fields: &schema.all_fields,
-            required_fields: &schema.required_fields,
-            field_accepts: &schema.field_accepts,
-            has_extra_items: schema.has_extra_items,
+            class_name,
+            all_fields,
+            field_types,
+            is_total: *is_total,
+            has_extra_items: *has_extra_items,
         },
         node.range(),
+        fields,
         out,
     );
+}
+
+/// Recursively check value types in a dict literal against `TypedDict` field types.
+fn check_dict_value_types(
+    dict: &ruff_python_ast::ExprDict,
+    field_types: &std::collections::HashMap<&str, String>,
+    all_fields: &[&str],
+    class_name: &str,
+    span_range: ruff_text_size::TextRange,
+    fields: &TdFieldMap<'_>,
+    out: &mut Vec<TypedDictKeyViolation>,
+) {
+    use ruff_text_size::Ranged as _;
+    for item in &dict.items {
+        let Some(Expr::StringLiteral(s)) = &item.key else {
+            continue;
+        };
+        let key = s.value.to_string();
+        if !all_fields.contains(&key.as_str()) {
+            continue;
+        }
+        let Some(expected) = field_types.get(key.as_str()) else {
+            continue;
+        };
+
+        // Primitive literal value — check type directly.
+        if let Some(actual) = expr_literal_type_name(&item.value) {
+            if !typeddict_field_type_compatible(actual, expected) {
+                out.push(TypedDictKeyViolation {
+                    span: text_range_to_span(span_range),
+                    class_name: class_name.to_owned(),
+                    kind: TypedDictKeyViolationKind::WrongSubscriptValueType {
+                        key,
+                        expected: expected.clone(),
+                    },
+                });
+            }
+            continue;
+        }
+
+        // Nested dict literal — if the expected type is a TypedDict, recurse.
+        if let Expr::Dict(nested_dict) = &item.value {
+            if let Some((nested_fields, nested_types, _, _)) = fields.get(expected.as_str()) {
+                check_dict_value_types(
+                    nested_dict,
+                    nested_types,
+                    nested_fields,
+                    expected,
+                    nested_dict.range(),
+                    fields,
+                    out,
+                );
+            }
+        }
+    }
 }
 
 /// Walk an expression and report subscript reads with invalid `TypedDict` keys.
 pub(super) fn td_check_expr_reads(
     expr: &Expr,
-    var_type: &std::collections::HashMap<String, Span>,
+    var_type: &std::collections::HashMap<String, String>,
     fields: &TdFieldMap<'_>,
+    final_consts: &std::collections::HashMap<String, String>,
     out: &mut Vec<TypedDictKeyViolation>,
 ) {
     use ruff_text_size::Ranged as _;
     match expr {
         Expr::Subscript(sub) => {
             if let Some(var_name) = expr_simple_name(&sub.value) {
-                if let Some(schema) = var_type.get(&var_name).and_then(|site| fields.get(site)) {
-                    // A string literal is a statically-known key; anything else is not.
-                    if let Some(key) = subscript_key_literal(&sub.slice) {
-                        if !schema.all_fields.contains(&key.as_str()) {
+                if let Some(class_name) = var_type.get(&var_name) {
+                    if let Some((all_fields, _, _, _)) = fields.get(class_name.as_str()) {
+                        // A string literal, or a `Final` name bound to a string value
+                        // (PEP 591), is a statically-known key; anything else is not.
+                        if let Some(key) = subscript_key_literal(&sub.slice, final_consts) {
+                            if !all_fields.contains(&key.as_str()) {
+                                out.push(TypedDictKeyViolation {
+                                    span: text_range_to_span(sub.range()),
+                                    class_name: class_name.clone(),
+                                    kind: TypedDictKeyViolationKind::SubscriptReadInvalidKey {
+                                        key,
+                                    },
+                                });
+                            }
+                        } else {
+                            // Non-literal key access on a TypedDict
                             out.push(TypedDictKeyViolation {
                                 span: text_range_to_span(sub.range()),
-                                class_name: schema.class_name.to_owned(),
-                                kind: TypedDictKeyViolationKind::SubscriptReadInvalidKey { key },
+                                class_name: class_name.clone(),
+                                kind: TypedDictKeyViolationKind::NonLiteralDictKey,
                             });
                         }
-                    } else {
-                        // Non-literal key access on a TypedDict
-                        out.push(TypedDictKeyViolation {
-                            span: text_range_to_span(sub.range()),
-                            class_name: schema.class_name.to_owned(),
-                            kind: TypedDictKeyViolationKind::NonLiteralDictKey,
-                        });
                     }
                 }
             }
-            td_check_expr_reads(&sub.value, var_type, fields, out);
-            td_check_expr_reads(&sub.slice, var_type, fields, out);
+            td_check_expr_reads(&sub.value, var_type, fields, final_consts, out);
+            td_check_expr_reads(&sub.slice, var_type, fields, final_consts, out);
         }
         Expr::Call(call) => {
-            td_check_expr_reads(&call.func, var_type, fields, out);
+            td_check_expr_reads(&call.func, var_type, fields, final_consts, out);
             for arg in &call.arguments.args {
-                td_check_expr_reads(arg, var_type, fields, out);
+                td_check_expr_reads(arg, var_type, fields, final_consts, out);
             }
         }
         Expr::BinOp(binop) => {
-            td_check_expr_reads(&binop.left, var_type, fields, out);
-            td_check_expr_reads(&binop.right, var_type, fields, out);
+            td_check_expr_reads(&binop.left, var_type, fields, final_consts, out);
+            td_check_expr_reads(&binop.right, var_type, fields, final_consts, out);
         }
         Expr::UnaryOp(unary) => {
-            td_check_expr_reads(&unary.operand, var_type, fields, out);
+            td_check_expr_reads(&unary.operand, var_type, fields, final_consts, out);
         }
         _ => {}
     }
@@ -257,105 +313,115 @@ pub(super) fn td_check_expr_reads(
 
 /// Resolve a subscript key expression to its statically-known string value.
 ///
-/// Returns the value for a string literal; anything else yields `None`.
-fn subscript_key_literal(slice: &Expr) -> Option<String> {
+/// Returns the value for a string literal, or for a `Name` bound to a module-level
+/// `Final` string constant (PEP 591 — final string values may stand in for string
+/// literals in `TypedDict` operations). Anything else yields `None`.
+fn subscript_key_literal(
+    slice: &Expr,
+    final_consts: &std::collections::HashMap<String, String>,
+) -> Option<String> {
     match slice {
         Expr::StringLiteral(key_str) => Some(key_str.value.to_string()),
+        Expr::Name(_) => expr_simple_name(slice).and_then(|n| final_consts.get(&n).cloned()),
         _ => None,
     }
 }
 
-/// Collect `isinstance`/`issubclass`-on-`TypedDict` violations from
-/// module-level statements and function bodies.
-///
-/// PEP 589: "`TypedDict` type objects cannot be used in `isinstance()` tests
-/// such as `isinstance(d, Movie)`." Both sides of the call resolve through
-/// the module's [`basilisk_canonical::BindingTable`] ([ASTREBUILD-LAW]): the
-/// callee must resolve to the builtin `isinstance`/`issubclass`, and the
-/// checked expression must resolve to the DEFINITION of a class this module
-/// defines, which the [`ClassGraph`] then judges.
-///
-/// The second half was REBUILT. It used to test the argument's `Expr::Name.id`
-/// against a `HashSet<&str>` of names of classes DIRECTLY declared with a
-/// `TypedDict` base, which got the question wrong three ways at once: a
-/// `TypedDict` reached under a second name was not in the set, a subclass of
-/// a `TypedDict` was not in the set even though it is just as un-checkable,
-/// and a
-/// name since rebound to an ordinary class matched the set and was reported
-/// anyway.
+/// Return the inferred type name for a literal expression, or `None` if not a literal.
+pub(super) fn expr_literal_type_name(expr: &Expr) -> Option<&'static str> {
+    match expr {
+        Expr::StringLiteral(_) | Expr::FString(_) => Some("str"),
+        Expr::NumberLiteral(n) => Some(match n.value {
+            ruff_python_ast::Number::Float(_) => "float",
+            ruff_python_ast::Number::Complex { .. } => "complex",
+            ruff_python_ast::Number::Int(_) => "int",
+        }),
+        Expr::BooleanLiteral(_) => Some("bool"),
+        Expr::NoneLiteral(_) => Some("None"),
+        _ => None,
+    }
+}
+
+/// Return `true` if an actual literal type is compatible with an expected `TypedDict` field type.
+pub(super) fn typeddict_field_type_compatible(actual: &str, expected: &str) -> bool {
+    let stripped = crate::scope::strip_typeddict_qualifiers(expected);
+    // A union field accepts a value matching any member (`year: int | None`).
+    if stripped.contains('|') {
+        return stripped
+            .split('|')
+            .any(|member| typeddict_field_type_compatible(actual, member.trim()));
+    }
+    actual == stripped
+        || (actual == "bool" && stripped == "int")
+        || (actual == "int" && stripped == "float")
+}
+
+/// Collect `ReadOnly` violations from module-level statements and function bodies.
 pub(super) fn collect_isinstance_typeddict_violations(
-    bindings: &basilisk_canonical::BindingTable,
     stmts: &[Stmt],
-    graph: &ClassGraph<'_>,
+    typeddict_names: &std::collections::HashSet<&str>,
 ) -> Vec<Span> {
     let mut out = Vec::new();
-    collect_isinstance_typeddict_in_stmts(bindings, stmts, graph, &mut out);
+    collect_isinstance_typeddict_in_stmts(stmts, typeddict_names, &mut out);
     out
 }
 
 pub(super) fn collect_isinstance_typeddict_in_stmts(
-    bindings: &basilisk_canonical::BindingTable,
     stmts: &[Stmt],
-    graph: &ClassGraph<'_>,
+    typeddict_names: &std::collections::HashSet<&str>,
     out: &mut Vec<Span>,
 ) {
-    let mut check = |expr: &Expr| collect_isinstance_typeddict_in_expr(bindings, expr, graph, out);
     crate::walk_all_stmts(stmts, &mut |stmt| match stmt {
         Stmt::If(node) => {
-            check(&node.test);
+            collect_isinstance_typeddict_in_expr(&node.test, typeddict_names, out);
             for clause in &node.elif_else_clauses {
                 if let Some(test) = &clause.test {
-                    check(test);
+                    collect_isinstance_typeddict_in_expr(test, typeddict_names, out);
                 }
             }
         }
-        Stmt::Expr(node) => check(&node.value),
-        Stmt::Assign(node) => check(&node.value),
+        Stmt::Expr(node) => collect_isinstance_typeddict_in_expr(&node.value, typeddict_names, out),
+        Stmt::Assign(node) => {
+            collect_isinstance_typeddict_in_expr(&node.value, typeddict_names, out);
+        }
         Stmt::AnnAssign(node) => {
             if let Some(val) = &node.value {
-                check(val);
+                collect_isinstance_typeddict_in_expr(val, typeddict_names, out);
             }
         }
-        Stmt::While(node) => check(&node.test),
+        Stmt::While(node) => collect_isinstance_typeddict_in_expr(&node.test, typeddict_names, out),
         _ => {}
     });
 }
 
 pub(super) fn collect_isinstance_typeddict_in_expr(
-    bindings: &basilisk_canonical::BindingTable,
     expr: &Expr,
-    graph: &ClassGraph<'_>,
+    typeddict_names: &std::collections::HashSet<&str>,
     out: &mut Vec<Span>,
 ) {
-    use basilisk_canonical::TypingForm;
     use ruff_text_size::Ranged as _;
     let Expr::Call(call) = expr else { return };
-    let callee_is_runtime_check = matches!(
-        bindings.form_of_with_builtins(&call.func),
-        Some(TypingForm::IsinstanceFunction | TypingForm::IssubclassFunction)
+    let callee_is_isinstance = matches!(
+        call.func.as_ref(),
+        Expr::Name(n) if n.id == "isinstance" || n.id == "issubclass"
     );
-    if !callee_is_runtime_check {
+    if !callee_is_isinstance {
         return;
     }
     let Some(second_arg) = call.arguments.args.get(1) else {
         return;
     };
-    // Positional resolution: which class the argument denotes is decided by
-    // the binding in force AT THE CALL, so a name later rebound to something
-    // else does not retroactively make this call illegal, and a name rebound
-    // to an ordinary class before it is not illegal at all.
-    let Some(site) = bindings.local_class_definition(second_arg) else {
-        return;
-    };
-    let Some(class) = graph.at(text_range_to_span(site)) else {
-        return;
-    };
-    if !graph.is_typed_dict(class) {
-        return;
+    if let Expr::Name(name) = second_arg {
+        if typeddict_names.contains(name.id.as_str()) {
+            let range = call.range();
+            out.push(Span {
+                start: range.start().to_u32(),
+                end: range.end().to_u32(),
+            });
+        }
     }
-    let range = call.range();
-    out.push(Span {
-        start: range.start().to_u32(),
-        end: range.end().to_u32(),
-    });
 }
+
+// ---------------------------------------------------------------------------
+// TypeVar bound=TypedDict detection
+// ---------------------------------------------------------------------------

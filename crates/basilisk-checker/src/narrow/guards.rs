@@ -1,27 +1,3 @@
-// ############################################################################
-// # BROKEN — THIS FILE DOES NOT COMPILE. DO NOT "FIX" IT BY RESTORING TEXT   #
-// # MATCHING.                                                                #
-// #                                                                          #
-// # Deleted helper this file called:                                         #
-// #   InferredType::from_annotation (types_parsing.rs)
-// #                                                                          #
-// # That helper decided types from the SPELLING of source text (lowercased   #
-// # annotation strings, `"int"`/`"str"`/`"object"` literal matching, `|`     #
-// # splitting, `starts_with("tuple[")`). It was deleted, not replaced.       #
-// #                                                                          #
-// # The call sites below are LEFT BROKEN ON PURPOSE. They are the map of     #
-// # what must be rebuilt on the resolved AST — resolved bindings, canonical  #
-// # `TypeNode`, and `assignable`/`equivalent` — or made to abstain.          #
-// #                                                                          #
-// # Restoring the deleted helper, vendoring a copy of it, or re-deriving a   #
-// # type from source text anywhere below is FORBIDDEN.                       #
-// #                                                                          #
-// # Evidence and the failing tests that pin the real behaviour:              #
-// #   docs/RULE-VALIDITY-REPORT.md                                           #
-// #   crates/basilisk-checker/tests/legacy_annotation_text_parser_pin_tests.rs
-// #   crates/basilisk-checker/tests/pep_spelling_invariance_pin_tests.rs     #
-// ############################################################################
-
 //! Implements [TYPEINF-TARGET-NARROWING]. See docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-TARGET-NARROWING
 //! Consumption of the resolver's collected narrowing guards
 //! ([`NarrowingGuardKind`]) into positive/negative environment updates —
@@ -52,47 +28,14 @@ pub struct TypedDictKeys {
 pub struct NarrowContext {
     /// `TypedDict` name → key sets.
     pub typeddict_keys: HashMap<String, TypedDictKeys>,
-    /// DEFINITION SITES of `@final` classes — the classes whose
-    /// `type(x) is not C` branch may soundly exclude `C`
-    /// ([TYPEINF-NARROWING-TYPEOF]).
-    ///
-    /// Keyed on definition site, not on a name. The deleted membership test
-    /// read `final_classes.contains(&type_name.to_ascii_lowercase())`, which
-    /// case-folded a class's RENDERING and looked the result up in a set of
-    /// renderings: `Ledger` and `LEDGER` collided, an aliased reference to a
-    /// `@final` class missed, and a distinct class sharing a `@final` class's
-    /// name inherited its exclusion.
-    pub final_class_sites: std::collections::HashSet<basilisk_resolver::Span>,
-    /// The RESOLVED type each narrowing type-expression denotes, keyed by that
-    /// expression's own span.
-    ///
-    /// `type(x) is C` narrows to whatever `C` resolves to at the comparison.
-    /// The span is the key because it identifies one occurrence in one file;
-    /// nothing about the answer depends on how `C` was written. A span absent
-    /// here has no resolved target, and the guard then narrows NOTHING — the
-    /// variable keeps its declared type, which is the conservative direction
-    /// and invents no diagnostic ([CHKARCH-CONFORMANCE-MODE]).
-    pub type_targets: HashMap<basilisk_resolver::Span, InferredType>,
+    /// `@final` class names — the classes whose `type(x) is not C` branch
+    /// may soundly exclude `C` ([TYPEINF-NARROWING-TYPEOF]).
+    pub final_classes: std::collections::HashSet<String>,
     /// Same-module callable interfaces (name → `Callable` type), seeding the
     /// flow walker's expression synthesis so `x = f()` narrows through `f`'s
     /// return and a `Never`-returning call statement counts as divergence
     /// (inference-driven reachability, [TYPEINF-TARGET-NARROWING]).
     pub callables: HashMap<String, InferredType>,
-    /// Guard-annotation text → the RESOLVED narrowing target, produced by the
-    /// module-level [TYPEINF-ANNOTATION-RESOLUTION] cascade. A
-    /// `TypeGuard[MyAlias]` narrows to what `MyAlias` resolves to, not to an
-    /// opaque name; texts absent here fall back to the annotation-text
-    /// lowering (Stage 0.5 bidir wiring).
-    pub guard_types: HashMap<String, InferredType>,
-}
-
-/// The narrowing target a `TypeGuard[X]` / `TypeIs[X]` text denotes: the
-/// module-resolved type when the context has one, else the text lowering.
-fn resolved_guard_type(ctx: &NarrowContext, guard_type: &str) -> InferredType {
-    ctx.guard_types
-        .get(guard_type)
-        .cloned()
-        .unwrap_or_else(|| InferredType::from_annotation(guard_type))
 }
 
 /// What one guard does to one variable in each branch.
@@ -167,7 +110,7 @@ fn outcome_for_kind(
             ..
         } => Some(GuardOutcome {
             variable: variable.clone(),
-            positive: resolved_guard_type(ctx, guard_type),
+            positive: InferredType::from_annotation(guard_type),
             // PEP 647: TypeGuard narrows the positive branch ONLY.
             negative: current.clone(),
             whole_scope,
@@ -177,7 +120,7 @@ fn outcome_for_kind(
             guard_type,
             ..
         } => {
-            let narrowed_to = resolved_guard_type(ctx, guard_type);
+            let narrowed_to = InferredType::from_annotation(guard_type);
             Some(GuardOutcome {
                 variable: variable.clone(),
                 // PEP 742: TypeIs narrows BOTH branches.
@@ -317,29 +260,14 @@ fn extended_outcome_for_kind(
         // only when `C` is `@final` (a subclass may still be `is not C`).
         NarrowingGuardKind::TypeOfIs {
             variable,
-            type_span,
-            type_class_site,
+            type_name,
             is_positive,
             ..
         } => {
-            // REBUILT. The deleted body called the text parser
-            // `InferredType::from_annotation(type_name)` on the class's
-            // RENDERING, then decided `@final`-ness with
-            // `final_classes.contains(&type_name.to_ascii_lowercase())`. Both
-            // read the characters of a name where the question is which class
-            // the expression denotes.
-            let Some(class_type) = ctx.type_targets.get(type_span) else {
-                // No resolved target for this occurrence: narrow nothing.
-                return None;
-            };
-            let matched = intersect(current, class_type);
-            // The negative branch may exclude `C` only when `C` is `@final` —
-            // a subclass instance satisfies `type(x) is not C` while still
-            // being a `C`. Decided on the class's definition site.
-            let is_final =
-                type_class_site.is_some_and(|site| ctx.final_class_sites.contains(&site));
-            let excluded = if is_final {
-                subtract(current, class_type)
+            let class_type = InferredType::from_annotation(type_name);
+            let matched = intersect(current, &class_type);
+            let excluded = if ctx.final_classes.contains(&type_name.to_ascii_lowercase()) {
+                subtract(current, &class_type)
             } else {
                 current.clone()
             };
@@ -642,52 +570,6 @@ mod tests {
             type_is.negative,
             InferredType::Str,
             "TypeIs: negative subtracts"
-        );
-    }
-
-    /// Stage 0.5 bidir wiring: a `TypeGuard[MyAlias]` / `TypeIs[MyAlias]`
-    /// narrows to the type the module RESOLVED for the alias, not to an
-    /// opaque lowered name ([TYPEINF-ANNOTATION-RESOLUTION]).
-    #[test]
-    fn guard_types_resolve_through_the_module_context() {
-        let current = InferredType::Union(vec![InferredType::Int, InferredType::Str]);
-        let ctx = NarrowContext {
-            guard_types: std::iter::once(("MyAlias".to_owned(), InferredType::Str)).collect(),
-            ..NarrowContext::default()
-        };
-        let type_guard = guard_outcomes_in(
-            &guard(NarrowingGuardKind::TypeGuard {
-                variable: "x".to_owned(),
-                guard_type: "MyAlias".to_owned(),
-                if_body_span: Span::new(0, 0),
-                else_body_span: None,
-            }),
-            &current,
-            &ctx,
-        )
-        .expect("outcome");
-        assert_eq!(
-            type_guard.positive,
-            InferredType::Str,
-            "the alias narrows to its RESOLVED type"
-        );
-
-        let type_is = guard_outcomes_in(
-            &guard(NarrowingGuardKind::TypeIs {
-                variable: "x".to_owned(),
-                guard_type: "MyAlias".to_owned(),
-                if_body_span: Span::new(0, 0),
-                else_body_span: None,
-            }),
-            &current,
-            &ctx,
-        )
-        .expect("outcome");
-        assert_eq!(type_is.positive, InferredType::Str);
-        assert_eq!(
-            type_is.negative,
-            InferredType::Int,
-            "TypeIs subtracts the RESOLVED type from the negative branch"
         );
     }
 

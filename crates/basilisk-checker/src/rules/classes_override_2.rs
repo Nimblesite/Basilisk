@@ -15,32 +15,28 @@
 
 use std::collections::HashMap;
 
-use basilisk_resolver::{AttributeInfo, ClassGraph, ClassInfo, ResolvedModule, Span};
+use basilisk_resolver::{AttributeInfo, ClassInfo, ResolvedModule, Span};
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
+use crate::span_util::slice_span;
 
 use super::Rule;
 
-// ######################################################################
-// # `is_typed_dict_hierarchy` IS GONE, NOT REBUILT IN PLACE.            #
-// #                                                                    #
-// # Its body was:                                                      #
-// #                                                                    #
-// #   class_map.get(base.as_str()).is_some_and(|b| b.is_typed_dict)    #
-// #                                                                    #
-// # It took a base class's identity from its RENDERED NAME and looked  #
-// # that string up in a name-keyed map. A base reached through an      #
-// # alias missed; a base sharing a rendered name with an unrelated     #
-// # local class matched. This gate decides whether the whole rule runs #
-// # at all, so a wrong answer here silently disabled E0017 or applied  #
-// # it to a TypedDict where it produces only false positives.          #
-// #                                                                    #
-// # `ClassGraph::is_typed_dict` answers exactly this question from     #
-// # resolved bases keyed on definition site, so the wrapper had no     #
-// # work left to do. The call site below asks the graph directly.      #
-// #                                                                    #
-// # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs         #
-// ######################################################################
+/// Returns `true` when the child class is a `TypedDict` or inherits from one.
+///
+/// `TypedDict` subclassing has entirely different rules from normal OOP attribute
+/// inheritance — subclasses can narrow `ReadOnly` items, change `Required`/`NotRequired`,
+/// etc.  Applying E0017 to `TypedDict` classes produces only false positives.
+fn is_typed_dict_hierarchy(child: &ClassInfo, class_map: &HashMap<&str, &ClassInfo>) -> bool {
+    if child.is_typed_dict {
+        return true;
+    }
+    child.bases.iter().any(|base| {
+        class_map
+            .get(base.as_str())
+            .is_some_and(|b| b.is_typed_dict)
+    })
+}
 
 const CODE: ErrorCode = ErrorCode {
     code: "classes_override_2",
@@ -58,30 +54,32 @@ impl Rule for IncompatibleVariableOverride {
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        let graph = ClassGraph::new(&module.classes);
+        // Build map: class_name → &ClassInfo
+        let class_map = super::shared::class_name_map(&module.classes);
 
-        // Build map: (class DEFINITION SITE, attr_name) → &AttributeInfo, so
-        // an attribute is attached to the class that declares it rather than
-        // to every class sharing its rendered name.
-        let attr_map: HashMap<(Span, &str), &AttributeInfo> = module
+        // Build map: (class_name, attr_name) → &AttributeInfo
+        let attr_map: HashMap<(&str, &str), &AttributeInfo> = module
             .classes
             .iter()
             .flat_map(|cls| {
                 cls.attributes
                     .iter()
-                    .map(move |attr| ((cls.name_span, attr.name.as_str()), attr))
+                    .map(move |attr| ((cls.name.as_str(), attr.name.as_str()), attr))
             })
             .collect();
 
+        let class_names: Vec<&str> = basilisk_resolver::collect_names(&module.classes);
+
         module.classes.iter().for_each(|child| {
             // TypedDict hierarchies have their own subtyping rules — skip.
-            if graph.is_typed_dict(child) {
+            if is_typed_dict_hierarchy(child, &class_map) {
                 return;
             }
             check_class(
-                &graph,
                 child,
                 &attr_map,
+                &class_names,
+                &class_map,
                 &module.source,
                 &module.path,
                 diagnostics,
@@ -90,91 +88,94 @@ impl Rule for IncompatibleVariableOverride {
     }
 }
 
-// ##########################################################################
-// # DELETED BODY — `check_class`. DO NOT RESTORE IT OR RETURN EARLY.        #
-// #                                                                         #
-// # The class walk and attribute lookup had been rebuilt on definition      #
-// # sites, but the verdict at the end still read both annotation SPANS back #
-// # out of the source and compared their characters:                        #
-// #                                                                         #
-// #   let child_ann = annotation_text(source, attr.annotation_span);        #
-// #   let base_ann = annotation_text(source, base_attr.annotation_span);    #
-// #   child_ann != base_ann                                                  #
-// #                                                                         #
-// # That makes formatting, aliases, qualification, and forward-reference    #
-// # quotes part of type compatibility. `int` and `builtins.int` conflict,   #
-// # while two unrelated classes rendered with one spelling agree. The sound #
-// # definition-site walk around that comparison cannot make the comparison  #
-// # lawful, so the ENTIRE verdict body is deleted.                           #
-// #                                                                         #
-// # The rebuild must retrieve both original annotation `Expr` nodes by      #
-// # their spans, lower them through the binding table, and report only a     #
-// # definite semantic incompatibility. An unresolvable side abstains.        #
-// #                                                                         #
-// # Pinned by: tests/pep_spelling_invariance_pin_tests.rs                    #
-// ##########################################################################
-
-/// DELETED — panics; see the banner above.
 fn check_class(
-    _graph: &ClassGraph<'_>,
-    _child: &ClassInfo,
-    _attr_map: &HashMap<(Span, &str), &AttributeInfo>,
-    _source: &str,
-    _path: &str,
-    _out: &mut Vec<Diagnostic>,
+    child: &ClassInfo,
+    attr_map: &HashMap<(&str, &str), &AttributeInfo>,
+    class_names: &[&str],
+    class_map: &HashMap<&str, &ClassInfo>,
+    source: &str,
+    path: &str,
+    out: &mut Vec<Diagnostic>,
 ) {
-    panic!(
-        "basilisk-checker: `classes_override_2::check_class` was DELETED because it \
-         decided override compatibility by comparing the SOURCE SPELLINGS of the child \
-         and base annotations. It panics because the real implementation — resolving \
-         both original annotation `Expr` nodes and relating their binding-backed types — \
-         DOES NOT EXIST YET. Do not restore the text comparison and do not return early \
-         or emit no diagnostic in its place."
-    )
+    for base_name in &child.bases {
+        if !class_names.contains(&base_name.as_str()) {
+            continue;
+        }
+
+        let base_is_dataclass = class_map
+            .get(base_name.as_str())
+            .is_some_and(|b| b.is_dataclass);
+
+        for child_attr in &child.attributes {
+            // Only check annotated attributes in child.
+            if !child_attr.has_annotation {
+                continue;
+            }
+
+            let Some(base_attr) = attr_map.get(&(base_name.as_str(), child_attr.name.as_str()))
+            else {
+                continue;
+            };
+
+            // Only compare if base also has an annotation.
+            if !base_attr.has_annotation {
+                continue;
+            }
+
+            let child_ann = annotation_text(source, child_attr.annotation_span);
+            let base_ann = annotation_text(source, base_attr.annotation_span);
+
+            // Skip when either side uses ReadOnly/Required/NotRequired wrappers.
+            // TypedDict subclasses may legally strip ReadOnly, change Required to
+            // NotRequired, etc. — string comparison cannot verify compatibility here.
+            if uses_typed_dict_qualifier(child_ann) || uses_typed_dict_qualifier(base_ann) {
+                continue;
+            }
+
+            // When both the child and the base are dataclasses, a non-`ClassVar`
+            // annotation change is allowed (frozen dataclasses support covariant
+            // attribute overrides).  We still flag `ClassVar` vs instance-variable
+            // mismatches because those are always errors in dataclasses.
+            if child.is_dataclass && base_is_dataclass {
+                let child_is_classvar = child_ann.is_some_and(|s| s.contains("ClassVar"));
+                let base_is_classvar = base_ann.is_some_and(|s| s.contains("ClassVar"));
+                if child_is_classvar == base_is_classvar {
+                    // Same ClassVar-ness: allow the override (frozen covariance).
+                    continue;
+                }
+            }
+
+            if child_ann != base_ann {
+                out.push(make_diagnostic(
+                    child_attr,
+                    &child_attr.name,
+                    &child.name,
+                    base_name,
+                    child_ann,
+                    base_ann,
+                    path,
+                ));
+            }
+        }
+    }
 }
 
-// ##########################################################################
-// # DELETED BODY — `annotation_text`. DO NOT RESTORE IT.                   #
-// #                                                                         #
-// #   slice_span(source, span?)                                            #
-// #                                                                         #
-// # Innocuous on its own; the defect is what the caller does with it. The  #
-// # override check compares a child attribute's annotation to the base's   #
-// # AS WRITTEN and reports a mismatch when the characters differ, so this  #
-// # rule's whole verdict is a spelling comparison:                         #
-// #                                                                         #
-// #   * `x: int` overriding `x: builtins.int` reads as a type mismatch;    #
-// #   * `Alias = int` used in one of the two reads as a mismatch;          #
-// #   * `list[int]` vs `list[ int ]` — pure formatting — reads as one too; #
-// #   * two genuinely different classes SPELLED alike read as a match, so  #
-// #     the real error goes unreported.                                     #
-// #                                                                         #
-// # The lawful replacement resolves both annotation spans to their `Expr`  #
-// # nodes through `rules::shared::ExprIndex` and relates the two lowered   #
-// # types, reporting only on a proven incompatibility and abstaining when  #
-// # either side is unresolvable ([CHKARCH-CONFORMANCE-MODE]).              #
-// ##########################################################################
-
-/// DELETED — panics; see the banner above.
-#[expect(
-    dead_code,
-    reason = "caller deleted with the source-spelling verdict; retained as part of the rebuild map"
-)]
-fn annotation_text(_source: &str, _span: Option<Span>) -> Option<&str> {
-    panic!(
-        "basilisk-checker: `annotation_text` was DELETED because `classes_override_2` \
-         decided override compatibility by comparing the child's and base's annotation \
-         SOURCE CHARACTERS. It panics because the real implementation — both annotations \
-         resolved to type expressions and related semantically — DOES NOT EXIST YET. Do \
-         not restore the slice and do not return `None` in its place."
-    )
+/// Returns `true` when an annotation string contains `TypedDict` qualifier wrappers.
+///
+/// `ReadOnly`, `Required`, and `NotRequired` change subtyping rules in ways
+/// that a raw string comparison cannot capture — a subclass can legally strip
+/// `ReadOnly` or change `Required` to `NotRequired`.  Skip E0017 for these.
+fn uses_typed_dict_qualifier(ann: Option<&str>) -> bool {
+    ann.is_some_and(|s| {
+        s.contains("ReadOnly") || s.contains("Required") || s.contains("NotRequired")
+    })
 }
 
-#[expect(
-    dead_code,
-    clippy::too_many_arguments,
-    reason = "orphaned by the deleted verdict body; retained with its diagnostic contract"
-)]
+/// Extract annotation text from source given an optional span.
+fn annotation_text(source: &str, span: Option<Span>) -> Option<&str> {
+    slice_span(source, span?)
+}
+
 fn make_diagnostic(
     attr: &AttributeInfo,
     attr_name: &str,

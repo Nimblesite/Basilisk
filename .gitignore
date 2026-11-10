@@ -25,9 +25,6 @@ Desktop.ini
 # Rust
 # =============================================================================
 target/
-# `make clean` / `make distclean` rename heavy dirs here before unlinking them
-# in the background; they are transient and must never appear in git status.
-.trash-*
 *.wasm
 
 # =============================================================================
@@ -120,8 +117,8 @@ benchmarks/results/.warmcache/
 benchmarks/results/.carry/
 # Raw per-fixture hyperfine output: ~9.6k lines rewritten on EVERY `make bench`,
 # which buried real changes in diff noise. The published record of a run is
-# benchmarks/status/<machine>.csv (the historical measurement record) plus the
-# summary.md / coverage.tsv highlights, all still tracked for auditability.
+# benchmarks/status/<machine>.csv (the regression gate reads it from git) plus
+# the summary.md / coverage.tsv highlights, all still tracked.
 benchmarks/results/*.json
 
 
@@ -189,6 +186,3 @@ book/dist/
 # without this the residue gets committed and the next run type-checks a file
 # the suite believes it created fresh.
 vscode-extension/test-fixtures/workspace/ofo_no_scan_target.py
-
-
-.deslop/

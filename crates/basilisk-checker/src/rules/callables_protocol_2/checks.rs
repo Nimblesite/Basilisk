@@ -7,7 +7,10 @@ use basilisk_resolver::Span;
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
-use super::context::{annotation_base_name, expr_name, ModuleContext};
+use crate::rules::shared::infer_expr_literal_type;
+
+use super::callable::{check_callable_compat, parse_callable_type, types_compat};
+use super::context::{ann_str, expr_name, extract_base_name, ModuleContext};
 use super::protocol::check_protocol_func_compat;
 
 use ruff_python_ast::{Expr, Stmt};
@@ -80,6 +83,7 @@ pub(super) fn check_stmts_in_func(
     diag: &mut Vec<Diagnostic>,
 ) {
     let mut local_annotations: Vec<(String, Expr)> = Vec::new();
+    let mut var_proto_types: HashMap<String, String> = HashMap::new();
     for stmt in stmts {
         match stmt {
             Stmt::AnnAssign(ann) => {
@@ -92,7 +96,15 @@ pub(super) fn check_stmts_in_func(
                 }
             }
             Stmt::Assign(assign) => {
-                handle_func_body_assign(assign, &local_annotations, ctx, path, code, diag);
+                handle_func_body_assign(
+                    assign,
+                    &local_annotations,
+                    &mut var_proto_types,
+                    ctx,
+                    path,
+                    code,
+                    diag,
+                );
             }
             _ => {}
         }
@@ -103,6 +115,7 @@ pub(super) fn check_stmts_in_func(
 fn handle_func_body_assign(
     assign: &ruff_python_ast::StmtAssign,
     local_annotations: &[(String, Expr)],
+    var_proto_types: &mut HashMap<String, String>,
     ctx: &ModuleContext,
     path: &str,
     code: &ErrorCode,
@@ -114,18 +127,100 @@ fn handle_func_body_assign(
     let Some(target) = assign.targets.first() else {
         return;
     };
-    let Some(name) = expr_name(target) else {
+    // Track cast() types
+    if let Some(name) = expr_name(target) {
+        if let Some(proto_name) = extract_cast_proto_type(&assign.value, ctx) {
+            let _ = var_proto_types.insert(name.to_owned(), proto_name);
+        }
+        if let Some((_, prev_ann)) = local_annotations.iter().rev().find(|(n, _)| n == name) {
+            let span = mk_span(assign.range());
+            check_assignment(prev_ann, &assign.value, ctx, path, code, diag, span);
+        }
         return;
-    };
-    if let Some((_, prev_ann)) = local_annotations.iter().rev().find(|(n, _)| n == name) {
-        let span = mk_span(assign.range());
-        check_assignment(prev_ann, &assign.value, ctx, path, code, diag, span);
     }
+    // Check attribute assignment on protocol-typed variables
+    check_attr_assignment(
+        target,
+        &assign.value,
+        var_proto_types,
+        ctx,
+        path,
+        code,
+        diag,
+    );
 }
 
 // ---------------------------------------------------------------------------
 // Protocol attribute checking
 // ---------------------------------------------------------------------------
+
+/// Extract the protocol base name from a `cast(ProtoType, expr)` call.
+fn extract_cast_proto_type(value: &Expr, ctx: &ModuleContext) -> Option<String> {
+    let Expr::Call(call) = value else {
+        return None;
+    };
+    if !matches!(call.func.as_ref(), Expr::Name(n) if n.id.as_str() == "cast") {
+        return None;
+    }
+    let type_arg = call.arguments.args.first()?;
+    let type_str = ann_str(type_arg);
+    let base = extract_base_name(&type_str);
+    ctx.find_protocol(&base).map(|_| base)
+}
+
+/// Check an attribute assignment against a protocol-typed variable's attributes.
+fn check_attr_assignment(
+    target: &Expr,
+    value: &Expr,
+    var_proto_types: &HashMap<String, String>,
+    ctx: &ModuleContext,
+    path: &str,
+    code: &ErrorCode,
+    diag: &mut Vec<Diagnostic>,
+) {
+    let Expr::Attribute(attr) = target else {
+        return;
+    };
+    let Some(var_name) = expr_name(&attr.value) else {
+        return;
+    };
+    let Some(proto_name) = var_proto_types.get(var_name) else {
+        return;
+    };
+    let Some(proto) = ctx.find_protocol(proto_name) else {
+        return;
+    };
+    let attr_name = attr.attr.as_str();
+    let span = mk_span(attr.range());
+    let Some(proto_attr) = proto.attrs.iter().find(|a| a.name == attr_name) else {
+        diag.push(error_diagnostic_owned(
+            code.clone(),
+            format!("Protocol `{proto_name}` has no attribute `{attr_name}`"),
+            span,
+            path,
+            None,
+            None,
+        ));
+        return;
+    };
+    // Check type compatibility of the assigned value
+    let value_type = infer_expr_literal_type(value).map(str::to_owned);
+    if let Some(vt) = value_type {
+        if !types_compat(&proto_attr.ann, &vt) {
+            diag.push(error_diagnostic_owned(
+                code.clone(),
+                format!(
+                    "Cannot assign `{vt}` to `{proto_name}.{attr_name}` of type `{}`",
+                    proto_attr.ann
+                ),
+                span,
+                path,
+                None,
+                None,
+            ));
+        }
+    }
+}
 
 /// Collect names of decorated functions/variables whose type is a protocol.
 fn collect_proto_typed_names(stmts: &[Stmt], ctx: &ModuleContext) -> HashMap<String, String> {
@@ -149,13 +244,12 @@ fn infer_decorated_proto_type(
     for dec in &func.decorator_list {
         let dec_name = expr_name(&dec.expression)?;
         let dec_func = ctx.find_func(dec_name)?;
-        // The return annotation's base class is captured structurally from
-        // the AST ([ASTREBUILD-LAW]), never from rendered annotation text.
-        let Some(base) = dec_func.return_base_name.as_deref() else {
+        if dec_func.return_type.is_empty() {
             continue;
-        };
-        if ctx.find_protocol(base).is_some() {
-            return Some(base.to_owned());
+        }
+        let base = extract_base_name(&dec_func.return_type);
+        if ctx.find_protocol(&base).is_some() {
+            return Some(base);
         }
     }
     None
@@ -214,14 +308,23 @@ fn check_assignment(
     span: Span,
 ) {
     let value_name = expr_name(value);
+    let ann_s = ann_str(annotation);
 
-    // The annotation's base class is read structurally from the AST
-    // ([ASTREBUILD-LAW]): a bare name or the base of a subscript. Anything
-    // else names no class this context models, so the check abstains.
-    let Some(base) = annotation_base_name(annotation) else {
+    // Callable[...] annotation
+    if ann_s.starts_with("Callable[") {
+        if let Some(cinfo) = parse_callable_type(&ann_s) {
+            if let Some(fname) = value_name {
+                if let Some(fsig) = ctx.find_func(fname) {
+                    check_callable_compat(&cinfo, fsig, &ann_s, path, diag, span, code);
+                }
+            }
+        }
         return;
-    };
-    if ctx.is_non_protocol_class(base) {
+    }
+
+    // Protocol type annotation
+    let base = extract_base_name(&ann_s);
+    if ctx.is_non_protocol_class(&base) {
         if let Some(fname) = value_name {
             if ctx.find_func(fname).is_some() {
                 diag.push(error_diagnostic_owned(
@@ -236,7 +339,7 @@ fn check_assignment(
         }
         return;
     }
-    if let Some(protocol) = ctx.find_protocol(base) {
+    if let Some(protocol) = ctx.find_protocol(&base) {
         if let Some(fname) = value_name {
             if let Some(fsig) = ctx.find_func(fname) {
                 check_protocol_func_compat(protocol, fsig, path, code, diag, span);

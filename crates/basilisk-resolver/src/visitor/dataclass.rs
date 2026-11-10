@@ -1,72 +1,465 @@
 //! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
 //! Dataclass visitor functions.
 
-use ruff_python_ast::{Expr, ExprCall};
+use ruff_python_ast::{Expr, Stmt, StmtClassDef};
 
-use crate::canonical::{BindingTable, TypingForm};
+use crate::scope::{AttributeInfo, ClassInfo, FunctionInfo};
+
+use super::annotations::annotation_is_kw_only;
+use super::class_info_ext::{
+    decorator_name, expr_simple_name, parse_dataclass_transform_decorator, DcTransformFactory,
+    FieldSpecOverload,
+};
+
+pub(super) fn apply_dataclass_transform(
+    stmts: &[Stmt],
+    classes: &mut [ClassInfo],
+    functions: &[FunctionInfo],
+) {
+    let factories = collect_dc_transform_factories(stmts);
+
+    if factories.is_empty() {
+        return;
+    }
+    let mut specifier_overloads: std::collections::HashMap<&str, Vec<FieldSpecOverload>> =
+        std::collections::HashMap::new();
+    for factory in &factories {
+        for spec_name in &factory.field_specifier_names {
+            if specifier_overloads.contains_key(spec_name.as_str()) {
+                continue;
+            }
+            let overloads = build_field_specifier_overloads(stmts, spec_name, functions);
+            let _ = specifier_overloads.insert(spec_name.as_str(), overloads);
+        }
+    }
+
+    for cls in classes.iter_mut() {
+        let Some(factory) = find_matching_factory(stmts, &cls.name, &factories) else {
+            continue;
+        };
+        cls.is_dataclass = true;
+        cls.is_dataclass_kw_only = factory.kw_only_default;
+        cls.is_dataclass_frozen = factory.frozen_default;
+        cls.is_dataclass_order = factory.order_default;
+
+        // Check for per-class overrides like `@create_model(frozen=True)`
+        if let Some(class_def) = find_class_def(stmts, &cls.name) {
+            apply_class_decorator_overrides(class_def, &factory.name, cls);
+            // Mark field kw-only-ness from the EFFECTIVE setting (after any
+            // per-class `kw_only=` override), not the factory default — otherwise
+            // a class opting out with `@factory(kw_only=False)` keeps kw-only fields.
+            let effective_kw_only = cls.is_dataclass_kw_only;
+            resolve_transform_field_attrs(
+                class_def,
+                &mut cls.attributes,
+                &factory.field_specifier_names,
+                &specifier_overloads,
+                effective_kw_only,
+            );
+        }
+    }
+}
+
+/// Collect `@dataclass_transform(...)` decorated functions at module level.
+pub(super) fn collect_dc_transform_factories(stmts: &[Stmt]) -> Vec<DcTransformFactory> {
+    let mut out = Vec::new();
+    for stmt in stmts {
+        let Stmt::FunctionDef(func) = stmt else {
+            continue;
+        };
+        for dec in &func.decorator_list {
+            let (
+                is_dc_transform,
+                kw_only_default,
+                frozen_default,
+                order_default,
+                field_specifier_names,
+            ) = parse_dataclass_transform_decorator(&dec.expression);
+            if is_dc_transform {
+                out.push(DcTransformFactory {
+                    name: func.name.to_string(),
+                    kw_only_default,
+                    frozen_default,
+                    order_default,
+                    field_specifier_names,
+                });
+            }
+        }
+    }
+    out
+}
+
+/// Parse a `@dataclass_transform(...)` expression.
+///
+/// Returns `(is_dc_transform, kw_only_default, field_specifier_names)`.
+pub(super) fn build_field_specifier_overloads(
+    stmts: &[Stmt],
+    spec_name: &str,
+    functions: &[FunctionInfo],
+) -> Vec<FieldSpecOverload> {
+    let mut overloads = Vec::new();
+
+    let has_overloads = functions.iter().any(|f| {
+        f.name == spec_name
+            && f.class_name.is_none()
+            && f.decorators.iter().any(|d| d == "overload")
+    });
+
+    for stmt in stmts {
+        let Stmt::FunctionDef(func) = stmt else {
+            continue;
+        };
+        if func.name.as_str() != spec_name {
+            continue;
+        }
+
+        let is_overload = func
+            .decorator_list
+            .iter()
+            .any(|d| matches!(decorator_name(d), Some(n) if n == "overload"));
+
+        if has_overloads && !is_overload {
+            continue;
+        }
+
+        let params = &func.parameters;
+        let mut required_kwargs = Vec::new();
+        let mut init_default = None;
+        let mut kw_only_default = None;
+
+        for pwd in &params.kwonlyargs {
+            let param_name = pwd.parameter.name.as_str();
+            let has_default = pwd.default.is_some();
+
+            if param_name == "init" {
+                if let Some(default_expr) = &pwd.default {
+                    init_default =
+                        Some(matches!(default_expr.as_ref(), Expr::BooleanLiteral(b) if b.value));
+                }
+            } else if param_name == "kw_only" {
+                if let Some(default_expr) = &pwd.default {
+                    kw_only_default =
+                        Some(matches!(default_expr.as_ref(), Expr::BooleanLiteral(b) if b.value));
+                }
+            }
+
+            if !has_default && param_name != "init" && param_name != "kw_only" {
+                required_kwargs.push(param_name.to_string());
+            }
+        }
+
+        for pwd in params.posonlyargs.iter().chain(params.args.iter()) {
+            let param_name = pwd.parameter.name.as_str();
+            let has_default = pwd.default.is_some();
+
+            if param_name == "init" {
+                if let Some(default_expr) = &pwd.default {
+                    init_default =
+                        Some(matches!(default_expr.as_ref(), Expr::BooleanLiteral(b) if b.value));
+                }
+            } else if param_name == "kw_only" {
+                if let Some(default_expr) = &pwd.default {
+                    kw_only_default =
+                        Some(matches!(default_expr.as_ref(), Expr::BooleanLiteral(b) if b.value));
+                }
+            }
+
+            if !has_default && param_name != "init" && param_name != "kw_only" {
+                required_kwargs.push(param_name.to_string());
+            }
+        }
+
+        overloads.push(FieldSpecOverload {
+            required_kwargs,
+            init_default,
+            kw_only_default,
+        });
+    }
+
+    overloads
+}
+
+/// Find which factory decorates a class, if any.
+pub(super) fn find_matching_factory<'a>(
+    stmts: &[Stmt],
+    class_name: &str,
+    factories: &'a [DcTransformFactory],
+) -> Option<&'a DcTransformFactory> {
+    let class_def = find_class_def(stmts, class_name)?;
+    for dec in &class_def.decorator_list {
+        let callee = match &dec.expression {
+            Expr::Call(call) => match call.func.as_ref() {
+                Expr::Name(n) => n.id.as_str(),
+                Expr::Attribute(a) => a.attr.as_str(),
+                _ => continue,
+            },
+            Expr::Name(n) => n.id.as_str(),
+            _ => continue,
+        };
+        for factory in factories {
+            if factory.name == callee {
+                return Some(factory);
+            }
+        }
+    }
+    None
+}
+
+/// Apply per-class keyword overrides from the decorator call.
+///
+/// For `@create_model(frozen=True)`, overrides the factory's `frozen_default`.
+fn apply_class_decorator_overrides(
+    class_def: &StmtClassDef,
+    factory_name: &str,
+    cls: &mut ClassInfo,
+) {
+    for dec in &class_def.decorator_list {
+        let Expr::Call(call) = &dec.expression else {
+            continue;
+        };
+        let callee = match call.func.as_ref() {
+            Expr::Name(n) => n.id.as_str(),
+            Expr::Attribute(a) => a.attr.as_str(),
+            _ => continue,
+        };
+        if callee != factory_name {
+            continue;
+        }
+        for kw in &call.arguments.keywords {
+            let Some(arg_name) = kw.arg.as_ref() else {
+                continue;
+            };
+            match arg_name.as_str() {
+                "frozen" => {
+                    cls.is_dataclass_frozen =
+                        matches!(&kw.value, Expr::BooleanLiteral(b) if b.value);
+                }
+                "kw_only" => {
+                    cls.is_dataclass_kw_only =
+                        matches!(&kw.value, Expr::BooleanLiteral(b) if b.value);
+                }
+                "order" => {
+                    cls.is_dataclass_order =
+                        matches!(&kw.value, Expr::BooleanLiteral(b) if b.value);
+                }
+                _ => {}
+            }
+        }
+        break;
+    }
+}
+
+/// Find a class definition by name in the top-level statements.
+pub(super) fn find_class_def<'a>(stmts: &'a [Stmt], name: &str) -> Option<&'a StmtClassDef> {
+    for stmt in stmts {
+        if let Stmt::ClassDef(cls) = stmt {
+            if cls.name.as_str() == name {
+                return Some(cls);
+            }
+        }
+    }
+    None
+}
+
+/// Resolve `is_init_false` and `is_kw_only` for attributes of a `dataclass_transform` class.
+pub(super) fn resolve_transform_field_attrs(
+    class_def: &StmtClassDef,
+    attributes: &mut [AttributeInfo],
+    field_specifier_names: &[String],
+    specifier_overloads: &std::collections::HashMap<&str, Vec<FieldSpecOverload>>,
+    kw_only_default: bool,
+) {
+    let mut attr_idx = 0;
+    for stmt in &class_def.body {
+        let Stmt::AnnAssign(ann) = stmt else {
+            continue;
+        };
+        let Some(attr_name) = expr_simple_name(&ann.target) else {
+            continue;
+        };
+        if attr_name == "_" && annotation_is_kw_only(&ann.annotation) {
+            continue;
+        }
+
+        let Some(attr) = attributes.get_mut(attr_idx) else {
+            break;
+        };
+        if attr.name != attr_name {
+            attr_idx += 1;
+            continue;
+        }
+        attr_idx += 1;
+
+        let Some(value_expr) = ann.value.as_deref() else {
+            if kw_only_default {
+                attr.is_kw_only = true;
+            }
+            continue;
+        };
+
+        let Expr::Call(call) = value_expr else {
+            continue;
+        };
+
+        let callee_name = match call.func.as_ref() {
+            Expr::Name(n) => n.id.as_str(),
+            Expr::Attribute(a) => a.attr.as_str(),
+            _ => continue,
+        };
+
+        if !field_specifier_names.iter().any(|n| n == callee_name) {
+            continue;
+        }
+
+        let Some(overloads) = specifier_overloads.get(callee_name) else {
+            continue;
+        };
+
+        let call_kwargs: Vec<&str> = call
+            .arguments
+            .keywords
+            .iter()
+            .filter_map(|kw| kw.arg.as_ref().map(ruff_python_ast::Identifier::as_str))
+            .collect();
+
+        let explicit_init: Option<bool> = call.arguments.keywords.iter().find_map(|kw| {
+            if kw.arg.as_ref().is_some_and(|a| a.as_str() == "init") {
+                Some(matches!(&kw.value, Expr::BooleanLiteral(b) if b.value))
+            } else {
+                None
+            }
+        });
+
+        let explicit_kw_only: Option<bool> = call.arguments.keywords.iter().find_map(|kw| {
+            if kw.arg.as_ref().is_some_and(|a| a.as_str() == "kw_only") {
+                Some(matches!(&kw.value, Expr::BooleanLiteral(b) if b.value))
+            } else {
+                None
+            }
+        });
+
+        let mut matched_init: Option<bool> = None;
+        let mut matched_kw_only: Option<bool> = None;
+
+        for overload in overloads {
+            let all_required_present = overload
+                .required_kwargs
+                .iter()
+                .all(|req| call_kwargs.contains(&req.as_str()));
+            if all_required_present {
+                matched_init = overload.init_default;
+                matched_kw_only = overload.kw_only_default;
+                break;
+            }
+        }
+
+        let effective_init = explicit_init.or(matched_init);
+        let effective_kw_only = explicit_kw_only.or(matched_kw_only);
+
+        if effective_init == Some(false) {
+            attr.is_init_false = true;
+        }
+        attr.is_kw_only = effective_kw_only.unwrap_or(kw_only_default);
+    }
+}
 
 // ---------------------------------------------------------------------------
-// Dataclass field specifiers
-//
-// The callee is recognised by resolving it to its definition, so
-// `from dataclasses import field as f` and `dataclasses.field(...)` both work
-// and a local `def field(...)` is correctly not the dataclass specifier.
-// Keyword-argument NAMES at a call site are read directly: they need no import,
-// so reading one decides nothing about typing. Implements
-// [RESOLV-CANONICAL-BINDING].
+// Function info
 // ---------------------------------------------------------------------------
 
-/// The literal boolean passed to keyword `argument` of `call`, when present.
-pub(super) fn keyword_bool(call: &ExprCall, argument: &str) -> Option<bool> {
-    call.arguments
-        .keywords
-        .iter()
-        .find(|keyword| {
-            keyword
-                .arg
-                .as_ref()
-                .is_some_and(|name| name.as_str() == argument)
-        })
-        .and_then(|keyword| match &keyword.value {
-            Expr::BooleanLiteral(literal) => Some(literal.value),
+/// Returns `true` when `class` carries a `@dataclass` / `@dataclass(...)` /
+/// `@dataclasses.dataclass` decorator. Used to recognize that the synthesized
+/// `__init__` assigns every (non-`ClassVar`) field, so a `Final` field without an
+/// inline default is valid (it becomes a required constructor parameter).
+pub(super) fn is_dataclass_decorated(class: &StmtClassDef) -> bool {
+    class.decorator_list.iter().any(|dec| {
+        let expr = match &dec.expression {
+            Expr::Call(call) => call.func.as_ref(),
+            other => other,
+        };
+        super::walks::is_name_or_attr_named(expr, "dataclass")
+    })
+}
+
+pub(super) fn dataclass_flag(class: &StmtClassDef, key: &str) -> bool {
+    for dec in &class.decorator_list {
+        let Expr::Call(call) = &dec.expression else {
+            continue;
+        };
+        let is_dc = super::walks::is_name_or_attr_named(call.func.as_ref(), "dataclass");
+        if !is_dc {
+            continue;
+        }
+        for kw in &call.arguments.keywords {
+            if kw.arg.as_ref().map(ruff_python_ast::Identifier::as_str) == Some(key) {
+                return matches!(&kw.value, Expr::BooleanLiteral(b) if b.value);
+            }
+        }
+    }
+    false
+}
+
+/// Returns `true` when the annotation expression is `KW_ONLY`
+/// (the sentinel that makes all following fields keyword-only).
+pub(super) fn field_kw_only_override(value: &Expr) -> Option<bool> {
+    let Expr::Call(call) = value else { return None };
+    let is_field_call = super::walks::is_name_or_attr_named(call.func.as_ref(), "field");
+    if !is_field_call {
+        return None;
+    }
+    for kw in &call.arguments.keywords {
+        if kw.arg.as_ref().is_some_and(|arg| arg.as_str() == "kw_only") {
+            return Some(matches!(&kw.value, Expr::BooleanLiteral(b) if b.value));
+        }
+    }
+    None
+}
+
+/// Returns `true` when the value expression is a `field(init=False, ...)` call.
+///
+/// Only checks calls to the standard `dataclasses.field` function.  Field specifier
+/// calls from `@dataclass_transform` are resolved in `apply_dataclass_transform`.
+pub(super) fn field_init_is_false(value: &Expr) -> bool {
+    let Expr::Call(call) = value else {
+        return false;
+    };
+    let is_field_call = super::walks::is_name_or_attr_named(call.func.as_ref(), "field");
+    if !is_field_call {
+        return false;
+    }
+    call.arguments.keywords.iter().any(|kw| {
+        kw.arg.as_ref().is_some_and(|a| a.as_str() == "init")
+            && matches!(&kw.value, Expr::BooleanLiteral(b) if !b.value)
+    })
+}
+
+pub(super) fn dataclass_bool_flag_is_false(class: &StmtClassDef, key: &str) -> bool {
+    for dec in &class.decorator_list {
+        let Expr::Call(call) = &dec.expression else {
+            continue;
+        };
+        let is_dc = super::walks::is_name_or_attr_named(call.func.as_ref(), "dataclass");
+        if !is_dc {
+            continue;
+        }
+        for kw in &call.arguments.keywords {
+            if kw.arg.as_ref().map(ruff_python_ast::Identifier::as_str) == Some(key) {
+                return matches!(&kw.value, Expr::BooleanLiteral(b) if !b.value);
+            }
+        }
+    }
+    false
+}
+
+pub(super) fn extract_string_list(
+    elts: &[Expr],
+    final_constants: &std::collections::HashMap<&str, &str>,
+) -> Vec<String> {
+    elts.iter()
+        .filter_map(|elt| match elt {
+            Expr::StringLiteral(s) => Some(s.value.to_str().to_owned()),
+            Expr::Name(n) => final_constants.get(n.id.as_str()).map(|s| (*s).to_owned()),
             _ => None,
         })
+        .collect()
 }
-
-/// A dataclass field specifier call, if `value` is one.
-fn field_specifier_call<'a>(bindings: &BindingTable, value: &'a Expr) -> Option<&'a ExprCall> {
-    let Expr::Call(call) = value else {
-        return None;
-    };
-    bindings
-        .is_form(&call.func, TypingForm::DataclassField)
-        .then_some(call)
-}
-
-/// `Some(true)`/`Some(false)` when a field specifier sets `kw_only`.
-pub(super) fn field_kw_only_override(bindings: &BindingTable, value: &Expr) -> Option<bool> {
-    keyword_bool(field_specifier_call(bindings, value)?, "kw_only")
-}
-
-/// Whether a field specifier sets `init=False`.
-pub(super) fn field_init_is_false(bindings: &BindingTable, value: &Expr) -> bool {
-    field_specifier_call(bindings, value)
-        .and_then(|call| keyword_bool(call, "init"))
-        .is_some_and(|init| !init)
-}
-
-// ---------------------------------------------------------------------------
-// `dataclass_transform` support — DELETED
-//
-// The whole chain (factory discovery, field-specifier overloads, per-class
-// decorator overrides, field attribute resolution) hung off a decorator parser
-// that matched the DECORATOR'S SPELLING rather than resolving it, so
-// `@dataclass_transform` was recognised and `@dt` from
-// `from typing import dataclass_transform as dt` was not. That parser was
-// deleted under [CHKARCH-TEXT-MATCHED-LOGIC]; everything that consumed it is
-// deleted here with it rather than propped up.
-//
-// Rebuild is scoped by [ASTREBUILD-PHASE-RESOLVER] — see
-// docs/plans/CHECKER-AST-RECONSTRUCTION-PLAN.md. Until then classes produced by
-// a `dataclass_transform` factory carry none of the dataclass flags, and the
-// rules keyed to them report nothing.

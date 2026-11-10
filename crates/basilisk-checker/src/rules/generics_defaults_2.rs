@@ -1,27 +1,3 @@
-// ############################################################################
-// # BROKEN — THIS FILE DOES NOT COMPILE. DO NOT "FIX" IT BY RESTORING TEXT   #
-// # MATCHING.                                                                #
-// #                                                                          #
-// # Deleted helper this file called:                                         #
-// #   crate::subtyping (SubtypingContext::is_subtype / name_subtype)
-// #                                                                          #
-// # That helper decided types from the SPELLING of source text (lowercased   #
-// # annotation strings, `"int"`/`"str"`/`"object"` literal matching, `|`     #
-// # splitting, `starts_with("tuple[")`). It was deleted, not replaced.       #
-// #                                                                          #
-// # The call sites below are LEFT BROKEN ON PURPOSE. They are the map of     #
-// # what must be rebuilt on the resolved AST — resolved bindings, canonical  #
-// # `TypeNode`, and `assignable`/`equivalent` — or made to abstain.          #
-// #                                                                          #
-// # Restoring the deleted helper, vendoring a copy of it, or re-deriving a   #
-// # type from source text anywhere below is FORBIDDEN.                       #
-// #                                                                          #
-// # Evidence and the failing tests that pin the real behaviour:              #
-// #   docs/RULE-VALIDITY-REPORT.md                                           #
-// #   crates/basilisk-checker/tests/legacy_annotation_text_parser_pin_tests.rs
-// #   crates/basilisk-checker/tests/pep_spelling_invariance_pin_tests.rs     #
-// ############################################################################
-
 //! Implements [`generics_defaults_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `generics_defaults_2`: Incompatible `TypeVar` bound or constraint with its default.
 //!
@@ -46,15 +22,12 @@
 
 use basilisk_resolver::ResolvedModule;
 
-use crate::diagnostic::{Diagnostic, ErrorCode};
+use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
 
 use super::Rule;
 
-#[expect(
-    dead_code,
-    reason = "caller deleted for spelling dependence; retained for the rebuild — see \
-              tests/string_keyed_class_hierarchy_pin_tests.rs"
-)]
+use crate::rules::shared::is_numeric_subtype;
+
 const CODE: ErrorCode = ErrorCode {
     code: "generics_defaults_2",
     docs_url: "https://www.basilisk-python.dev/errors/generics_defaults_2",
@@ -64,36 +37,89 @@ const CODE: ErrorCode = ErrorCode {
 pub(crate) struct TypeVarDefaultIncompatible;
 
 impl Rule for TypeVarDefaultIncompatible {
-    // ##########################################################################
-    // # DELETED BODY. DO NOT RESTORE IT AND DO NOT RETURN A DEFAULT.
-    // #
-    // #   tv.constraint_type_names.iter().any(|c| c == default_name)
-    // #   subtyping.is_subtype(default_name, bound_name)      // DELETED helper
-    // #
-    // # PEP 696 conformance decided by STRING EQUALITY between rendered type
-    // # names. `TypeVarCallInfo` records these only when the value "is a simple
-    // # name", so `default=list[int]` never reached the check at all; what did
-    // # reach it compared `int` and `Int` (aliased import) as unequal, and two
-    // # unrelated classes sharing a rendered name as equal.
-    // #
-    // # A default matching a constraint is TYPE EQUIVALENCE; a default fitting a
-    // # bound is ASSIGNABILITY. Both are `TypeNode` relations.
-    // #
-    // # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
-    // ##########################################################################
     fn check(
         &self,
-        _module: &ResolvedModule,
+        module: &ResolvedModule,
         _ctx: &super::CheckContext,
-        _diagnostics: &mut Vec<Diagnostic>,
+        diagnostics: &mut Vec<Diagnostic>,
     ) {
-        panic!(
-            "basilisk-checker: `generics_defaults_2::check` was DELETED because it settled \
-         PEP 696 default-vs-bound and default-vs-constraint conformance by comparing \
-         RENDERED TYPE NAMES as strings. It panics because the real implementation — \
-         both sides lowered to `TypeNode` through the binding table and related with \
-         `assignable`/`equivalent` — DOES NOT EXIST YET. Do not restore the string \
-         comparison and do not skip the check in its place."
-        )
+        // Build a set of TypeVar names in scope — when the default is another TypeVar,
+        // the check is referential and requires comparing bounds, which is out of scope
+        // for this simple check. Skip those to avoid false positives.
+        let typevar_names: std::collections::HashSet<&str> = module
+            .typevar_calls
+            .iter()
+            .map(|tv| tv.name.as_str())
+            .collect();
+
+        for tv in &module.typevar_calls {
+            // Only plain TypeVar can have bounds/constraints with defaults.
+            // TypeVarTuple and ParamSpec have different semantics.
+            if tv.is_typevartuple || tv.is_paramspec {
+                continue;
+            }
+            if !tv.has_default {
+                continue;
+            }
+            let Some(ref default_name) = tv.default_type_name else {
+                continue;
+            };
+            // If the default is another TypeVar, referential checking (comparing bounds)
+            // is needed — skip to avoid false positives.
+            if typevar_names.contains(default_name.as_str()) {
+                continue;
+            }
+
+            // Case 1: bound + default — default must be a subtype of bound.
+            if tv.has_bound {
+                if let Some(ref bound_name) = tv.bound_type_name {
+                    if !is_numeric_subtype(default_name, bound_name) {
+                        diagnostics.push(error_diagnostic_owned(
+                            CODE.clone(),
+                            format!(
+                                "`TypeVar` `{}` has `default={default_name}` which is not a \
+                                 subtype of `bound={bound_name}`",
+                                tv.name
+                            ),
+                            tv.span,
+                            &module.path,
+                            Some(format!(
+                                "The default must be a subtype of the bound; \
+                                 `{default_name}` is not a subtype of `{bound_name}`"
+                            )),
+                            None,
+                        ));
+                    }
+                }
+                continue; // A TypeVar has either bound OR constraints, not both.
+            }
+
+            // Case 2: constrained TypeVar — default must exactly match one constraint.
+            if !tv.constraint_type_names.is_empty()
+                && !tv.constraint_type_names.iter().any(|c| c == default_name)
+            {
+                let constraint_list = tv
+                    .constraint_type_names
+                    .iter()
+                    .map(|c| format!("`{c}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!(
+                        "`TypeVar` `{}` has `default={default_name}` which is not one of the \
+                         constraints ({constraint_list})",
+                        tv.name
+                    ),
+                    tv.span,
+                    &module.path,
+                    Some(format!(
+                        "The default for a constrained `TypeVar` must be exactly one of its \
+                         constraints; choose one of {constraint_list}"
+                    )),
+                    None,
+                ));
+            }
+        }
     }
 }

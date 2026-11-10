@@ -683,81 +683,56 @@ pub fn bound_method_signatures(class: &StubClass, method: &str) -> Vec<String> {
 /// named `From` imports, so lazy extraction and the benchmark stay unaffected.
 #[must_use]
 pub fn flattened_class_methods(
-    _class_name: &str,
-    _module_exports: &[(String, ExternalSymbol)],
+    class_name: &str,
+    module_exports: &[(String, ExternalSymbol)],
 ) -> Vec<ExternalMethod> {
-    // ######################################################################
-    // # DELETED BODY. DO NOT RESTORE IT AND DO NOT RETURN AN EMPTY VECTOR  #
-    // # IN ITS PLACE.                                                      #
-    // #                                                                    #
-    // # The MRO this walked was built from RENDERED base names:            #
-    // #                                                                    #
-    // #   .map(|base| stub_constructor::base_head(base).to_owned())        #
-    // #   .filter(|head| head != "object")                                 #
-    // #                                                                    #
-    // # `base_head` split a base's SOURCE TEXT at `[`, and the filter      #
-    // # dropped the top type by its builtin SPELLING. Every method this    #
-    // # function reports as inherited was inherited according to a string  #
-    // # comparison, so a base written with unusual spacing, reached under  #
-    // # an alias, or merely sharing a rendered name with another class     #
-    // # produced the wrong method set.                                     #
-    // #                                                                    #
-    // # An empty vector is NOT a safe default here: it silently reports    #
-    // # every class as having no inherited methods.                        #
-    // #                                                                    #
-    // # Pinned by: tests/no_type_spelling_surgery_tests.rs                 #
-    // ######################################################################
-    panic!(
-        "basilisk-checker: `flattened_class_methods` was DELETED because it \
-         linearized an MRO from base-class SOURCE TEXT — heads split at `[` and the \
-         top type dropped by comparing to the literal `\"object\"`. It panics because \
-         the real implementation — resolving each base to a class symbol through the \
-         binding table — DOES NOT EXIST YET. Do not restore the string walk and do \
-         not return an empty vector in its place."
-    )
+    let by_name: std::collections::HashMap<&str, &ExternalSymbol> = module_exports
+        .iter()
+        .map(|(name, symbol)| (name.as_str(), symbol))
+        .collect();
+    let mro = crate::stub_constructor::mro_over(class_name, &|name| {
+        by_name.get(name).map_or_else(Vec::new, |symbol| {
+            symbol
+                .bases
+                .iter()
+                .map(|base| crate::stub_constructor::base_head(base).to_owned())
+                .filter(|head| head != "object" && head != "Any")
+                .collect()
+        })
+    });
+    let mut methods = Vec::new();
+    let mut claimed: HashSet<String> = HashSet::new();
+    for class in &mro {
+        let Some(symbol) = by_name.get(class.as_str()) else {
+            continue;
+        };
+        for method in &symbol.methods {
+            if !claimed.contains(&method.name) {
+                methods.push(method.clone());
+            }
+        }
+        for method in &symbol.methods {
+            let _ = claimed.insert(method.name.clone());
+        }
+    }
+    methods
 }
 
 /// Resolve the bound `__call__` overloads declared by an external class's
 /// metaclass, including an inherited definition over the metaclass C3 MRO.
-// ##########################################################################
-// # DELETED BODY — `flattened_metaclass_calls`. DO NOT RESTORE IT AND DO   #
-// # NOT RETURN AN EMPTY `Vec`.                                             #
-// #                                                                        #
-// #   let head = crate::stub_constructor::base_head(metaclass);            #
-// #   let simple_name = head.rsplit('.').next().unwrap_or(head);           #
-// #   flattened_class_methods(simple_name, module_exports)                 #
-// #                                                                        #
-// # `symbol.metaclass` is the RENDERED TEXT of a `metaclass=` argument —   #
-// # the `metaclass_name` field the spelling guard already forbids reading. #
-// # This took that text, stripped any subscript off it, THREW AWAY THE     #
-// # QUALIFIER, and looked the remainder up in a by-name export map.        #
-// #                                                                        #
-// # `class C(metaclass=abc.ABCMeta)` and `class C(metaclass=ABCMeta)` and  #
-// # a local `class ABCMeta` all reduced to the same key, so whichever      #
-// # entry the export map happened to hold supplied the metaclass           #
-// # `__call__` signature.                                                  #
-// #                                                                        #
-// # This is NOT display data: `metaclass_calls` is what the constructor    #
-// # call check consults for a class whose metaclass defines `__call__`, so #
-// # a wrong entry here changes the arity and types a call is checked       #
-// # against.                                                               #
-// #                                                                        #
-// # Pinned by: tests/source_text_verdict_pin_tests.rs                      #
-// ##########################################################################
 fn flattened_metaclass_calls(
-    _symbol: &ExternalSymbol,
-    _module_exports: &[(String, ExternalSymbol)],
+    symbol: &ExternalSymbol,
+    module_exports: &[(String, ExternalSymbol)],
 ) -> Vec<ExternalMethod> {
-    panic!(
-        "basilisk-checker: `flattened_metaclass_calls` was DELETED because it took the \
-         RENDERED TEXT of a `metaclass=` argument, discarded the qualifier with \
-         `rsplit('.')`, and looked the trailing word up in a by-name export map — so \
-         `abc.ABCMeta` and any local class of that name shared one entry. It panics \
-         because the real implementation — resolving the metaclass expression to a \
-         definition — DOES NOT EXIST YET. Do not restore the name lookup and do not \
-         return an empty `Vec` in its place: empty silently drops the metaclass \
-         `__call__` signature that constructor checking depends on."
-    )
+    let Some(metaclass) = symbol.metaclass.as_deref() else {
+        return Vec::new();
+    };
+    let head = crate::stub_constructor::base_head(metaclass);
+    let simple_name = head.rsplit('.').next().unwrap_or(head);
+    flattened_class_methods(simple_name, module_exports)
+        .into_iter()
+        .filter(|method| method.name == "__call__")
+        .collect()
 }
 
 /// Build a function signature string for hover display.

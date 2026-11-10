@@ -6,46 +6,41 @@ the engineering detail.
 
 Current baseline:
 
-- **The checker is under audit.** Most rules decide from raw source text rather
-  than resolved symbols, so a green run says little about whether Basilisk
-  analyses Python it has never seen
-  ([CONFORMANCE-INTEGRITY-AUDIT](../CONFORMANCE-INTEGRITY-AUDIT.md)). The active
-  work is finding that logic, pinning it with failing tests, and deleting it —
-  not raising any number.
+- The unmodified `python/typing` harness passes 141/141 files with zero missed
+  errors and zero false positives. Conformance is now a permanent ratchet, not a
+  project plan.
 - Tagged-release automation builds the binaries and editor artifacts, stamps
   placeholder versions, publishes VSIX packages to the Microsoft and Open VSX
   registries, and refreshes the Neovim and Zed mirror repositories.
 - VS Code, Neovim, and Zed share the Rust LSP. Editor-specific manual publication
   and clean-install validation remain.
 
-## Accuracy beyond the upstream suite {#NEXTSTEPS-BEYOND-CONFORMANCE}
+## Coverage beyond the upstream suite {#NEXTSTEPS-BEYOND-CONFORMANCE}
 
-**Accuracy on unseen Python is the prime directive.** The upstream suite is a
-downstream sample of it, and one this codebase is overfitted to
-([CHKARCH-CONFORMANCE](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE)).
-A batch of user-reported typing puzzles (2026-08-01, issues
+Conformance remains the prime directive and both ratchets stand. But a batch of
+user-reported typing puzzles (2026-08-01, issues
 [#378](https://github.com/Nimblesite/Basilisk/issues/378)–[#383](https://github.com/Nimblesite/Basilisk/issues/383),
-[#371](https://github.com/Nimblesite/Basilisk/issues/371)) made the point
-concrete: **every one of those defects coexisted with a clean run of the whole
-suite**, and each reproduced on the CLI as well as the playground.
+[#371](https://github.com/Nimblesite/Basilisk/issues/371)) established something
+we should hold onto: **every one of those defects coexisted with a clean 141/141
+run**, and each reproduced on the CLI as well as the playground.
 
-Two blind spots, both of which a perfect score concealed:
+The suite is a floor, not a ceiling. Two concrete blind spots it does not cover:
 
 - `conformance/tests/aliases_recursive.py` contains **zero** PEP 695 `type`
   statements — every recursive case upstream uses the legacy spelling — so
-  rejecting every non-generic recursive `type` alias passed the file.
+  rejecting every non-generic recursive `type` alias scored 100%.
 - Nothing upstream pins "return a `str` literal from a function annotated with
   an alias-of-`int`", so skipping assignability for every nominal annotation
-  passed the file.
+  scored 100%.
 
 Neither is an upstream flaw to route around: a syntax the suite omits is *our*
 responsibility to cover.
 
-- [ ] **`[AGENT]`** Own a Basilisk-side regression suite of Python the upstream
-  suite has never contained, starting with a PEP 695 `type`-statement
-  counterpart of every recursive case in `aliases_recursive.py`. Cases come from
-  the typing spec and real code, **never** from `conformance/tests/`. It grows
-  whenever a user-reported defect turns out to be uncovered upstream.
+- [ ] **`[AGENT]`** Own a Basilisk-side regression suite for constructs the
+  upstream suite omits, starting with a PEP 695 `type`-statement counterpart of
+  every recursive case in `aliases_recursive.py`. It grows whenever a
+  user-reported defect turns out to be uncovered upstream; it never substitutes
+  for the live harness.
 - [ ] **`[AGENT]`** For each user-reported defect, record whether the upstream
   suite covered the construct. A "no" is a coverage-gap ticket in its own right,
   not just a bug fix.
@@ -54,36 +49,14 @@ responsibility to cover.
   decorator) and [#381](https://github.com/Nimblesite/Basilisk/issues/381)
   (call not in outermost position) disable real rules with no signal, which no
   pass-percentage metric can surface.
-- [ ] **`[AGENT]`** Sweep `crates/basilisk-checker/src/rules/` for text-matched
-  logic and handle each find by
-  [CHKARCH-TEXT-MATCHED-LOGIC](../specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TEXT-MATCHED-LOGIC):
-  failing test, delete, report. Do not fix, rewrite, or leave a TODO. Expect the
-  rule count and the conformance number to fall; report both drops plainly.
-  What gets built back is the user's decision, made deliberately and separately.
 
 ## Distribution follow-ups {#NEXTSTEPS-DISTRIBUTION}
 
 - [ ] **`[HYBRID]`** Validate a tagged release end to end with the real
   `VSCODE_MARKETPLACE_PAT`, `OPEN_VSX_PAT`, and mirror credentials, then install
   each published artifact on a clean machine.
-- [ ] **`[HUMAN]`** Get the `zed-industries/extensions` listing PR merged.
-  Basilisk still does not appear in that repo's `extensions.toml`, so the Zed
-  extensions view cannot find it and
-  [install-zed](../../website/src/docs/install-zed.md) documents the
-  dev-extension flow until the listing lands. The `basilisk` extension ID is
-  unclaimed upstream.
-
-  **No longer a manual procedure.** `publish-zed` now forks the registry, pins
-  the `extensions/basilisk` submodule to the release tag, sets the version, and
-  opens (or re-points) the PR on every tagged release, via
-  `scripts/publish_zed_registry.py` ([ZED-MIRROR](../specs/ZED-SPEC.md#ZED-MIRROR)).
-  The `languages/python/` tree that would have shadowed Zed's built-in Python
-  ([ZED-TREESITTER](../specs/ZED-SPEC.md#ZED-TREESITTER)) is gone from
-  `basilisk-zed/`, so the next mirror push is safe to list — the published
-  `v0.39.0` mirror predates that fix and must not be pinned.
-
-  What remains is upstream's: reviewing and merging the PR. Until it merges,
-  nothing about Zed availability may be documented as shipped.
+- [ ] **`[HYBRID]`** Submit the standalone `Nimblesite/basilisk-zed` mirror to
+  `zed-industries/extensions`; automation already renders and tests that mirror.
 - [ ] **`[HUMAN]`** Submit the prepared
   `basilisk.nvim/lspconfig/basilisk.lua` definition upstream.
 - [ ] **`[HYBRID]`** Submit `basilisk` to the upstream

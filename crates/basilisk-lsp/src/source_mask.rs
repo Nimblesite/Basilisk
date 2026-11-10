@@ -150,8 +150,23 @@ impl AnnotationSpans {
         }
     }
 
+    /// Recurse into a subscript's arguments, honouring the two special forms
+    /// whose arguments are not all types.
     fn collect_subscript(&mut self, subscript: &ruff_python_ast::ExprSubscript) {
-        self.collect_type_strings(&subscript.slice);
+        match qualified_tail(&subscript.value) {
+            // Every argument is a value.
+            Some("Literal") => {}
+            // Only the first argument is a type; the rest is metadata.
+            Some("Annotated") => match subscript.slice.as_ref() {
+                Expr::Tuple(tuple) => {
+                    if let Some(first) = tuple.elts.first() {
+                        self.collect_type_strings(first);
+                    }
+                }
+                other => self.collect_type_strings(other),
+            },
+            _ => self.collect_type_strings(&subscript.slice),
+        }
     }
 
     fn collect_each(&mut self, elements: &[Expr]) {
@@ -162,6 +177,14 @@ impl AnnotationSpans {
 }
 
 /// The trailing name of a plain or dotted reference (`Literal`, `typing.Literal`).
+fn qualified_tail(expr: &Expr) -> Option<&str> {
+    match expr {
+        Expr::Name(name) => Some(name.id.as_str()),
+        Expr::Attribute(attribute) => Some(attribute.attr.as_str()),
+        _ => None,
+    }
+}
+
 impl<'a> Visitor<'a> for AnnotationSpans {
     fn visit_stmt(&mut self, stmt: &'a Stmt) {
         match stmt {

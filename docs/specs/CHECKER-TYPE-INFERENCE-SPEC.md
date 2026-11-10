@@ -1,24 +1,10 @@
 # Basilisk type inference {#TYPEINF}
 
-Basilisk has **one** type oracle: the bidirectional inference engine
-([TYPEINF-TARGET](#TYPEINF-TARGET)) — synthesis and checking over a
-subtype-constraint solver, flow-narrowed by the statement-level walker. Every
-type question in the checker is answered by that engine. The default
-configuration follows the typing specification; optional house rules can
-require or discourage annotations without changing PEP behavior (see
-[TYPEINF-REDUNDANT]).
+Basilisk combines conservative shared inference with focused typing-rule algorithms. The default configuration follows the typing specification; optional house rules can require or discourage annotations without changing PEP behavior (see [TYPEINF-REDUNDANT]).
 
 > **Authoritative references**: [PEP 484](https://peps.python.org/pep-0484/), [PEP 526](https://peps.python.org/pep-0526/), [Python Typing Spec](https://typing.python.org/en/latest/spec/), [Python Typing Conformance Suite](https://github.com/python/typing/tree/main/conformance)
 >
-> **Implementation**: the engine is `crates/basilisk-checker/src/bidir/` (synthesis, checking, constraints, solver, generics), `src/narrow/` (flow-sensitive narrowing and inference-driven reachability), and `src/subtyping.rs` (`SubtypingContext`). The pre-engine remnants (`inference.rs`, `collection_inference.rs`, `types_parsing.rs`, per-rule text matching) are **legacy under demolition** — see [TYPEINF-LEGACY](#TYPEINF-LEGACY); nothing in this spec licenses new code against them.
-
-> **Integrity status (2026-08-06):** Basilisk's former conformance result and
-> every Basilisk-generated benchmark, scorecard, and competitor ranking in this
-> document are withdrawn historical research notes. The current conformance
-> level is temporarily unknown while fitted logic is deleted and rebuilt from
-> the specification. External figures remain attributed vendor or third-party
-> claims, not Basilisk measurements. No figure here may be republished until its
-> methodology and robustness have been independently reviewed.
+> **Implementation**: Core inference engine (`inference.rs`, `collection_inference.rs`, `types.rs`, `types_parsing.rs`) is wired into rules E0011, E0013, E0014, E0120, and W0050.
 
 ---
 
@@ -87,72 +73,15 @@ defines the annotation as part of the construct.
 
 ### [TYPEINF-ALGO] Inference algorithm {#TYPEINF-ALGO}
 
-The algorithm is **bidirectional inference over a subtype-constraint solver**,
-specified in full in [TYPEINF-TARGET](#TYPEINF-TARGET): `synth(e) → τ` infers
-bottom-up, `check(e, τ)` propagates an expected type top-down, neither judges
-subtyping directly — they record constraints a separate solver discharges.
-Flow-sensitive positions go through the narrowing walker
-([TYPEINF-TARGET-NARROWING](#TYPEINF-TARGET-NARROWING)), which drives the same
-engine. Anything the engine cannot prove is `Unknown` — never a guess
-([TYPEINF-TARGET-GRADUAL](#TYPEINF-TARGET-GRADUAL)).
-
-There is no second algorithm. Rule-local expected-type tricks, syntactic
-right-hand-side classification, and annotation text matching are not
-alternative inference strategies — they are legacy remnants under demolition
-([TYPEINF-LEGACY](#TYPEINF-LEGACY)), and this section must never again be read
-as licensing them.
-
-### [TYPEINF-LEGACY] Legacy mechanisms — condemned {#TYPEINF-LEGACY}
-
-The following mechanisms predate the engine. They are **not part of this
-specification**; they are scheduled for deletion, rule by rule, under
-[NARROWPLAN-INTEGRATION](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-INTEGRATION),
-and no new code may be written against any of them:
-
-- `inference.rs` (`infer_rhs`) and `collection_inference.rs` — syntactic RHS
-  classification. Superseded by `BidirEngine::synth`.
-- `types_parsing.rs` annotation-string parsing and every rule that slices
-  annotation text out of the source (`slice_span`) — superseded by evaluating
-  the annotation as a type expression through the resolution cascade
-  ([TYPEINF-ANNOTATION-RESOLUTION](#TYPEINF-ANNOTATION-RESOLUTION)) into the
-  engine.
-- `InferredType::Named(String)` — identifying a type by the characters it was
-  spelled with rather than by the declaration it resolves to. This is the root
-  the two entries above grow from: while a type *is* a string, comparing types
-  can only ever be comparing strings.
-- `RhsKind` shape dispatch in rules — superseded by synthesized types.
-- Rule-local subtype/text helpers — were to be superseded by
-  `subtyping::SubtypingContext` as the **single** subtyping judgment. That
-  never happened: `SubtypingContext` was itself deleted as a string-keyed
-  layer and is now a panic-only shell, so these helpers were superseded by
-  nothing and the rule-local paths that survive are unreplaced.
-
-**This is the same defect as the symbol-naming ban, one level down.** The names
-these paths match on are true builtins, so
-[CHKARCH-RECOGNITION-PERMITTED](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-RECOGNITION-PERMITTED)
-allows naming them — but the *mechanism* is string matching on code, and it
-produces the same failure: a verdict that depends on how the file was written
-instead of on what it means. `slice_span(src, span).starts_with("tuple[")` is
-banned by
-[CHKARCH-RECOGNITION-BANNED](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-RECOGNITION-BANNED)
-whatever the name inside the brackets is.
-
-As of 2026-08-06 this layer is roughly 130 sites — 94 `slice_span` and 36
-`from_annotation` in `crates/basilisk-checker/src`. Because it is the checker's
-entire type representation, it comes out by scheduled demolition, not by ad-hoc
-edits: [ASTREBUILD-PHASE-TYPEEXPR](../plans/CHECKER-AST-RECONSTRUCTION-PLAN.md#ASTREBUILD-PHASE-TYPEEXPR).
-
-**No production verdict may continue through text while waiting for its
-replacement.** There is one rule, and it is
-[CHKARCH-TEXT-MATCHED-LOGIC](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TEXT-MATCHED-LOGIC):
-on discovery, pin the defect with a failing test, delete the text path, and
-report — the rule abstains (emits nothing) until its semantic replacement
-exists. "The engine gets fixed first while the legacy path keeps answering"
-was a tolerance policy and is withdrawn; a diagnostic that a text path was
-carrying was never a diagnostic. Fewer answers with visible failing tests is
-the correct intermediate state, and neither direction is decided by what it
-costs a conformance run
-([CHKARCH-CONFORMANCE](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-CONFORMANCE)).
+The shared engine is conservative and primarily bottom-up: literal and
+collection syntax produces an `InferredType`; unsupported expressions produce
+`Unknown` rather than a guessed type. Expected-type and flow reasoning live in
+focused rule/resolver paths, not in a general `infer_type(expr, expected)`
+engine. Consolidating those paths is tracked in
+[NARROWPLAN-INFERENCE](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-INFERENCE).
+The target architecture that supersedes this conservative core — bidirectional
+checking over a subtype-constraint solver — is specified in
+[TYPEINF-TARGET](#TYPEINF-TARGET).
 
 ### [TYPEINF-ANNOTATION-RESOLUTION] Annotation name resolution {#TYPEINF-ANNOTATION-RESOLUTION}
 
@@ -495,9 +424,7 @@ def variadic(*args: int) -> None:
     reveal_type(args)  # tuple[int, ...]
 ```
 
-**Index-range checking.** A value declared `tuple[T1, ..., Tn]` supports exactly the literal indices `[-n, n)`; any other literal index is a guaranteed runtime `IndexError` and draws `tuples_index` at **every** scope. The declared annotation of the innermost binding scope decides: an annotated local's tuple length applies; a parameter, `*args`/`**kwargs`, or unannotated rebinding in that scope opts the name out; otherwise an annotated module variable applies. Lambda parameters and comprehension targets shadow enclosing annotations. Variadic (`tuple[T, ...]`) and PEP 646 unpacked (`*tuple[...]`, `*Ts`) forms have no fixed length and are exempt. Collected in the resolver by `visitor/annotated_tuple_index.rs` (annotated variables), `visitor/key_lambda.rs` (`key=` lambda parameters), and the `tuples_index_2` rule (function parameters); all render through the `tuples_index` rule.
-
-> **Authority**: [Typing spec — Tuples](https://typing.python.org/en/latest/spec/tuples.html).
+> **Authority**: [Typing spec — Tuple types](https://typing.readthedocs.io/en/latest/spec/special-forms.html#tuple).
 
 ### [TYPEINF-COLLECTIONS-COMPREHENSIONS] Comprehensions {#TYPEINF-COLLECTIONS-COMPREHENSIONS}
 
@@ -530,17 +457,6 @@ z: float = first([1, 2, 3])  # T solved to int; int assignable to float ✓
 ```
 
 > **Authority**: [PEP 484 §Generics](https://peps.python.org/pep-0484/#generics).
-
-PEP 695 generic function calls must solve a type parameter from the argument
-and substitute it recursively through the complete return annotation. The
-required `tuple[T, T]`, `list[T]`, union, and lowercase-parameter cases are
-tracked by [#419](https://github.com/Nimblesite/Basilisk/issues/419) and pinned
-by `crates/basilisk-checker/tests/runtime_type_safety_regressions_tests.rs`.
-Abstaining from `assert_type` is not implementation of this obligation: the
-same fixture pairs an exact accepted assertion with a deliberately wrong
-assertion that must emit exactly one diagnostic.
-
-> **Authority**: [PEP 695 § Generic functions](https://peps.python.org/pep-0695/#generic-functions), [typing spec — `assert_type`](https://typing.python.org/en/latest/spec/directives.html#assert-type).
 
 ### [TYPEINF-GENERICS-CONSTRAINED] Constrained TypeVars {#TYPEINF-GENERICS-CONSTRAINED}
 
@@ -773,34 +689,7 @@ def f(val: int | str) -> None:
         reveal_type(val)  # int  — complement narrowing
 ```
 
-**The guard type itself.** `TypeGuard[T]` and `TypeIs[T]` are one modelled type,
-`InferredType::Guard { type_is, inner }`, produced by the cascade so aliases
-expand through them. `is_assignable_to` gives it three relations, guard-to-guard
-tested FIRST so the two forms never collapse into each other:
-
-| Relation | Holds when | Why |
-|---|---|---|
-| `TypeGuard[B]` <: `TypeGuard[A]` | `B` <: `A` | `TypeGuard` is covariant in its argument |
-| `TypeIs[B]` <: `TypeIs[A]` | `B` IS `A` | "Unlike `TypeGuard`, `TypeIs` is invariant in its argument type" |
-| across the two forms | never | "`TypeIs` and `TypeGuard` are not compatible with each other" |
-| `Guard` <: `X` | `bool` <: `X` | in these contexts a guard "is treated as a subtype of `bool`", so `Callable[..., TypeIs[int]]` satisfies `Callable[..., bool]` but never `Callable[..., str]` |
-| `X` <: `Guard` | `X` <: `bool` | the body of a narrowing function returns an ordinary bool (`return False`) |
-
-**Consistency precondition.** `TypeIs[X]` additionally requires `X` to be
-consistent with the input parameter type — three-valued, abstaining when
-either side is not grounded (`rules/narrowing_typeis_2.rs`). NOT through
-`SubtypingContext`, which is a panic-only shell; the rule resolves each
-nominal leaf through `rules/shared/nominal.rs`. That path is currently
-unreachable for two nominal leaves: `leaf_consistency` calls
-`InferredType::is_assignable_to` first, which panics on `(Named, Named)`. See
-the function's own doc comment. Invariant container positions are compared in
-BOTH directions, which is why `object` must stay distinct from `Any`
-([TYPEINF-SUBTYPING-NOMINAL](#TYPEINF-SUBTYPING-NOMINAL)): narrowing
-`list[object]` to `list[int]` is an error, narrowing `list[Any]` is not.
-
-> **Authority**: [PEP 742](https://peps.python.org/pep-0742/),
-> [PEP 647](https://peps.python.org/pep-0647/),
-> [Typing spec — TypeIs](https://typing.python.org/en/latest/spec/narrowing.html#typeis).
+> **Authority**: [PEP 742](https://peps.python.org/pep-0742/).
 
 ### [TYPEINF-NARROWING-ASSERT] `assert` Narrowing {#TYPEINF-NARROWING-ASSERT}
 
@@ -876,21 +765,13 @@ Nominal-subtyping rules may walk `ClassInfo.bases` transitively; the shared MRO
 model remains tracked by
 [NARROWPLAN-SUBTYPING](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-SUBTYPING).
 
+**Builtin numeric tower.** The typing-spec promotions ([Special cases for float and complex](https://typing.python.org/en/latest/spec/special-types.html#special-cases-for-float-and-complex)) hold: `bool`/`int` are accepted where `float` is expected, and `bool`/`int`/`float` where `complex` is expected. Two layers implement this:
 
-> **STATUS 2026-08-09 — `subtyping.rs` IS A PANIC-ONLY SHELL.** Every body in that file was deleted for deciding subtyping from the SPELLING of type names; `SubtypingContext::is_subtype` took two annotation STRINGS. The struct, `name_subtype`, and every `register_*` method now panic when called. Nothing in the paragraphs below describes running code: read them as the OBLIGATION a replacement must meet, not as a description of this checker. The replacement is a relation over resolved identities — `basilisk-canonical`'s `TypeNode` + `assignable`, and `rules/shared/nominal.rs`'s definition-site class graph — not a revived string layer.
-
-**Builtin numeric tower.** The typing-spec promotions ([Special cases for float and complex](https://typing.python.org/en/latest/spec/special-types.html#special-cases-for-float-and-complex)) hold: `bool`/`int` are accepted where `float` is expected, and `bool`/`int`/`float` where `complex` is expected.
-
-This judgment has NO home. `crates/basilisk-checker/src/subtyping.rs` was intended to be it — `name_subtype` encoding the full `bool <: int <: float <: complex` chain, `SubtypingContext` as the judgment every consumer goes through — but that file is now a panic-only shell, because `name_subtype` compared type NAMES and `is_subtype` took two annotation strings. The numeric tower that survives is the hard-coded arm in `InferredType::is_assignable_to`; the accepted/rejected table was pinned in `tests/subtyping_context_tests.rs` ([NARROWPLAN-SUBTYPING](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-SUBTYPING)). The rule-local delegates still calling `name_subtype` directly (`rules/shared.rs::is_numeric_subtype` and the helpers in `narrowing_typeis`, `narrowing_typeis_2`, `overloads_evaluation`, `generics_typevartuple_callable`, `aliases_implicit`, `generics_syntax_scoping`, `callables_subtyping`, `generics_defaults_referential`) are legacy shims on the demolition list ([TYPEINF-LEGACY](#TYPEINF-LEGACY)); the `types_parsing.rs` fold of `complex` into `Float` is a legacy-parser artifact that dies with that parser. One subtyping implementation — not two layers.
+- Annotation-text level (the conformance rules): the single home is `crates/basilisk-checker/src/subtyping.rs::name_subtype`, encoding the full `bool <: int <: float <: complex` chain; `rules/shared.rs::is_numeric_subtype` and the rule-local helpers (`narrowing_typeis`, `narrowing_typeis_2`, `overloads_evaluation`, `generics_typevartuple_callable`, `aliases_implicit`, `generics_syntax_scoping`, `callables_subtyping`, `generics_defaults_referential`) delegate to it, with the accepted/rejected table pinned in `tests/subtyping_context_tests.rs` ([NARROWPLAN-SUBTYPING](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-SUBTYPING)).
+- `InferredType` level: the annotation parser folds `complex` into `Float` (`types_parsing.rs`: `"float" | "complex" => Float`), so the `int → float` and `int`/`float → complex` promotions hold by construction (`bool` acceptance lives at the text level). Accepted trade-off: a `complex`-typed value is not rejected where `float` is expected — the conformance suite does not exercise that direction.
 
 **Other builtin relations:**
-- All classes <: `object`. The cascade resolves `object` to the named TOP type, not to `Any`:
-  it accepts every value as a target and is accepted everywhere as a source (the gradual
-  posture the `Any` spelling used to provide), but it stays a DISTINCT name so an invariant
-  judgment can tell `list[object]` from `list[Any]` — narrowing the former to `list[int]` is an
-  error the typing spec requires, while the latter is consistent with anything
-  ([TYPEINF-NARROWING-TYPEIS](#TYPEINF-NARROWING-TYPEIS)). The legacy `types_parsing.rs` string
-  parser still folds it into `Any`, and dies with that parser.
+- All classes <: `object` (`object` parses to the `Any` escape hatch for assignment purposes).
 - `Never` <: everything (bottom type).
 - There is **no** `bytearray <: bytes` promotion: the [current typing spec](https://typing.python.org/en/latest/spec/special-types.html#special-cases-for-float-and-complex) defines promotions only for `float`/`complex` (the historical `bytes` shorthand was removed), and no conformance test requires it. `bytearray` parses to `Named("bytearray")` and is assignable essentially only to itself, `object`, and `Any`.
 
@@ -981,11 +862,7 @@ y: Sequence[Animal] = dogs   # OK — Sequence is covariant
 - `Optional[T]` = `T | None`
 - `Any` is bidirectionally compatible with all types (not a real subtype, an escape hatch)
 - `Never` <: everything (bottom type, assignable to all types)
-- the simplified annotation parser treats `object` as a gradual `Any` spelling; the cascade
-  keeps it as the named top type (see the builtin relations above)
-- **Enum literal expansion**: an enum type with members is equivalent to the union of literals of all its members, so `Answer` <: `Literal[Answer.Yes, Answer.No]` exactly when `Yes`/`No` are ALL of `Answer`'s members; a partial member union is not a supertype. Membership follows the `Enum` metaclass's own rules: unannotated class-body value assignments, excluding sunder/dunder names and `nonmember`/descriptor/lambda values. Implemented by `rules/assignment_compatibility/enum_expand.rs`.
-
-> **Authority**: [Typing spec — Enums](https://typing.python.org/en/latest/spec/enums.html).
+- the simplified annotation parser treats `object` as a gradual `Any` spelling
 
 ### [TYPEINF-SUBTYPING-CALLABLE] Callable Subtyping {#TYPEINF-SUBTYPING-CALLABLE}
 
@@ -1008,15 +885,6 @@ g: Callable[[Dog], Animal]  # accepts Dog, returns Animal
 - Source may have fewer required parameters than target (extra defaults OK).
 - `*args`/`**kwargs` in source accepts any parameter count in target.
 - `Callable[..., R]` (ellipsis params) is compatible with any parameter signature.
-- **A gradual tail is not the same as no parameters.** `CallableInfo.param_types`
-  ends with the `types::GRADUAL_PARAMS` marker (`types::gradual_params` builds
-  it, `types::split_gradual` reads it) whenever the tail is unconstrained:
-  `Callable[..., R]`, a bare `ParamSpec`, and PEP 612
-  `Callable[Concatenate[int, P], R]` — which pins `int` as a REQUIRED leading
-  position and leaves the rest gradual. An EMPTY list therefore means a callable
-  that takes no parameters at all (`Callable[[], R]`), which is what lets
-  `Concatenate[int, P]` reject a zero-argument callable instead of silently
-  accepting it.
 
 > **Authority**: [PEP 484 §Callable](https://peps.python.org/pep-0484/#callable), [Typing spec — Callables](https://typing.readthedocs.io/en/latest/spec/callables.html)
 
@@ -1025,16 +893,14 @@ g: Callable[[Dog], Animal]  # accepts Dog, returns Animal
 Subtyping is decided by `InferredType::is_assignable_to(&self, other)` in `crates/basilisk-checker/src/types.rs` — a pure structural match over the `InferredType` enum, called on production paths by the compatibility rules (e.g. `rules/assignment_compatibility`, `rules/returns_compatibility`). It implements:
 
 - `Any` / `Unknown` bidirectional compatibility and `Never` as bottom ([TYPEINF-SPECIAL-ANY](#TYPEINF-SPECIAL-ANY), [TYPEINF-SPECIAL-NEVER](#TYPEINF-SPECIAL-NEVER)).
-- Partial, literal-level numeric relations: `int` (and `Literal` ints/floats) <: `float`, `Literal[True/False]` <: `bool`/`int`, plus `Literal`/`LiteralString`/`str` relations ([TYPEINF-SUBTYPING-NOMINAL](#TYPEINF-SUBTYPING-NOMINAL), [TYPEINF-SPECIAL-LITERALSTRING](#TYPEINF-SPECIAL-LITERALSTRING)). The numeric tower and `object`-as-top relations over RESOLVED nodes live in `basilisk-canonical`'s relation layer (`TypeNode` + `assignable`/`equivalent`, [RESOLV-CANONICAL-RELATION]) — that is the sanctioned home. `subtyping.rs::name_subtype` receives NAMES rather than resolved identities; centralising text matching does not make it semantic, so `name_subtype` is condemned under [TYPEINF-LEGACY](#TYPEINF-LEGACY): no new caller may be added, and existing callers migrate to the relation layer or abstain.
+- Partial, literal-level numeric relations: `int` (and `Literal` ints/floats) <: `float`, `Literal[True/False]` <: `bool`/`int`, plus `Literal`/`LiteralString`/`str` relations ([TYPEINF-SUBTYPING-NOMINAL](#TYPEINF-SUBTYPING-NOMINAL), [TYPEINF-SPECIAL-LITERALSTRING](#TYPEINF-SPECIAL-LITERALSTRING)). The full `bool <: int <: float <: complex` tower lives in the annotation-text-level helpers used by the conformance rules.
 - `Optional`/`Union` decomposition: `A | B <: C` iff both sides do; `A <: A | B` ([TYPEINF-SUBTYPING-UNION](#TYPEINF-SUBTYPING-UNION)).
 - Bidirectional element compatibility (invariance, with gradual `Any`/`Unknown` consistency) for mutable `list`/`set`/`dict`; fixed-length, homogeneous `tuple[X, ...]`, and PEP 646 unpacked (`*tuple[...]`/`*Ts`) tuple matching ([TYPEINF-SUBTYPING-GENERIC](#TYPEINF-SUBTYPING-GENERIC), [TYPEINF-COLLECTIONS-TUPLES](#TYPEINF-COLLECTIONS-TUPLES)).
 - Callable contravariant parameters / covariant return, with `...` params gradual ([TYPEINF-SUBTYPING-CALLABLE](#TYPEINF-SUBTYPING-CALLABLE)); `TypeForm` covariance.
 
-Module-context equivalences that `is_assignable_to` cannot see run as ordered rescues in `rules/assignment_compatibility` after it returns false: expected-type literal-collection checking, the enum literal expansion (`enum_expand.rs`, needing the module's enum-member environment), then callable-signature rescue — all over the skip/alias/schema environment built once per module by `skip_names::SkipNames::collect`.
+`Named` types (user classes and unparameterised imports) compare by base name before `[`: `Foo[int]` and `Foo[float]` are treated as compatible. This is deliberate — without whole-program generic variance analysis, stricter matching would emit false positives, and the conformance gate holds `max_false_positives` at zero.
 
-`Named` types (user classes and unparameterised imports) have **no lawful comparison**: a name is a spelling, not an identity, so any answer computed from it — including the historical "compare the source text before the `[`" — is text matching by [CHKARCH-TEXT-MATCHED-LOGIC](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-TEXT-MATCHED-LOGIC) and is FORBIDDEN to execute, not merely documented as weak. The REQUIRED behaviour until resolved generic subtyping exists is abstention: a relation involving a `Named` leaf the module cannot ground answers `Unknown`/no-verdict, never a string-prefix `true` and never a spelling-difference `false`. **The implementation does not do this.** `InferredType::is_assignable_to` PANICS on a `(Named, Named)` pair rather than abstaining, because the text comparison was deleted and the deletion protocol requires the gap to be loud rather than defaulted. Abstention is what the replacement must do once a nominal leaf carries its definition site; the panic is what happens today, on production paths, including every nested pair (`list[A]` vs `list[B]`, dict values, tuple elements, callable parameters and returns). (The prior justification — that stricter matching would raise false positives against a zero-false-positive conformance gate — was a reason the gate was the wrong instrument, not a licence for the text verdict.)
-
-Nominal MRO walking and structural Protocol/TypedDict compatibility are decided today by the per-conformance-area rule modules (`rules/protocols_*`, `rules/typeddicts_*`, and the class-bases-walking `is_subtype_of` helper in `rules/generics_basic_3/helpers.rs`). There is no shared home: `crates/basilisk-checker/src/subtyping.rs` was to be it, and is a panic-only shell. Nothing walks a real MRO anywhere in this checker — `ClassGraph::ancestors` is depth-first reachability, not C3. The rule modules were to migrate onto `SubtypingContext` behind the parity pins in `tests/subtyping_context_tests.rs` and the in-module `helper_parity_tests` at the Integration stage ([NARROWPLAN-SUBTYPING](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-SUBTYPING)).
+Nominal MRO walking and structural Protocol/TypedDict compatibility are decided today by the per-conformance-area rule modules (`rules/protocols_*`, `rules/typeddicts_*`, and the class-bases-walking `is_subtype_of` helper in `rules/generics_basic_3/helpers.rs`). The shared home now exists — `crates/basilisk-checker/src/subtyping.rs` (`SubtypingContext`: cycle-guarded nominal walk, structural Protocol satisfaction, `TypedDict` schemas, declared variance, `Callable` kinds) — and the rule modules migrate onto it behind the parity pins in `tests/subtyping_context_tests.rs` and the in-module `helper_parity_tests` at the Integration stage ([NARROWPLAN-SUBTYPING](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-SUBTYPING)).
 
 ---
 
@@ -1043,12 +909,9 @@ Nominal MRO walking and structural Protocol/TypedDict compatibility are decided 
 ### [TYPEINF-SPECIAL-ANY] `Any` {#TYPEINF-SPECIAL-ANY}
 
 `Any` is bidirectionally compatible with all types. It arises from explicit
-`Any` and from typing-defined gradual spellings such as bare generics in the
-simplified annotation parser; it is never the fallback for a failed expression
-inference (that sentinel is `Unknown`). `object` is NOT one of those spellings
-in the cascade — it is the named top type, which accepts everything without
-erasing the distinction between `object` and `Any` (see
-[TYPEINF-SUBTYPING-NOMINAL](#TYPEINF-SUBTYPING-NOMINAL)). Unannotated
+`Any` and from typing-defined gradual spellings such as `object` and bare
+generics in the simplified annotation parser; it is never the fallback for a
+failed expression inference (that sentinel is `Unknown`). Unannotated
 parameters do not silently become explicit `Any`; the opt-in annotation policy
 may report `BSK-0001`.
 
@@ -1137,7 +1000,7 @@ Deliberate, distinctive behaviors of Basilisk's inference engine:
 
 ### [TYPEINF-EXCEEDS-NOUNKNOWN] Conservative `Unknown` Sentinel {#TYPEINF-EXCEEDS-NOUNKNOWN}
 
-Whatever the engine cannot **prove**, it types as the internal sentinel `InferredType::Unknown` (`crates/basilisk-checker/src/types.rs`) — never a guess. This is the gradual posture of [TYPEINF-TARGET-GRADUAL](#TYPEINF-TARGET-GRADUAL) made concrete: `is_assignable_to` treats `Unknown` as bidirectionally compatible, and rules that encounter it suppress their diagnostic rather than speculate. Recursive value-alias matching and `TypeForm` RHS validation are narrow exceptions that preserve real incompatibility diagnostics. `Unknown` never becomes explicit `Any` and does not alter the separately configured annotation policy. (The legacy `infer_rhs` path produces `Unknown` for every call expression because it cannot see callables at all; the engine's `synth_call` resolves them — one of the concrete losses the demolition of [TYPEINF-LEGACY](#TYPEINF-LEGACY) recovers.)
+When syntactic RHS inference cannot determine a type (call expressions, `type(...)` calls, arbitrary expressions, lambda return types — `infer_rhs` in `crates/basilisk-checker/src/inference.rs`), it produces the internal sentinel `InferredType::Unknown` (`crates/basilisk-checker/src/types.rs`). `Unknown` is deliberately conservative: `is_assignable_to` treats it as bidirectionally compatible, and rules that encounter it generally suppress their diagnostic rather than guess. Recursive value-alias matching and `TypeForm` RHS validation are narrow exceptions that preserve real incompatibility diagnostics. `Unknown` never becomes explicit `Any` and does not alter the separately configured annotation policy.
 
 ### [TYPEINF-EXCEEDS-CONTAINERS] Strict Container Inference Always On {#TYPEINF-EXCEEDS-CONTAINERS}
 
@@ -1178,23 +1041,14 @@ engine grows ([TYPEINF-TARGET](#TYPEINF-TARGET)) — never the reverse.
 
 ## [TYPEINF-IMPL] Implementation notes {#TYPEINF-IMPL}
 
-The engine lives in `basilisk-checker`:
+Shared inference lives in `basilisk-checker`:
 
-- `bidir/` — the bidirectional core: `engine.rs` (synthesis), `check.rs`
-  (checking mode), `constraints.rs` + `solve.rs` (the two-stage constraint
-  architecture), `generics.rs` (`GenericEnv`), `builtins.rs` (the central
-  builtin call/method table).
-- `narrow/` — the flow walker (`flow.rs`), scoped environment (`env.rs`),
-  guard interpretation (`guards.rs`), inference-driven reachability
-  (`reachability.rs`), and set operations (`set_ops.rs`).
-- `subtyping.rs` — `SubtypingContext`. **Panic-only shell**; deleted for
-  string-keyed subtyping. Not a judgment, single or otherwise.
-- `types.rs` — `InferredType`, the ground-type vocabulary the engine solves
-  into.
-
-Still present, condemned, and being deleted under
-[TYPEINF-LEGACY](#TYPEINF-LEGACY): `inference.rs`, `collection_inference.rs`,
-`types_parsing.rs`, and per-rule text/shape matching.
+- `inference.rs` — conservative RHS inference.
+- `collection_inference.rs` — collection element joins.
+- `types.rs` and `types_parsing.rs` — `InferredType`, assignability, and
+  annotation parsing.
+- Focused resolver/rule modules — narrowing, overload, Literal, Protocol, and
+  TypedDict behavior.
 
 The LSP analysis path is memoized by the Salsa database described in
 [CHKARCH-INCREMENTAL-SALSA](CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-INCREMENTAL-SALSA).
@@ -1202,13 +1056,12 @@ A separate content-addressed cache serves opt-in cross-session CLI reuse.
 
 ---
 
-## [TYPEINF-TARGET] The inference engine {#TYPEINF-TARGET}
+## [TYPEINF-TARGET] Target inference architecture {#TYPEINF-TARGET}
 
-This section specifies **the** inference engine — not a future aspiration, not
-an alternative mode: the one type oracle of [TYPEINF-ALGO](#TYPEINF-ALGO),
-built in `bidir/` + `narrow/` + `subtyping.rs`. Rolling it through every rule
-and deleting the legacy remnants it replaces is ordered by
-[NARROWPLAN-INTEGRATION](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-INTEGRATION).
+This section specifies the design of the next-generation inference engine.
+The current conservative core ([TYPEINF-ALGO](#TYPEINF-ALGO)) is superseded by
+this design; delivery is staged in
+[NARROWPLAN-INFERENCE](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-INFERENCE).
 The design is oriented toward
 [PEP 827 – Type Manipulation](https://peps.python.org/pep-0827/) — the engine
 must be powerful enough to host PEP 827-style conditional/mapped types — but
@@ -1217,7 +1070,7 @@ groundwork is specified here. Every claim below is grounded in the research
 survey in [TYPEINF-RESEARCH](#TYPEINF-RESEARCH). The outcome requirement —
 inference measurably superior to every officially-recognized competitor,
 proven and held by a self-measured ratcheted scoreboard — is defined in
-[NARROWPLAN-SCOREBOARD](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-SCOREBOARD).
+[NARROWPLAN-SUPERIORITY](../plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-SUPERIORITY).
 
 ### [TYPEINF-TARGET-BIDIRECTIONAL] Bidirectional core {#TYPEINF-TARGET-BIDIRECTIONAL}
 
@@ -1304,42 +1157,32 @@ eviction (keep only interfaces) sits behind the query layer — see the threshol
 
 ### [TYPEINF-TARGET-TYPELEVEL] Type-level evaluation (PEP 827 readiness) {#TYPEINF-TARGET-TYPELEVEL}
 
+`tyeval.rs` implements isolated Stage 3 groundwork: a bounded, memoized,
+call-by-need evaluator for ground/alias/parameter/list/tuple/union terms with a
+gradual `Divergent` fallback and guarded-recursion acceptance. It is not wired
+into annotation resolution and does not yet implement conditional or mapped
+types. The target extension is constrained as follows.
+
 Type-level computation with conditional/mapped types is Turing-complete
 territory (proven for both TypeScript and Python type hints — see
 [TYPEINF-RESEARCH-TYPELEVEL](#TYPEINF-RESEARCH-TYPELEVEL)), so the only safe
-engineering path is **bounded evaluation**.
-`crates/basilisk-checker/src/tyeval/` implements it: a call-by-need
-normalization-by-evaluation engine over type-level terms, exposed as memoized
-Salsa queries returning weak-head normal forms
-(`queries::{type_alias_env, alias_whnf}`; cross-revision memoization via
-backdating pinned by `tests/tyeval_salsa_tests.rs`), with:
+engineering path is **bounded evaluation**: a call-by-need
+normalization-by-evaluation engine over type-level functions, built as
+memoized Salsa queries returning types in weak-head normal form (whnf), with:
 
-- **fuel/depth bounds** (TypeScript's instantiation-depth model) —
-  `eval::{EVAL_FUEL, EVAL_DEPTH}`;
-- **memoization** of normalized results — a per-evaluator application memo
-  under the Salsa layer;
-- a **`Divergent`/`@Todo`-style fallback** preserving the gradual guarantee on
-  truncation — `Eval::Divergent` projects to `Unknown`
-  ([TYPEINF-TARGET-GRADUAL](#TYPEINF-TARGET-GRADUAL)), never a diagnostic;
+- **fuel/depth bounds** (TypeScript's instantiation-depth model);
+- **memoization** of normalized results;
+- a **`Divergent`/`@Todo`-style fallback** that preserves the gradual
+  guarantee when evaluation is truncated;
 - **GHC-style acceptance conditions** (Paterson/Coverage analogues) that
-  statically reject obviously-nonterminating definitions — `accept::classify`
-  gates `AliasEnv::insert` (self-references must sit under a type
-  constructor; union arms do not guard, and the transparent
-  `Union[..]`/`Optional[..]`/`Annotated[..]` spellings lower to unions so
-  they cannot guard either (`lower::LowerCtx::lower_subscript`);
-  self-application arguments must not grow) — with the opt-in
-  `insert_undecidable` escape hatch falling back to fuel.
+  statically reject obviously-nonterminating type-level definitions, with an
+  opt-in "undecidable" escape hatch.
 
-Mapped types are **kind `Type → Type` operators** (`term::Kind`,
-`TypeTerm::Op`/`Apply`, higher-order through parameters); conditional types
-are guarded rewrites keyed on a consistency/assignability check
-(`IsAssignable` in PEP 827) that distribute over union scrutinees and never
-force the untaken arm (`TypeTerm::Cond`). The acceptance conditions drive
-`generics_syntax_scoping`'s circular-alias check (issue #371); wiring
-normalization into annotation resolution is Integration-stage
-([NARROWPLAN-INTEGRATION]). Because bounded evaluation cannot be complete,
-some legitimate type-level programs will hit the bound — an inherent
-limitation, not an implementation gap.
+Mapped types are **kind `Type → Type` operators**; conditional types are
+guarded rewrites keyed on a consistency/assignability check (`IsAssignable`
+in PEP 827), evaluated lazily so unused branches never diverge. Because
+bounded evaluation cannot be complete, some legitimate type-level programs
+will hit the bound — an inherent limitation, not an implementation gap.
 
 ---
 

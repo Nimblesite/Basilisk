@@ -1,32 +1,23 @@
 //! Implements [`callables_protocol`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `ParamSpec` component rules (PEP 612): `P.args` / `P.kwargs` placement,
 //! scoping, and transmission through `*args` / `**kwargs` forwarding calls.
-//!
-//! Every verdict is computed from resolved bindings and the [`TypeNode`]
-//! relations ([ASTREBUILD-LAW]); forwarded argument types are related to the
-//! target's resolved parameter annotations through [`assignable`], and a
-//! diagnostic is emitted only on a definite `Some(false)`.
 
 use std::collections::{HashMap, HashSet};
 
 use ruff_python_ast::{Expr, Stmt};
 use ruff_text_size::Ranged as _;
 
-use basilisk_resolver::{assignable, BindingTable, ResolvedModule, Span, TypeNode};
+use basilisk_resolver::{ResolvedModule, Span};
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic};
-use crate::span_util::node_message_text;
+use crate::rules::shared::{ann_str, infer_expr_literal_type, is_type_compatible};
 
-use super::hof_paramspec::{parse_callable_pbind, AnnInfo};
+use super::hof_paramspec::parse_callable_pbind;
 use super::CODE;
 
 struct Ctx<'a> {
     paramspecs: HashSet<&'a str>,
     path: &'a str,
-    /// The module's binding table — annotation heads resolve through it.
-    bindings: &'a BindingTable,
-    /// Module source, for diagnostic message text only ([ASTREBUILD-LAW]).
-    source: &'a str,
 }
 
 /// Callees visible from a components-function body: the enclosing function's
@@ -52,8 +43,6 @@ pub(super) fn check_paramspec_components(
     let ctx = Ctx {
         paramspecs,
         path: &module.path,
-        bindings: &module.bindings,
-        source: &module.source,
     };
     check_direct_forwarding_calls(stmts, &ctx, diagnostics);
     walk(
@@ -143,9 +132,7 @@ fn extend_bound(
     let mut inner = bound.clone();
     for pwd in all_named_params(func) {
         if let Some(ann) = pwd.parameter.annotation.as_deref() {
-            if let Some((_, ps)) =
-                parse_callable_pbind(ctx.bindings, ctx.source, ann, &ctx.paramspecs)
-            {
+            if let Some((_, ps)) = parse_callable_pbind(ann, &ctx.paramspecs) {
                 let _ = inner.insert(ps);
             }
         }
@@ -159,9 +146,7 @@ fn callee_scope(func: &ruff_python_ast::StmtFunctionDef, ctx: &Ctx<'_>) -> Calle
     let mut scope = CalleeScope::default();
     for pwd in all_named_params(func) {
         if let Some(ann) = pwd.parameter.annotation.as_deref() {
-            if let Some((prefix, _)) =
-                parse_callable_pbind(ctx.bindings, ctx.source, ann, &ctx.paramspecs)
-            {
+            if let Some((prefix, _)) = parse_callable_pbind(ann, &ctx.paramspecs) {
                 // `Callable` prefixes are anonymous positional-only slots.
                 let names = prefix.iter().map(|_| String::new()).collect();
                 let _ = scope.prefixes.insert(pwd.parameter.name.to_string(), names);
@@ -442,9 +427,7 @@ fn check_direct_forwarding_calls(stmts: &[Stmt], ctx: &Ctx<'_>, diagnostics: &mu
             let first_is_pbind = all_named_params(func)
                 .next()
                 .and_then(|pwd| pwd.parameter.annotation.as_deref())
-                .and_then(|ann| {
-                    parse_callable_pbind(ctx.bindings, ctx.source, ann, &ctx.paramspecs)
-                })
+                .and_then(|ann| parse_callable_pbind(ann, &ctx.paramspecs))
                 .is_some_and(|(prefix, _)| prefix.is_empty());
             first_is_pbind && forwarding_names(func, ctx).is_some()
         })
@@ -475,47 +458,39 @@ fn check_direct_forwarding_calls(stmts: &[Stmt], ctx: &Ctx<'_>, diagnostics: &mu
         let Some(target) = module_fns.get(arg_fn.id.as_str()) else {
             return;
         };
-        if let Some(problem) = direct_call_problem(call, target, arg_fn.id.as_str(), ctx) {
+        if let Some(problem) = direct_call_problem(call, target, arg_fn.id.as_str()) {
             push(diagnostics, ctx, call.range(), &problem);
         }
     });
 }
 
-/// Validate forwarded literal arguments against the target's RESOLVED
-/// parameter annotations: each argument's [`TypeNode::of_literal_expr`] node
-/// is related through [`assignable`], and only a definite `Some(false)`
-/// reports ([RESOLV-CANONICAL-RELATION]). Non-literal arguments and
-/// unresolvable annotations abstain.
+/// Validate forwarded literal arguments against the target's parameters.
 fn direct_call_problem(
     call: &ruff_python_ast::ExprCall,
     target: &ruff_python_ast::StmtFunctionDef,
     target_name: &str,
-    ctx: &Ctx<'_>,
 ) -> Option<String> {
-    let positional: Vec<(String, Option<AnnInfo>)> = all_named_params(target)
+    let positional: Vec<(String, Option<String>)> = all_named_params(target)
         .map(|pwd| {
             (
                 pwd.parameter.name.to_string(),
-                pwd.parameter
-                    .annotation
-                    .as_deref()
-                    .map(|ann| AnnInfo::lower(ctx.bindings, ctx.source, ann)),
+                pwd.parameter.annotation.as_deref().map(ann_str),
             )
         })
         .collect();
 
     for (idx, arg) in call.arguments.args.iter().skip(1).enumerate() {
-        let actual = TypeNode::of_literal_expr(arg);
+        let Some(actual) = infer_expr_literal_type(arg) else {
+            continue;
+        };
         let Some((_, Some(expected))) = positional.get(idx) else {
             continue;
         };
-        if assignable(&actual, &expected.node) == Some(false) {
+        if !is_type_compatible(actual, expected) {
             return Some(format!(
-                "forwarded argument {} (`{}`) is not assignable to `{}`, which \
-                 `{target_name}` expects",
-                idx + 1,
-                node_message_text(ctx.source, arg),
-                expected.display
+                "forwarded argument {} has type `{actual}`, but `{target_name}` \
+                 expects `{expected}`",
+                idx + 1
             ));
         }
     }
@@ -523,18 +498,18 @@ fn direct_call_problem(
         let Some(kw_name) = kw.arg.as_ref() else {
             continue;
         };
-        let actual = TypeNode::of_literal_expr(&kw.value);
+        let Some(actual) = infer_expr_literal_type(&kw.value) else {
+            continue;
+        };
         let expected = positional
             .iter()
             .find(|(name, _)| name == kw_name.as_str())
-            .and_then(|(_, ann)| ann.as_ref());
+            .and_then(|(_, ann)| ann.as_deref());
         let Some(expected) = expected else { continue };
-        if assignable(&actual, &expected.node) == Some(false) {
+        if !is_type_compatible(actual, expected) {
             return Some(format!(
-                "forwarded keyword `{kw_name}` (`{}`) is not assignable to `{}`, which \
-                 `{target_name}` expects",
-                node_message_text(ctx.source, &kw.value),
-                expected.display
+                "forwarded keyword `{kw_name}` has type `{actual}`, but \
+                 `{target_name}` expects `{expected}`",
             ));
         }
     }

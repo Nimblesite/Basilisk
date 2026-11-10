@@ -27,14 +27,13 @@ use basilisk_resolver::scope::GeneratorViolationKind;
 use basilisk_resolver::{FunctionInfo, ResolvedModule};
 
 use super::annotations_generators_helpers::{
-    check_yield_from, generator_return_type_expr, generator_yield_type_expr, CODE,
+    base_type_name, check_yield_from, extract_return_type_from_generator, extract_yield_type,
+    infer_yield_type, ASYNC_GENERATOR_TYPES, CODE, SYNC_GENERATOR_TYPES,
 };
 use super::Rule;
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic};
-use crate::rules::shared::judge::TypeJudge;
-use crate::rules::shared::module_types::ModuleTypes;
-use crate::rules::shared::{parse_module, ExprIndex};
-use crate::span_util::{node_span, slice_span};
+use crate::inference::{infer_rhs, literal_collection_assignable_to};
+use crate::span_util::slice_span;
 use crate::types::InferredType;
 
 /// Emits `annotations_generators` for generator return type and yield type violations.
@@ -44,16 +43,6 @@ impl Rule for GeneratorReturnTypeViolation {
     fn check(
         &self,
         module: &ResolvedModule,
-        ctx: &super::CheckContext,
-        diagnostics: &mut Vec<Diagnostic>,
-    ) {
-        super::check_with_own_types(self, module, ctx, diagnostics);
-    }
-
-    fn check_with_types(
-        &self,
-        module: &ResolvedModule,
-        types: &ModuleTypes<'_>,
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
@@ -125,56 +114,44 @@ impl Rule for GeneratorReturnTypeViolation {
             ));
         }
 
-        // Check yield type mismatches for generator functions with valid return
-        // types. Every yielded and returned expression is typed by the module
-        // oracle ([NARROWPLAN-INTEGRATION] Step 2), so a call in either position
-        // is judged through its callee's declared return instead of skipped.
-        let Some(resolver) = types.annotations() else {
-            return;
-        };
-        let Some(parsed) = parse_module(module) else {
-            return;
-        };
-        let index = ExprIndex::build(&parsed.ast);
-        let judge = TypeJudge::new(types.oracle(), resolver, types.nominal());
+        // Check yield type mismatches for generator functions with valid return types.
         for func in &module.functions {
             if !func.is_generator || func.yield_exprs.is_empty() {
                 continue;
             }
-            check_yield_types(func, module, resolver, &judge, &index, diagnostics);
-            check_return_in_generator(func, module, resolver, &judge, &index, diagnostics);
+            check_yield_types(func, module, diagnostics);
+            check_return_in_generator(func, module, diagnostics);
         }
     }
 }
 
 /// Check yield expression types against the declared yield type parameter.
-///
-/// The annotation's generator form is recognised by resolving its base
-/// through the binding table ([ASTREBUILD-LAW]), and the yield parameter is
-/// the subscript slice's AST node.
-fn check_yield_types(
-    func: &FunctionInfo,
-    module: &ResolvedModule,
-    resolver: &crate::annotation::AnnotationResolver<'_>,
-    judge: &TypeJudge<'_, '_>,
-    index: &ExprIndex<'_>,
-    out: &mut Vec<Diagnostic>,
-) {
+fn check_yield_types(func: &FunctionInfo, module: &ResolvedModule, out: &mut Vec<Diagnostic>) {
     let Some(ann_span) = func.return_annotation_span else {
         return;
     };
-    let Some(yield_node) = generator_yield_type_expr(module, index, ann_span) else {
-        return;
-    };
-    let Some(yield_type_str) = slice_span(&module.source, node_span(yield_node)) else {
+    let Some(ann_text) = slice_span(&module.source, ann_span) else {
         return;
     };
 
-    // The parameter is a type expression the CASCADE evaluates
-    // ([TYPEINF-ANNOTATION-RESOLUTION]).
-    let declared_yield_type = resolver
-        .resolve_text(yield_type_str.trim())
-        .unwrap_or(InferredType::Unknown);
+    let base = base_type_name(ann_text);
+    let valid_types = if func.is_async {
+        ASYNC_GENERATOR_TYPES
+    } else {
+        SYNC_GENERATOR_TYPES
+    };
+
+    // Only check yield types if this is a valid generator type.
+    if !valid_types.iter().any(|t| base.eq_ignore_ascii_case(t)) {
+        return;
+    }
+
+    // Extract the yield type parameter from the annotation.
+    let Some(yield_type_str) = extract_yield_type(ann_text, base) else {
+        return;
+    };
+
+    let declared_yield_type = InferredType::from_annotation(&yield_type_str);
 
     // Skip if the declared yield type is Unknown/Any - can't check.
     if matches!(
@@ -190,27 +167,28 @@ fn check_yield_types(
                 func,
                 yield_expr,
                 &declared_yield_type,
-                index,
-                judge,
+                ann_text,
+                base,
                 module,
                 out,
             );
             continue;
         }
 
-        let inferred = judge.inferred(yield_expr.value_span);
+        let inferred =
+            infer_yield_type(&yield_expr.rhs_kind, yield_expr.call_name.as_ref(), module);
 
         // Skip Unknown types - we can't prove incompatibility.
         if matches!(inferred, InferredType::Unknown) {
             continue;
         }
 
-        // A yielded collection display is contextually typed against the
+        // A yielded collection literal is contextually typed against the
         // declared yield type ([TYPEINF-SPECIAL-LITERAL-CONTEXT]); a stored
         // value keeps invariant subtyping.
-        let is_assignable = judge.fits(&inferred, &declared_yield_type)
-            || judge.display_checks(yield_expr.value_span, &declared_yield_type)
-            || !judge.judgeable(&declared_yield_type);
+        let is_assignable =
+            literal_collection_assignable_to(&yield_expr.rhs_kind, &declared_yield_type)
+                .unwrap_or_else(|| inferred.is_assignable_to(&declared_yield_type));
         if !is_assignable {
             out.push(error_diagnostic_owned(
                 CODE.clone(),
@@ -232,32 +210,31 @@ fn check_yield_types(
 }
 
 /// Check return statements in generator functions against the `ReturnType` parameter.
-///
-/// Only `Generator[Y, S, R]` carries a return type parameter; that is decided
-/// by resolving the annotation's base through the binding table
-/// ([ASTREBUILD-LAW]), never by matching the spelling `Generator`.
 fn check_return_in_generator(
     func: &FunctionInfo,
     module: &ResolvedModule,
-    resolver: &crate::annotation::AnnotationResolver<'_>,
-    judge: &TypeJudge<'_, '_>,
-    index: &ExprIndex<'_>,
     out: &mut Vec<Diagnostic>,
 ) {
     let Some(ann_span) = func.return_annotation_span else {
         return;
     };
-    let Some(return_node) = generator_return_type_expr(module, index, ann_span) else {
-        return;
-    };
-    let Some(return_type_str) = slice_span(&module.source, node_span(return_node)) else {
+    let Some(ann_text) = slice_span(&module.source, ann_span) else {
         return;
     };
 
-    // Same cascade evaluation as the yield parameter — case preserved.
-    let declared_return_type = resolver
-        .resolve_text(return_type_str.trim())
-        .unwrap_or(InferredType::Unknown);
+    let base = base_type_name(ann_text);
+
+    // Only Generator[Y, S, R] has a return type parameter.
+    // Iterator and Iterable don't have a return type param.
+    if !base.eq_ignore_ascii_case("Generator") {
+        return;
+    }
+
+    let Some(return_type_str) = extract_return_type_from_generator(ann_text) else {
+        return;
+    };
+
+    let declared_return_type = InferredType::from_annotation(&return_type_str);
 
     if matches!(
         declared_return_type,
@@ -292,14 +269,22 @@ fn check_return_in_generator(
         ));
     }
 
-    for ret_stmt in func.return_stmts.iter().filter(|stmt| stmt.has_value) {
-        let inferred = judge.inferred(ret_stmt.value_span);
+    for ret_stmt in &func.return_stmts {
+        if !ret_stmt.has_value {
+            continue;
+        }
+        // Skip call expressions - can't prove type.
+        if ret_stmt.value_is_call {
+            continue;
+        }
+
+        let inferred = infer_rhs(&ret_stmt.rhs_kind);
 
         if matches!(inferred, InferredType::Unknown) {
             continue;
         }
 
-        if !judge.fits(&inferred, &declared_return_type) && judge.judgeable(&declared_return_type) {
+        if !inferred.is_assignable_to(&declared_return_type) {
             out.push(error_diagnostic_owned(
                 CODE.clone(),
                 format!(

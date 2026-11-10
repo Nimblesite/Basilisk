@@ -160,12 +160,10 @@ fn attribute_decorator_name_extracted() -> Result<(), Box<dyn std::error::Error>
         .iter()
         .find(|f| f.name == "foo")
         .ok_or("foo must be resolved")?;
-    // decorator_name renders the FULL dotted path for the Attribute
-    // expression — the qualifier is what lets consumers discriminate a
-    // typing-module decorator from a same-named foreign one (#380).
+    // decorator_name returns "abstractmethod" for the Attribute expression
     assert!(
-        method.decorators.contains(&"abc.abstractmethod".to_owned()),
-        "attribute decorator path must be extracted in full"
+        method.decorators.contains(&"abstractmethod".to_owned()),
+        "attribute decorator name must be extracted"
     );
     Ok(())
 }

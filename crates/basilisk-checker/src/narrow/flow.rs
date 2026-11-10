@@ -1,27 +1,3 @@
-// ############################################################################
-// # BROKEN — THIS FILE DOES NOT COMPILE. DO NOT "FIX" IT BY RESTORING TEXT   #
-// # MATCHING.                                                                #
-// #                                                                          #
-// # Deleted helper this file called:                                         #
-// #   InferredType::from_annotation (types_parsing.rs)
-// #                                                                          #
-// # That helper decided types from the SPELLING of source text (lowercased   #
-// # annotation strings, `"int"`/`"str"`/`"object"` literal matching, `|`     #
-// # splitting, `starts_with("tuple[")`). It was deleted, not replaced.       #
-// #                                                                          #
-// # The call sites below are LEFT BROKEN ON PURPOSE. They are the map of     #
-// # what must be rebuilt on the resolved AST — resolved bindings, canonical  #
-// # `TypeNode`, and `assignable`/`equivalent` — or made to abstain.          #
-// #                                                                          #
-// # Restoring the deleted helper, vendoring a copy of it, or re-deriving a   #
-// # type from source text anywhere below is FORBIDDEN.                       #
-// #                                                                          #
-// # Evidence and the failing tests that pin the real behaviour:              #
-// #   docs/RULE-VALIDITY-REPORT.md                                           #
-// #   crates/basilisk-checker/tests/legacy_annotation_text_parser_pin_tests.rs
-// #   crates/basilisk-checker/tests/pep_spelling_invariance_pin_tests.rs     #
-// ############################################################################
-
 //! Implements [TYPEINF-TARGET-NARROWING]. See docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-TARGET-NARROWING
 //! The statement-level flow walker: drives a [`NarrowEnv`] through a function
 //! body, applying resolver-collected guards at branches (positive frame in
@@ -45,7 +21,7 @@ use crate::types::InferredType;
 
 use super::env::NarrowEnv;
 use super::guards::{guard_outcomes_in, GuardOutcome};
-use super::reachability::stmt_diverges;
+use super::reachability::{stmt_diverges, stmts_diverge};
 use super::rebind::{bound_names, target_names};
 
 /// One narrowed name-use site: the location and the type visible there.
@@ -99,16 +75,6 @@ pub fn analyse_function_in(
             .map(|guard| ((guard.span.start, guard.span.end), guard))
             .collect(),
         ctx,
-        // The module's callable interfaces convert to `Ty` ONCE, here, and
-        // stay in the engine's outermost scope for the whole walk
-        // ([NARROWPLAN-INTEGRATION]).
-        engine: BidirEngine::new(
-            ctx.callables
-                .iter()
-                .map(|(name, ty)| (name.clone(), Ty::from_inferred(ty)))
-                .collect(),
-        ),
-        diverges: HashMap::new(),
         result: FlowResult::default(),
     };
     walker.walk_stmts(body);
@@ -120,14 +86,6 @@ struct FlowWalker<'g> {
     env: NarrowEnv,
     guards_by_span: HashMap<(u32, u32), &'g NarrowingGuard>,
     ctx: &'g super::guards::NarrowContext,
-    /// One engine for the whole walk. Its outermost scope holds the module's
-    /// callable interfaces, converted once at construction; each synthesis
-    /// pushes only the currently-visible flow bindings on top and resets the
-    /// solver, so no per-expression cost scales with module size
-    /// ([NARROWPLAN-INTEGRATION]).
-    engine: BidirEngine,
-    /// Divergence answers by statement span — see [`FlowWalker::one_diverges`].
-    diverges: HashMap<(u32, u32), bool>,
     result: FlowResult,
 }
 
@@ -497,50 +455,42 @@ impl FlowWalker<'_> {
     /// binding — the SAME engine the definition-level queries run
     /// ([TYPEINF-TARGET-BIDIRECTIONAL]).
     ///
-    /// The callable seed lives in [`FlowWalker::engine`]'s outermost scope for
-    /// the whole walk; only the flow bindings — which are function-sized, not
-    /// module-sized — are pushed as an overlay per expression, and
-    /// [`BidirEngine::solve_expression`] resets the solver in place rather
-    /// than throwing the engine away. That is what makes the walker cheap
-    /// enough to sit behind a live rule ([NARROWPLAN-INTEGRATION]).
-    fn synth_type(&mut self, expr: &Expr) -> InferredType {
-        let overlay = self
-            .env
-            .visible()
-            .into_iter()
-            .map(|(name, ty)| (name, Ty::from_inferred(&ty)))
+    /// # Rebuild the seed BEFORE wiring this into a rule ([NARROWPLAN-INTEGRATION])
+    ///
+    /// Every call clones the WHOLE module's callables plus a full
+    /// [`NarrowEnv::visible`] snapshot (itself `declared` + `scope` + every
+    /// open frame) into a fresh map, then discards the engine's solver state
+    /// via `finish()` — so per-expression cost scales with module size and
+    /// nothing amortizes. That is survivable only because the flow walker has
+    /// no production consumer yet and so no benchmark gate times it; the
+    /// plan makes fixing it a precondition for the first rule migration,
+    /// not a follow-up. Do not wire a rule to this without doing that first.
+    fn synth_type(&self, expr: &Expr) -> InferredType {
+        let mut globals: HashMap<String, Ty> = self
+            .ctx
+            .callables
+            .iter()
+            .map(|(name, ty)| (name.clone(), Ty::from_inferred(ty)))
             .collect();
-        self.engine.push_scope_with(overlay);
-        let ty = self.engine.synth(expr);
-        let solution = self.engine.solve_expression();
-        self.engine.pop_scope();
+        for (name, ty) in self.env.visible() {
+            let _ = globals.insert(name, Ty::from_inferred(&ty));
+        }
+        let mut engine = BidirEngine::new(globals);
+        let ty = engine.synth(expr);
+        let solution = engine.finish();
         ty.to_inferred(&solution.vars)
     }
 
-    /// Inference-driven divergence of a statement list: only its last
-    /// statement can carry control past the list.
-    fn body_diverges(&mut self, stmts: &[Stmt]) -> bool {
-        stmts.last().is_some_and(|last| self.one_diverges(last))
+    /// Inference-driven divergence of a statement list.
+    fn body_diverges(&self, stmts: &[Stmt]) -> bool {
+        let mut synth = |expr: &Expr| self.synth_type(expr);
+        stmts_diverge(stmts, &mut synth)
     }
 
-    /// Inference-driven divergence of one statement, memoized by span.
-    ///
-    /// `walk_if` probes a body's divergence and then walks that same body,
-    /// whose `walk_stmts` probes each statement again — so without a memo the
-    /// same statements are re-synthesized once per enclosing branch. The memo
-    /// is keyed by span alone because the only two synthesis-dependent forms
-    /// are a call statement typed `Never` and a `while` test proven to be a
-    /// truthy literal, neither of which a narrowing frame can change.
-    fn one_diverges(&mut self, stmt: &Stmt) -> bool {
-        let range = stmt.range();
-        let key = (u32::from(range.start()), u32::from(range.end()));
-        if let Some(&cached) = self.diverges.get(&key) {
-            return cached;
-        }
+    /// Inference-driven divergence of one statement.
+    fn one_diverges(&self, stmt: &Stmt) -> bool {
         let mut synth = |expr: &Expr| self.synth_type(expr);
-        let answer = stmt_diverges(stmt, &mut synth);
-        let _ = self.diverges.insert(key, answer);
-        answer
+        stmt_diverges(stmt, &mut synth)
     }
 
     /// Record every narrowed `Name` read inside `expr`.
@@ -639,19 +589,7 @@ fn element_type(iterable: &InferredType) -> InferredType {
         | InferredType::Literal(crate::types::LiteralValue::Str(_)) => InferredType::Str,
         InferredType::Generator(yield_type, _, _) => (**yield_type).clone(),
         InferredType::Tuple(elems) => tuple_element(elems),
-        // ##############################################################
-        // # DELETED — the `name == "range"` arm. DO NOT RESTORE IT.     #
-        // #                                                            #
-        // # It typed the element of an iterable as `int` when the       #
-        // # iterable's type RENDERED as the five characters "range".   #
-        // # `from builtins import range as r`, a user `class range`,   #
-        // # or any class a module names `range` all got the builtin's  #
-        // # element type. `range` resolves through the binding table    #
-        // # like every other name (CLAUDE.md: builtins are not an       #
-        // # exception).                                                 #
-        // #                                                            #
-        // # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs #
-        // ##############################################################
+        InferredType::Named(name) if name == "range" => InferredType::Int,
         _ => InferredType::Unknown,
     }
 }

@@ -78,32 +78,40 @@ fn has_cycle(start: &str, graph: &HashMap<&str, Vec<&str>>) -> bool {
     false
 }
 
-// DELETED — `CONTAINER_TYPES`, a table of builtin container SPELLINGS. Its
-// only reader (`has_container_wrapper`) panics; see the banner below. DO NOT
-// RECREATE IT.
+/// Known container types that make recursive type aliases valid when they
+/// wrap the self-reference (e.g. `list["Json"]` inside a Union).
+const CONTAINER_TYPES: &[&str] = &[
+    "list",
+    "dict",
+    "set",
+    "frozenset",
+    "tuple",
+    "List",
+    "Dict",
+    "Set",
+    "FrozenSet",
+    "Tuple",
+    "Mapping",
+    "MutableMapping",
+    "Sequence",
+    "MutableSequence",
+    "Iterable",
+    "Iterator",
+    "Deque",
+    "DefaultDict",
+    "OrderedDict",
+    "ChainMap",
+    "Counter",
+];
 
-// ##########################################################################
-// # DELETED BODY — `has_container_wrapper`. DO NOT RESTORE IT AND DO NOT RETURN A DEFAULT.
-// #
-// # `CONTAINER_TYPES.contains(&name.as_str())` matched the SPELLINGS "list"/"dict"/"set"/"frozenset"/"tuple" against names in a type alias RHS.
-// #
-// # CLAUDE.md: "a whitelist of `int`/`str`/`isinstance` names. Builtins are
-// # not an exception — Python lets any name be shadowed, rebound, or
-// # aliased, so builtin uses resolve through the binding table like
-// # everything else." The replacement is `BindingTable::form_of_with_builtins`,
-// # which already models builtin scope AND rebinding.
-// #
-// # Pinned by: tests/string_keyed_class_hierarchy_pin_tests.rs
-// ##########################################################################
-fn has_container_wrapper(_alias: &basilisk_resolver::TypeAliasDefInfo) -> bool {
-    panic!(
-        "basilisk-checker: `has_container_wrapper` was DELETED because it recognised builtin types by \
-         matching their SPELLINGS against a hard-coded table, so a shadowed or \
-         aliased builtin was misjudged and any user symbol spelled like a builtin \
-         inherited the table's verdict. It panics because the real implementation \
-         — resolution through the binding table — DOES NOT EXIST YET. Do not \
-         restore the table and do not substitute a default answer."
-    )
+/// Returns `true` if the alias's RHS references any known container type,
+/// indicating the recursive reference is likely wrapped in a container
+/// (e.g. `list["Json"]`) rather than appearing directly in a Union.
+fn has_container_wrapper(alias: &basilisk_resolver::TypeAliasDefInfo) -> bool {
+    alias
+        .rhs_names
+        .iter()
+        .any(|name| CONTAINER_TYPES.contains(&name.as_str()))
 }
 
 impl Rule for CyclicalTypeAliasReference {

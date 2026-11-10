@@ -1,14 +1,5 @@
 //! Static selection of simple version and platform guards in `.pyi` files.
-//!
-//! Implements the "simple version and platform checks" of the
-//! [typing spec's directives section](https://typing.python.org/en/latest/spec/directives.html):
-//! `sys.version_info` / `sys.platform` comparisons and `TYPE_CHECKING`, which
-//! is considered `True` during type checking. Recognition resolves the guard
-//! expression through the module's own bindings ([RESOLV-CANONICAL-BINDING]) —
-//! `import sys as s` guards evaluate identically, and a module that rebinds
-//! `sys` or `TYPE_CHECKING` decides nothing.
 
-use basilisk_canonical::{BindingTable, TypingForm};
 use ruff_python_ast::{BoolOp, CmpOp, Expr, Number, Stmt, StmtIf, UnaryOp};
 
 use crate::types::{StubTarget, StubTargetPlatform};
@@ -43,12 +34,11 @@ impl PossibleTruth {
 }
 
 pub(super) fn feasible_branches<'a>(
-    bindings: &BindingTable,
     if_stmt: &'a StmtIf,
     target: Option<&StubTarget>,
 ) -> Vec<Option<&'a [Stmt]>> {
     let mut branches = Vec::new();
-    let first = evaluate_guard(bindings, &if_stmt.test, target);
+    let first = evaluate_guard(&if_stmt.test, target);
     if first.can_be_true {
         branches.push(Some(if_stmt.body.as_slice()));
     }
@@ -59,7 +49,7 @@ pub(super) fn feasible_branches<'a>(
             break;
         }
         if let Some(test) = &clause.test {
-            let truth = evaluate_guard(bindings, test, target);
+            let truth = evaluate_guard(test, target);
             if truth.can_be_true {
                 branches.push(Some(clause.body.as_slice()));
             }
@@ -75,45 +65,38 @@ pub(super) fn feasible_branches<'a>(
     branches
 }
 
-fn evaluate_guard(
-    bindings: &BindingTable,
-    expr: &Expr,
-    target: Option<&StubTarget>,
-) -> PossibleTruth {
+fn evaluate_guard(expr: &Expr, target: Option<&StubTarget>) -> PossibleTruth {
     match expr {
         Expr::BooleanLiteral(literal) => PossibleTruth::from_bool(literal.value),
+        Expr::Name(name) if name.id.as_str() == "TYPE_CHECKING" => PossibleTruth::TRUE,
+        Expr::Attribute(attribute)
+            if attribute.attr.as_str() == "TYPE_CHECKING"
+                && matches!(attribute.value.as_ref(), Expr::Name(name)
+                    if matches!(name.id.as_str(), "typing" | "typing_extensions")) =>
+        {
+            PossibleTruth::TRUE
+        }
         Expr::UnaryOp(unary) if matches!(unary.op, UnaryOp::Not) => {
-            let inner = evaluate_guard(bindings, &unary.operand, target);
+            let inner = evaluate_guard(&unary.operand, target);
             PossibleTruth {
                 can_be_true: inner.can_be_false,
                 can_be_false: inner.can_be_true,
             }
         }
-        Expr::BoolOp(boolean) => {
-            evaluate_boolean_guard(bindings, boolean.op, &boolean.values, target)
-        }
-        Expr::Compare(_) => evaluate_comparison_guard(bindings, expr, target),
-        // "Considered True during type checking" — spec directives. Only an
-        // expression that RESOLVES to the flag qualifies; a bare unimported
-        // name or a rebound one stays undecidable.
-        Expr::Name(_) | Expr::Attribute(_)
-            if bindings.is_form(expr, TypingForm::TypeCheckingFlag) =>
-        {
-            PossibleTruth::TRUE
-        }
+        Expr::BoolOp(boolean) => evaluate_boolean_guard(boolean.op, &boolean.values, target),
+        Expr::Compare(_) => evaluate_comparison_guard(expr, target),
         _ => PossibleTruth::EITHER,
     }
 }
 
 fn evaluate_boolean_guard(
-    bindings: &BindingTable,
     operator: BoolOp,
     values: &[Expr],
     target: Option<&StubTarget>,
 ) -> PossibleTruth {
     let truths: Vec<PossibleTruth> = values
         .iter()
-        .map(|value| evaluate_guard(bindings, value, target))
+        .map(|value| evaluate_guard(value, target))
         .collect();
     match operator {
         BoolOp::And => PossibleTruth {
@@ -127,11 +110,7 @@ fn evaluate_boolean_guard(
     }
 }
 
-fn evaluate_comparison_guard(
-    bindings: &BindingTable,
-    expr: &Expr,
-    target: Option<&StubTarget>,
-) -> PossibleTruth {
+fn evaluate_comparison_guard(expr: &Expr, target: Option<&StubTarget>) -> PossibleTruth {
     let Expr::Compare(compare) = expr else {
         return PossibleTruth::EITHER;
     };
@@ -144,16 +123,16 @@ fn evaluate_comparison_guard(
     let Some(right) = compare.comparators.first() else {
         return PossibleTruth::EITHER;
     };
-    if resolves_to_sys(bindings, &compare.left, "version_info") {
+    if is_sys_attribute(&compare.left, "version_info") {
         return version_guard(operator, right, target);
     }
-    if resolves_to_sys(bindings, right, "version_info") {
+    if is_sys_attribute(right, "version_info") {
         return version_guard(flip_comparison(operator), &compare.left, target);
     }
-    if resolves_to_sys(bindings, &compare.left, "platform") {
+    if is_sys_attribute(&compare.left, "platform") {
         return platform_guard(operator, right, target);
     }
-    if resolves_to_sys(bindings, right, "platform") {
+    if is_sys_attribute(right, "platform") {
         return platform_guard(flip_comparison(operator), &compare.left, target);
     }
     PossibleTruth::EITHER
@@ -208,13 +187,10 @@ fn flip_comparison(operator: CmpOp) -> CmpOp {
     }
 }
 
-/// Whether an expression resolves to `sys.<name>` through the module's own
-/// bindings — so `import sys as s; s.version_info` and
-/// `from sys import version_info` qualify, and a module that rebinds `sys`
-/// does not. The `Name | Attribute` guard keeps subscripted and called forms
-/// (`sys.version_info[0]`) honestly undecidable rather than unwrapped.
-fn resolves_to_sys(bindings: &BindingTable, expr: &Expr, name: &str) -> bool {
-    matches!(expr, Expr::Name(_) | Expr::Attribute(_)) && bindings.resolves_to(expr, "sys", name)
+fn is_sys_attribute(expr: &Expr, attribute_name: &str) -> bool {
+    matches!(expr, Expr::Attribute(attribute)
+        if attribute.attr.as_str() == attribute_name
+            && matches!(attribute.value.as_ref(), Expr::Name(name) if name.id.as_str() == "sys"))
 }
 
 fn version_tuple(expr: &Expr) -> Option<(u32, u32)> {
@@ -257,7 +233,6 @@ pub(crate) fn platform_guard_literals(body: &[Stmt]) -> std::collections::BTreeS
     use ruff_python_ast::visitor::Visitor as _;
 
     let mut collector = PlatformLiterals {
-        bindings: BindingTable::from_module(body),
         found: std::collections::BTreeSet::new(),
     };
     for stmt in body {
@@ -267,10 +242,6 @@ pub(crate) fn platform_guard_literals(body: &[Stmt]) -> std::collections::BTreeS
 }
 
 struct PlatformLiterals {
-    /// The module's own bindings — comparisons are recognised exactly as
-    /// [`evaluate_comparison_guard`] recognises them, so the collected set is
-    /// complete for the guards that can actually fire.
-    bindings: BindingTable,
     found: std::collections::BTreeSet<String>,
 }
 
@@ -278,9 +249,7 @@ impl ruff_python_ast::visitor::Visitor<'_> for PlatformLiterals {
     fn visit_expr(&mut self, expr: &Expr) {
         if let Expr::Compare(compare) = expr {
             let sides = std::iter::once(compare.left.as_ref()).chain(compare.comparators.iter());
-            let names_platform = sides
-                .clone()
-                .any(|side| resolves_to_sys(&self.bindings, side, "platform"));
+            let names_platform = sides.clone().any(|side| is_sys_attribute(side, "platform"));
             if names_platform {
                 self.found.extend(sides.filter_map(string_literal));
             }

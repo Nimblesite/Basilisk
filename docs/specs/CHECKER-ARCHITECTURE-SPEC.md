@@ -10,7 +10,7 @@ Basilisk has **no modes** (no `--strict`, no `off`/`basic`/`standard`/`strict` d
 
 Configuration **grades**; commands **select**. The config file never chooses commands, and there are no presets, mutation intents, or rule-family booleans. Strict-by-default is delivered by the LSP's one-time two-line seed — `"basilisk" = "error"` — never by hidden defaults ([LSPARCH-CONFIG-SEEDING](LSP-ARCHITECTURE-SPEC.md#LSPARCH-CONFIG-SEEDING)).
 
-No PEP rule may be disabled, deleted, or unregistered **to move a conformance number** ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)). Deleting a rule **because it decides from source text rather than resolved symbols** is a different act and a required one — failing test, delete, report ([CHKARCH-TEXT-MATCHED-LOGIC](#CHKARCH-TEXT-MATCHED-LOGIC)).
+No PEP rule may be disabled, deleted, or unregistered to move the conformance number ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)).
 
 ### The partition {#CHKARCH-COMMANDS}
 
@@ -264,7 +264,7 @@ configuration/editor behavior is specified by
 
 ### Python Typing PEP Coverage {#CHKARCH-PEPS}
 
-Basilisk's target is to **implement the Python typing specification** — to decide these PEPs correctly on Python it has never seen. The PEPs below name the analysis each rule owes; passing a fixture that exercises one is evidence, not achievement. A rule that reaches the right verdict on the upstream test file and the wrong verdict on an aliased import, a reformatted source, or a spelling the suite never contains has not implemented its PEP, and the table's "Required" is a statement of intent about the analysis, never about a score. Where the two disagree, the specification wins and the number is discarded ([CHKARCH-CONFORMANCE](#CHKARCH-CONFORMANCE)).
+Basilisk's **target** is 100% conformance with the Python typing specification. We measure against the latest **`python/typing@main`**, recording the exact graded commit by hash in `conformance_report.json` (currently [`<!--g:short-->0dc9b5d<!--/g:short-->`](https://github.com/python/typing/tree/0dc9b5d23b368713af33ac25338eeb08b80f6360/conformance)). Today the official scorer, run unmodified in CI on the binary in its default configuration (the PEP conformance set; see [CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)), reports **<!--g:pass-->141<!--/g:pass--> of <!--g:total-->141<!--/g:total--> files passing (<!--g:score-->100.0%<!--/g:score-->)**, with **<!--g:fp-->0<!--/g:fp--> false positives** and **<!--g:missed-->0<!--/g:missed--> missed required errors** (<!--g:caught-->970<!--/g:caught--> caught). We run that suite in CI on every change; the gate ratchets the pass-percentage **up** and the false-positive ceiling **down** — closed only by fixing the checker, never by disabling a rule.
 
 #### Foundation PEPs {#CHKARCH-PEPS-FOUNDATION}
 
@@ -379,202 +379,62 @@ accepted by the Python parser in Python 3.12 and later"
 
 Tests: `crates/basilisk-checker/tests/checker/version_target_tests.rs`.
 
-## Symbol recognition — AST and resolution only {#CHKARCH-RECOGNITION}
-
-**Normative, and it overrides every other section of this specification.** No
-part of Basilisk may decide what a Python expression *means* by examining the
-characters written at the use site. Meaning is a property of the **definition**
-an expression resolves to, and it is derived from the parsed AST plus binding
-resolution — in the checker, in the resolver, in the LSP, in stub parsing, in
-every crate, without exception.
-
-This is not a style preference. Character matching is wrong on the language's
-own terms: `from typing import ClassVar as CV` is a `ClassVar` though the
-characters differ, and a module's own `class ClassVar:` is not one though the
-characters match. Basilisk previously scored 100% on the `python/typing`
-conformance suite with recognition fitted to the fixtures' spellings; the score
-collapsed under AST-preserving mutation, the claim was withdrawn, and the
-project was removed from the official results table. That failure is the reason
-this section is normative — see the
-[integrity audit](../CONFORMANCE-INTEGRITY-AUDIT.md) and the
-[spelling-cheat inventory](../CONFORMANCE-SPELLING-CHEAT-INVENTORY.md).
-
-### Canonical resolution {#RESOLV-CANONICAL}
-
-The single lawful mechanism, implemented in `basilisk-resolver`'s `canonical`
-module. Recognition is a two-step question, and both steps are mandatory:
-
-1. **Which definition does this expression refer to?** Answered from the
-   module's own imports and bindings ([RESOLV-CANONICAL-BINDING](#RESOLV-CANONICAL-BINDING)),
-   producing a `CanonicalSymbol` — a fully-qualified `(module, name)` definition
-   site.
-2. **What does the specification define at that site?** Answered by the registry
-   ([RESOLV-CANONICAL-REGISTRY](#RESOLV-CANONICAL-REGISTRY)), producing a
-   `TypingForm`.
-
-`TypingForm` is **Basilisk's own vocabulary**. Every variant is the *answer*
-resolution produces, never the *question* a caller asks. A caller that can pass
-a name has already broken the contract, so no API in this path accepts one.
-
-### Binding resolution {#RESOLV-CANONICAL-BINDING}
-
-`BindingTable` is built once per module from its AST and records what each local
-name refers to: symbols bound by `from X import A [as B]`, modules bound by
-`import X [as Y]`, star-imported modules, and names **shadowed** by a local
-`class`, `def`, or assignment. Imports are collected at any nesting depth,
-because an import under `if TYPE_CHECKING:` or inside a `try`/`except
-ImportError` fallback still binds at module level.
-
-Lookups unwrap the forms a symbol is used through — subscript (`Final[int]`),
-call (`TypeVar("T")`), and dotted module access (`t.ClassVar`) — and follow
-dotted paths so `collections.abc.Callable` resolves through the `collections`
-binding. A shadowed name resolves to nothing, which is the correct answer: it is
-not the specification's symbol.
-
-### The specification registry {#RESOLV-CANONICAL-REGISTRY}
-
-The mapping from definition site to `TypingForm` lives in
-`crates/basilisk-resolver/resources/typing_symbols.toml` **as data**. Python
-spellings appear in that file and in no Rust source file.
-
-Adding or changing a recognised symbol is a data edit. If implementing a rule
-appears to require typing a Python symbol name into Rust, the correct fix is a
-registry entry — never a comparison, however it is wrapped.
-
-`crates/basilisk-resolver/tests/canonical_registry.rs` validates that every
-registry entry resolves to a real declaration in bundled typeshed. An entry
-naming a symbol typeshed does not declare is a **build failure**; that test is
-what prevents the registry itself from degenerating into a spelling table.
-
-### Banned mechanisms {#CHKARCH-RECOGNITION-BANNED}
-
-Illegal in production code in every crate, in every form — as a comparison, a
-match arm, a constant array, a function argument, or behind any API that takes
-one. Delete on sight:
-
-| Mechanism | Example |
-|---|---|
-| Comparing a use-site name to a typing symbol | `name.id.as_str() == "TypeVar"` |
-| Matching a base or decorator spelling | `matches!(base, "Protocol" \| "Generic")` |
-| A constant table of spellings | `const FORMS: &[&str] = &["Final", …]` |
-| Passing the name into a resolver API | `denotes(resolver, expr, "ClassVar")` |
-| Scanning raw source for language vocabulary | `source.lines()` + `starts_with("def ")` |
-| Hand-lexing Python | manual quote/comment skipping to find `yield` |
-| Matching rendered annotation text | `slice_span(src, span).starts_with("tuple[")` |
-
-The last row is the same defect one level down and is condemned by
-[TYPEINF-LEGACY](CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-LEGACY); its removal is
-[ASTREBUILD-PHASE-TYPEEXPR](../plans/CHECKER-AST-RECONSTRUCTION-PLAN.md#ASTREBUILD-PHASE-TYPEEXPR).
-
-Wrapping a banned mechanism in a helper, a trait, or a resolver does not launder
-it. The test is whether the code works only because a human typed Python's
-vocabulary into Rust.
-
-### Permitted {#CHKARCH-RECOGNITION-PERMITTED}
-
-These decide nothing about typing, so naming them is lawful:
-
-- **Builtin names inside the registry and its fallback ONLY.** Python's
-  [name-binding rules](https://docs.python.org/3/reference/executionmodel.html#binding-of-names)
-  let ANY name — builtins included — be shadowed, rebound, or imported under
-  an alias, so a use of `int`, `isinstance`, or `object` must resolve through
-  the binding table's positional lookup with the canonical builtin fallback
-  (`form_of_with_builtins`). The builtin spellings themselves may appear in
-  exactly two places: `typing_symbols.toml` entries for the `builtins`
-  module, and the registry lookup that implements the fallback. A rule that
-  compares a use-site name against a builtin spelling is broken, whatever it
-  scores. Dunder names on DEFINITION sites (`def __init__`) remain lawful —
-  a definition's own name is identity, not a reference to resolve.
-- **Keyword-argument names at call sites** (`bound=`, `kw_only=`, `total=`) —
-  part of a signature already identified by resolution.
-- **Basilisk's own directive syntax** (`# basilisk:`, `# type:`) — genuinely
-  comments, which the AST does not carry, so parsing them from text is the only
-  possible mechanism.
-- **Basilisk's own rendered output, for display ONLY** — text this codebase
-  produced, such as a stub signature it formatted, parsed back solely to
-  present it. Rendered text may NEVER feed a typing verdict: the moment a
-  comparison, compatibility answer, or diagnostic condition reads it, the
-  code is in violation regardless of who produced the text.
-- **Line geometry** — computing a span or indentation for a diagnostic's
-  location, provided no Python structure is inferred from it.
-- **Diagnostic message text** shown to users.
-
-### Abstention over guessing {#CHKARCH-RECOGNITION-ABSTAIN}
-
-When resolution cannot answer, the rule emits nothing. A silent rule is a
-tracked gap; a rule that guesses from spelling is a false conformance claim. A
-rule may never be disabled, unregistered, or deleted to move a number
-([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)) — an unimplementable
-rule stays registered and inert until it can be built lawfully.
-
-### Verification {#CHKARCH-RECOGNITION-VERIFY}
-
-Conformance on pristine fixtures cannot distinguish lawful recognition from
-fitted recognition — that is precisely how the withdrawn claim survived review.
-Every rule therefore carries tests that a spelling-based implementation fails:
-the same program with the import **aliased**, accessed **dotted** through a
-module, **shadowed** by a local definition, and **reformatted**. A verdict that
-changes under any of these is a defect, whatever the fixture score says. The
-suite-level equivalent is the mutation gate
-([CHKARCH-CONFORMANCE-MUTATION](#CHKARCH-CONFORMANCE-MUTATION)).
-
-Current implementation status and the rebuild order are tracked in
-[ASTREBUILD](../plans/CHECKER-AST-RECONSTRUCTION-PLAN.md#ASTREBUILD).
-
 ---
+
+## Ownership and safety analysis {#CHKARCH-SAFETY}
+
+Status: planned, opt-in, and not wired into the checker pipeline. The
+scaffolding lives in `basilisk-checker`'s `ownership` module — there is no
+separate crate for it, and it registers no rule; shipping PEP rules must not
+reuse these anchors or diagnostic descriptions. Its scan is textual, so it must
+be rebuilt on the Ruff AST before any rule is registered against it.
+
+These are Basilisk rules. The concepts are borrowed from
+[Mojo's ownership model](https://docs.modular.com/mojo/manual/values/ownership),
+but the analysis is Basilisk's own, expressed in standard Python `Annotated`
+conventions — not a port of Mojo's checker. `mojo` is therefore not a legal
+identifier here: it must never appear in a spec ID, module path, file name, or
+rule name. Prose may credit the inspiration; tags may not carry it.
+
+Because none of it works today it is also **not advertised**: it stays out of
+the README, the website, and the user-facing docs until it ships as a working,
+opt-in rule set. Only complete, production-ready features are advertised.
+
+### Ownership tracking {#CHKARCH-SAFETY-OWNERSHIP}
+
+The target is explicit `Annotated[T, Borrowed|InOut|Owned]` analysis for
+mutation-of-borrowed and use-after-transfer diagnostics.
+
+### Parameter immutability {#CHKARCH-SAFETY-IMMUTABLE}
+
+The target is an opt-in rule that treats mutable parameters as read-only unless
+marked `InOut`; it does not change Python runtime semantics.
+
+### Structural discipline {#CHKARCH-SAFETY-STRUCTURAL}
+
+The target is opt-in checks for dynamic attributes and related typed-class
+structure. Existing PEP/dataclass rules remain separate.
+
+### Explicit coercion {#CHKARCH-SAFETY-COERCION}
+
+The target is opt-in diagnostics for selected implicit conversions. It must not
+contradict the typing-spec numeric tower used by default PEP rules.
+
+### Compatibility contract {#CHKARCH-SAFETY-COMPAT}
+
+All metadata uses standard Python typing constructs, all rules are off by
+default, and the implementation plan is
+[CHECKER-ADVANCED-FEATURES-PLAN.md](../plans/CHECKER-ADVANCED-FEATURES-PLAN.md).
 
 ## Diagnostic Rules {#CHKARCH-DIAG}
 
 ### Design Philosophy {#CHKARCH-DIAG-PHILOSOPHY}
 
 Every diagnostic must be:
-1. **Semantic** -- decided from the resolved model, never from source text ([CHKARCH-TEXT-MATCHED-LOGIC](#CHKARCH-TEXT-MATCHED-LOGIC))
-2. **Precise** -- exact location (file, line, column, span)
-3. **Clear** -- explains what is wrong and why
-4. **Actionable** -- suggests at least one fix
-5. **Stable** -- error codes are never renumbered or reused
-
-### Text-matched logic — test, delete, report {#CHKARCH-TEXT-MATCHED-LOGIC}
-
-A rule whose behaviour depends on the **spelling** of its input rather than its
-**meaning** is broken, whatever it scores. `from typing import Final as F` must behave
-identically to `typing.Final`; reformatting a file must change no diagnostic. Removing
-this logic outranks every other checker task.
-
-**Detection signatures:**
-
-- Raw source-text matching — `.contains` / `starts_with` / `ends_with` on user code.
-- Hard-coded symbol spellings instead of resolved identity: `t == "typing.Final"`,
-  `text.starts_with("Callable[")`, `import.module == "typing"`.
-- Any regex over Python source.
-- Logic keyed to a fixture: rule files named after upstream test files, branches for
-  shapes only that suite contains, comments citing a test file as justification.
-- Detection that fires on formatting — line breaks, spacing, quote style, comment
-  text, statement order.
-- An accept-all fallback (`_ => true`) standing in for the remainder of the type
-  system, rather than deferring a named set of cases to a named path.
-
-**On encountering it, do exactly three things — do not fix it, do not rewrite it, do
-not leave a TODO:**
-
-1. **Write a test that fails** because of the code — pin the real defect: an aliased
-   import, a reformatted source, a shape the fixture never contains.
-2. **Delete the offending code.**
-3. **Tell the user what you deleted and why**, and that the test is now failing.
-
-Replacing it is not an agent's call. The point is to surface each one so the user can
-acknowledge it and decide what gets built back. **A failing test that pins real
-incorrect behaviour is worth more than a passing fixture carried by logic that does not
-analyse code** — the first records what Basilisk cannot do, the second falsely claims
-it can. A checker with fewer rules and visible failing tests is the correct outcome; a
-diagnostic that only fires on one spelling looks like coverage and isn't.
-
-**What a correct rule looks like** — the yardstick for judging code, not licence to go
-and fix it: it decides on the resolved semantic model from `basilisk-resolver`, parses
-with `ruff_python_parser`, is named for the typing-spec concept it implements rather
-than a test file, survives semantics-preserving mutation
-([CHKARCH-TESTING-SEMANTIC-MUTATION](#CHKARCH-TESTING-SEMANTIC-MUTATION)), and is
-tested against Python the upstream suite has never contained.
+1. **Precise** -- exact location (file, line, column, span)
+2. **Clear** -- explains what is wrong and why
+3. **Actionable** -- suggests at least one fix
+4. **Stable** -- error codes are never renumbered or reused
 
 ### Error Code System {#CHKARCH-DIAG-CODES}
 
@@ -779,6 +639,9 @@ Source Files (.py)
   VS Code / Cursor /      Terminal / CI
   Windsurf / Zed /
   Neovim
+
+  (planned: basilisk-checker::ownership — ownership / immutability /
+   coercion analysis — is not yet wired into the pipeline.)
 ```
 
 All stages are backed by:
@@ -787,17 +650,6 @@ All stages are backed by:
 | basilisk-db      |  Salsa incremental computation database
 +------------------+
 ```
-
-**The AST is the only input to every stage below the parser.** Source text
-enters this pipeline exactly once, at `ruff_python_parser`. Downstream stages
-consume the parsed tree, the symbol table, and the binding table
-([RESOLV-CANONICAL-BINDING](#RESOLV-CANONICAL-BINDING)); they do not re-read the
-file to reconstruct what the parser already produced. `ResolvedModule::source`
-exists to render diagnostic spans and quote code back to the user, not to reach
-a verdict. Any stage that re-derives structure from characters is duplicating
-the parser and will disagree with it — inside string literals, inside comments,
-across line continuations, and under reformatting
-([CHKARCH-RECOGNITION-BANNED](#CHKARCH-RECOGNITION-BANNED)).
 
 ### Parse Nesting-Depth Guard {#CHKARCH-ARCH-PARSEDEPTH}
 
@@ -843,9 +695,9 @@ real-binary crash-safety tests in
 basilisk/
   crates/
     basilisk-parser/       # Python AST parsing (wraps or extends ruff_python_parser)
-    basilisk-resolver/     # Name resolution, scope analysis, import resolution,
-                           #   canonical symbol recognition (RESOLV-CANONICAL)
-    basilisk-checker/      # Core type checking engine
+    basilisk-resolver/     # Name resolution, scope analysis, import resolution
+    basilisk-checker/      # Core type checking engine (incl. ownership:
+                           #   planned safety analysis, unwired)
     basilisk-lsp/          # Language Server Protocol implementation
     basilisk-cli/          # Command-line interface
     basilisk-stubs/        # Stub generation, loading, registry client
@@ -874,9 +726,7 @@ basilisk-stubs (standalone, used by basilisk-resolver)
 
 - **Cargo workspace** with all crates
 - Cross-compilation targets: `x86_64-linux`, `aarch64-linux`, `x86_64-darwin`, `aarch64-darwin`, `x86_64-windows`
-- CI: `cargo clippy`, `cargo test`, pristine/mutated conformance regression
-  suites, and fuzzing (nightly). Developer-machine benchmarks are recorded
-  manually and do not gate CI.
+- CI: `cargo clippy`, `cargo test`, conformance suite, benchmarks, fuzzing (nightly)
 - Release: pre-compiled binaries for all platforms (no build dependencies for users)
 
 #### Shared build-info emitter {#CHKARCH-ARCH-BUILD-VERSIONINFO}
@@ -1043,11 +893,11 @@ the database's memory footprint scales with the workspace (every analysed
 file's inputs and memos stay resident for the session — the standard
 incremental-engine trade).
 
-**Scope — the batch CLI path is deliberately unchanged.** The batch CLI
-(`process_file`) still runs the direct pipeline, so this work cannot change any
-diagnostic it emits. Routing the CLI (and the LSP's bulk scan) through the engine is
-future work: it must first prove byte-for-byte diagnostic parity on real Python, and
-being one-shot it reuses no memos. The engine is a public API
+**Scope — the CLI/conformance path is deliberately unchanged.** The batch CLI
+(`process_file`) still runs the direct pipeline, so this work **cannot affect the
+conformance score**. Routing the CLI (and the LSP's bulk scan) through the engine
+is future work — the CLI is the conformance path (must prove byte-for-byte parity
+first) and, being one-shot, reuses no memos. The engine is a public API
 (`basilisk_checker::{BasiliskDatabase, SourceFile, ConfigInput, ConfigValue,
 SearchPathsInput, WorkspaceFiles, ModuleExports, checked_file,
 file_diagnostics, resolved_module, module_exports, cross_resolved_module,
@@ -1126,14 +976,11 @@ unchanged; machine consumers see no new field.
 
 #### Unanalysable files {#CHKARCH-CLI-OUTPUT-FAILURES}
 
-A file the run could not analyse at all is always visible in the selected report
-format ([#384](https://github.com/Nimblesite/Basilisk/issues/384)). In JSON it
-appears alongside diagnostics, with `code` set to `null` because no rule
-produced it and a `severity` of `"error"`; it anchors at line 1, column 1 for
-schema stability. In human-readable text, the report body names the file,
-describes the failure, renders the parser position as actionable `line:column`
-rather than a byte offset, and counts the entry in the final summary. A tracing
-line on stderr is not part of either report and cannot satisfy this contract.
+A file the run could not analyse at all — a syntax error, an unreadable path —
+appears in the JSON array alongside the diagnostics, with `code` set to `null`
+because no rule produced it and a `severity` of `"error"`. It anchors at line 1,
+column 1: the failure is about the file as a whole, and the parser's own message
+carries whatever position it knows.
 
 Omitting it rendered `[]` — byte-for-byte the answer a clean file gets — for a
 file that was never checked, so every consumer reading the report rather than
@@ -1149,22 +996,9 @@ recognise an entry.
 | Code | Meaning |
 |---|---|
 | 0 | Completed without error diagnostics |
-| 1 | Source errors were found, including Python syntax errors that prevented analysis |
+| 1 | Error diagnostics were found |
 | 2 | Invalid configuration (e.g. a `pep` rule resolved to `disabled`) |
 | 3 | Internal failure |
-
-A syntax error in user Python is code 1, never code 3. Code 3 means Basilisk
-itself could not complete for an internal reason; it must not mask diagnostics
-already produced by other files in the same run. This distinction and the
-text/JSON parity obligation are pinned by
-[#384](https://github.com/Nimblesite/Basilisk/issues/384) in
-`crates/basilisk-cli/tests/cli_binary_tests.rs`.
-
-Malformed or semantically invalid `pyproject.toml` configuration is code 2 and
-aborts source checking with an actionable configuration message. It must never
-fall back to defaults as though no configuration existed. This regression is
-tracked by [#227](https://github.com/Nimblesite/Basilisk/issues/227) in
-`crates/basilisk-cli/tests/e2e_scope.rs`.
 
 ### CI use {#CHKARCH-CLI-CI}
 
@@ -1503,8 +1337,9 @@ accept loop, process enumeration). What keeps an edit sub-10ms is Salsa's
 incremental invalidation ([CHKARCH-INCREMENTAL]), not thread count.
 
 File-level parallelism stays a future option. It is not implemented, and no
-benchmark number in this repository depends on it — so a change that adds it
-should be measured on its own merits ([CHKARCH-TESTING-BENCH]).
+benchmark number in this repository depends on it — so a change that adds it must
+still clear the benchmark ratchet on its own merits
+([CHKARCH-TESTING-BENCH-RATCHET]).
 
 ### Memory {#CHKARCH-PERF-MEMORY}
 
@@ -1519,10 +1354,10 @@ stress fixtures timed cold across Basilisk, Pyright, mypy, ty, Pyrefly, and
 zuban by `benchmarks/run.sh`. Each run does a full `cargo clean` + fresh
 `--release` build of basilisk, pulls the LATEST official release of every
 competitor, times all fixtures, and writes the measured numbers to the
-per-machine status CSV **immediately and unconditionally**. Nothing gates on
-those numbers: they are indicative developer-machine measurements, to be
-compared between tools within a single run rather than across runs. Full
-mechanism: [CHKARCH-TESTING-BENCH].
+per-machine status CSV **immediately and unconditionally** — the write is never
+gated. A **separate** read-only regression gate then compares those numbers
+against the committed baseline and fails CI on a slip beyond a small noise
+tolerance. Full mechanism: [CHKARCH-TESTING-BENCH-RATCHET].
 
 **Planned, not yet built:** a real-world-codebase suite — **PyTorch** (~600K
 LOC), **Django** (~250K LOC), **FastAPI** (~30K LOC), **Python standard
@@ -1537,139 +1372,69 @@ a design target, not a claim of existing measurement.
 |---|---|---|
 | Unit tests | `cargo test` per crate | Crate-level correctness |
 | Integration tests | Multi-file scenarios | Cross-module type checking |
-| Semantics-preserving mutation | Aliased imports, reformatting, reordering over rule tests | **The accuracy gate** — proves a rule decides on meaning, not spelling ([CHKARCH-TESTING-SEMANTIC-MUTATION]) |
-| Off-suite rule tests | Python the upstream suite has never contained | Proves a rule generalises beyond its fixture |
-| Conformance tests | Python typing test suite, run live | Regression detector only — never a target ([CHKARCH-CONFORMANCE]) |
+| Conformance tests | Python typing test suite | PEP compliance (target: 100%) |
 | Golden file tests | Expected diagnostic output | Diagnostic regression |
 | Fuzzing | `cargo-fuzz` | Crash resistance, soundness |
 | Property tests | `proptest` crate | Type system invariants |
-| Benchmarks | `make _bench` (hyperfine, `benchmarks/run.sh`) vs Pyright/mypy/ty/Pyrefly/Zuban | Indicative performance tracking, written to `benchmarks/status/<machine>.csv` immediately, every run. **Gates nothing** — developer-machine numbers, compared between tools within one run ([CHKARCH-TESTING-BENCH]) |
+| Benchmarks | `make bench` (hyperfine, `benchmarks/run.sh`) vs Pyright/mypy/ty/Pyrefly/Zuban | Performance tracking (results written to `benchmarks/status/<machine>.csv` immediately, every run) + zero-tolerance regression gate that fails if basilisk gets slower than the **committed** baseline on any fixture ([CHKARCH-TESTING-BENCH-RATCHET]) |
 
-A test is judged by what it would catch, never by whether it is green. **A failing
-test that pins real incorrect behaviour is worth more than a passing fixture carried
-by logic that does not analyse code**, so a suite gets *more* failing tests when
-Basilisk is found to be wrong, never fewer. Never delete a failing test, remove a
-failure-causing assertion, reduce assertiveness, or mark a test ignored.
+### PEP Conformance Scoring {#CHKARCH-CONFORMANCE}
 
-### Semantics-preserving mutation — the accuracy gate {#CHKARCH-TESTING-SEMANTIC-MUTATION}
+The conformance score is produced by **RUNNING the real `python/typing`
+conformance harness** — the suite's own `conformance/src/main.py` driving its
+built-in `BasiliskTypeChecker` — against the compiled binary on **every run**,
+never a Basilisk reimplementation. It is the exact tooling the reference checkers
+(pyright, mypy, pyrefly, ty, zuban, pycroscope) are graded with. **A build in which
+that official check did not run against a freshly cloned suite is a BUILD FAILURE.**
 
-> **Status: specified, not built.** No harness in this repo performs these mutations
-> today, which is exactly why text-matched logic survived every green run. Building it
-> is owned by [LINESCANPLAN-SEMANTIC-MUTATION](../plans/CHECKER-ELIMINATE-LINE-SCANNING-PLAN.md#LINESCANPLAN-SEMANTIC-MUTATION).
-> Until it exists, **every rule is unverified against this gate** and no rule may be
-> described as spec-implementing on the strength of a fixture alone.
+**The mechanism — every CI run, in order, no step skippable or the build dies:**
 
-The one gate that can distinguish a rule that analyses code from a rule that matches
-text. It takes each rule test and re-runs it over inputs that are *semantically
-identical and textually different*; the diagnostics must be **byte-for-byte the same**.
-
-Required mutations, each applied independently and in combination:
-
-| Mutation | Example |
-|---|---|
-| Import aliasing | `from typing import Final as F`, `import typing as t` |
-| Import form | `typing.Final` ↔ `from typing import Final` ↔ re-export through a local module |
-| Reformatting | line breaks, indentation width, trailing commas, parenthesisation |
-| Quote and string style | `'…'` ↔ `"…"`, implicit concatenation, raw/f-prefixes on non-type strings |
-| Identifier renaming | consistent rename of every class, type variable, alias, and parameter |
-| Statement reordering | independent statements, class members, and imports permuted |
-| Comment and whitespace churn | comments added, removed, and moved |
-
-Rules:
-
-- **A rule whose diagnostics move under any of these is broken.** The finding is
-  handled by [CHKARCH-TEXT-MATCHED-LOGIC](#CHKARCH-TEXT-MATCHED-LOGIC) — failing test,
-  delete, report — never by teaching the harness to tolerate the difference.
-- **The harness may never mutate an expected result to match observed output.** The
-  expectation is the unmutated run's diagnostics; only the input varies.
-- **Coverage is reported as a fraction of rules exercised**, and the uncovered
-  remainder is named in the report. A score over a hand-picked subset says nothing
-  about the rest, and reporting only the covered fraction is how a partial measure
-  reads as a complete one.
-- **Never re-submit to `python/typing` until this gate passes clean** and an external
-  audit has run ([CHKARCH-CONFORMANCE](#CHKARCH-CONFORMANCE)).
-
-### PEP Conformance Measurement {#CHKARCH-CONFORMANCE}
-
-**The number is a regression detector, never an objective.** It samples one
-fixed corpus that the checker was historically developed against, so it cannot
-tell you whether a rule analyses code — only whether today's binary agrees with
-yesterday's on 141 files it has already seen. Optimising it is the failure mode
-that produced [CHKARCH-CONFORMANCE-INTEGRITY-AUDIT](../CONFORMANCE-INTEGRITY-AUDIT.md).
-Accuracy on unseen Python is the objective; this measurement is downstream of it
-and overfitted to it.
-
-Three consequences, all normative:
-
-- **Never publish, quote, or market a conformance figure**, in the specs, the
-  README, the website, a commit message, or a PR description. Nothing may imply
-  Basilisk appears in the official `python/typing` results — it was
-  [removed at its own author's request](https://github.com/python/typing/pull/2330).
-- **Never re-submit to `python/typing`** until
-  [CHKARCH-TESTING-SEMANTIC-MUTATION](#CHKARCH-TESTING-SEMANTIC-MUTATION) passes
-  clean and an external audit has run.
-- **A drop caused by deleting text-matched logic is progress.** Record it, say so
-  plainly, and move on. Never restore the deleted code, re-fit a rule to the
-  fixture, or fake a pass to hold a ratchet. **There is no pass-percentage floor
-  and no ratchet on this number** — a threshold on a corpus the code was fitted
-  to rewards fitting, which is precisely how the defect arose
-  ([§6.3](../CONFORMANCE-INTEGRITY-AUDIT.md)).
-
-When the measurement *is* taken, it is taken honestly or not at all. It comes
-from **RUNNING the real `python/typing` harness** — the suite's own
-`conformance/src/main.py` driving its built-in `BasiliskTypeChecker` — against the
-compiled binary, never a Basilisk reimplementation. A vendored scorer, an injected
-adapter, cached fixtures, or a committed result standing in for a live run is a
-**BUILD FAILURE**.
-
-**The mechanism — in order, no step skippable:**
-
-1. **Freshly clone** the tests **and** the harness/calculator from
+1. **Freshly download** the tests **and** the harness/calculator from
    `python/typing@main`'s **latest** commit — `git clone --depth 1
    https://github.com/python/typing`. No cache, no committed fixtures, no vendored
-   calculator.
+   calculator. (So the moment upstream merges a new rule/fixture, the very next run
+   grades against it — and if we regress, CI tanks.)
 2. **Freshly build a CLEAN release** `basilisk` binary from THIS checkout's source
    — `cargo build --release`, un-instrumented, byte-for-byte what ships. Never the
    PyPI wheel (a prior version), never an instrumented build.
 3. **Run the suite's OWN `conformance/src/main.py --only-run basilisk`** against
-   that binary (pointed at it via `BASILISK_BIN`) and record what it reports.
-4. **Regenerate `conformance/conformance_status.csv`** from the harness's OWN
-   `results/basilisk/*.toml` — the committed record is always a product of the live
-   run, never hand-authored.
+   that binary (pointed at it via `BASILISK_BIN`), and **fail HARD on ANY false
+   positive or ANY missed required error** — the gate demands 100 % pass / 0 FP
+   (`coverage-thresholds.json`). One stray diagnostic tanks the build.
+4. **Regenerate `conformance/conformance_status.csv`** (and the website report)
+   from the harness's OWN `results/basilisk/*.toml` — the committed scoreboard is
+   always a product of the live run, never hand-authored.
 
-> ⛔️ **Never move the number by touching the scoreboard.** The binary runs in its
-> **full default configuration with every `pep` rule enabled** — no Basilisk config
-> (any format; the legacy `basilisk.json` is no longer read), no per-rule override,
-> no "spec-conformance mode", no skipped fixtures. Equally forbidden: hand-editing
-> `conformance/conformance_status.csv`, and loosening or tightening a threshold to
-> match a run.
->
-> **Deleting a rule is not on this list, and that is deliberate.** Deleting a rule
-> that decides from source text rather than resolved symbols is the *required*
-> action ([CHKARCH-TEXT-MATCHED-LOGIC](#CHKARCH-TEXT-MATCHED-LOGIC)) — write the
-> failing test, delete the code, tell the user. The distinction is intent, and it is
-> visible in what happens to the number: deleting analysis you cannot trust is
-> expected to *lower* it and you report the drop; deleting a rule to dodge a failure
-> is dishonest. If the rule genuinely analyses code and merely fires on valid input,
-> that is a real gap to fix in the checker, not to silence.
+> ⛔️ **DISABLING, DELETING, OR UNREGISTERING ANY CONFORMANCE RULE IS FORBIDDEN.**
+> The binary is scored in its **full default configuration with EVERY core
+> PEP/conformance rule enabled** — no Basilisk config (any format; the legacy
+> `basilisk.json` is no longer read), no per-rule override, no "spec-conformance mode",
+> no skipped fixtures, no deleting rule source (`src/rules/*.rs`), no removing rules
+> from `all_rules()`. The binary is scored over a **fresh `python/typing` clone**
+> whose tree holds no Basilisk config of any format, so nothing of ours can silence a rule;
+> deleting the rules themselves is the **same crime by another route** and equally
+> forbidden — as is hand-editing `conformance/conformance_status.csv` or loosening
+> the `coverage-thresholds.json` gate (`threshold` / `max_false_positives`). A
+> strict default firing on valid code is a **real conformance gap to FIX in the
+> checker**, never to hide. Gaming the number is a punishable offence.
 
-- **Runner — the upstream snapshot's real harness, nothing else**:
+- **Runner — the real harness, nothing else**:
   [`conformance/run_conformance.py`](../../conformance/run_conformance.py) is the
-  ONE pristine-fixture path. While `python/typing@main` has no Basilisk adapter,
-  every run clones the declared historical upstream snapshot fresh and runs
-  that snapshot's **own unmodified `conformance/src/main.py --only-run
-  basilisk`** against the compiled binary (via `BASILISK_BIN`). Nothing of ours
-  is injected, adapted, or used to rescore the outcome. The
+  ONE conformance path. Every run it clones the
+  **latest [`python/typing@main`](https://github.com/python/typing/tree/main/conformance)**
+  FRESH (we shoot for the current spec suite, not a frozen commit) and runs the
+  suite's **OWN unmodified `conformance/src/main.py --only-run basilisk`** against
+  the real compiled binary (via `BASILISK_BIN`). The suite already ships the
+  official Basilisk adapter — `BasiliskTypeChecker` in
+  [`conformance/src/type_checker.py`](https://github.com/python/typing/blob/main/conformance/src/type_checker.py) —
+  so **nothing of ours is injected, vendored, adapted, or reimplemented**. The
   harness writes `results/basilisk/*.toml`; every `Pass`/`Fail` verdict and every
   `errors_diff` is the harness's OWN, produced by the same code that grades pyright,
   mypy, pyrefly, ty, zuban and pycroscope. From those real results the runner only
   *reports*: it writes `conformance/conformance_status.csv` and **records the exact
   graded commit hash** in
-  [`website/src/_data/conformance_report.json`](../../website/src/_data/conformance_report.json)
-  so any run is traceable to the upstream tree it ran against. That file is a local
-  record, **not a publication source**: the site's `_data/conformance.js` reads it only
-  to render the withdrawn historical run, and no current figure is published from it.
-  There is **NO
+  [`website/src/_data/conformance_report.json`](../../website/src/_data/conformance_report.json),
+  so every published number is pinned *by hash* on the website. There is **NO
   vendored calculator and NO cached-fixtures fallback** — a build in which the real
   harness could not be cloned and run is a **BUILD FAILURE**, by design. (The only
   auxiliary number not in the toml, `caught` = required errors matched, is taken
@@ -1686,217 +1451,185 @@ adapter, cached fixtures, or a committed result standing in for a live run is a
   Basilisk config of any format, so nothing of ours can silence a conformance rule. Opt-in
   Basilisk-specific rules remain off by the same ordinary default
   ([CHKARCH-CONFORMANCE-MODE](#CHKARCH-CONFORMANCE-MODE)).
-- **Where it runs**: `make test` (via [`scripts/test-rust.sh`](../../scripts/test-rust.sh))
+- **Gate**: `make test` (via [`scripts/test-rust.sh`](../../scripts/test-rust.sh))
   builds the `basilisk` binary, then runs
-  `python3 conformance/run_conformance.py --gate` on it — the REAL harness, with the
-  pass/false-positive comparison delegated to
+  `python3 conformance/run_conformance.py --gate` on it — which runs the REAL
+  harness and delegates the 100 %-pass / 0-false-positive check to
   [`conformance/assert_wheel_conformance.py`](../../conformance/assert_wheel_conformance.py)
   over the harness's OWN `results/basilisk/*.toml`. There is **no Rust conformance
-  test** and **no in-repo scorer**: the result is the real suite's own verdict on the
-  compiled binary. Per-file results land in `conformance/conformance_status.csv`.
-- **Known contradiction — `coverage-thresholds.json` still gates this number.**
-  Its `conformance` block carries `threshold` (a pass-percentage floor) and
-  `max_false_positives`, and `--gate` enforces both. That floor is the mechanism the
-  integrity audit identified as the incentive behind the fitted predicates
-  ([§6.3](../CONFORMANCE-INTEGRITY-AUDIT.md)): it makes the *expected, correct* drop
-  from deleting a text-matched rule fail the build, which is the pressure that
-  produces fitting in the first place. Removing that floor is the user's call and is
-  not an agent's to make. **Until they decide, a deletion that lowers the number is
-  still the right action** — make the deletion, report the drop and the failing gate,
-  and stop there. Do not restore the code, refit the rule, or edit the threshold to
-  get green.
-- **No current figure is recorded here, by policy.** Reading one out of a spec is
-  how a withdrawn number keeps circulating. `conformance_status.csv` holds the last
-  live run for whoever needs it; the specs quote nothing.
+  test** and **no in-repo scorer**: the score is the real suite's own verdict on the
+  compiled binary. The pass-percentage floor and false-positive ceiling live in
+  `coverage-thresholds.json` (`conformance.threshold`,
+  `conformance.max_false_positives`); the former ratchets **up**, the latter
+  **down**. Per-file results are written to `conformance/conformance_status.csv`.
+- **Current score** — measured against `python/typing@main` at the exact graded
+  commit recorded in `conformance_report.json`, currently
+  [`<!--g:short-->0dc9b5d<!--/g:short-->`](https://github.com/python/typing/tree/0dc9b5d23b368713af33ac25338eeb08b80f6360/conformance):
+  **<!--g:pass-->141<!--/g:pass--> / <!--g:total-->141<!--/g:total--> = <!--g:score-->100.0%<!--/g:score-->**, **<!--g:fp-->0<!--/g:fp--> false positives**, **<!--g:missed-->0<!--/g:missed--> missed required errors**, with
+  **<!--g:caught-->970<!--/g:caught-->** required errors caught. The binary runs in its default configuration — the
+  PEP conformance set — over a fresh `python/typing` clone whose tree holds no
+  Basilisk config of any format, so nothing can silence a rule; Basilisk's opt-in house-style rules never run during scoring,
+  so they can neither pad nor sink the number. The gate
+  ratchets the pass-percentage **up** and the false-positive ceiling **down**
+  (`coverage-thresholds.json` → `conformance.threshold` /
+  `conformance.max_false_positives`), driven only by genuinely fixing the checker,
+  **never** by disabling a rule. (History: a **baseline reset on 2026-06-26**
+  corrected a gamed *fake 100%* that had disabled six house-style rules before
+  scoring; conformance has been measured honestly in the default config ever since.)
+  Target: **100%**.
 
-#### No "spec-conformance mode" — the harness runs the genuine default config {#CHKARCH-CONFORMANCE-MODE}
+#### No "spec-conformance mode" — the scorer runs the genuine default config {#CHKARCH-CONFORMANCE-MODE}
 
-There is **no** conformance mode, and there never will be. The harness runs the binary
+There is **no** conformance mode, and there never will be. The scorer runs the binary
 in exactly the configuration a user gets out of the box — the **default config, which
-is the pure PEP set** ([CHKARCH-CONFIGURATION-ONLY](#CHKARCH-CONFIGURATION-ONLY)) —
-with no Basilisk config of any format (the legacy `basilisk.json` is no longer read),
-no per-rule override, and no special measurement path. Basilisk's opinionated
-*house-style* rules (require-annotations `BSK-0001`/`BSK-0002`/`BSK-0004`,
+is the pure PEP conformance set** ([CHKARCH-CONFIGURATION-ONLY](#CHKARCH-CONFIGURATION-ONLY))
+— with no Basilisk config of any format (the legacy `basilisk.json` is no longer
+read), no per-rule override, and no special scoring path. Basilisk's
+opinionated *house-style* rules (require-annotations `BSK-0001`/`BSK-0002`/`BSK-0004`,
 require-`@override` `BSK-0025`, redundant-annotation `BSK-0050`, the explicit-`Any`
-nudge `BSK-0014`) are **opt-in and off by default**, so they never run during a
-measurement and can neither pad nor sink it.
+nudge `BSK-0014`) are **opt-in and off by default**, so they never run during scoring
+and can neither pad nor sink the number. The figure is the genuine out-of-the-box
+conformance result — currently <!--g:score-->100.0%<!--/g:score-->. Any shortfall would be a real
+checker bug to fix (a missing spec feature, or a false positive from an over-strict
+*conformance* rule), never something to paper over by silencing a rule.
 
-⛔️ **Configuring a rule off before measuring is forbidden**, as is hand-editing
-`conformance_status.csv` or moving a threshold to match a run. Both have been
-attempted: a revision once wrote a `basilisk.json` that turned six rules off before
-measuring and reported a fake result, and when that route was closed, another deleted
-the rule sources and unregistered them from `all_rules()` to reach the same figure.
-The measurement now runs over a **fresh `python/typing` clone** whose tree holds no
-Basilisk config of any format, so no configuration can silence a rule.
+⛔️ **Disabling, deleting, or unregistering a conformance (PEP) rule to move the number
+is forbidden** — as is hand-editing `conformance_status.csv` or loosening the
+`coverage-thresholds.json` gate (`threshold` / `max_false_positives`) to match a faked
+run. This has been attempted twice, back when the house rules still ran by default and
+counted toward the score. First, a revision wrote a `basilisk.json` that turned six
+rules off before scoring and reported a **fake 100%**; that was removed, and the
+scorer now runs the binary over a **fresh `python/typing` clone** whose tree contains
+no Basilisk config of any format (the legacy `basilisk.json` is no longer read at
+all), so no config can silence a rule. Second — when config-disabling
+was blocked — a revision tried to
+*delete the offending rule source files outright* and unregister them from
+`all_rules()`, then re-report a **fake 100%**: the same lie by another route. **Deleting
+a rule to dodge the config guard is the identical offence.**
 
-That history is why deletion needs an explicit boundary, and it is a boundary of
-**intent and disclosure**, not of mechanism:
-
-- **Deleting a rule to reach a number is dishonest** — the deletion is hidden, the
-  figure is reported as if the analysis still existed, and nothing fails.
-- **Deleting a rule that decides from source text is required** — the deletion is the
-  point, a failing test is left behind to mark the hole, the drop is reported, and
-  nobody claims the analysis exists ([CHKARCH-TEXT-MATCHED-LOGIC](#CHKARCH-TEXT-MATCHED-LOGIC)).
-
-**A failing test that pins real incorrect behaviour is worth more than a passing
-fixture carried by logic that does not analyse code.** The first is an accurate map of
-what Basilisk cannot yet do; the second is a false claim that it can. Given the choice,
-take the failing test every time.
-
-Anyone may relax rules *in their own project* via config; a measurement run never does.
+The path to 100% is to make the checker **correct**, never to silence a rule at score
+time: implement the spec features it still misses, and teach its conformance rules to
+stop firing on spec-valid code (recognising inferred return types, honouring `# E`-free
+lines) so the false positives fall on their own merits. Anyone may relax rules *in their
+own project* via config; the **conformance scorer never does**.
 
 ### Mutation Testing Ratchet {#CHKARCH-TESTING-MUTATION-RATCHET}
 
-Mutation testing exists to prove the suite **asserts** behaviour rather than merely
-executing it. The current regime does not prove that, and the reasons are structural
-rather than accidental. They are recorded here because a metric whose limits are
-undocumented reads as a guarantee.
+Mutation testing proves the test suite actually asserts behaviour. Scope only ever **grows** toward all Rust code:
 
-**How it works today.** `#[mutation_safe(rule = "<rule-slug>", fns = "fn_a|fn_b")]`
-attributes on e2e tests drive the `cargo mutants` examine regex
-(`scripts/mutation_examine_re.py`). `<rule-slug>` is the rule's path stem under
-`crates/basilisk-checker/src/rules/` (file like `aliases_implicit` or directory like
-`assignment_compatibility`); omitting `fns` scopes the whole file.
-`mutation_testing/mutation_scores.json` holds the committed baseline and
-`mutants_report.py::regression_messages` fails the build when `kill_rate` drops below
-the baseline or the absolute floor, when `detected` drops while the viable pool did
-not grow, or when `timeout` rises. Both `make _mutation_test` and the CI shard merge
-call the same function.
+- **Scope is test-driven.** `#[mutation_safe(rule = "<rule-slug>", fns = "fn_a|fn_b")]`
+  attributes on e2e tests drive the `cargo mutants` examine regex
+  (`scripts/mutation_examine_re.py`). `<rule-slug>` is the rule's path stem under
+  `crates/basilisk-checker/src/rules/` (file like `aliases_implicit` or directory
+  like `assignment_compatibility`); omitting `fns` scopes the whole file. Adding
+  these tests is the only way to widen scope.
+- **Baseline is ratcheted.** `mutation_testing/mutation_scores.json` is the committed
+  baseline; `mutation_testing/mutants_report.py::regression_messages` fails the build
+  when `kill_rate` drops below the baseline or the absolute floor, when `detected`
+  (`caught` + `timeout`) drops **while the viable pool did not grow**, or when
+  `timeout` rises. (`unviable` mutants don't compile and are excluded.) Absolute
+  `missed` is deliberately *not* a signal: widening scope mutates more code, so a
+  larger raw `missed` against a smaller-pool baseline is expected — `kill_rate` is
+  the size-independent guard. Both `make mutation-test` and the CI shard merge
+  enforce the same function.
+- **A timeout may never rise.** A `timeout` is credited as a kill (the PIT/Stryker
+  convention: a terminating suite made non-terminating *has* been detected). That
+  credit is only honest while timeouts come from hung code rather than slowness —
+  and the mutants that time out are structurally the likely *survivors*, since a
+  killed mutant exits at the first failing test binary while an uncaught one runs
+  the whole suite. So a rise in `timeout` is itself a build failure: it means
+  mutants were credited as killed without being evaluated. Fix the budget or the
+  suite's speed ([`.cargo/mutants.toml`](../../.cargo/mutants.toml)); never absorb it.
+- **Direction.** End state is the full workspace under mutation
+  (`make mutation-test ALL=1`); until then each checker-logic PR leaves the viable
+  pool the same size or larger.
 
-**Three ways the number overstates what is proven.** Each is a correction owed, not a
-convention to preserve:
+### Benchmark Non-Regression {#CHKARCH-TESTING-BENCH-RATCHET}
 
-1. **Scope is opt-in, so the pool is self-selected.** Only annotated files are
-   examined. The committed baseline is 161 mutants at a 100% kill rate; the checker
-   crate alone is ~82k LOC across 307 files, 246 of them rules. A perfect score over a
-   chosen sliver is not a statement about the crate, and reporting it without the
-   denominator makes a partial measure read as a complete one. **Correction owed:**
-   report kill rate *and* the fraction of mutable surface examined, and name the
-   unexamined remainder. Un-annotated code is **unverified**, and must be described
-   that way rather than omitted.
-2. **A timeout is credited as a kill.** `detected = caught + timeout`, on the
-   PIT/Stryker convention that a terminating suite made non-terminating has been
-   detected. But a timed-out mutant was never evaluated, and timeouts are structurally
-   biased toward *survivors*: a killed mutant exits at the first failing test binary
-   while an uncaught one runs the whole suite. Crediting them inflates the rate with
-   the mutants most likely to have lived. **Correction owed:** report `timeout` as its
-   own unevaluated category, outside the numerator. Until then a rise in `timeout` is a
-   build failure — it means mutants were credited without being run. Fix the budget or
-   the suite's speed ([`.cargo/mutants.toml`](../../.cargo/mutants.toml)); never absorb it.
-3. **Survivors are aggregated away.** Absolute `missed` is deliberately not a signal,
-   because widening scope mutates more code and a larger raw `missed` is expected. That
-   is sound arithmetic and poor engineering: every surviving mutant is a specific
-   behaviour no assertion pins, and a count cannot be acted on. **Correction owed:**
-   enumerate survivors by file, function, and mutation in the report, so each is a
-   fixable item rather than a number to keep flat.
+Performance and conformance ratchet **together** — neither traded for the other.
+`make bench` (`benchmarks/run.sh`) runs the fixture suite and enforces the
+performance gate. Two responsibilities are deliberately **DECOUPLED**, so one can
+never suppress the other (`benchmarks/summarize.py`):
 
-**Rules that stand regardless:**
+1. **WRITE — unconditional and immediate.** Every measured number is written
+   straight to the per-machine status CSV `benchmarks/status/<machine>.csv` the
+   instant it exists: `summarize.py` runs in `incremental` mode after **each**
+   fixture (rewriting the CSV from all results so far) and again in `final` mode
+   at the end. There is **no gate on the write, no branch, no "left unchanged"
+   path** — the file ALWAYS reflects exactly what this build just measured. A run
+   that measured a number but did not record it is a lie about the build's
+   performance, and the whole point of the suite is to KNOW the moment a number
+   slips. So the write happens regardless of what the gate later decides
+   (atomic tmp + `os.replace`, so a kill mid-write never tears the file).
 
-- **Never widen the mutant pool by weakening what is mutated**, and never narrow scope
-  to protect a rate. Scope only grows; each checker-logic PR leaves the viable pool the
-  same size or larger. End state is the full workspace (`make _mutation_test ALL=1`).
-- **Never tune a test to kill a mutant without asserting the behaviour** the mutant
-  changed. A kill obtained by asserting on incidental output is the same defect as a
-  rule that matches text — it moves a number without proving meaning.
-- **A high kill rate over rules that decide from source text proves nothing.** It shows
-  the tests pin the text-matching, which is the behaviour being deleted. Mutation score
-  is meaningful only over rules that pass
-  [CHKARCH-TESTING-SEMANTIC-MUTATION](#CHKARCH-TESTING-SEMANTIC-MUTATION); it never
-  substitutes for it.
+2. **GATE — read-only, CI pass/fail, separate judgment.** In `final` mode, AFTER
+   the numbers are on disk, the run's basilisk times are compared against the
+   **COMMITTED** baseline — the status CSV read from git at `BENCH_BASELINE_REF`
+   (default `HEAD`) via `git show`, **never the working copy the run just
+   overwrote**, so a slower run can never launder its regression into the
+   baseline. Any backwards step on any fixture exits 3 →
+   CI FAILURE. The gate only READS; it never edits the file. The committed
+   baseline advances only when a run is committed, so it still ratchets toward
+   faster — while the live file never hides a slip.
 
-### Benchmark — Indicative, Not a Gate {#CHKARCH-TESTING-BENCH}
+- **Fresh binary, every run.** `run.sh` ALWAYS does a full `cargo clean` + a
+  from-scratch `cargo build --release --bin basilisk` before timing a single
+  fixture. A number is only honest if it came from a from-scratch optimized build
+  of the exact tree under test — never a stale or incrementally-linked binary. The
+  `# generated` timestamp and the basilisk version recorded in the CSV header are
+  captured after this build, so the header proves the numbers came from it.
+- **Latest competitors, every run.** Before discovery/timing, `run.sh` upgrades
+  each officially-recognized checker (pyright, mypy, ty, pyrefly, zuban — only
+  those tracked by the `python/typing` conformance suite; never unofficial tools)
+  to its newest official release via `pip install --upgrade` (best-effort per
+  tool, loud warning on failure). Competitor columns therefore always reflect
+  current upstream, never a pinned build. The pull runs outside all timing.
+- **Zero-tolerance ratchet.** The committed tolerance is zero
+  (`BENCH_TOLERANCE_PCT=0`), so every fixture must be monotonically
+  non-increasing. It lives in the tracked script, not an env var; the gate itself
+  cannot be disabled or widened at runtime (`BENCH_NO_GATE` /
+  `BENCH_REGRESS_PCT` / `BENCH_TOLERANCE_PCT` overrides are rejected).
+- **Basilisk-only iteration (`make bench-basilisk`, `BENCH_ONLY_BASILISK=1`).**
+  Closing a basilisk performance gap is a tight edit-measure loop, and five
+  competitors at ~0.5 s per invocation add minutes to every turn of it while
+  saying nothing about a change to this tree. This mode times the basilisk
+  columns alone and skips the competitor pull, discovery, preflight, and timing.
+  It relaxes **nothing that decides anything**: the full `cargo clean` + fresh
+  release build, the noisy-measurement stability policy, and the zero-tolerance
+  gate against the committed baseline all run exactly as in a full sweep — a
+  regression fails it identically. Two honesty rules keep the partial CSV
+  truthful: the untimed tools' `_ms`/`_diags` cells and version strings are
+  **carried forward verbatim** from the file rather than blanked (a blank cell
+  means "not installed / failed preflight" and must keep meaning that) — the
+  same carry applies to the tracked `benchmarks/results/coverage.tsv`, whose
+  rows for the skipped tools are preserved instead of being truncated away —
+  and a
+  `# measured:` header line names which tools this run timed and which it
+  carried, with the date they came from — so the fresh `# generated` stamp can
+  never imply a competitor was re-timed. Nothing measured is ever carried, so
+  the write-always rule is untouched. CI always runs the full sweep: the mode
+  exits 2 under `GITHUB_ACTIONS`. **A number published or committed as a full
+  benchmark must come from `make bench`** — this mode is for iteration.
+- Run it whenever checker hot paths change (resolver visitors, rule `check` loops,
+  conformance-driven additions). Conformance logic that blows the gate must be
+  optimised or restructured. A machine without a baseline establishes one only
+  after a successful run is committed.
 
-`make _bench` (`benchmarks/run.sh`) times the fixture suite against
-pyright/mypy/ty/pyrefly/zuban and records what it measured. **It gates nothing.
-No CI job passes or fails on a benchmark number, and none is to be
-reintroduced.**
-
-**Why there is no gate.** The benchmark runs on whichever workstation a
-contributor happens to use, against whatever else that machine is doing at the
-time. Background load moves every tool in the table together and can shift
-absolute times by tens of percent between two runs of *identical code* — far
-larger than the differences worth acting on. A pass/fail built on that signal
-fails honest work and waves through real regressions depending on what else was
-running, and a baseline recorded during a loaded run silently raises the bar for
-every later run compared against it. Reporting the numbers and letting a human
-read them is the honest treatment of a noisy measurement.
-
-**WRITE — unconditional and immediate.** Every measured number is written
-straight to the per-machine status CSV `benchmarks/status/<machine>.csv` the
-instant it exists: `summarize.py` runs in `incremental` mode after **each**
-fixture (rewriting the CSV from all results so far) and again in `final` mode at
-the end. There is **no branch and no "left unchanged" path** — the file ALWAYS
-reflects exactly what this build just measured. A run that measured a number but
-did not record it is a lie about the build's performance (atomic tmp +
-`os.replace`, so a kill mid-write never tears the file).
-
-**How to read the numbers.**
-
-- **Compare tools WITHIN one run.** Every tool in a row is measured back to back
-  on the same machine in the same conditions, so machine speed cancels out. This
-  is the comparison the published website table makes, and it is sound.
-- **Never compare across runs, machines, or time.** A figure from one run says
-  nothing when set against a figure recorded elsewhere or on another day.
-- **To answer a real performance question**, measure both revisions on one quiet
-  machine in one sitting. If a competitor's pinned binaries time roughly the same
-  across the two measurements, the machine conditions were comparable and a
-  difference in the basilisk column is real; if they did not, it is not.
-
-**Fresh binary, every run.** `run.sh` ALWAYS does a full `cargo clean` + a
-from-scratch `cargo build --release --bin basilisk` before timing a single
-fixture. A number is only honest if it came from a from-scratch optimized build
-of the exact tree under test — never a stale or incrementally-linked binary. The
-`# generated` timestamp and the basilisk version recorded in the CSV header are
-captured after this build, so the header proves the numbers came from it.
-
-**Latest competitors, every run.** Before discovery/timing, `run.sh` upgrades
-each officially-recognized checker (pyright, mypy, ty, pyrefly, zuban — only
-those tracked by the `python/typing` conformance suite; never unofficial tools)
-to its newest official release via `pip install --upgrade` (best-effort per
-tool, loud warning on failure). Competitor columns therefore always reflect
-current upstream, never a pinned build. The pull runs outside all timing. The
-versions actually used are recorded in the CSV `# tools:` header and published
-beside the table on the website, so a reader can always see what was measured.
-
-**Noisy-sample policy.** A basilisk measurement whose coefficient of variation
-exceeds 15% is automatically remeasured with at least 30 runs, so a scheduler
-spike surfaces as more evidence rather than as a misleading mean.
-
-**Basilisk-only iteration (`make _bench ONLY=basilisk`, `BENCH_ONLY_BASILISK=1`).**
-Closing a basilisk performance gap is a tight edit-measure loop, and five
-competitors at ~0.5 s per invocation add minutes to every turn of it while
-saying nothing about a change to this tree. This mode times the basilisk columns
-alone and skips the competitor pull, discovery, preflight, and timing. The full
-`cargo clean` + fresh release build and the stability policy run exactly as in a
-full sweep. Two honesty rules keep the partial CSV truthful: the untimed tools'
-`_ms`/`_diags` cells and version strings are **carried forward verbatim** from
-the file rather than blanked (a blank cell means "not installed / failed
-preflight" and must keep meaning that) — the same carry applies to the tracked
-`benchmarks/results/coverage.tsv`, whose rows for the skipped tools are
-preserved instead of being truncated away — and a `# measured:` header line
-names which tools this run timed and which it carried, with the date they came
-from, so the fresh `# generated` stamp can never imply a competitor was
-re-timed. Nothing measured is ever carried, so the write-always rule is
-untouched. CI never runs benchmarks at all; **a number published as a full
-benchmark must come from `make _bench`** — this mode is for iteration.
-
-**Publication.** Every existing figure and ranking is withdrawn. The website
-may read the status CSV only to render a clearly labelled historical audit
-record; direct ingestion prevents transcription errors but does not validate
-the method or make a figure current. A controlled, repeatable environment,
-same-run comparisons, stated limitations, and independent methodology review
-are prerequisites for any future publication. No developer-workstation number
-is authoritative.
+> **Planned — bench in the pipeline (CI).** Today `make bench` is run locally and
+> its results are committed. The intention is to eventually run the benchmark gate
+> in CI on a fixed runner class, on the same write-always / gate-separately
+> discipline described here, so a performance regression fails the pipeline the way
+> the conformance and coverage gates already do. Until that lands, the discipline
+> is enforced by running `make bench` locally and committing the updated status CSV.
 
 ### CI Artifact Storage Policy {#GITHUB-NO-ARTIFACTS}
 
 Basilisk is **public**: GitHub-hosted runner compute (all `ubuntu-24.04`) is free and unlimited; GitHub bills for **stored Actions artifacts** (GB-days). Therefore:
 
 - **CI stores no artifacts.** No `actions/upload-artifact` for coverage HTML,
-  mutation reports, logs, screenshots. Coverage and mutation gates enforce
-  in-job, and reports reproduce locally (`make test`, `make _mutation_test`).
-  Benchmarks do not run or gate in CI. Codecov consumes `lcov.info` directly
-  without GitHub storage.
+  mutation reports, logs, screenshots. Gates enforce in-job (coverage, mutation
+  merge, benchmarks) and reports reproduce locally (`make test`, `make
+  mutation-test`). Codecov consumes `lcov.info` directly without GitHub storage.
 - **The only permanent store is the GitHub Release.** Release assets (binaries,
   per-platform VSIX) are free and unlimited; never retained Actions artifacts.
 - **Transient cross-job hand-offs are the sole exception** (matrix jobs on separate

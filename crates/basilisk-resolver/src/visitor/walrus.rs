@@ -7,12 +7,6 @@
 //! *expression* — `if item := prices.get(asset):` binds `item` from the `if`
 //! test — which made its target invisible to those collectors and so undefined
 //! to `names_undefined` (GitHub #339).
-//!
-//! This is the workspace's ONE walrus-target collector: the resolver's own
-//! scope analysis, the checker's narrow-invalidation
-//! ([TYPEINF-NARROWING-ASSIGN]), and the checker's definite-assignment walk
-//! ([NARROWPLAN-INTEGRATION] Step 8) all call it, so they cannot disagree
-//! about what a walrus binds.
 
 use ruff_python_ast::visitor::{walk_elif_else_clause, walk_expr, walk_stmt, Visitor};
 use ruff_python_ast::{Comprehension, ElifElseClause, Expr, Stmt};
@@ -20,8 +14,8 @@ use ruff_python_ast::{Comprehension, ElifElseClause, Expr, Stmt};
 use super::class_info_ext::expr_simple_name;
 
 /// How much of the visited code the caller may treat as evaluated.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Reach {
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Reach {
     /// Everything, however deeply nested or conditional: the target is bound
     /// *somewhere* in the body.
     Any,
@@ -38,8 +32,7 @@ pub enum Reach {
 /// Nested `def`/`class`/`lambda` scopes are excluded: a walrus there binds in
 /// *that* scope. Comprehensions are not — PEP 572 deliberately exempts the
 /// walrus from the comprehension's own scope so it binds in the enclosing one.
-#[must_use]
-pub fn collect_walrus_targets(stmts: &[Stmt], reach: Reach) -> Vec<String> {
+pub(super) fn collect_walrus_targets(stmts: &[Stmt], reach: Reach) -> Vec<String> {
     let mut collector = WalrusTargets {
         reach,
         out: Vec::new(),

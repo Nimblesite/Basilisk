@@ -28,30 +28,9 @@ pub struct UnhashableHashCallViolation {
 #[derive(Debug, Clone, PartialEq)]
 pub struct CallSite {
     /// The name of the called function (simple name only; complex callees ignored).
-    ///
-    /// A RENDERING, for diagnostic message text. Which class or function the
-    /// callee DENOTES is [`Self::callee_class_site`].
     pub callee: String,
-    /// DEFINITION SITE of the class the callee denotes, when it denotes a
-    /// class this module defines.
-    ///
-    /// Resolved through the binding table at the CALL's own offset, so an
-    /// alias (`Shorthand = Widget; Shorthand()`) reaches `Widget`, and a name
-    /// rebound before the call reaches whatever it is bound to there. `None`
-    /// means "not a local class" — an imported callee, a plain function, a
-    /// computed callee — and is an abstention, never "no such class".
-    pub callee_class_site: Option<Span>,
     /// Receiver of a supported bound method call, if this is `receiver.method(...)`.
     pub receiver: Option<CallReceiver>,
-    /// DEFINITION SITE of the class the RECEIVER denotes, when the receiver is
-    /// a `C.method(...)` class-object access or a `C().method(...)`
-    /// constructor call on a class this module defines.
-    ///
-    /// [`CallReceiver::Name`] and [`CallReceiver::Constructor`] carry the
-    /// receiver's SPELLING; this is that expression resolved through the
-    /// binding table at the call's own offset. `None` for a literal receiver,
-    /// an imported class, or a name this module cannot resolve to a class.
-    pub receiver_class_site: Option<Span>,
     /// Kinds and spans of positional arguments at the call site.
     pub args: Vec<(RhsKind, Span)>,
     /// Keyword arguments at the call site: `(name, rhs_kind)` pairs.
@@ -77,11 +56,6 @@ pub enum CallReceiver {
     BytesLiteral,
     /// A named variable or parameter whose annotation/inferred type is resolved later.
     Name(String),
-    /// A direct constructor call on a named callee (`C().method(...)`): the
-    /// receiver is a fresh *instance* of `C`, so instance-method binding
-    /// consumes the implicit `self` parameter
-    /// ([#382](https://github.com/Nimblesite/Basilisk/issues/382)).
-    Constructor(String),
 }
 
 /// A `NamedTuple` definition collected from module-level code.
@@ -337,10 +311,6 @@ pub struct TypeStatementInfo {
     pub rhs_span: Span,
     /// Span of the name token.
     pub name_span: Span,
-    /// The statement's own type-parameter names (`T` in `type X[T] = rhs`).
-    /// PEP 695 binds these in the alias's annotation scope, shadowing any
-    /// module-level binding of the same name inside the RHS.
-    pub param_names: Vec<String>,
 }
 
 /// Information about an `Annotated[...]` subscription with too few arguments.
@@ -402,7 +372,7 @@ pub struct TypeAliasDefInfo {
     pub name: String,
     /// All simple names referenced in the RHS expression (includes both `TypeVar`s and non-`TypeVar`s).
     pub rhs_names: Vec<String>,
-    /// The base name of the RHS expression, if it is a subscript.
+    /// The base name of the RHS expression, if it is a subscript (e.g. `"Generic"` from `Generic[T]`).
     pub rhs_base_name: Option<String>,
     /// Type argument names from the RHS subscript expression.
     pub rhs_type_arg_names: Vec<String>,

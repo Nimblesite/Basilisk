@@ -523,34 +523,29 @@ c: int = "hello"
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// E0014 check_vars: assignment through a type alias
+// E0014 check_vars: type-alias annotation skip (lines 289–290)
 // ═══════════════════════════════════════════════════════════════════════
 
-/// Kills mutants of `check_vars`'s declared-type resolution. E0014 obtains the
-/// declared type from the [TYPEINF-ANNOTATION-RESOLUTION] cascade, which
-/// expands a PEP 695 `type` alias transparently — so `a: loweralias = "hello"`
-/// is judged against `list[int]` and FIRES. This replaced a blanket skip of
-/// every alias-annotated assignment, which suppressed exactly this error
-/// ([#378](https://github.com/Nimblesite/Basilisk/issues/378)); a mutant that
-/// stops expanding the alias, or that reinstates the skip, drops the count
-/// from 2 to 1 and is caught here.
-///
-/// `TypeAliasType(...)` is a *call*, not a type expression, so the cascade
-/// cannot expand it: that name stays gradual and its assignment stays silent —
-/// pinning the boundary between "resolved, therefore judged" and "unresolved,
-/// therefore gradual". A mutant that guesses a type for the unresolved name
-/// raises the count to 3.
+/// Kills mutant: e0014/mod.rs:290 `replace || with &&` in the type-alias skip
+/// guard (`skip.type_alias.contains(base) || skip.type_alias_type.contains(..)`).
+/// E0014 cannot evaluate an expanded alias, so an annotation referencing a PEP
+/// 695 `type` alias OR a `TypeAliasType(...)` alias must be skipped (no E0014),
+/// while a genuine `int`-vs-`str` mismatch must still fire. Each alias form sets
+/// exactly ONE operand true, so flipping `||`→`&&` makes neither skip: both
+/// alias lines would then be processed and wrongly fire E0014, raising the count
+/// from 1 to 3 — observably killing the mutant. Keeping both forms also pins the
+/// individual operands against future deletion mutants.
 #[mutation_safe(rule = "assignment_compatibility", fns = "check_vars")]
 #[test]
-fn mutant_e0014_type_alias_expansion() -> Result<(), Box<dyn std::error::Error>> {
+fn mutant_e0014_type_alias_skip() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 from typing import TypeAliasType
 
-# PEP 695 type alias — the cascade expands it to `list[int]`.
+# PEP 695 type alias (lowercase name) → only `skip.type_alias` matches.
 type loweralias = list[int]
 a: loweralias = "hello"
 
-# TypeAliasType alias — a call, not a type expression: gradual.
+# TypeAliasType alias → only `skip.type_alias_type` matches.
 Bar = TypeAliasType("Bar", int)
 b: Bar = "hello"
 
@@ -558,28 +553,17 @@ b: Bar = "hello"
 c: int = "hello"
 "#;
     let diagnostics = run(source)?;
-    let messages: Vec<_> = diagnostics
-        .iter()
-        .filter(|d| d.code.code == "assignment_compatibility")
-        .map(|d| d.message.clone())
-        .collect();
+    let e0014 = assignment_compatibility_count(&diagnostics);
     assert_eq!(
-        messages.len(),
-        2,
-        "the alias-expanded `a` and the direct `c` both fire; the gradual `b` \
-         does not: {messages:?}"
-    );
-    assert!(
-        messages.iter().any(|m| m.contains("`a`")),
-        "the alias must expand to `list[int]` and reject a str: {messages:?}"
-    );
-    assert!(
-        messages.iter().any(|m| m.contains("`c`")),
-        "the direct int-vs-str mismatch must still fire: {messages:?}"
-    );
-    assert!(
-        !messages.iter().any(|m| m.contains("`b`")),
-        "an unexpandable `TypeAliasType` name is gradual, never guessed: {messages:?}"
+        e0014,
+        1,
+        "both alias-annotated assignments are skipped; only `c: int = \"hello\"` \
+         fires, got {e0014}: {:?}",
+        diagnostics
+            .iter()
+            .filter(|d| d.code.code == "assignment_compatibility")
+            .map(|d| &d.message)
+            .collect::<Vec<_>>()
     );
     Ok(())
 }

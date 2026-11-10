@@ -1,23 +1,29 @@
 //! Implements [CHKARCH-ARCH-PIPELINE]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-ARCH-PIPELINE
 //! AST visitor that collects function definitions and module-level information.
 
+const ENUM_BASES: &[&str] = &["Enum", "IntEnum", "StrEnum", "Flag", "IntFlag", "ReprEnum"];
+
 mod annotations;
 mod assert_narrow;
 mod assigns;
+mod call_return;
 mod calls_and_reveal;
 mod class_info;
 mod class_info_ext;
 mod core;
 mod dataclass;
+mod enum_checks;
 mod final_readonly;
 mod final_readonly_ext;
 mod function_info;
 mod generics;
 mod historical;
+mod key_lambda;
 mod module_level;
 mod narrowing;
 mod pep695_scoping;
 mod protocol;
+mod protocol_ext;
 mod type_alias;
 mod typeddict;
 mod typeddict_ext;
@@ -25,7 +31,7 @@ mod typeddict_schema;
 mod typevar;
 mod unhashable;
 pub(crate) mod walks;
-pub(crate) mod walrus;
+mod walrus;
 mod yield_exprs;
 
 use basilisk_parser::ParsedModule;
@@ -39,34 +45,25 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
     let mut imports = Vec::new();
     let mut match_stmts = Vec::new();
 
-    // Which `typing` symbol a name denotes is decided by resolving it through
-    // the module's own imports, never by its spelling — `KW_ONLY as KO`,
-    // `dataclasses.KW_ONLY`, and a locally-defined `KW_ONLY` all answer
-    // correctly. Implements [RESOLV-CANONICAL-BINDING].
-    let bindings = basilisk_canonical::BindingTable::from_module(&module.ast.body);
+    core::collect_from_body(
+        &module.ast.body,
+        &mut functions,
+        &mut classes,
+        &mut module_vars,
+        &mut imports,
+        &mut match_stmts,
+        true,
+    );
 
-    let mut sinks = core::CollectSinks {
-        functions: &mut functions,
-        classes: &mut classes,
-        module_vars: &mut module_vars,
-        imports: &mut imports,
-        match_stmts: &mut match_stmts,
-    };
-    core::collect_from_body(&bindings, &module.ast.body, &mut sinks, true);
+    dataclass::apply_dataclass_transform(&module.ast.body, &mut classes, &functions);
 
-    let calls = calls_and_reveal::collect_calls_from_stmts(&bindings, &module.ast.body);
-    // Which callee is a type-parameter factory is decided by resolving the
-    // callee node through the same bindings, so `TypeVar as TV` and
-    // `typing.TypeVar` answer identically and a locally-defined `TypeVar` does
-    // not answer at all.
-    let typevar_calls = typevar::collect_typevar_calls(&bindings, &module.ast.body);
+    let calls = calls_and_reveal::collect_calls_from_stmts(&module.ast.body);
+    let typevar_calls = typevar::collect_typevar_calls(&module.ast.body);
     reclassify_generic_params(&mut classes, &typevar_calls);
-    propagate_enum_bases(&mut classes);
 
-    let collected = collect_analysis_results(module, &bindings, &classes);
+    let collected = collect_analysis_results(module, &classes, &functions);
     build_resolved_module(
         module,
-        bindings,
         functions,
         classes,
         module_vars,
@@ -76,44 +73,6 @@ pub(crate) fn collect(module: &ParsedModule) -> ResolvedModule {
         typevar_calls,
         collected,
     )
-}
-
-/// Propagate enum-ness through module-local bases.
-///
-/// `ClassInfo::is_enum` promises "directly or transitively inherits from an
-/// `Enum` family class" (`scope/class_types.rs`), matching the runtime
-/// (<https://docs.python.org/3/library/enum.html#enum.Enum>). Direct bases
-/// were classified through binding resolution when each class was collected;
-/// this pass closes the relation over the module's own class hierarchy.
-///
-/// REBUILT on definition-site identity. The deleted version closed the
-/// relation over a `HashSet<String>` of class NAMES tested against
-/// `ClassInfo::bases`, a `Vec<String>` of renderings, so it made two errors at
-/// once: `StoneFamily = MineralFamily; class Grade(StoneFamily)` named no
-/// class in the set and LOST a real enum edge, while a class whose base name
-/// had since been rebound to something else matched the set anyway and GAINED
-/// an edge the program does not have. [`ClassGraph`] answers from resolved
-/// bases keyed on definition site, and closes the relation transitively on its
-/// own, so no fixpoint loop is needed.
-fn propagate_enum_bases(classes: &mut [crate::scope::ClassInfo]) {
-    let enum_sites: std::collections::HashSet<crate::scope::Span> = {
-        let graph = crate::scope::ClassGraph::new(classes);
-        classes
-            .iter()
-            .filter(|class| {
-                graph
-                    .ancestors(class)
-                    .into_iter()
-                    .any(|ancestor| ancestor.is_enum)
-            })
-            .map(|class| class.name_span)
-            .collect()
-    };
-    for class in classes.iter_mut() {
-        if enum_sites.contains(&class.name_span) {
-            class.is_enum = true;
-        }
-    }
 }
 
 /// Reclassify generic params that are not actual `TypeVar`s.
@@ -164,63 +123,51 @@ struct AnalysisResults {
 
 fn collect_analysis_results(
     module: &ParsedModule,
-    bindings: &basilisk_canonical::BindingTable,
     classes: &[crate::scope::ClassInfo],
+    functions: &[crate::scope::FunctionInfo],
 ) -> AnalysisResults {
     let stmts = &module.ast.body;
     let source = &module.source;
 
-    let class_graph = crate::scope::ClassGraph::new(classes);
+    let typeddict_class_names: std::collections::HashSet<&str> = classes
+        .iter()
+        .filter(|c| c.is_typed_dict)
+        .map(|c| c.name.as_str())
+        .collect();
     let mut isinstance_typeddict_spans =
-        typeddict_ext::collect_isinstance_typeddict_violations(bindings, stmts, &class_graph);
-    isinstance_typeddict_spans.extend(typevar::collect_typevar_bound_typeddict_violations(
-        bindings, stmts,
-    ));
+        typeddict_ext::collect_isinstance_typeddict_violations(stmts, &typeddict_class_names);
+    isinstance_typeddict_spans.extend(typevar::collect_typevar_bound_typeddict_violations(stmts));
 
-    // Fields initialised to an empty collection below had their collectors
-    // deleted as text-matched logic.
-    //
-    // READ THIS BEFORE TRUSTING ANY RULE THAT CONSUMES THEM. An earlier
-    // version of this comment claimed the downstream rules were "INERT —
-    // never silently satisfied". That was false, and it was false in the
-    // worst direction: `Vec::new()` is not a signal, it is an ANSWER. A rule
-    // handed `newtype_calls: Vec::new()` iterates nothing, finds nothing, and
-    // reports the module clean — indistinguishable from a module that genuinely
-    // contains no `NewType` call. Every such rule is therefore SILENTLY
-    // SATISFIED on every input, and the checker reports a pass it never
-    // computed.
-    //
-    // This is a known, unrepaired defect, not a design. The honest shape is a
-    // per-collector "not computed" state that makes the consuming rule abstain
-    // visibly; that state does not exist yet, and until it does these fields
-    // are lies told in a type the compiler cannot object to. Do not add a new
-    // `Vec::new()` here, and do not cite this comment as licence for one.
-    // Tracking: [ASTREBUILD-PHASE-RESOLVER],
-    // docs/plans/CHECKER-AST-RECONSTRUCTION-PLAN.md.
     AnalysisResults {
         reveal_type_calls: calls_and_reveal::collect_reveal_type_calls(stmts),
         assert_type_calls: calls_and_reveal::collect_assert_type_calls_from_stmts(stmts, source),
-        typeddict_calls: Vec::new(),
-        newtype_calls: Vec::new(),
-        namedtuple_defs: Vec::new(),
-        multiple_unbounded_tuple_spans: annotations::collect_multiple_unbounded_tuple_spans(
-            bindings, stmts,
-        ),
+        typeddict_calls: typeddict::collect_typeddict_calls(stmts),
+        newtype_calls: type_alias::collect_newtype_calls(stmts),
+        namedtuple_defs: type_alias::collect_namedtuple_defs(stmts, source),
+        multiple_unbounded_tuple_spans: annotations::collect_multiple_unbounded_tuple_spans(stmts),
         module_bare_assignments: assigns::collect_module_bare_assignments(stmts),
         module_attr_assignments: assigns::collect_module_attr_assignments(stmts),
-        final_issues: final_readonly_ext::collect_final_violations(bindings, stmts, classes),
-        float_param_int_attr_accesses: Vec::new(),
-        literal_string_enum_mismatches: Vec::new(),
-        readonly_issues: final_readonly::collect_readonly_violations(bindings, stmts, classes),
-        protocol_self_issues: Vec::new(),
-        protocol_instantiation_issues: Vec::new(),
+        final_issues: final_readonly_ext::collect_final_violations(stmts, classes, source),
+        float_param_int_attr_accesses: module_level::collect_float_param_int_attr_accesses(
+            stmts, source,
+        ),
+        literal_string_enum_mismatches: enum_checks::collect_literal_string_enum_mismatches(
+            stmts, source,
+        ),
+        readonly_issues: final_readonly::collect_readonly_violations(stmts, classes, source),
+        protocol_self_issues: protocol::collect_protocol_self_violations(
+            stmts, classes, functions, source,
+        ),
+        protocol_instantiation_issues: protocol::collect_protocol_instantiation_violations(
+            stmts, classes,
+        ),
         isinstance_typeddict_spans,
-        typeddict_key_issues: typeddict::collect_typeddict_key_violations(bindings, stmts, classes),
+        typeddict_key_issues: typeddict::collect_typeddict_key_violations(stmts, classes, source),
         generic_subscript_sites: generics::collect_generic_subscript_sites(stmts),
         type_alias_defs: type_alias::collect_type_alias_defs(stmts),
         unhashable_hash_calls: unhashable::collect_unhashable_hash_calls(stmts, classes),
-        protocol_rtc_issues: Vec::new(),
-        generator_issues: Vec::new(),
+        protocol_rtc_issues: protocol_ext::collect_protocol_rtc_violations(stmts, classes),
+        generator_issues: module_level::collect_generator_violations(functions, source),
     }
 }
 
@@ -230,7 +177,6 @@ fn collect_analysis_results(
 )]
 fn build_resolved_module(
     module: &ParsedModule,
-    bindings: basilisk_canonical::BindingTable,
     functions: Vec<crate::scope::FunctionInfo>,
     classes: Vec<crate::scope::ClassInfo>,
     module_vars: Vec<crate::scope::VariableInfo>,
@@ -241,27 +187,18 @@ fn build_resolved_module(
     results: AnalysisResults,
 ) -> ResolvedModule {
     let stmts = &module.ast.body;
-    // `TypeAliasType` validation was deleted with its text-matched recogniser
-    // and depended on the equally-deleted `TypeVar` census. This empty vector
-    // is read downstream as "no violations found", NOT as "not computed" — the
-    // rule is silently satisfied on every input. See the banner in
-    // `analyse_module` above. Pending [ASTREBUILD-PHASE-RESOLVER].
-    let type_alias_type_violations = Vec::new();
-    // The `key=` lambda tuple-index collector identified its callees through a
-    // spelling whitelist (`sorted`/`min`/`max`/`sort`) and was deleted with it.
-    // As above: this reads downstream as a clean result, not as an abstention.
-    // Pending [ASTREBUILD-PHASE-RESOLVER].
-    let tuple_index_violations: Vec<crate::scope::TupleIndexViolation> = Vec::new();
-    // Computed before `bindings` is moved into the module: which class an
-    // annotation's subscript head denotes is a binding question.
-    let invalid_string_annotations = annotations::collect_invalid_annotations(&bindings, stmts);
+    let type_alias_type_violations = {
+        let tv_names: std::collections::HashSet<String> =
+            typevar_calls.iter().map(|tv| tv.name.clone()).collect();
+        type_alias::collect_type_alias_type_violations(stmts, &tv_names)
+    };
+    let tuple_index_violations = key_lambda::collect_key_lambda_tuple_violations(
+        stmts,
+        &functions,
+        &module_vars,
+        &module.source,
+    );
     ResolvedModule {
-        // Filled by the import-resolution layer, which owns the typeshed
-        // generation. `None` here is the literal truth: the resolver has not
-        // been told which builtin scope this module is checked against, and
-        // an empty set would claim it had been told and found nothing.
-        builtin_names: None,
-        bindings: crate::scope::ModuleBindings::new(bindings),
         functions,
         classes,
         module_vars,
@@ -276,7 +213,6 @@ fn build_resolved_module(
                 counts
             },
         ),
-        cast_calls: Vec::new(),
         calls,
         typevar_calls,
         reveal_type_calls: results.reveal_type_calls,
@@ -290,23 +226,26 @@ fn build_resolved_module(
         module_attr_accesses: module_level::collect_module_attr_accesses(stmts),
         module_order_comparisons: module_level::collect_module_order_comparisons(stmts),
         readonly_violations: results.readonly_issues,
-        annotated_direct_call_spans: Vec::new(),
+        annotated_direct_call_spans: module_level::collect_annotated_direct_calls(stmts),
         imported_final_names: final_readonly::collect_imported_final_names(stmts, &module.path),
-        imported_final_methods: std::collections::HashMap::new(),
-        type_alias_type_calls: Vec::new(),
+        imported_final_methods: final_readonly::collect_imported_final_methods(stmts, &module.path),
+        type_alias_type_calls: type_alias::collect_type_alias_type_calls(stmts),
         type_alias_type_violations,
         type_statements: type_alias::collect_type_statements(stmts),
         annotated_too_few_args: Vec::new(),
         namedtuple_defs: results.namedtuple_defs,
         float_param_int_attr_accesses: results.float_param_int_attr_accesses,
         literal_string_enum_mismatches: results.literal_string_enum_mismatches,
-        enum_value_type_violations: Vec::new(),
+        enum_value_type_violations: enum_checks::collect_enum_value_type_violations(
+            stmts,
+            &module.source,
+        ),
         local_classvar_violations: Vec::new(),
         pep695_bound_violations: generics::collect_pep695_bound_violations(stmts),
         historical_positional_violations: historical::collect_historical_positional_violations(
             stmts,
         ),
-        invalid_string_annotations,
+        invalid_string_annotations: annotations::collect_invalid_annotations(stmts),
         protocol_self_violations: results.protocol_self_issues,
         protocol_instantiation_violations: results.protocol_instantiation_issues,
         isinstance_typeddict_violations: results.isinstance_typeddict_spans,

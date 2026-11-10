@@ -273,62 +273,48 @@ pub(super) fn check_type_alias_in_function(
 // Violation 6: a circular `type` alias definition
 // ---------------------------------------------------------------------------
 
-/// A `type` alias is circular when its recursion fails the Stage 3
-/// acceptance conditions ([TYPEINF-TARGET-TYPELEVEL],
-/// [`crate::tyeval::accept`]): **unguarded** self-reference (`type X = X`,
-/// `type X = int | X` — union arms do not guard, so no weak head normal
-/// form exists) or **non-regular** self-application (arguments grow per
-/// unfold, e.g. `type R[T] = set[R[list[T]]]`). Ordinary guarded recursion
-/// — `type J = list[J]`, the canonical `JsonValue` union, identity- or
-/// ground-argument applications — is the PEP 695-mandated valid form and
-/// produces NO diagnostic
-/// ([#371](https://github.com/Nimblesite/Basilisk/issues/371)).
-///
-/// Important contract gap: [PEP 695 § Generic type alias](https://peps.python.org/pep-0695/#generic-type-alias)
-/// does not classify non-regular recursion as a scoping error or require
-/// recursive applications to reuse identical arguments. Emitting the default
-/// `generics_syntax_scoping` diagnostic for `Acceptance::NonRegular` is tracked
-/// as [#383](https://github.com/Nimblesite/Basilisk/issues/383) and pinned red
-/// in `tests/checker/aliases_recursive_tests.rs`; any rejection must be a
-/// separately named, opt-in Basilisk policy.
+/// A `type` alias is circular when it references itself with no type parameters,
+/// or recurses through *different* type arguments than its own parameters.
 pub(super) fn check_type_alias_circular(
-    module: &basilisk_resolver::ResolvedModule,
     scoping: &Pep695Scoping,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    use crate::tyeval::{classify, lower_module_aliases, Acceptance};
-
-    let mut reported: HashSet<String> = HashSet::new();
-    if let Some(parsed) = crate::rules::shared::parse_module(module) {
-        for lowered in lower_module_aliases(&parsed.ast) {
-            let detail = match classify(&lowered.name, &lowered.def) {
-                Acceptance::Accepted => continue,
-                Acceptance::Unguarded => "references itself",
-                Acceptance::NonRegular => "references itself with different type arguments",
-            };
-            let _ = reported.insert(lowered.name.clone());
+    for alias in &scoping.aliases {
+        if alias.params.is_empty() {
+            if alias.rhs_refs.iter().any(|r| r == &alias.name) {
+                push_circular(alias, "references itself", path, diagnostics);
+            }
+            continue;
+        }
+        let Some(args) = &alias.self_ref_args else {
+            continue;
+        };
+        let param_names: Vec<&str> = alias.params.iter().map(|p| p.name.as_str()).collect();
+        let identity = args.len() == param_names.len()
+            && args
+                .iter()
+                .zip(&param_names)
+                .all(|(arg, param)| arg == param);
+        if !identity {
             push_circular(
-                &lowered.name,
-                crate::span_util::text_range_to_span(lowered.name_range),
-                detail,
+                alias,
+                "references itself with different type arguments",
                 path,
                 diagnostics,
             );
         }
     }
 
-    check_mutual_alias_cycles(scoping, &reported, path, diagnostics);
+    check_mutual_alias_cycles(scoping, path, diagnostics);
 }
 
 /// Detect *mutual* / longer cycles between aliases connected by bare references
 /// (`type A = B`, `type B = A`). Only top-level bare references count — recursion
 /// through a container (`type A = list[B]`) terminates and is legitimate, so it
-/// is excluded via `rhs_bare_refs`. Aliases in `already_reported` were flagged
-/// by the acceptance pass and are skipped — one diagnostic per alias.
+/// is excluded via `rhs_bare_refs`.
 fn check_mutual_alias_cycles(
     scoping: &Pep695Scoping,
-    already_reported: &HashSet<String>,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
@@ -341,12 +327,9 @@ fn check_mutual_alias_cycles(
         .collect();
 
     for alias in &scoping.aliases {
-        if !already_reported.contains(alias.name.as_str())
-            && reaches_self(&alias.name, alias, &alias_by_name)
-        {
+        if reaches_self(&alias.name, alias, &alias_by_name) {
             push_circular(
-                &alias.name,
-                alias.name_span,
+                alias,
                 "is part of a circular alias chain",
                 path,
                 diagnostics,
@@ -384,20 +367,18 @@ fn reaches_self(
 }
 
 fn push_circular(
-    name: &str,
-    name_span: Span,
+    alias: &Pep695AliasDef,
     detail: &str,
     path: &str,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     diagnostics.push(error_diagnostic_owned(
         CODE.clone(),
-        format!("Circular type alias definition: `{name}` {detail}"),
-        name_span,
+        format!("Circular type alias definition: `{}` {detail}", alias.name),
+        alias.name_span,
         path,
         Some(
-            "A recursive type alias must reference itself beneath a type constructor \
-             (e.g. `type Json = int | list[Json]`) with non-growing type arguments"
+            "Recursive type aliases must reference themselves with the same type parameters"
                 .to_owned(),
         ),
         None,

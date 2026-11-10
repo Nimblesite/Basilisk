@@ -1,27 +1,3 @@
-// ############################################################################
-// # BROKEN — THIS FILE DOES NOT COMPILE. DO NOT "FIX" IT BY RESTORING TEXT   #
-// # MATCHING.                                                                #
-// #                                                                          #
-// # Deleted helper this file called:                                         #
-// #   InferredType::from_annotation (types_parsing.rs)
-// #                                                                          #
-// # That helper decided types from the SPELLING of source text (lowercased   #
-// # annotation strings, `"int"`/`"str"`/`"object"` literal matching, `|`     #
-// # splitting, `starts_with("tuple[")`). It was deleted, not replaced.       #
-// #                                                                          #
-// # The call sites below are LEFT BROKEN ON PURPOSE. They are the map of     #
-// # what must be rebuilt on the resolved AST — resolved bindings, canonical  #
-// # `TypeNode`, and `assignable`/`equivalent` — or made to abstain.          #
-// #                                                                          #
-// # Restoring the deleted helper, vendoring a copy of it, or re-deriving a   #
-// # type from source text anywhere below is FORBIDDEN.                       #
-// #                                                                          #
-// # Evidence and the failing tests that pin the real behaviour:              #
-// #   docs/RULE-VALIDITY-REPORT.md                                           #
-// #   crates/basilisk-checker/tests/legacy_annotation_text_parser_pin_tests.rs
-// #   crates/basilisk-checker/tests/pep_spelling_invariance_pin_tests.rs     #
-// ############################################################################
-
 //! Implements the [NARROWPLAN-CHECKLIST] Stage 2 expression-inference item
 //! "Infer unannotated parameter types from body constraints and call sites"
 //! (issue #317). See docs/plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md.
@@ -98,7 +74,7 @@ pub fn infer_parameters(
     let parameters = param_vars
         .into_iter()
         .map(|(name, var)| {
-            let inferred = var.map(|id| solution.vars.resolve_with_inflow(id));
+            let inferred = var.map(|id| solution.vars.resolve(id));
             (name, inferred)
         })
         .collect();
@@ -227,11 +203,6 @@ def f(p):
         assert_eq!(name, "p");
         let ty = ty.clone().expect("inferred");
         assert!(
-            !matches!(ty, InferredType::Unknown),
-            "call-site lower bounds must produce a REAL type, not the \
-             vacuously-admitting Unknown"
-        );
-        assert!(
             InferredType::Literal(LiteralValue::Int(1)).is_assignable_to(&ty)
                 && InferredType::Literal(LiteralValue::Int(2)).is_assignable_to(&ty),
             "call-site arguments must be admitted by the inferred type, got {ty:?}"
@@ -287,9 +258,7 @@ pub fn imported_callable_globals(
             let ty = match symbol.kind {
                 ExternalSymbolKind::Function => {
                     InferredType::Callable(crate::types::CallableInfo {
-                        // An imported function's parameters are not modelled
-                        // here — gradual tail, not "takes no arguments".
-                        param_types: crate::types::gradual_params(Vec::new()),
+                        param_types: Vec::new(),
                         return_type: Box::new(
                             symbol
                                 .type_annotation

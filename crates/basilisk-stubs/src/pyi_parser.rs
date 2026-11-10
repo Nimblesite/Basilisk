@@ -16,8 +16,6 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use basilisk_canonical::{BindingTable, BranchView, TypingForm};
-
 use ruff_python_ast::{
     Expr, Operator, Stmt, StmtAnnAssign, StmtAssign, StmtAugAssign, StmtFunctionDef, StmtIf,
 };
@@ -34,7 +32,6 @@ use self::dunder_all::{
 use self::guard::feasible_branches;
 use self::syntax::{
     ann_assign_target_name, expr_to_annotation, extract_decorator_names, extract_params,
-    has_decorator_form,
 };
 
 /// Errors that can occur during `.pyi` parsing.
@@ -172,15 +169,6 @@ pub fn platform_guard_literals(
     Ok(guard::platform_guard_literals(&module_ast.body))
 }
 
-/// Coerce a closure to the higher-ranked branch-filter signature
-/// [`basilisk_canonical::BranchFilter`] expects.
-fn branch_selector<F>(select: F) -> F
-where
-    F: for<'a> Fn(&'a StmtIf) -> BranchView<'a>,
-{
-    select
-}
-
 fn parse_pyi_source_with_target(
     content: &str,
     path: &Path,
@@ -196,25 +184,7 @@ fn parse_pyi_source_with_target(
                 message: err.to_string(),
             })?
             .ast;
-    // Two passes ([RESOLV-CANONICAL-BINDING]): a preliminary whole-module
-    // table resolves the guard expressions themselves (`sys.version_info`,
-    // `sys.platform`), then the real table is built with statically
-    // infeasible branches EXCLUDED — mutually exclusive version branches
-    // never execute together, and a symbol bound only in the branch the
-    // target rules out must not control resolution in the selected one.
-    let preliminary = BindingTable::from_module(&module_ast.body);
-    let select_branch = branch_selector(|if_stmt| {
-        let branches = feasible_branches(&preliminary, if_stmt, target.as_ref());
-        match branches.as_slice() {
-            [only] => only.map_or(BranchView::NoBranch, BranchView::Only),
-            _ => BranchView::AllBranches,
-        }
-    });
-    let bindings = Arc::new(BindingTable::from_module_with_branch_filter(
-        &module_ast.body,
-        &select_branch,
-    ));
-    let mut extractor = StubExtractor::new(module_name, path, source, tier, target, bindings);
+    let mut extractor = StubExtractor::new(module_name, path, source, tier, target);
     extractor.visit_body(&module_ast.body);
     Ok(extractor.into_module())
 }
@@ -245,9 +215,6 @@ struct StubExtractor {
     reexported_names: Vec<String>,
     star_reexports: Vec<StarReexport>,
     module_bindings: HashMap<String, StarReexport>,
-    /// What each name in this stub refers to. Shared behind `Arc` so the
-    /// per-branch clones in [`Self::visit_if`] stay refcount bumps.
-    bindings: Arc<BindingTable>,
 }
 
 impl StubExtractor {
@@ -257,7 +224,6 @@ impl StubExtractor {
         source: StubSource,
         tier: StubTier,
         target: Option<StubTarget>,
-        bindings: Arc<BindingTable>,
     ) -> Self {
         Self {
             module_name: module_name.to_owned(),
@@ -273,7 +239,6 @@ impl StubExtractor {
             reexported_names: Vec::new(),
             star_reexports: Vec::new(),
             module_bindings: HashMap::new(),
-            bindings,
         }
     }
 
@@ -320,7 +285,7 @@ impl StubExtractor {
     /// so the clone is a table copy plus refcount bumps and the intersection
     /// short-circuits untouched entries by pointer identity.
     fn visit_if(&mut self, if_stmt: &StmtIf) {
-        let branches = feasible_branches(&self.bindings, if_stmt, self.target.as_ref());
+        let branches = feasible_branches(if_stmt, self.target.as_ref());
         if branches.len() == 1 {
             if let Some(body) = branches.first().and_then(|body| *body) {
                 self.visit_body(body);
@@ -503,8 +468,11 @@ impl StubExtractor {
         Some(target)
     }
 
+    // Implements [STUBRES-PYI] — `@overload` is the one decorator that is
+    // significant for stub extraction: overload variants are grouped separately.
     fn visit_function(&mut self, func: &StmtFunctionDef, class_name: Option<&str>) {
         let decorators = extract_decorator_names(&func.decorator_list);
+        let is_overload = decorators.iter().any(|d| d == "overload");
         let params = extract_params(&func.parameters);
         let return_type = func.returns.as_ref().map(|ret| expr_to_annotation(ret));
 
@@ -513,12 +481,8 @@ impl StubExtractor {
             receiver: None,
             params,
             return_type,
+            is_overload,
             is_async: func.is_async,
-            is_overload: has_decorator_form(
-                &self.bindings,
-                &func.decorator_list,
-                TypingForm::Overload,
-            ),
             decorators,
             class_name: class_name.map(str::to_owned),
             source_span: StubSpan {
@@ -528,7 +492,7 @@ impl StubExtractor {
         };
 
         let name = func.name.to_string();
-        if stub_fn.is_overload {
+        if is_overload {
             Arc::make_mut(self.overloads.entry(name).or_default()).push(stub_fn);
         } else {
             let _ = self.functions.insert(name, Arc::new(stub_fn));

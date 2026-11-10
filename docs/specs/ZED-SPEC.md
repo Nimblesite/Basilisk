@@ -13,7 +13,7 @@ Zed extensions are Rust compiled to WASM with a deliberately narrow API:
 | Capability | Available | Mechanism |
 |---|---|---|
 | LSP integration | Yes | `language_server_command()` on Extension trait |
-| Tree-sitter grammars | Yes, but unused | A `languages/` dir would *replace* Zed's built-in Python, not extend it — see [ZED-TREESITTER](#ZED-TREESITTER) |
+| Tree-sitter grammars | Yes | `languages/` directory with `.scm` queries |
 | DAP debugging | Yes | `get_dap_binary()` on Extension trait |
 | Slash commands | Yes | `run_slash_command()` on Extension trait |
 | Themes | Yes | `themes/` directory |
@@ -72,13 +72,19 @@ basilisk-zed/
     logic_tests.rs          # Unit tests for logic.rs; #[path]-included as `mod tests`
   tests/
     fixtures/               # Python sample files (clean, type_error, completions)
-  themes/
-    basilisk-dark.json
+  languages/
+    python/
+      config.toml
+      highlights.scm        # tree-sitter-python queries
+      brackets.scm
+      outline.scm
+      indents.scm
+      injections.scm
+      textobjects.scm
+      runnables.scm
   debug_adapter_schemas/
     basilisk-debug.json
 ```
-
-No `languages/` directory — the extension binds to Zed's built-in Python language rather than shadowing it. See [ZED-TREESITTER](#ZED-TREESITTER).
 
 ### `extension.toml` {#ZED-EXTTOML}
 
@@ -91,7 +97,7 @@ authors = ["Basilisk Contributors"]
 description = "Strict-by-default Python type checker with debugging and profiling"
 repository = "https://github.com/Nimblesite/Basilisk"
 
-# No [grammars.python] block and no languages/ dir — binds to Zed's built-in Python. See [ZED-GRAMMAR].
+# No [grammars.python] block — reuses Zed's built-in tree-sitter-python grammar. See [ZED-GRAMMAR].
 
 [language_servers.basilisk]
 name = "Basilisk"
@@ -271,19 +277,25 @@ Three mechanisms:
 2. **Slash Commands** — `/profile` and `/profstop` via the AI assistant panel.
 3. **External Viewer** — LSP generates speedscope JSON and opens it in the browser.
 
-### Language Reuse {#ZED-TREESITTER}
+### Tree-sitter Queries {#ZED-TREESITTER}
 
-The extension ships **no** `languages/` directory and **no** tree-sitter queries. Syntax highlighting, brackets, outline, indents, injections, textobjects, and runnables all come from Zed's built-in Python language, untouched.
+The extension ships tree-sitter-python queries:
 
-This is not a gap — it is the only correct shape. Zed keys languages by name, and `LanguageRegistry::register_language` → [`AvailableLanguages::register`](https://github.com/zed-industries/zed/blob/main/crates/language/src/available_languages.rs) **overwrites** an existing entry's `grammar`, `matcher`, and `load` on a name collision rather than merging with it. Extensions load after the built-ins, so a `languages/python/config.toml` declaring `name = "Python"` does not augment Zed's Python — it *replaces* it wholesale, and everything the extension's config omits is simply lost: bracket auto-close, the f-/b-/r-/t-string and triple-quote pairs, `block_comment`, `autoclose_before`, `first_line_pattern` shebang detection, `modeline_aliases`, `increase_indent_pattern` / `decrease_indent_patterns` (`elif`/`else`/`except`/`finally` auto-dedent), and `debuggers = ["Debugpy"]` — plus a downgrade from Zed's 376-line `highlights.scm` and 108-line `runnables.scm` to whatever the extension bundles.
+- **highlights.scm** — syntax highlighting (keywords, builtins, decorators, f-strings, type annotations)
+- **brackets.scm** — `()`, `[]`, `{}`, string quotes
+- **outline.scm** — functions, classes, methods for the outline panel
+- **indents.scm** — indentation-based structure
+- **injections.scm** — SQL in strings, regex, docstring formatting
+- **textobjects.scm** — Vim motions for functions, classes, arguments, comments
+- **runnables.scm** — detect `if __name__ == "__main__"` and pytest functions for run buttons
 
-Every Python language-server extension in the registry — [`ty`](https://github.com/zed-extensions/ty), [`pyrefly`](https://github.com/zed-extensions/pyrefly), [`pylsp`](https://github.com/rgbkrk/python-lsp-zed-extension) — ships manifest and `src/` only, for this reason. Basilisk matches them.
+Zed already ships built-in Python support; these queries augment it (or the extension can rely on the built-in queries entirely and provide only LSP/DAP).
 
 ### Grammar Reuse {#ZED-GRAMMAR}
 
-`extension.toml` omits `[grammars.python]` and declares only `[language_servers.basilisk] languages = ["Python"]`, which binds the server to Zed's **built-in** Python language and its tree-sitter-python grammar by name.
+`extension.toml` omits `[grammars.python]`; `languages/python/config.toml` declares `grammar = "python"`, which Zed resolves to its **built-in** tree-sitter-python grammar that the query files above augment.
 
-Bundling `[grammars.python]` would force Zed to compile the grammar from source on install, requiring the multi-hundred-megabyte [`wasi-sdk`](https://github.com/WebAssembly/wasi-sdk/releases) toolchain — an extraction that can fail on a constrained disk (`No space left on device`) and surface as the misleading `failed to compile grammar 'python'`. Binding by name removes the compile step. Implemented in `basilisk-zed/extension.toml` (absence of `[grammars.*]` and of `languages/`).
+Bundling `[grammars.python]` would force Zed to compile the grammar from source on install, requiring the multi-hundred-megabyte [`wasi-sdk`](https://github.com/WebAssembly/wasi-sdk/releases) toolchain — an extraction that can fail on a constrained disk (`No space left on device`) and surface as the misleading `failed to compile grammar 'python'`. Reusing the built-in grammar removes the compile step. Implemented in `basilisk-zed/extension.toml` (absence of `[grammars.*]`).
 
 ## Binary Distribution {#ZED-DIST}
 
@@ -328,11 +340,7 @@ Zed has no upload API. Extensions are listed in [`zed-industries/extensions`](ht
 
 `scripts/render-zed-mirror.sh` resolves both: vendors `basilisk-common` (zero-dependency, WASM-safe) under `vendor/basilisk-common`, rewrites the path dependency, stamps the release version, makes the mirror its own workspace root, and drops the workspace-only `[lints]` inheritance. The `publish-zed` job in `release.yml` renders the tree, **gates the push on a real `cargo build --release --target wasm32-wasip2`**, then pushes to [`Nimblesite/basilisk-zed`](https://github.com/Nimblesite/basilisk-zed) and tags it with the monorepo tag — same clone-replace-commit-push convention as `publish-nvim`, using the `BREW_SCOOP_PAT` org secret.
 
-The mirror version equals the monorepo tag (`v1.2.3` → `1.2.3`); the binary [ZED-DIST](#ZED-DIST) updates independently at runtime.
-
-**Pushing the mirror publishes nothing.** Zed installs only what `zed-industries/extensions` lists, so the mirror push is a prerequisite, not the release. `scripts/publish_zed_registry.py`, run by `publish-zed` immediately after the mirror is tagged, performs the listing itself: it forks the registry, resets a `listing-basilisk` branch to upstream's head, adds or re-pins the `extensions/basilisk` submodule to the release tag, sets `[basilisk] version` in `extensions.toml`, re-sorts `.gitmodules`, and opens the PR — or, once that PR is open, moves the pointer on the same branch. Every release therefore proposes its own bump; upstream maintainers still merge it.
-
-The registry is a repository Basilisk does not own, and its `extensions.toml` holds ~1400 entries, so the edit is **surgical, not a rewrite**: the entry is spliced into alphabetical position and every other entry stays byte-identical, since a reformatting diff across someone else's registry is a rejected PR. `scripts/test_publish_zed_registry.py` proves both properties — placement, non-disturbance, bump-not-duplicate, and idempotence — in the `zed` CI job, because the real thing runs only during a tagged release.
+The mirror version equals the monorepo tag (`v1.2.3` → `1.2.3`); the binary [ZED-DIST](#ZED-DIST) updates independently at runtime. The first listing is a one-time human-reviewed PR adding the submodule to `zed-industries/extensions`; subsequent bumps amend that pointer.
 
 ## Zed Settings {#ZED-CONFIG}
 
@@ -398,6 +406,6 @@ The LSP produces all underlying data; only visualization differs.
 | Binary resolution | Per-editor | `vscode-extension/src/extension.ts` / `basilisk-zed/src/lib.rs` |
 | Debug config UI | Per-editor | `package.json` / `basilisk-debug.json` |
 | Flamegraph rendering | Per-editor | VS Code webview / browser fallback |
-| Tree-sitter queries | Neither — Zed's built-in Python owns them ([ZED-TREESITTER](#ZED-TREESITTER)) | — |
+| Tree-sitter queries | Zed-only | `basilisk-zed/languages/python/` |
 
 The entire backend is shared; only thin editor-specific glue differs. Remaining cross-editor work is tracked in the [roadmap](../plans/ROADMAP-NEXT-STEPS-PLAN.md).

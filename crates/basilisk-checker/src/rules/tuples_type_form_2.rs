@@ -1,13 +1,13 @@
 //! Implements [`tuples_type_form_2`] from [CHKARCH-DIAG]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG
 //! `tuples_type_form_2`: Invalid tuple type syntax.
 //!
-//! Validates tuple type annotations according to the typing spec's tuple form
-//! (<https://typing.python.org/en/latest/spec/tuples.html>):
+//! Validates tuple type annotations according to PEP 646 rules:
 //!
 //! - `tuple[T, ...]` must have exactly one type before `...`
 //! - `tuple[...]` is invalid (must specify a type)
 //! - `tuple[T, ..., U]` is invalid (`...` can only appear at the end)
 //! - `tuple[T, U, ...]` is invalid (can't have multiple fixed types before `...`)
+//! - Invalid unpack patterns like `tuple[*tuple[str], ...]`
 //!
 //! ```python
 //! t1: tuple[int, ...]        # OK
@@ -15,18 +15,14 @@
 //! t3: tuple[...]             # E — missing type before ...
 //! t4: tuple[..., int]         # E — ... must be at the end
 //! t5: tuple[int, ..., int]    # E — ... must be at the end
+//! t6: tuple[*tuple[str], ...] # E — invalid unpack pattern
 //! ```
-//!
-//! The annotation is recognised by resolving its base through the module's
-//! binding table ([ASTREBUILD-LAW]) — `tuple`, `typing.Tuple`, and any alias
-//! of either behave identically — and the elements are the subscript slice's
-//! AST nodes, never a comma-split of the source text.
 
-use basilisk_resolver::{ResolvedModule, Span, TypingForm};
-use ruff_python_ast::Expr;
+use basilisk_resolver::ResolvedModule;
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
-use crate::rules::shared::{parse_module, ExprIndex};
+use crate::rules::shared::split_top_level_commas;
+use crate::span_util::slice_span;
 
 use super::Rule;
 
@@ -45,81 +41,99 @@ impl Rule for InvalidTupleTypeSyntax {
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
-        let Some(parsed) = parse_module(module) else {
-            return;
-        };
-        let index = ExprIndex::build(&parsed.ast);
+        let source = &module.source;
 
-        let annotation_spans = module
-            .module_vars
-            .iter()
-            .filter(|var| var.has_annotation)
-            .filter_map(|var| var.annotation_span)
-            .chain(
-                module
-                    .functions
-                    .iter()
-                    .filter_map(|func| func.return_annotation_span),
-            );
+        // Check all variable annotations for tuple type syntax violations
+        for var in &module.module_vars {
+            if !var.has_annotation {
+                continue;
+            }
 
-        for ann_span in annotation_spans {
-            let Some(ann_expr) = index.expr(ann_span) else {
+            let Some(ann_span) = var.annotation_span else {
                 continue;
             };
-            if let Some(error_msg) = tuple_ellipsis_violation(module, ann_expr) {
-                diagnostics.push(make_diagnostic(error_msg, ann_span, &module.path));
+
+            let Some(ann_text) = slice_span(source, ann_span) else {
+                continue;
+            };
+
+            let ann_trimmed = ann_text.trim();
+            if let Some(error_msg) = check_tuple_syntax(ann_trimmed) {
+                diagnostics.push(error_diagnostic_owned(
+                    CODE.clone(),
+                    format!("Invalid tuple type syntax: {error_msg}"),
+                    ann_span,
+                    &module.path,
+                    Some("Use valid tuple type syntax according to PEP 646".to_owned()),
+                    Some(
+                        "Tuple types must follow the pattern `tuple[T, ...]` with exactly one type before the ellipsis"
+                            .to_owned(),
+                    ),
+                ));
+            }
+        }
+
+        // Also check function return type annotations
+        for func in &module.functions {
+            if let Some(ret_span) = func.return_annotation_span {
+                let Some(ret_text) = slice_span(source, ret_span) else {
+                    continue;
+                };
+
+                let ret_trimmed = ret_text.trim();
+                if let Some(error_msg) = check_tuple_syntax(ret_trimmed) {
+                    diagnostics.push(error_diagnostic_owned(
+                        CODE.clone(),
+                        format!("Invalid tuple type syntax: {error_msg}"),
+                        ret_span,
+                        &module.path,
+                        Some("Use valid tuple type syntax according to PEP 646".to_owned()),
+                        Some(
+                            "Tuple types must follow the pattern `tuple[T, ...]` with exactly one type before the ellipsis"
+                                .to_owned(),
+                        ),
+                    ));
+                }
             }
         }
     }
 }
 
-/// Build the rule's diagnostic for one invalid tuple annotation.
-fn make_diagnostic(error_msg: &str, span: Span, path: &str) -> Diagnostic {
-    error_diagnostic_owned(
-        CODE.clone(),
-        format!("Invalid tuple type syntax: {error_msg}"),
-        span,
-        path,
-        Some("Use valid tuple type syntax according to the typing spec".to_owned()),
-        Some(
-            "Tuple types must follow the pattern `tuple[T, ...]` with exactly one type before the ellipsis"
-                .to_owned(),
-        ),
-    )
-}
-
-/// Returns `Some(error_message)` when the annotation is a `tuple[...]` form
-/// whose top-level ellipsis placement is invalid.
+/// Returns `Some(error_message)` if the tuple type annotation has invalid syntax.
 ///
-/// Only top-level ellipsis misuse is flagged; a `...` nested inside a starred
-/// unpack like `*tuple[str, ...]` is valid and is a distinct expression node,
-/// so it never appears among the outer slice's elements.
-fn tuple_ellipsis_violation(module: &ResolvedModule, expr: &Expr) -> Option<&'static str> {
-    let Expr::Subscript(sub) = expr else {
-        return None;
-    };
-    let form = module.bindings.form_of_with_builtins(&sub.value)?;
-    if !matches!(form, TypingForm::TupleClass | TypingForm::TupleAlias) {
+/// Only flags top-level ellipsis misuse; nested `...` inside starred unpacks
+/// like `*tuple[str, ...]` are valid and not flagged.
+fn check_tuple_syntax(annotation: &str) -> Option<&'static str> {
+    // Check if this is a tuple annotation
+    if !annotation.starts_with("tuple[") || !annotation.ends_with(']') {
         return None;
     }
 
-    // The subscript's elements: a tuple slice's elements, or the single
-    // expression itself. `tuple[()]` yields an empty element list — the
-    // valid empty-tuple form.
-    let elements: Vec<&Expr> = match sub.slice.as_ref() {
-        Expr::Tuple(tuple) => tuple.elts.iter().collect(),
-        single => vec![single],
-    };
+    let inner = annotation
+        .get("tuple[".len()..annotation.len().checked_sub(1)?)
+        .map_or("", str::trim);
 
-    let ellipsis_positions: Vec<usize> = elements
+    // Check for empty tuple: tuple[()]
+    if inner == "()" {
+        return None; // Valid empty tuple syntax
+    }
+
+    // Split by top-level commas to get individual components.
+    let components: Vec<&str> = split_top_level_commas(inner)
+        .into_iter()
+        .map(str::trim)
+        .collect();
+
+    // Find positions of top-level `...` components.
+    let ellipsis_positions: Vec<usize> = components
         .iter()
         .enumerate()
-        .filter(|(_, element)| matches!(element, Expr::EllipsisLiteral(_)))
-        .map(|(position, _)| position)
+        .filter(|(_, c)| **c == "...")
+        .map(|(i, _)| i)
         .collect();
 
     if ellipsis_positions.is_empty() {
-        // No top-level `...` — valid fixed tuple.
+        // No top-level `...` — valid fixed tuple (starred unpacks inside are OK).
         return None;
     }
 
@@ -130,15 +144,21 @@ fn tuple_ellipsis_violation(module: &ResolvedModule, expr: &Expr) -> Option<&'st
 
     let &ellipsis_pos = ellipsis_positions.first()?;
 
-    // `...` must be the very last element.
-    if ellipsis_pos != elements.len() - 1 {
+    // `...` must be the very last component.
+    if ellipsis_pos != components.len() - 1 {
         return Some("ellipsis (...) must appear at the end of the tuple type");
     }
 
-    // Count elements before `...`.
-    match ellipsis_pos {
-        0 => Some("tuple[...] is invalid — must specify a type before the ellipsis"),
-        1 => None,
-        _ => Some("tuple[T, U, ...] is invalid — can only have one type before the ellipsis"),
+    // Count non-ellipsis components before `...`.
+    let types_before = ellipsis_pos;
+
+    if types_before == 0 {
+        return Some("tuple[...] is invalid — must specify a type before the ellipsis");
     }
+
+    if types_before > 1 {
+        return Some("tuple[T, U, ...] is invalid — can only have one type before the ellipsis");
+    }
+
+    None
 }

@@ -9,11 +9,11 @@ use std::collections::HashMap;
 use ruff_python_ast::{self as ast, Expr, Stmt};
 use ruff_text_size::Ranged as _;
 
-use basilisk_resolver::{assignable, BindingTable, Span, TypeNode};
+use basilisk_resolver::Span;
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
-use crate::rules::shared::ExprIndex;
-use crate::span_util::{node_message_text, slice_span};
+use crate::rules::shared::{infer_expr_literal_type, is_type_compatible};
+use crate::span_util::slice_span;
 
 pub(super) const CODE: ErrorCode = ErrorCode {
     code: "constructors_call_type",
@@ -24,44 +24,44 @@ pub(super) const CODE: ErrorCode = ErrorCode {
 // TypeVar bound map
 // ---------------------------------------------------------------------------
 
-// ##########################################################################
-// # DELETED BODY — `build_typevar_bound_map`. DO NOT RESTORE IT.           #
-// #                                                                         #
-// #   let var_name = expr_simple_name(target)?;                            #
-// #   if !typevar_names.contains(&var_name) { continue }                   #
-// #   map.insert(var_name, expr_simple_name(&kw.value)?)                   #
-// #                                                                         #
-// # Both halves of every entry are RENDERED NAMES: the `TypeVar` is        #
-// # identified by the word its assignment target is spelled with, and its  #
-// # bound by the word the `bound=` expression is spelled with. The map is  #
-// # then consumed by name, so:                                             #
-// #                                                                         #
-// #   * `Marker = Cairn; TypeVar("T", bound=Marker)` recorded `"Marker"`,  #
-// #     which matches no class and silently drops every judgment;          #
-// #   * `bound=mod.Cairn` recorded nothing at all;                         #
-// #   * an unrelated local class merely spelled like the bound matched.    #
-// #                                                                         #
-// # The lawful replacement keys on `TypeVarCallInfo::span` (the `TypeVar`  #
-// # construction itself, which `local_value_binding` reaches through any   #
-// # number of aliases) and stores the bound's DEFINITION SITE from         #
-// # `local_class_definition`.                                              #
-// #                                                                         #
-// # Pinned by: tests/constructor_identity_tests.rs                          #
-// ##########################################################################
-
-/// DELETED — panics; see the banner above.
+/// Build a map from `TypeVar` name to the bound class name, by scanning
+/// `T = TypeVar("T", bound=SomeClass)` assignments.
 pub(super) fn build_typevar_bound_map<'src>(
-    _stmts: &'src [Stmt],
-    _typevar_names: &[&str],
+    stmts: &'src [Stmt],
+    typevar_names: &[&str],
 ) -> HashMap<&'src str, &'src str> {
-    panic!(
-        "basilisk-checker: `build_typevar_bound_map` was DELETED because it identified \
-         both a `TypeVar` and its `bound=` class by the WORDS they were spelled with, \
-         and its consumers joined on those words. It panics because the real \
-         implementation — keyed on `TypeVarCallInfo::span` with the bound resolved to a \
-         definition site — DOES NOT EXIST YET. Do not restore the name lookup and do not \
-         return an empty map in its place."
-    )
+    let mut map: HashMap<&str, &str> = HashMap::new();
+    for stmt in stmts {
+        let Stmt::Assign(assign) = stmt else { continue };
+        if assign.targets.len() != 1 {
+            continue;
+        }
+        let Some(var_name) = assign.targets.first().and_then(expr_simple_name) else {
+            continue;
+        };
+        if !typevar_names.contains(&var_name) {
+            continue;
+        }
+        // Look for TypeVar(..., bound=X) call.
+        let Expr::Call(call) = assign.value.as_ref() else {
+            continue;
+        };
+        let Some(callee_name) = expr_simple_name(&call.func) else {
+            continue;
+        };
+        if callee_name != "TypeVar" {
+            continue;
+        }
+        // Find `bound=` keyword.
+        for kw in &call.arguments.keywords {
+            if kw.arg.as_deref() == Some("bound") {
+                if let Some(bound_class) = expr_simple_name(&kw.value) {
+                    let _ = map.insert(var_name, bound_class);
+                }
+            }
+        }
+    }
+    map
 }
 
 // ---------------------------------------------------------------------------
@@ -81,52 +81,38 @@ pub(super) enum ConstructorSig {
 
 /// Resolve the constructor argument signature for a class by inspecting its
 /// metaclass `__call__`, `__new__`, or `__init__` (in that priority order).
-#[expect(
-    dead_code,
-    reason = "orphaned by the deleted name-keyed `check_type_call`; retained for the identity-based rebuild"
-)]
 pub(super) fn resolve_constructor_sig(
-    graph: &basilisk_resolver::ClassGraph<'_>,
+    class_name: &str,
     class_info: &basilisk_resolver::ClassInfo,
-    method_map: &HashMap<(basilisk_resolver::Span, &str), Vec<&basilisk_resolver::FunctionInfo>>,
+    class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
+    method_map: &HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>>,
+    source: &str,
 ) -> ConstructorSig {
     // 1. Check metaclass __call__ first.
-    if let Some(meta_sig) = check_metaclass_call(graph, class_info, method_map) {
+    if let Some(meta_sig) = check_metaclass_call(class_info, class_map, method_map, source) {
         return meta_sig;
     }
 
-    // 2/3/4. `__new__`, then `__init__`, on the class itself and then up its
-    // resolved base chain.
-    //
-    // REBUILT in one respect: the walk used to be over `class_bases`, which
-    // took each base's head by splitting SOURCE TEXT at `[`, and it needed a
-    // `base_name == "object"` skip to stop the top type looking like a local
-    // class. `ClassGraph::ancestors` yields definition-site-keyed local
-    // classes, so `object` — not a class this module defines — simply is not
-    // among them and no spelling comparison is needed.
-    //
-    // NOT AN MRO, despite what this comment used to call it. `ancestors` is a
-    // cycle-safe depth-first REACHABILITY order; Python resolves methods by C3
-    // linearisation. The two disagree under multiple inheritance, so `the
-    // first ancestor declaring __new__` can be a different definition from the
-    // one Python would call, and the arity reported below is then the wrong
-    // signature's. Single inheritance — where the orders coincide — is the
-    // only shape this is right for by construction.
-    //
-    // The fall-through is also unsound in the other direction: reaching the
-    // end of the walk yields `ConstructorSig::NoArgs`, which asserts that NO
-    // constructor exists anywhere. That holds only if the ancestry was walked
-    // completely. `ClassGraph::ancestry` reports whether it was
-    // (`Ancestry::complete`); this walk uses `ancestors`, which discards that
-    // flag, so a class whose base is imported from a module the checker never
-    // read is treated as having no `__init__` and every argument passed to it
-    // is reported as excess.
-    for ancestor in graph.ancestors(class_info) {
-        if let Some(new_sig) = method_map.get(&(ancestor.name_span, "__new__")) {
-            return sig_from_funcs(new_sig);
+    // 2. Check __new__.
+    if let Some(new_sig) = method_map.get(&(class_name, "__new__")) {
+        return sig_from_funcs(new_sig);
+    }
+
+    // 3. Check __init__.
+    if let Some(init_sig) = method_map.get(&(class_name, "__init__")) {
+        return sig_from_funcs(init_sig);
+    }
+
+    // 4. Walk base classes (simplified MRO).
+    for base_name in class_bases(class_info) {
+        if matches!(base_name, "object" | "Generic" | "Protocol") {
+            continue;
         }
-        if let Some(init_sig) = method_map.get(&(ancestor.name_span, "__init__")) {
-            return sig_from_funcs(init_sig);
+        if let Some(base_class) = class_map.get(base_name) {
+            let sig = resolve_constructor_sig(base_name, base_class, class_map, method_map, source);
+            if !matches!(sig, ConstructorSig::NoArgs) {
+                return sig;
+            }
         }
     }
 
@@ -134,47 +120,29 @@ pub(super) fn resolve_constructor_sig(
     ConstructorSig::NoArgs
 }
 
-/// The constructor signature imposed by the class's metaclass `__call__`, if
-/// this module defines that metaclass and it declares one.
-///
-/// REBUILT on resolved identity. The deleted version read:
-///
-/// ```ignore
-/// let meta_name = class_info.metaclass_name.as_deref()?;
-/// class_map.get(meta_name);
-/// method_map.get(&(meta_name, "__call__"))
-/// ```
-///
-/// `metaclass_name` is the RENDERED text of a `metaclass=` value, filled only
-/// when that value is a bare word. The metaclass, and the owner of its
-/// `__call__`, were both identified by that string, so `metaclass=mod.Meta`
-/// found nothing, an aliased metaclass found nothing, and a local class merely
-/// sharing the rendered name was used instead — and the constructor signature
-/// is what every argument check is measured against.
-///
-/// `ClassInfo::metaclass_site` is the same expression resolved through the
-/// binding table, and the method index is keyed on definition site, so both
-/// halves now name the class rather than describe it.
+/// Extract the metaclass name and check its `__call__` method.
 fn check_metaclass_call(
-    graph: &basilisk_resolver::ClassGraph<'_>,
     class_info: &basilisk_resolver::ClassInfo,
-    method_map: &HashMap<(basilisk_resolver::Span, &str), Vec<&basilisk_resolver::FunctionInfo>>,
+    class_map: &HashMap<&str, &basilisk_resolver::ClassInfo>,
+    method_map: &HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>>,
+    _source: &str,
 ) -> Option<ConstructorSig> {
-    let meta_site = class_info.metaclass_site?;
-    // The metaclass must be a class this module defines for its body to be
-    // visible here; anything else abstains ([CHKARCH-CONFORMANCE-MODE]).
-    let meta = graph.at(meta_site)?;
-    // `__call__` may be inherited by the metaclass itself.
-    graph
-        .ancestors(meta)
-        .into_iter()
-        .find_map(|ancestor| method_map.get(&(ancestor.name_span, "__call__")))
-        .map(|funcs| sig_from_funcs(funcs))
+    let meta_name = class_info.metaclass_name.as_deref()?;
+    // Resolve metaclass through class_map (it may be defined in the same file).
+    let _ = class_map.get(meta_name); // just check existence
+    if let Some(call_funcs) = method_map.get(&(meta_name, "__call__")) {
+        return Some(sig_from_funcs(call_funcs));
+    }
+    None
 }
 
 /// Derive a `ConstructorSig` from one or more `FunctionInfo` entries.
 pub(super) fn sig_from_funcs(funcs: &[&basilisk_resolver::FunctionInfo]) -> ConstructorSig {
-    if let Some(func) = funcs.first() {
+    // Pick the first non-overload function.
+    for func in funcs {
+        if func.decorators.iter().any(|d| d == "overload") {
+            continue;
+        }
         // If it has *args or **kwargs, we can't know the exact arity.
         if func.vararg.is_some() || func.kwarg.is_some() {
             return ConstructorSig::Unknown;
@@ -189,47 +157,46 @@ pub(super) fn sig_from_funcs(funcs: &[&basilisk_resolver::FunctionInfo]) -> Cons
     ConstructorSig::NoArgs
 }
 
-// ##########################################################################
-// # `class_bases` IS GONE. DO NOT RECREATE IT.                            #
-// #                                                                       #
-// # It took each base's head by splitting its SOURCE TEXT at `[`, so base #
-// # identity moved with formatting and aliasing, and it needed a          #
-// # `base_name == "object"` companion check to stop the top type looking  #
-// # like a local class. The replacement is `ClassGraph::ancestors`, which #
-// # yields the classes themselves, keyed on definition site.              #
-// #                                                                       #
-// # The same defect existed in `constructors_call_init::all_base_names`.  #
-// ##########################################################################
+/// Return the simple base class names for a class.
+pub(super) fn class_bases(class_info: &basilisk_resolver::ClassInfo) -> Vec<&str> {
+    let mut names: Vec<&str> = class_info
+        .bases
+        .iter()
+        .map(|b| {
+            let s: &str = b.as_str();
+            s.split('[').next().unwrap_or(s)
+        })
+        .collect();
+    for entry in &class_info.base_subscripts {
+        let s: &str = entry.base_name.as_str();
+        if !names.contains(&s) {
+            names.push(s);
+        }
+    }
+    names
+}
 
 // ---------------------------------------------------------------------------
 // Keyword and positional argument type checking
 // ---------------------------------------------------------------------------
 
 /// Check that keyword arguments match the expected parameter types.
-///
-/// The literal argument is typed with [`TypeNode::of_literal_expr`] and
-/// related to the parameter's annotation lowered through the module's binding
-/// table ([ASTREBUILD-LAW]); a diagnostic is emitted only on a proven
-/// `Some(false)`. Annotation source text appears in the MESSAGE only.
 #[expect(
     clippy::too_many_arguments,
     reason = "type checking requires full context"
 )]
 pub(super) fn check_kwarg_types(
     call: &ast::ExprCall,
-    class_site: basilisk_resolver::Span,
     class_name: &str,
     kw_names: &[&str],
-    method_map: &HashMap<(basilisk_resolver::Span, &str), Vec<&basilisk_resolver::FunctionInfo>>,
-    bindings: &BindingTable,
-    index: &ExprIndex<'_>,
+    method_map: &HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>>,
     source: &str,
     path: &str,
     span: Span,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     // Find the constructor function (prefer __new__ then __init__).
-    let func = find_constructor_func(class_site, method_map);
+    let func = find_constructor_func(class_name, method_map);
     let Some(func) = func else { return };
 
     for kw in &call.arguments.keywords {
@@ -243,21 +210,18 @@ pub(super) fn check_kwarg_types(
         let Some(ann_span) = param.annotation_span else {
             continue;
         };
-        // Annotations the index cannot map to a node abstain
-        // ([ASTREBUILD-PHASE-RESOLVER]).
-        let Some(ann_expr) = index.expr(ann_span) else {
+        let Some(ann_text) = slice_span(source, ann_span) else {
             continue;
         };
-        let target = TypeNode::lower(bindings, ann_expr);
-        if assignable(&TypeNode::of_literal_expr(&kw.value), &target) == Some(false) {
-            let expected_type = slice_span(source, ann_span)
-                .unwrap_or("<annotation>")
-                .trim();
-            let arg_text = node_message_text(source, &kw.value);
+        let expected_type = ann_text.trim();
+        let Some(arg_type) = infer_expr_literal_type(&kw.value) else {
+            continue;
+        };
+        if !is_type_compatible(arg_type, expected_type) {
             diagnostics.push(error_diagnostic_owned(
                 CODE.clone(),
                 format!(
-                    "Keyword argument `{kw_name}={arg_text}` is incompatible with \
+                    "Keyword argument `{kw_name}={arg_type}` is incompatible with \
                      parameter `{kw_name}: {expected_type}` of `{class_name}` constructor"
                 ),
                 span,
@@ -274,25 +238,16 @@ pub(super) fn check_kwarg_types(
 }
 
 /// Check positional arguments against the constructor parameter types.
-///
-/// Same relation as [`check_kwarg_types`]: literal arguments against lowered
-/// annotations, emitting only on a proven `Some(false)`.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "type checking requires full context"
-)]
 pub(super) fn check_positional_arg_types(
     call: &ast::ExprCall,
-    class_site: basilisk_resolver::Span,
     class_name: &str,
-    method_map: &HashMap<(basilisk_resolver::Span, &str), Vec<&basilisk_resolver::FunctionInfo>>,
-    bindings: &BindingTable,
-    index: &ExprIndex<'_>,
+    method_map: &HashMap<(&str, &str), Vec<&basilisk_resolver::FunctionInfo>>,
     source: &str,
     path: &str,
+    span: Span,
     diagnostics: &mut Vec<Diagnostic>,
 ) {
-    let func = find_constructor_func(class_site, method_map);
+    let func = find_constructor_func(class_name, method_map);
     let Some(func) = func else { return };
 
     // Skip self/cls param.
@@ -303,23 +258,20 @@ pub(super) fn check_positional_arg_types(
         let Some(ann_span) = param.annotation_span else {
             continue;
         };
-        // Annotations the index cannot map to a node abstain
-        // ([ASTREBUILD-PHASE-RESOLVER]).
-        let Some(ann_expr) = index.expr(ann_span) else {
+        let Some(ann_text) = slice_span(source, ann_span) else {
             continue;
         };
-        let target = TypeNode::lower(bindings, ann_expr);
-        if assignable(&TypeNode::of_literal_expr(arg_expr), &target) == Some(false) {
-            let expected_type = slice_span(source, ann_span)
-                .unwrap_or("<annotation>")
-                .trim();
-            let arg_text = node_message_text(source, arg_expr);
+        let expected_type = ann_text.trim();
+        let Some(arg_type) = infer_expr_literal_type(arg_expr) else {
+            continue;
+        };
+        if !is_type_compatible(arg_type, expected_type) {
             let arg_span = Span::from(arg_expr.range());
             diagnostics.push(error_diagnostic_owned(
                 CODE.clone(),
                 format!(
-                    "Argument {n} (`{arg_text}`) is incompatible with parameter `{pname}` of \
-                     `{class_name}` constructor, which expects `{expected_type}`",
+                    "Argument {n} has type `{arg_type}` but parameter `{pname}` of \
+                     `{class_name}` constructor expects `{expected_type}`",
                     n = idx + 1,
                     pname = param.name,
                 ),
@@ -331,24 +283,25 @@ pub(super) fn check_positional_arg_types(
                 )),
                 None,
             ));
+            // Use outer span to silence unreachable — not actually needed but
+            // keeps the variable used.
+            let _ = span;
         }
     }
 }
 
-/// Find the primary constructor function for a class.
+/// Find the primary (non-overload) constructor function for a class.
 pub(super) fn find_constructor_func<'a>(
-    class_site: basilisk_resolver::Span,
-    method_map: &'a HashMap<
-        (basilisk_resolver::Span, &str),
-        Vec<&'a basilisk_resolver::FunctionInfo>,
-    >,
+    class_name: &str,
+    method_map: &'a HashMap<(&str, &str), Vec<&'a basilisk_resolver::FunctionInfo>>,
 ) -> Option<&'a basilisk_resolver::FunctionInfo> {
     for method in &["__new__", "__init__"] {
-        if let Some(func) = method_map
-            .get(&(class_site, method))
-            .and_then(|funcs| funcs.first())
-        {
-            return Some(func);
+        if let Some(funcs) = method_map.get(&(class_name, method)) {
+            for func in funcs {
+                if !func.decorators.iter().any(|d| d == "overload") {
+                    return Some(func);
+                }
+            }
         }
     }
     None

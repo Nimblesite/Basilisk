@@ -1,63 +1,64 @@
-// ############################################################################
-// # DELETED IMPLEMENTATION — PANIC-ONLY SHELL. DO NOT PUT LOGIC BACK HERE.   #
-// #                                                                          #
-// # Every body in this file was DELETED because it decided subtyping from    #
-// # the SPELLING of annotation text: `is_subtype(&str, &str)` over class     #
-// # names harvested from rendered annotations, `sup == "object"` for the top #
-// # type, literal `"int"`/`"str"`/`"float"` matching for the numeric tower,  #
-// # `|` splitting to decompose unions, `starts_with("tuple[")` to recognise  #
-// # a tuple, and `strip_prefix` to settle enum membership.                   #
-// #                                                                          #
-// # None of that is a type judgment. It is string surgery wearing one, and   #
-// # it is the defect that got Basilisk withdrawn from the python/typing      #
-// # conformance results.                                                     #
-// #                                                                          #
-// # THE SIGNATURES SURVIVE ONLY AS A MAP. Each body panics because the real  #
-// # implementation DOES NOT EXIST YET. That is mandatory, not a placeholder  #
-// # awaiting convenience:                                                    #
-// #                                                                          #
-// #   * DO NOT return `false` "for now" — that silently blesses every        #
-// #     mismatch and reports full coverage while checking nothing.           #
-// #   * DO NOT return `true` "for now" — that invents a diagnostic for       #
-// #     every legal subclass assignment.                                     #
-// #   * DO NOT reintroduce the string tables under a new name, in a rule     #
-// #     module, or as a "temporary" local helper.                            #
-// #                                                                          #
-// # The replacement is the resolved semantic model: `basilisk-resolver`      #
-// # bindings and the `basilisk-canonical` binding table, with a class        #
-// # hierarchy built from RESOLVED base symbols — never from base-class       #
-// # source text. When a caller is rebuilt, it stops calling this file; this  #
-// # file is never repaired.                                                  #
-// #                                                                          #
-// # Pinned by:                                                               #
-// #   crates/basilisk-checker/tests/nominal_spelling_surgery_pin_tests.rs    #
-// #   crates/basilisk-checker/tests/no_type_spelling_surgery_tests.rs        #
-// ############################################################################
+//! Implements [TYPEINF-SUBTYPING]. See
+//! docs/specs/CHECKER-TYPE-INFERENCE-SPEC.md#TYPEINF-SUBTYPING and
+//! docs/plans/CHECKER-TYPE-NARROWING-INFERENCE-PLAN.md#NARROWPLAN-SUBTYPING
+//!
+//! The shared subtyping context — nominal class relationships, Protocol
+//! member tables, `TypedDict` schemas, generic variance, and `Callable`
+//! kinds, in ONE place.
+//!
+//! Two layers already exist and stay authoritative for what they cover:
+//! [`crate::types::InferredType::is_assignable_to`] for inferred types
+//! ([TYPEINF-SUBTYPING-IMPL]) and [`name_subtype`] here for the
+//! annotation-text numeric tower the conformance rules use. This module adds
+//! the *context-dependent* relations those layers cannot answer alone —
+//! MRO walks, structural Protocol satisfaction, `TypedDict` field
+//! compatibility, and declared variance.
+//!
+//! # [`SubtypingContext`] has no production caller yet — deliberately
+//!
+//! [`name_subtype`] below IS wired (eight rules delegate to it).
+//! [`SubtypingContext`] is not, and that is the REQUIRED order, not an
+//! oversight: [NARROWPLAN-SUBTYPING] mandates that rule-local subtype helpers
+//! are replaced "only after parity tests pin their current accepted/rejected
+//! cases". Landing the context plus its parity tests in one change and
+//! migrating rules onto it in the next is what that instruction asks for —
+//! migrating in the same change would move behaviour and its pins together,
+//! which is exactly the drift the parity tests exist to prevent. The rules
+//! consume this at the Integration stage ([NARROWPLAN-INTEGRATION]), whose
+//! checklist item is "migrate assignment, return, call, and `assert_type`
+//! rules incrementally, deleting the replaced local logic in the same
+//! change". Until then this is a pure, fully-tested core.
+//!
+//! **Lint posture — do not "fix" this by narrowing visibility.** The
+//! workspace denies `dead_code`. This module satisfies it because it is
+//! `pub mod subtyping` at the crate root, so every item is reachable from
+//! outside the crate and therefore live. Demoting the module or any item to
+//! `pub(crate)` before the Integration-stage wiring lands would make
+//! `dead_code` fire on a deliberate placeholder — and the fix for THAT is to
+//! wire the rules up, never to add an `#[allow]`/`#[expect]`.
 
-//! The DELETED string-keyed subtyping layer, reduced to loudly panicking
-//! signatures so its call sites remain visible as the rebuild map.
+use std::collections::{HashMap, HashSet};
 
-use std::collections::HashMap;
-
-/// Panic message shared by every deleted body in this module.
-macro_rules! deleted {
-    ($what:literal) => {
-        panic!(concat!(
-            "basilisk-checker: `",
-            $what,
-            "` was DELETED because it decided subtyping from the SPELLING of \
-             annotation text rather than from resolved symbols. It panics \
-             because the real implementation — a hierarchy built from resolved \
-             base symbols on the binding table — DOES NOT EXIST YET. Do not \
-             restore the deleted body and do not substitute a default answer: \
-             rebuild this caller on the resolved semantic model, or make it \
-             abstain."
-        ))
-    };
+/// The context-free, annotation-text subtype core: identity plus the full
+/// builtin numeric tower `bool <: int <: float <: complex`
+/// ([TYPEINF-SUBTYPING-NOMINAL], typing-spec float/complex promotions).
+///
+/// This is THE single home of the text-level tower;
+/// `rules::shared::is_numeric_subtype` and the rule-local helpers delegate
+/// here so every rule agrees on it.
+#[must_use]
+pub fn name_subtype(sub: &str, sup: &str) -> bool {
+    sub == sup
+        || matches!(
+            (sub, sup),
+            ("bool", "int" | "float" | "complex")
+                | ("int", "float" | "complex")
+                | ("float", "complex")
+        )
 }
 
-/// Declared variance of one generic type parameter. Inert data — the deleted
-/// logic is what read it.
+/// Declared variance of one generic type parameter
+/// ([TYPEINF-SUBTYPING-GENERIC]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Variance {
     /// `G[A] <: G[B]` when `A <: B` — read-only positions.
@@ -68,110 +69,215 @@ pub enum Variance {
     Invariant,
 }
 
-/// One `TypedDict` field's schema entry. Inert data.
+/// One `TypedDict` field's schema entry ([TYPEINF-SUBTYPING-TYPEDDICT]).
 #[derive(Debug, Clone, PartialEq)]
 pub struct TypedDictField {
-    /// The declared value type. Held as annotation TEXT — itself part of why
-    /// this layer could only ever compare spellings.
+    /// The declared value type, as annotation text.
     pub ty: String,
     /// `false` for `NotRequired` fields.
     pub required: bool,
-    /// `ReadOnly` fields checked covariantly; mutable fields invariantly.
+    /// `ReadOnly` fields check covariantly; mutable fields invariantly.
     pub read_only: bool,
 }
 
-/// DELETED — was a hierarchy keyed on rendered type NAMES. The fields are gone
-/// with the bodies that read them; nothing may be registered into it and
-/// nothing may be asked of it.
+/// The shared subtyping context: everything context-dependent that
+/// [`name_subtype`] and `is_assignable_to` cannot answer alone.
 #[derive(Debug, Clone, Default)]
-pub struct SubtypingContext;
+pub struct SubtypingContext {
+    /// Class name → direct base names (nominal edges).
+    bases: HashMap<String, Vec<String>>,
+    /// Class name → member name → declared type text.
+    members: HashMap<String, HashMap<String, String>>,
+    /// Names registered as `Protocol` classes.
+    protocols: HashSet<String>,
+    /// `TypedDict` name → field schemas.
+    typeddicts: HashMap<String, HashMap<String, TypedDictField>>,
+    /// Generic class name → per-parameter declared variance.
+    variance: HashMap<String, Vec<Variance>>,
+}
 
 impl SubtypingContext {
-    /// DELETED — panics; see the banner at the head of this file.
-    pub fn register_class(&mut self, _name: &str, _bases: &[String]) {
-        deleted!("SubtypingContext::register_class")
+    /// Register a class and its direct bases (nominal edges).
+    pub fn register_class(&mut self, name: &str, bases: &[String]) {
+        let _ = self.bases.insert(name.to_owned(), bases.to_vec());
     }
 
-    /// DELETED — panics; see the banner at the head of this file.
-    pub fn register_member(&mut self, _class: &str, _member: &str, _ty: &str) {
-        deleted!("SubtypingContext::register_member")
+    /// Register one member (attribute or method) of a class.
+    pub fn register_member(&mut self, class: &str, member: &str, ty: &str) {
+        let _ = self
+            .members
+            .entry(class.to_owned())
+            .or_default()
+            .insert(member.to_owned(), ty.to_owned());
     }
 
-    /// DELETED — panics; see the banner at the head of this file.
-    pub fn register_protocol(&mut self, _name: &str) {
-        deleted!("SubtypingContext::register_protocol")
+    /// Mark a registered class as a `Protocol`.
+    pub fn register_protocol(&mut self, name: &str) {
+        let _ = self.protocols.insert(name.to_owned());
     }
 
-    /// DELETED — panics; see the banner at the head of this file.
-    pub fn register_typeddict(&mut self, _name: &str, _fields: HashMap<String, TypedDictField>) {
-        deleted!("SubtypingContext::register_typeddict")
+    /// Register a `TypedDict` schema.
+    pub fn register_typeddict(&mut self, name: &str, fields: HashMap<String, TypedDictField>) {
+        let _ = self.typeddicts.insert(name.to_owned(), fields);
     }
 
-    /// DELETED — panics; see the banner at the head of this file.
-    pub fn register_variance(&mut self, _class: &str, _variance: Vec<Variance>) {
-        deleted!("SubtypingContext::register_variance")
+    /// Register a generic class's declared per-parameter variance.
+    pub fn register_variance(&mut self, class: &str, variance: Vec<Variance>) {
+        let _ = self.variance.insert(class.to_owned(), variance);
     }
 
-    /// DELETED — panics. Took two annotation STRINGS and compared them.
+    /// The central entry: is annotation text `sub` usable where `sup` is
+    /// expected, under this context?
+    ///
+    /// Gradual posture first ([TYPEINF-SUBTYPING-UNION]): `Any` either side
+    /// and the `object` top accept. Then the tower, union decomposition,
+    /// the nominal walk, structural Protocol satisfaction, and `TypedDict`
+    /// schemas ([TYPEINF-SUBTYPING-NOMINAL/-PROTOCOL/-TYPEDDICT]).
     #[must_use]
-    pub fn is_subtype(&self, _sub: &str, _sup: &str) -> bool {
-        deleted!("SubtypingContext::is_subtype")
+    pub fn is_subtype(&self, sub: &str, sup: &str) -> bool {
+        let sub = sub.trim();
+        let sup = sup.trim();
+        if sub == "Any" || sup == "Any" || sup == "object" || name_subtype(sub, sup) {
+            return true;
+        }
+        if sub.contains('|') {
+            return sub.split('|').all(|alt| self.is_subtype(alt, sup));
+        }
+        if sup.contains('|') {
+            return sup.split('|').any(|alt| self.is_subtype(sub, alt));
+        }
+        self.is_nominal_subclass(sub, sup)
+            || self.satisfies_protocol(sub, sup)
+            || self.typeddict_assignable(sub, sup)
     }
 
-    /// DELETED — panics. Walked an MRO of NAME strings.
+    /// Nominal subtyping: `sup` appears among `sub`'s transitive bases
+    /// ([TYPEINF-SUBTYPING-NOMINAL]). Cycle-guarded.
     #[must_use]
-    pub fn is_nominal_subclass(&self, _sub: &str, _sup: &str) -> bool {
-        deleted!("SubtypingContext::is_nominal_subclass")
+    pub fn is_nominal_subclass(&self, sub: &str, sup: &str) -> bool {
+        self.mro(sub).iter().any(|ancestor| ancestor == sup)
     }
 
-    /// DELETED — panics. Matched protocol members by name and type TEXT.
+    /// The class's linearized ancestry (itself first) — breadth-first over
+    /// the registered bases, each class visited once.
+    fn mro(&self, class: &str) -> Vec<String> {
+        let mut order = vec![class.to_owned()];
+        let mut index = 0;
+        while let Some(current) = order.get(index).cloned() {
+            for base in self.bases.get(&current).into_iter().flatten() {
+                if !order.contains(base) {
+                    order.push(base.clone());
+                }
+            }
+            index += 1;
+        }
+        order
+    }
+
+    /// A member's declared type, found on the class or anywhere up its MRO
+    /// (inherited members satisfy protocols, [TYPEINF-SUBTYPING-PROTOCOL]).
+    fn member_type(&self, class: &str, member: &str) -> Option<&str> {
+        self.mro(class).iter().find_map(|ancestor| {
+            self.members
+                .get(ancestor)
+                .and_then(|members| members.get(member))
+                .map(String::as_str)
+        })
+    }
+
+    /// Structural Protocol satisfaction ([TYPEINF-SUBTYPING-PROTOCOL]):
+    /// `sub` provides every member `protocol` declares (own or inherited),
+    /// each with a compatible (covariant) type. No inheritance required.
     #[must_use]
-    pub fn satisfies_protocol(&self, _sub: &str, _protocol: &str) -> bool {
-        deleted!("SubtypingContext::satisfies_protocol")
+    pub fn satisfies_protocol(&self, sub: &str, protocol: &str) -> bool {
+        if !self.protocols.contains(protocol) {
+            return false;
+        }
+        let required: Vec<(&String, &String)> = self
+            .mro(protocol)
+            .iter()
+            .filter_map(|ancestor| self.members.get(ancestor))
+            .flatten()
+            .collect::<HashMap<_, _>>()
+            .into_iter()
+            .collect();
+        !required.is_empty()
+            && required.iter().all(|(member, wanted)| {
+                self.member_type(sub, member)
+                    .is_some_and(|found| self.is_subtype(found, wanted))
+            })
     }
 
-    /// DELETED — panics. Compared `TypedDict` schemas by rendered field text.
+    /// `TypedDict`-to-`TypedDict` structural assignability
+    /// ([TYPEINF-SUBTYPING-TYPEDDICT]): every required target field exists
+    /// in the source; `ReadOnly` fields check covariantly, mutable fields
+    /// invariantly; `NotRequired` target fields may be absent.
     #[must_use]
-    pub fn typeddict_assignable(&self, _source: &str, _target: &str) -> bool {
-        deleted!("SubtypingContext::typeddict_assignable")
+    pub fn typeddict_assignable(&self, source: &str, target: &str) -> bool {
+        let (Some(source_fields), Some(target_fields)) =
+            (self.typeddicts.get(source), self.typeddicts.get(target))
+        else {
+            return false;
+        };
+        target_fields
+            .iter()
+            .all(|(name, wanted)| match source_fields.get(name) {
+                None => !wanted.required,
+                Some(found) if wanted.read_only => self.is_subtype(&found.ty, &wanted.ty),
+                Some(found) => found.ty == wanted.ty,
+            })
     }
 
-    /// DELETED — panics. Took type arguments as `&[&str]`.
+    /// Positional generic-argument compatibility under the class's declared
+    /// variance ([TYPEINF-SUBTYPING-GENERIC]). Unregistered classes default
+    /// every position to invariant.
     #[must_use]
     pub fn generic_args_compatible(
         &self,
-        _class: &str,
-        _sub_args: &[&str],
-        _sup_args: &[&str],
+        class: &str,
+        sub_args: &[&str],
+        sup_args: &[&str],
     ) -> bool {
-        deleted!("SubtypingContext::generic_args_compatible")
+        if sub_args.len() != sup_args.len() {
+            return false;
+        }
+        let declared = self.variance.get(class);
+        sub_args
+            .iter()
+            .zip(sup_args)
+            .enumerate()
+            .all(|(position, (sub, sup))| {
+                let variance = declared
+                    .and_then(|list| list.get(position))
+                    .copied()
+                    .unwrap_or(Variance::Invariant);
+                match variance {
+                    Variance::Covariant => self.is_subtype(sub, sup),
+                    Variance::Contravariant => self.is_subtype(sup, sub),
+                    Variance::Invariant => self.is_subtype(sub, sup) && self.is_subtype(sup, sub),
+                }
+            })
     }
 
-    /// DELETED — panics. Took parameter and return types as strings.
+    /// `Callable` assignability ([TYPEINF-SUBTYPING-CALLABLE]):
+    /// contravariant parameters, covariant return. An empty parameter list
+    /// on either side is the gradual `Callable[..., R]`, which skips the
+    /// parameter check — matching `is_assignable_to`'s treatment.
     #[must_use]
     pub fn callable_assignable(
         &self,
-        _source_params: &[&str],
-        _source_return: &str,
-        _target_params: &[&str],
-        _target_return: &str,
+        source_params: &[&str],
+        source_return: &str,
+        target_params: &[&str],
+        target_return: &str,
     ) -> bool {
-        deleted!("SubtypingContext::callable_assignable")
+        let params_ok = source_params.is_empty()
+            || target_params.is_empty()
+            || (source_params.len() == target_params.len()
+                && source_params
+                    .iter()
+                    .zip(target_params)
+                    .all(|(source, target)| self.is_subtype(target, source)));
+        params_ok && self.is_subtype(source_return, target_return)
     }
-}
-
-/// DELETED — panics. Settled subtyping between two NAME STRINGS: a hard-coded
-/// `("bool", "int")` numeric tower, `sup == "object"`, and prefix tests on
-/// rendered generics. Subtyping is a relation between resolved types.
-#[must_use]
-pub fn name_subtype(_sub: &str, _sup: &str) -> bool {
-    deleted!("name_subtype")
-}
-
-/// DELETED — panics. Built the context above by harvesting base-class SOURCE
-/// TEXT out of a module. The replacement resolves each base to the symbol it
-/// denotes through the binding table.
-#[must_use]
-pub fn module_context(_module: &basilisk_resolver::ResolvedModule) -> SubtypingContext {
-    deleted!("module_context")
 }

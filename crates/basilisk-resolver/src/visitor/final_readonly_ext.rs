@@ -4,17 +4,16 @@
 use ruff_python_ast::{Expr, Stmt, StmtClassDef, StmtFunctionDef};
 use ruff_text_size::Ranged;
 
-use crate::canonical::BindingTable;
 use crate::scope::ClassInfo;
 
-use super::annotations::annotation_is_final;
+use super::annotations::ann_text_is_final;
 use super::assigns::collect_unconditional_self_assigns;
-use super::core::text_range_to_span;
+use super::core::{source_slice_range, source_slice_span, text_range_to_span};
 
 pub(super) fn collect_final_violations(
-    bindings: &BindingTable,
     stmts: &[Stmt],
     classes: &[ClassInfo],
+    source: &str,
 ) -> Vec<crate::scope::FinalViolationInfo> {
     let mut out = Vec::new();
 
@@ -26,39 +25,26 @@ pub(super) fn collect_final_violations(
             let Expr::Name(n) = ann.target.as_ref() else {
                 return None;
             };
-            // `Final` is decided by resolving the annotation NODE through the
-            // module's bindings — `Final as F`, `typing.Final`, and a locally
-            // shadowed `Final` all answer correctly, and no source text is read.
-            // Implements [RESOLV-CANONICAL-BINDING].
-            annotation_is_final(bindings, &ann.annotation).then(|| n.id.as_str())
+            let range = ann.annotation.range();
+            let ann_text = source_slice_range(source, range)?;
+            ann_text_is_final(ann_text).then(|| n.id.as_str())
         })
         .collect();
 
     // Build a class-name -> Final-attr-names map for SubclassOverrideFinal.
-    //
-    // Read from the annotation NODES of each class body, resolved through the
-    // module's bindings. The previous version sliced each attribute's span out
-    // of the source and pattern-matched the text, so `Final as Sealed` and
-    // `typing.Final` were both invisible. Implements [RESOLV-CANONICAL-BINDING].
     let class_finals: std::collections::HashMap<&str, std::collections::HashSet<&str>> = classes
         .iter()
         .map(|cls| {
-            let finals: std::collections::HashSet<&str> = stmts
+            let finals: std::collections::HashSet<&str> = cls
+                .attributes
                 .iter()
-                .filter_map(|stmt| match stmt {
-                    Stmt::ClassDef(def) if def.name.as_str() == cls.name => Some(def),
-                    _ => None,
+                .filter(|a| {
+                    a.has_annotation
+                        && a.annotation_span
+                            .and_then(|sp| source_slice_span(source, sp))
+                            .is_some_and(ann_text_is_final)
                 })
-                .flat_map(|def| def.body.iter())
-                .filter_map(|body_stmt| {
-                    let Stmt::AnnAssign(ann) = body_stmt else {
-                        return None;
-                    };
-                    let Expr::Name(name) = ann.target.as_ref() else {
-                        return None;
-                    };
-                    annotation_is_final(bindings, &ann.annotation).then(|| name.id.as_str())
-                })
+                .map(|a| a.name.as_str())
                 .collect();
             (cls.name.as_str(), finals)
         })
@@ -69,21 +55,21 @@ pub(super) fn collect_final_violations(
     for stmt in stmts {
         match stmt {
             Stmt::ClassDef(cls_def) => {
-                collect_class_final_violations(bindings, cls_def, &class_finals, &mut out);
+                collect_class_final_violations(cls_def, &class_finals, source, &mut out);
                 // Also check methods inside the class for global Final modifications.
                 for body_stmt in &cls_def.body {
                     if let Stmt::FunctionDef(method) = body_stmt {
                         collect_func_final_violations(
-                            bindings,
                             method,
                             &module_final_names,
+                            source,
                             &mut out,
                         );
                     }
                 }
             }
             Stmt::FunctionDef(func) => {
-                collect_func_final_violations(bindings, func, &module_final_names, &mut out);
+                collect_func_final_violations(func, &module_final_names, source, &mut out);
             }
             // Check module-level walrus operators in if/while/expr statements.
             Stmt::If(node) => {
@@ -122,9 +108,9 @@ pub(super) fn collect_final_violations(
 
 /// Collect Final violations inside a class definition.
 pub(super) fn collect_class_final_violations(
-    bindings: &BindingTable,
     cls_def: &StmtClassDef,
     class_finals: &std::collections::HashMap<&str, std::collections::HashSet<&str>>,
+    source: &str,
     out: &mut Vec<crate::scope::FinalViolationInfo>,
 ) {
     use crate::scope::{FinalViolationInfo, FinalViolationKind};
@@ -166,7 +152,11 @@ pub(super) fn collect_class_final_violations(
             continue;
         };
         let attr_name = n.id.as_str();
-        if annotation_is_final(bindings, &ann.annotation) {
+        let range = ann.annotation.range();
+        let Some(ann_text) = source_slice_range(source, range) else {
+            continue;
+        };
+        if ann_text_is_final(ann_text) {
             let has_value = ann.value.is_some();
             let _ = this_final_attrs.insert(attr_name, has_value);
         }
@@ -186,6 +176,11 @@ pub(super) fn collect_class_final_violations(
         })
         .unwrap_or_default();
 
+    // In a `@dataclass`, a non-`ClassVar` `Final` field without an inline default
+    // is valid: the synthesized `__init__` assigns it as a required constructor
+    // parameter. A `ClassVar[Final[...]]` is not a field, so it still needs a value.
+    let is_dataclass = super::dataclass::is_dataclass_decorated(cls_def);
+
     // ClassFinalWithoutInit: attr has no initializer AND not in __init__ assignments.
     for (attr_name, has_value) in &this_final_attrs {
         if !has_value && !init_assigns.contains(*attr_name) {
@@ -199,6 +194,12 @@ pub(super) fn collect_class_final_violations(
                 };
                 if n.id.as_str() != *attr_name {
                     continue;
+                }
+                let is_dataclass_field = is_dataclass
+                    && source_slice_range(source, ann.annotation.range())
+                        .is_some_and(|t| !t.trim_start().starts_with("ClassVar"));
+                if is_dataclass_field {
+                    break;
                 }
                 out.push(FinalViolationInfo {
                     kind: FinalViolationKind::ClassFinalWithoutInit,
@@ -217,13 +218,7 @@ pub(super) fn collect_class_final_violations(
         };
         let is_init = method.name.as_str() == "__init__";
         for method_stmt in &method.body {
-            collect_instance_final_violations(
-                bindings,
-                method_stmt,
-                is_init,
-                &this_final_attrs,
-                out,
-            );
+            collect_instance_final_violations(method_stmt, is_init, &this_final_attrs, source, out);
         }
     }
 
@@ -232,7 +227,7 @@ pub(super) fn collect_class_final_violations(
     // Recurse into nested class definitions.
     for body_stmt in &cls_def.body {
         if let Stmt::ClassDef(nested) = body_stmt {
-            collect_class_final_violations(bindings, nested, class_finals, out);
+            collect_class_final_violations(nested, class_finals, source, out);
         }
     }
 }
@@ -285,10 +280,10 @@ pub(super) fn collect_subclass_override_final(
 
 /// Check a single statement inside a method body for instance Final violations.
 pub(super) fn collect_instance_final_violations(
-    bindings: &BindingTable,
     stmt: &Stmt,
     is_init: bool,
     class_final_attrs: &std::collections::HashMap<&str, bool>,
+    source: &str,
     out: &mut Vec<crate::scope::FinalViolationInfo>,
 ) {
     use crate::scope::{FinalViolationInfo, FinalViolationKind};
@@ -297,7 +292,10 @@ pub(super) fn collect_instance_final_violations(
             // self.x: Final = ... outside __init__
             if !is_init => {
                 if let Expr::Attribute(attr) = ann.target.as_ref() {
-                    if annotation_is_final(bindings, &ann.annotation) {
+                    let Some(ann_text) = source_slice_range(source, ann.annotation.range()) else {
+                        return;
+                    };
+                    if ann_text_is_final(ann_text) {
                         if let Expr::Name(self_name) = attr.value.as_ref() {
                             if self_name.id == "self" {
                                 out.push(FinalViolationInfo {
@@ -365,9 +363,9 @@ pub(super) fn collect_instance_final_violations(
 /// Collect the names of attributes unconditionally assigned via `self.X = ...` in
 /// the top-level statements of a function body (i.e., not inside if/for/while/try).
 pub(super) fn collect_func_final_violations(
-    bindings: &BindingTable,
     func: &StmtFunctionDef,
     module_final_names: &std::collections::HashSet<&str>,
+    source: &str,
     out: &mut Vec<crate::scope::FinalViolationInfo>,
 ) {
     // Find `global X` declarations to know which names are global Final.
@@ -395,10 +393,10 @@ pub(super) fn collect_func_final_violations(
 
     for stmt in &func.body {
         collect_func_stmt_final_violations(
-            bindings,
             stmt,
             &global_final_names,
             &mut local_finals,
+            source,
             out,
         );
     }
@@ -406,18 +404,21 @@ pub(super) fn collect_func_final_violations(
 
 /// Process a single statement inside a function for Final violations.
 pub(super) fn collect_func_stmt_final_violations(
-    bindings: &BindingTable,
     stmt: &Stmt,
     global_finals: &std::collections::HashSet<&str>,
     local_finals: &mut std::collections::HashSet<String>,
+    source: &str,
     out: &mut Vec<crate::scope::FinalViolationInfo>,
 ) {
     match stmt {
         Stmt::AnnAssign(ann) => {
             // Register x: Final = ... as a local Final.
             if let Expr::Name(n) = ann.target.as_ref() {
-                if annotation_is_final(bindings, &ann.annotation) {
-                    let _ = local_finals.insert(n.id.to_string());
+                let range = ann.annotation.range();
+                if let Some(ann_text) = source_slice_range(source, range) {
+                    if ann_text_is_final(ann_text) {
+                        let _ = local_finals.insert(n.id.to_string());
+                    }
                 }
             }
         }

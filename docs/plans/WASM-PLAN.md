@@ -20,7 +20,7 @@ browser build.
   the existing `wasm32-wasip2` Zed job, which already establishes the toolchain
   and cache pattern.
 - Record the `.wasm` byte size and ratchet it downward-only, matching the repo's
-  other gates ([CHKARCH-TESTING-BENCH]). The current unoptimised release
+  other gates ([CHKARCH-TESTING-BENCH-RATCHET]). The current unoptimised release
   artefact is **7.2 MB**, of which the embedded typeshed ZIP is 2.8 MB. That is
   the honest starting point; `opt-level = "z"`, `wasm-opt -Oz` and transport
   compression have not been applied yet and should move it before the first
@@ -46,14 +46,13 @@ The coupling is concentrated, so this is an extraction rather than a rewrite:
 `exports.rs`.
 
 - Introduce a source-provider trait for directory listing and file reading.
-- Keep the native implementation byte-identical in behaviour — a source-provider
-  refactor must change no diagnostic on any input. Prove it with the rule suites
-  and a recorded conformance run, not with the conformance run alone.
+- Keep the native implementation byte-identical in behaviour — this must not
+  move a single conformance result. The conformance suite is the gate.
 - Supply an in-memory implementation for wasm and extend the API to accept a
   set of named sources.
 
-**Gate:** a two-file playground program resolves its own imports, with the rule
-suites green and the conformance run recorded unchanged.
+**Gate:** a two-file playground program resolves its own imports, with
+conformance still 100% / 0 false positives.
 
 ## 3. Playground site {#WASM-PLAN-SITE}
 

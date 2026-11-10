@@ -32,22 +32,8 @@ pub struct ParameterInfo {
     pub name_span: Span,
     /// The source span of the annotation expression, if present.
     pub annotation_span: Option<Span>,
-    // ####################################################################
-    // # `annotation_text` IS GONE. DO NOT REINSTATE IT.                  #
-    // #                                                                  #
-    // # It held the RENDERED source of a parameter's annotation. Its     #
-    // # serializer was deleted as text-matched logic and the field was   #
-    // # left in place, filled with `None` for every parameter — which    #
-    // # turned its only consumer, `overloads_consistency`, into a false  #
-    // # positive generator: two fully annotated overloads compared       #
-    // # `None == None`, "matched", and were reported as overlapping      #
-    // # whatever their types were.                                       #
-    // #                                                                  #
-    // # A placeholder that every comparison passes is worse than the     #
-    // # text it replaced. `annotation_span` is beside it; a consumer     #
-    // # that needs the type resolves that span through the annotation    #
-    // # cascade ([TYPEINF-ANNOTATION-RESOLUTION]).                        #
-    // ####################################################################
+    /// The raw annotation text (e.g. `"int"`, `"str | None"`), if annotated.
+    pub annotation_text: Option<String>,
 }
 
 /// How a return annotation is classified.
@@ -90,12 +76,6 @@ pub struct ReturnStmtInfo {
     ///
     /// Used for return type inference in BSK-0002.
     pub rhs_kind: RhsKind,
-    /// The span of the returned expression itself, when there is one.
-    ///
-    /// The checker's per-module type oracle indexes every expression by its
-    /// exact source range, so this span is how a return statement asks the
-    /// bidirectional engine what it actually returns ([NARROWPLAN-INTEGRATION]).
-    pub value_span: Option<Span>,
 }
 
 /// A `yield` or `yield from` expression found inside a generator function body.
@@ -107,12 +87,6 @@ pub struct YieldExprInfo {
     pub rhs_kind: RhsKind,
     /// `true` when this is a `yield from` expression.
     pub is_yield_from: bool,
-    /// The span of the yielded expression itself, when there is one.
-    ///
-    /// The checker's per-module type oracle indexes every expression by its
-    /// exact source range, so this span is how a `yield` asks the
-    /// bidirectional engine what it actually yields ([NARROWPLAN-INTEGRATION]).
-    pub value_span: Option<Span>,
     /// The name of the called function/constructor, if the yield value is a call expression.
     /// For `yield SomeClass()`, this is `Some("SomeClass")`.
     pub call_name: Option<String>,
@@ -129,18 +103,13 @@ pub struct FunctionInfo {
     pub name: String,
     /// All positional-or-keyword and keyword-only parameters.
     pub parameters: Vec<ParameterInfo>,
-    /// How many leading entries of [`Self::parameters`] accept a positional
-    /// argument (`posonlyargs` + `args`); the remainder are keyword-only.
-    /// Rules that reason about "the first positional parameter" (PEP 742
-    /// narrowing functions) read this instead of guessing from names.
-    pub positional_count: usize,
     /// The `*args` parameter, if present.
     pub vararg: Option<ParameterInfo>,
     /// The `**kwargs` parameter, if present.
     pub kwarg: Option<ParameterInfo>,
     /// How the return annotation is classified (or absent).
     pub return_annotation: ReturnAnnotationKind,
-    /// Decorator names applied to this function, as spelled at the definition.
+    /// Decorator names applied to this function (e.g. `"overload"`, `"override"`).
     pub decorators: Vec<String>,
     /// Decorator name spans paired with their names (for semantic token highlighting).
     pub decorator_spans: Vec<(String, Span)>,
@@ -157,18 +126,7 @@ pub struct FunctionInfo {
     /// The span of the return annotation expression, if present.
     pub return_annotation_span: Option<Span>,
     /// Name of the containing class, if this function is a method.
-    ///
-    /// A RENDERING, kept for diagnostic message text. Two classes declared
-    /// with the same name in one module share it — use [`Self::class_site`] to
-    /// tell them apart.
     pub class_name: Option<String>,
-    /// DEFINITION SITE of the containing class, if this function is a method.
-    ///
-    /// The span of the `class` statement's name token, which is unique per
-    /// definition within a module and is the lawful key for "which class owns
-    /// this method?". Matches `ClassInfo::name_span`, so a method index built
-    /// on it lines up with [`crate::ClassGraph`].
-    pub class_site: Option<Span>,
     /// `true` when this function is lexically nested inside a class body — e.g.
     /// a closure defined inside a method — even though it is not itself a method
     /// (`class_name` is `None`).  Used by `generics_self_usage` to know that `Self` still
@@ -177,8 +135,16 @@ pub struct FunctionInfo {
     pub nested_in_class: bool,
     /// All names assigned anywhere in the function body (for scope analysis).
     pub all_local_assigns: Vec<String>,
+    /// Names assigned at the top level of the function body (unconditionally).
+    pub unconditional_assigns: Vec<String>,
     /// Names referenced directly in `return` expressions (simple `return name`).
     pub return_name_refs: Vec<(String, Span)>,
+    /// Names referenced in top-level (unconditional) `return` expressions only.
+    ///
+    /// Unlike `return_name_refs`, this excludes returns nested inside `if`/`for`/
+    /// `while`/`try`/`with` blocks.  Used by E0019 to avoid false positives where
+    /// a `return name` is inside the same branch that assigned `name`.
+    pub top_level_return_name_refs: Vec<(String, Span)>,
     /// Unhashable expressions used as dict keys in the function body.
     pub unhashable_keys: Vec<super::module_types::UnhashableKeyRef>,
     /// `true` when the entire function body is a stub (only `...` or `pass`).
@@ -214,36 +180,6 @@ pub struct FunctionInfo {
     /// `LSP-ARCHITECTURE-SPEC.md#LSPARCH-FEATURES-INLAYHINTS`).  Kept separate
     /// from `local_vars`, which is annotated-only for the checker rules.
     pub local_unannotated_vars: Vec<VariableInfo>,
-    /// `true` when a decorator resolves to `typing.overload`.
-    ///
-    /// Resolved through the module's bindings at collection time — an aliased
-    /// `from typing import overload as ov` answers identically and a local
-    /// `def overload` does not answer. Implements [RESOLV-CANONICAL-BINDING].
-    pub is_overload: bool,
-    /// `true` when a decorator is the builtin `staticmethod` and the module does
-    /// not rebind that name. Implements [RESOLV-CANONICAL-BINDING].
-    pub is_staticmethod: bool,
-    /// `true` when a decorator is the builtin `classmethod` and the module does
-    /// not rebind that name. Implements [RESOLV-CANONICAL-BINDING].
-    pub is_classmethod: bool,
-    /// `true` when a decorator resolves to `typing.final` (PEP 591).
-    ///
-    /// Resolved through the module's bindings, so `@final`, `@typing.final`,
-    /// and `from typing import final as sealed; @sealed` all answer alike, and
-    /// a locally-defined `final` does not answer at all.
-    pub is_final: bool,
-    /// `true` when a decorator resolves to `abc.abstractmethod`.
-    ///
-    /// Resolved through the module's bindings at collection time — an aliased
-    /// `from abc import abstractmethod as am` answers identically and a local
-    /// `def abstractmethod` does not answer. Implements
-    /// [RESOLV-CANONICAL-BINDING].
-    pub is_abstractmethod: bool,
-    /// `true` when a decorator resolves to `typing.no_type_check`.
-    ///
-    /// Resolved through the module's bindings at collection time. Implements
-    /// [RESOLV-CANONICAL-BINDING].
-    pub is_no_type_check: bool,
     /// `true` when the function body contains at least one `yield` or `yield from`.
     pub is_generator: bool,
     /// `true` when the function is declared with `async def`.

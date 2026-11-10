@@ -100,7 +100,7 @@
     "body": [
       {
         "type": "text",
-        "html": "Fires when a module-level variable has no type annotation.  This house rule is off by default \u2014 the default configuration contains only PEP-tagged rules \u2014 and a project opts in via configuration. When enabled, every module-level binding must carry an explicit annotation so that Basilisk can verify downstream usage and generate accurate stubs."
+        "html": "Fires when a module-level variable has no type annotation.  This house rule is off by default \u2014 the default configuration is pure PEP conformance \u2014 and a project opts in via configuration. When enabled, every module-level binding must carry an explicit annotation so that Basilisk can verify downstream usage and generate accurate stubs."
       }
     ],
     "group": "Missing Annotations",
@@ -137,7 +137,7 @@
     "body": [
       {
         "type": "text",
-        "html": "This house rule is off by default \u2014 the default configuration contains only PEP-tagged rules. When a project enables it, every variadic positional parameter (<code>*args</code>) and variadic keyword parameter (<code>**kwargs</code>) must carry an explicit type annotation."
+        "html": "This house rule is off by default \u2014 the default configuration is pure PEP conformance. When a project enables it, every variadic positional parameter (<code>*args</code>) and variadic keyword parameter (<code>**kwargs</code>) must carry an explicit type annotation."
       }
     ],
     "group": "Missing Annotations",
@@ -549,7 +549,7 @@
     "body": [
       {
         "type": "text",
-        "html": "Fires when a package is imported and resolves to a <code>.py</code> source file (not <code>.pyi</code>) without a <code>py.typed</code> marker. This means the package is installed but lacks type information, reducing type safety. This rule is off by default \u2014 the default configuration contains only PEP-tagged rules \u2014 and a project opts in with an explicit <code>BSK-0152</code> severity. Once enabled, an untyped third-party import is a hard error; a project can soften it per import (<code># type: warningBSK-0152</code>) or globally (<code>&quot;BSK-0152&quot; = &quot;warning&quot;</code>) to use non-type-safe libraries at its own risk."
+        "html": "Fires when a package is imported and resolves to a <code>.py</code> source file (not <code>.pyi</code>) without a <code>py.typed</code> marker. This means the package is installed but lacks type information, reducing type safety. This rule is off by default \u2014 the default configuration is pure PEP conformance \u2014 and a project opts in with an explicit <code>BSK-0152</code> severity. Once enabled, an untyped third-party import is a hard error; a project can soften it per import (<code># type: warningBSK-0152</code>) or globally (<code>&quot;BSK-0152&quot; = &quot;warning&quot;</code>) to use non-type-safe libraries at its own risk."
       },
       {
         "type": "code",
@@ -583,11 +583,11 @@
     "body": [
       {
         "type": "text",
-        "html": "<a href=\"https://peps.python.org/pep-0613/\">PEP 613</a> requires that the RHS of an explicit <code>TypeAlias</code> annotation must be a valid type expression, and the typing spec&#x27;s aliases chapter gives plain assignments the same split: an assignment whose RHS is a type expression is an implicit alias; any other assignment makes an ordinary variable, and a variable is not valid in a type expression. All verdicts are structural, over the parsed <code>ruff</code> AST (LINESCANPLAN-AST-MIGRATION, issue #408):"
+        "html": "<a href=\"https://peps.python.org/pep-0613/\">PEP 613</a> requires that the RHS of an explicit <code>TypeAlias</code> annotation must be a valid type expression. The following are errors:"
       },
       {
         "type": "text",
-        "html": "- Literals, collection displays, comprehensions, lambdas, conditionals,   boolean operators, f-strings, and calls that are not recognised type   constructors (<code>TypeVar</code>, <code>ParamSpec</code>, <code>TypeVarTuple</code>, <code>NewType</code>,   <code>TypedDict</code>, <code>NamedTuple</code>, <code>TypeAliasType</code>, <code>type(...)</code>) all make   runtime values, not types. - Alias parameterization is checked against the alias&#x27;s own type   parameters: arity, <code>ParamSpec</code> argument shape (<a href=\"https://peps.python.org/pep-0612/\">PEP 612</a>), and <code>TypeVar</code>   bounds through the module&#x27;s subtyping context (NARROWPLAN-SUBTYPING)."
+        "html": "- List literals: <code>x: TypeAlias = int, str</code> - Tuple literals: <code>x: TypeAlias = ((int, str),)</code> - Dict literals: <code>x: TypeAlias = {&quot;a&quot;: &quot;b&quot;}</code> - List comprehensions: <code>x: TypeAlias = int for i in range(1)</code> - Lambda calls: <code>x: TypeAlias = (lambda: int)()</code> - Conditional expressions: <code>x: TypeAlias = int if cond else str</code> - Boolean literals: <code>x: TypeAlias = True</code> - Integer literals: <code>x: TypeAlias = 1</code> - Binary boolean operators: <code>x: TypeAlias = list or set</code> - F-strings: <code>x: TypeAlias = f&quot;...&quot;</code> - Subscript-into-subscript: <code>x: TypeAlias = int0</code> - Runtime calls: <code>x: TypeAlias = eval(&quot;int&quot;)</code>"
       },
       {
         "type": "code",
@@ -605,10 +605,6 @@
       {
         "label": "PEP 484",
         "url": "https://peps.python.org/pep-0484/"
-      },
-      {
-        "label": "PEP 612",
-        "url": "https://peps.python.org/pep-0612/"
       },
       {
         "label": "PEP 613",
@@ -638,10 +634,6 @@
       {
         "type": "text",
         "html": "- The string name must match the variable it is assigned to - The base type must be a proper concrete class - <code>NewType</code> accepts exactly two arguments"
-      },
-      {
-        "type": "text",
-        "html": "Every verdict is structural over the parsed <code>ruff</code> AST, with typing members resolved through the module&#x27;s import cascade (LINESCANPLAN-AST-MIGRATION, issue #408): <code>Literal</code> under a renamed import is still <code>Literal</code>, and a module-local class is never mistaken for a <code>TypeVar</code> because of its capitalisation."
       },
       {
         "type": "code",
@@ -725,7 +717,7 @@
     "body": [
       {
         "type": "text",
-        "html": "<a href=\"https://peps.python.org/pep-0695/\">PEP 695</a> requires the RHS of a <code>type</code> statement to be a valid type expression. The RHS is validated **structurally** on the parsed <code>ruff</code> expression tree via the shared judge (LINESCANPLAN-AST-MIGRATION, issue #379 \u2014 substring matching both missed invalid forms and misfired on identifiers containing matched text): names, dotted names, <code>X | Y</code> unions, <code>None</code>, string forward references, and subscriptions of those are type expressions; every other expression form (literals, calls, lambdas, conditionals, comparisons, comprehensions, boolean operators, attribute access on a subscript) is not. The <code>type</code> statement is lazily evaluated, so string forward references are valid anywhere in the RHS, including as union operands \u2014 recursive aliases spell themselves that way."
+        "html": "<a href=\"https://peps.python.org/pep-0695/\">PEP 695</a> requires the RHS of a <code>type</code> statement to be a valid type expression. The same restrictions as <code>TypeAlias</code> (<code>aliases_implicit</code>) apply."
       },
       {
         "type": "code",
@@ -829,15 +821,15 @@
       },
       {
         "type": "text",
-        "html": "- Names (<code>int</code>, <code>str</code>, <code>MyClass</code>) - Subscripts (<code>listint</code>, <code>dictstr, int</code>) - Binary-or unions (<code>int | str</code>) - String literals (forward references) - <code>None</code>"
+        "html": "- Names (<code>int</code>, <code>str</code>, <code>MyClass</code>) - Subscripts (<code>listint</code>, <code>dictstr, int</code>) - Binary-or unions (<code>int | str</code>) - String literals (forward references) - <code>None</code> - <code>...</code> (Ellipsis, in Callable signatures)"
       },
       {
         "type": "text",
-        "html": "The following are invalid and are flagged structurally, on the parsed <code>ruff</code> AST (LINESCANPLAN-AST-MIGRATION, issue #408):"
+        "html": "The following are invalid and should be flagged:"
       },
       {
         "type": "text",
-        "html": "- List literals: <code>int, str</code> - Dict literals: <code>{}</code> - Tuple literals: <code>(int, str)</code> - List comprehensions: <code>int for i in range(1)</code> - Lambda expressions (called or uncalled) - Conditional expressions: <code>int if cond else str</code> - Boolean binary operators: <code>int or str</code>, <code>int and str</code> - F-string literals: <code>f&quot;int&quot;</code> - Calls \u2014 any call, <code>eval(...)</code> included, is a runtime expression - Negative numeric literals (positive are caught by E0024) - Names that refer to module objects (<code>import types</code> \u2192 <code>types</code> is a module, not a type) - Names that refer to unannotated literal variables (<code>var1 = 3</code> \u2192 <code>var1</code> is <code>int</code>, not a type)"
+        "html": "- List literals: <code>int, str</code> - Dict literals: <code>{}</code> - Tuple literals: <code>(int, str)</code> - List comprehensions: <code>int for i in range(1)</code> - Lambda expressions (called or uncalled) - Conditional expressions: <code>int if cond else str</code> - Boolean binary operators: <code>int or str</code>, <code>int and str</code> - F-string literals: <code>f&quot;int&quot;</code> - Explicit function calls like <code>eval(...)</code> - Negative numeric literals (positive are caught by E0024) - Names that refer to module objects (<code>import types</code> \u2192 <code>types</code> is a module, not a type) - Names that refer to unannotated literal variables (<code>var1 = 3</code> \u2192 <code>var1</code> is <code>int</code>, not a type)"
       },
       {
         "type": "code",
@@ -1025,7 +1017,7 @@
       },
       {
         "type": "text",
-        "html": "Every right-hand side \u2014 literal, call, constructor, method, variable \u2014 is typed by the module&#x27;s ModuleOracle (NARROWPLAN-INTEGRATION Step 1: <code>BidirEngine::synth</code>, with <code>synth_call</code> resolving call returns, GitHub #397/#378), collection displays are judged in the annotation&#x27;s expected-type context by engine check mode, and nominal verdicts route through crate::subtyping::SubtypingContext."
+        "html": "The check is performed by extracting the annotation text from the source around the variable&#x27;s name span and comparing it against the RHS kind."
       }
     ],
     "group": "Type System",
@@ -1058,7 +1050,11 @@
       },
       {
         "type": "text",
-        "html": "| Annotation pattern | Expected args | Error condition | |---|---|---| | <code>list...</code>      | exactly 1 | 0 or 2+ args | | <code>set...</code>       | exactly 1 | 0 or 2+ args | | <code>frozenset...</code> | exactly 1 | 0 or 2+ args | | <code>type...</code>      | exactly 1 | 0 or 2+ args | | <code>dict...</code>      | exactly 2 | 0, 1, or 3+ args |"
+        "html": "| Annotation pattern | Expected args | Error condition | |---|---|---| | <code>list...</code>      | exactly 1 | 0 or 2+ args | | <code>set...</code>       | exactly 1 | 0 or 2+ args | | <code>frozenset...</code> | exactly 1 | 0 or 2+ args | | <code>type...</code>      | exactly 1 | 0 or 2+ args | | <code>Type...</code>      | exactly 1 | 0 or 2+ args | | <code>dict...</code>      | exactly 2 | 0, 1, or 3+ args | | <code>Callable...</code>  | exactly 2 | wrong count or invalid form |"
+      },
+      {
+        "type": "text",
+        "html": "For <code>Callable</code>, the first argument must be a parameter list <code>int, str</code>, bare ellipsis <code>...</code>, a <code>ParamSpec</code>, or <code>Concatenate...</code>.  The second argument (return type) must not be a list literal."
       }
     ],
     "group": "Type System",
@@ -1092,7 +1088,12 @@
     ],
     "summary": "Unpack[`TypedDict`] kwargs violations",
     "summaryHtml": "UnpackTypedDict kwargs violations",
-    "body": [],
+    "body": [
+      {
+        "type": "text",
+        "html": "Detects invalid uses of <code>**kwargs: UnpackTypedDict</code> in function signatures: parameter overlap with <code>TypedDict</code> keys, <code>UnpackTypeVar</code> (invalid), and call-site validation for functions with Unpack kwargs."
+      }
+    ],
     "group": "Type System",
     "docsUrl": "https://www.basilisk-python.dev/errors/callables_kwargs",
     "references": [
@@ -1127,7 +1128,7 @@
     "body": [
       {
         "type": "text",
-        "html": "Calls to a callable member of a <code>ParamSpec</code>-generic class specialization must match the parameter list the class was specialized with. Such members are implicitly positional-only, so keyword arguments are not allowed."
+        "html": "When a parameter is annotated as <code>Callable[int, str, T]</code>, calls to that parameter must match the expected argument count. Additionally, <code>Callable</code> parameters are implicitly positional-only, so keyword arguments are not allowed."
       }
     ],
     "group": "Type System",
@@ -1201,7 +1202,20 @@
     "body": [
       {
         "type": "text",
-        "html": "Callable types are covariant with respect to return types and contravariant with respect to parameter types."
+        "html": "Callable types are covariant with respect to return types and contravariant with respect to parameter types.  When a <code>Callable[T, R]</code>-annotated variable is assigned a value whose type is <code>Callable[S, Q]</code>, the assignment is only valid when:"
+      },
+      {
+        "type": "text",
+        "html": "- <code>Q</code> is a subtype of <code>R</code>  (return type \u2014 covariant) - <code>T</code> is a subtype of <code>S</code>  (parameter type \u2014 contravariant, i.e. the source   must accept everything the target accepts, which means a broader type)"
+      },
+      {
+        "type": "code",
+        "lang": "python",
+        "code": "def func(\n    cb1: Callable[[float], int],\n    cb3: Callable[[int], int],\n) -> None:\n    f6: Callable[[float], float] = cb3  # E \u2014 int param is not supertype of float\n    f8: Callable[[int], int] = cb2      # E \u2014 float return is not subtype of int"
+      },
+      {
+        "type": "text",
+        "html": "This rule specifically handles assignments inside function bodies where the RHS is a parameter whose type is already known to be a <code>Callable</code>."
       }
     ],
     "group": "Type System",
@@ -1274,7 +1288,7 @@
     "body": [
       {
         "type": "text",
-        "html": "Every argument is judged by the TYPE the module&#x27;s bidirectional engine synthesises for it (NARROWPLAN-INTEGRATION Step 3), checked against the declared parameter type through the one shared judgment (TypeJudge) \u2014 never by the syntactic shape of the expression."
+        "html": "When a function is called with a literal argument whose type is clearly incompatible with the declared parameter annotation, Basilisk reports the mismatch.  The check mirrors the literal-kind vs annotation comparison used by <code>assignment_compatibility</code>."
       },
       {
         "type": "code",
@@ -1331,10 +1345,6 @@
         "html": "Additionally, <code>ClassVar</code> attributes cannot be assigned via instances."
       },
       {
-        "type": "text",
-        "html": "Every verdict is structural over the parsed <code>ruff</code> AST, resolved through the module&#x27;s import cascade (LINESCANPLAN-AST-MIGRATION) \u2014 <code>ClassVar</code>, <code>typing.ClassVar</code>, and any import alias all answer alike, and no check reads annotation source text."
-      },
-      {
         "type": "code",
         "lang": "python",
         "code": "class MyClass:\n    bad9: Final[ClassVar[int]] = 3     # E0036 \u2014 ClassVar cannot be nested\n    bad10: list[ClassVar[int]] = []    # E0036 \u2014 ClassVar cannot be nested\n\n    def method1(self, a: ClassVar[int]):   # E0036 \u2014 ClassVar not allowed here\n        x: ClassVar[str] = \"\"              # E0036 \u2014 ClassVar not allowed here\n        self.xx: ClassVar[str] = \"\"        # E0036 \u2014 ClassVar not allowed here\n\n    def method2(self) -> ClassVar[int]:    # E0036 \u2014 ClassVar not allowed here\n        ...\n\nbad11: ClassVar[int] = 3              # E0036 \u2014 ClassVar not allowed at module level\nbad12: TypeAlias = ClassVar[str]      # E0036 \u2014 ClassVar not allowed here"
@@ -1375,6 +1385,10 @@
       {
         "type": "text",
         "html": "When a class method marked with <code>@override</code> has a different parameter signature or return type than the corresponding method in a same-module base class, Basilisk reports an incompatible override."
+      },
+      {
+        "type": "text",
+        "html": "The check compares annotation text extracted from the source for non-self parameters and the return type.  The <code>self</code>/<code>cls</code> parameter is always skipped since its type naturally differs between base and child class."
       },
       {
         "type": "code",
@@ -1461,6 +1475,10 @@
         "html": "<a href=\"https://peps.python.org/pep-0698/\">PEP 698</a> \u2014 a method decorated <code>@override</code> (or <code>typing.override</code>) must actually override a method declared in a base class. When no ancestor declares a method of that name, the decorator is a lie and the type checker should report it."
       },
       {
+        "type": "text",
+        "html": "To stay free of false positives the check is deliberately conservative: it only fires when the <em>entire</em> ancestor chain is resolvable within the current module (no <code>Any</code> base and no imported base whose methods we cannot see), so a method that legitimately overrides something in an unseen base is never flagged."
+      },
+      {
         "type": "code",
         "lang": "python",
         "code": "class Base:\n    def existing(self) -> int: ...\n\nclass Child(Base):\n    @override\n    def missing(self) -> int:  # E0159: nothing named `missing` in any base\n        return 1"
@@ -1508,15 +1526,19 @@
       },
       {
         "type": "text",
-        "html": "2. **Explicit self annotation mismatch** (L56): <code>__init__</code> annotates <code>self</code>    as <code>Class4int</code> but the constructor is called as <code>Class4str()</code>."
+        "html": "2. **Self type incompatibility** (L42): Passing a base-class instance where    <code>Self</code> in <code>__init__</code> demands a subclass instance."
       },
       {
         "type": "text",
-        "html": "3. **Class-scoped <code>TypeVar</code>s in self annotation** (L107): Using class-scoped    type variables in a reordered <code>self</code> annotation is invalid."
+        "html": "3. **Explicit self annotation mismatch** (L56): <code>__init__</code> annotates <code>self</code>    as <code>Class4int</code> but the constructor is called as <code>Class4str()</code>."
       },
       {
         "type": "text",
-        "html": "4. **No custom <code>__init__</code> with arguments** (L130): Classes inheriting only    from <code>object</code> (no custom <code>__init__</code> or <code>__new__</code>) cannot accept arguments."
+        "html": "4. **Class-scoped <code>TypeVar</code>s in self annotation** (L107): Using class-scoped    type variables in a reordered <code>self</code> annotation is invalid."
+      },
+      {
+        "type": "text",
+        "html": "5. **No custom <code>__init__</code> with arguments** (L130): Classes inheriting only    from <code>object</code> (no custom <code>__init__</code> or <code>__new__</code>) cannot accept arguments."
       }
     ],
     "group": "Type System",
@@ -1636,7 +1658,16 @@
       },
       {
         "type": "text",
-        "html": "A variable that holds a class&#x27;s <em>constructor-to-callable</em> signature must be called in a way that matches that synthesized signature:"
+        "html": "When a class object flows through an identity-over-callable function such as"
+      },
+      {
+        "type": "code",
+        "lang": "python",
+        "code": "def accepts_callable(cb: Callable[P, R]) -> Callable[P, R]:\n    return cb\n\nr1 = accepts_callable(Class1)   # r1 has Class1's constructor signature"
+      },
+      {
+        "type": "text",
+        "html": "the bound variable (<code>r1</code>) gains the <em>constructor-to-callable</em> signature of the class. Calls to that variable must match the synthesized signature:"
       },
       {
         "type": "code",
@@ -1645,7 +1676,7 @@
       },
       {
         "type": "text",
-        "html": "The synthesized signature is derived (in priority order) from the metaclass <code>__call__</code>, then <code>__new__</code> (when it returns a type other than the class), then <code>__init__</code>, mirroring runtime construction."
+        "html": "The synthesized signature is derived (in priority order) from the metaclass <code>__call__</code>, then <code>__new__</code> (when it returns a type other than the class / <code>Self</code>), then <code>__init__</code>, mirroring runtime construction."
       }
     ],
     "group": "Type System",
@@ -1914,7 +1945,7 @@
       },
       {
         "type": "text",
-        "html": "1. **<code>__post_init__</code> signature mismatch**: A dataclass with <code>InitVar</code> fields    must declare a <code>__post_init__</code> method whose parameters (after <code>self</code>)    match the <code>InitVar</code> fields in count."
+        "html": "1. **<code>__post_init__</code> signature mismatch**: A dataclass with <code>InitVar</code> fields    must declare a <code>__post_init__</code> method whose parameters (after <code>self</code>)    match the <code>InitVar</code> fields in count and type."
       },
       {
         "type": "text",
@@ -1923,7 +1954,7 @@
       {
         "type": "code",
         "lang": "python",
-        "code": "from dataclasses import InitVar, dataclass\n\n@dataclass\nclass DC1:\n    x: InitVar[int]\n    y: InitVar[str]\n\n    def __post_init__(self, x: int) -> None:  # E: one parameter, two fields\n        pass\n\ndc1 = DC1(1, \"\")\ndc1.x  # E: cannot access InitVar field as attribute"
+        "code": "from dataclasses import InitVar, dataclass\n\n@dataclass\nclass DC1:\n    x: InitVar[int]\n    y: InitVar[str]\n\n    def __post_init__(self, x: int, y: int) -> None:  # E: y should be str\n        pass\n\ndc1 = DC1(1, \"\")\ndc1.x  # E: cannot access InitVar field as attribute"
       }
     ],
     "group": "Type System",
@@ -2182,11 +2213,7 @@
     "body": [
       {
         "type": "text",
-        "html": "<code>assert_type(expr, Type)</code> is a static-analysis directive that verifies the inferred type of <code>expr</code> equals <code>Type</code>. Two judgments feed it (NARROWPLAN-INTEGRATION Step 5):"
-      },
-      {
-        "type": "text",
-        "html": "- the resolver&#x27;s flow-narrowed comparison of declared parameter types   (<code>type_mismatch</code> on basilisk_resolver::AssertTypeCallInfo), and - the module&#x27;s span-indexed oracle \u2014 the SAME engine behind hover \u2014 for   expressions the resolver cannot type (call results, attributes). The   oracle verdict fires only when both sides are fully known and provably   DISJOINT (neither assignable to the other), so spelling variance and   literal widening can never manufacture a false positive   (CHKARCH-CONFORMANCE-MODE)."
+        "html": "<code>assert_type(expr, Type)</code> is a static-analysis directive that verifies the inferred type of <code>expr</code> equals <code>Type</code>.  When the resolver can determine both sides and they do not match, this rule emits an error."
       },
       {
         "type": "code",
@@ -2225,10 +2252,6 @@
       {
         "type": "text",
         "html": "<code>typing.cast(typ, val)</code> must be called with exactly two positional arguments, and the first argument must be a type expression, not a value literal. A <em>quoted</em> first argument (<code>cast(&quot;Widget&quot;, x)</code>) is NOT a value literal \u2014 it is the standard <a href=\"https://peps.python.org/pep-0484/\">PEP 484</a> forward-reference spelling, which typeshed admits directly (<code>cast(typ: type_T | str | Any, val)</code>) and which ruff&#x27;s <code>TC006</code> actively requires \u2014 so only genuine non-string value literals are rejected (issue #335)."
-      },
-      {
-        "type": "text",
-        "html": "A <code>cast()</code> is invalid wherever it appears, so every expression position is checked \u2014 <code>return cast(1, x)</code> and <code>print(cast(1, x))</code> are as wrong as <code>y = cast(1, x)</code> (issue #335)."
       },
       {
         "type": "text",
@@ -4689,10 +4712,6 @@
         "html": "1. Assigning a <code>Literal&quot;X&quot;</code>-typed parameter to a <code>Literal&quot;Y&quot;</code> variable    where the literal values differ. 2. Assigning an f-string containing non-<code>LiteralString</code> interpolations to    a <code>LiteralString</code>-annotated variable. 3. Assigning a generic parameterised with <code>str</code> where <code>LiteralString</code> is    required (invariant generics like <code>list</code>, <code>Container</code>). 4. Assigning a <code>listLiteralString</code> to <code>liststr</code> \u2014 lists are invariant."
       },
       {
-        "type": "text",
-        "html": "Every verdict is structural over the parsed <code>ruff</code> AST (LINESCANPLAN-AST-MIGRATION): the previous line reconstructor skipped statements by their leading keyword \u2014 including <code>assert_type</code>, a spelling fitted to the conformance fixtures (CHKARCH-CONFORMANCE-MODE, issue #408) \u2014 and re-parsed annotations, f-strings, and calls from text."
-      },
-      {
         "type": "code",
         "lang": "python",
         "code": "def func(b: Literal[\"two\"], non_literal: str):\n    x1: Literal[\"\"] = b                          # E \u2014 different literal values\n    x2: LiteralString = f\"{non_literal}\"          # E \u2014 non-literal in f-string\n    x3: Container[LiteralString] = Container(s)   # E \u2014 str \u2260 LiteralString\n    x4: list[str] = val                            # E \u2014 invariant mismatch"
@@ -4854,10 +4873,6 @@
       {
         "type": "text",
         "html": "2. **Augmented assignment widens a Literal type**:    <code>a += 3</code> where <code>a</code> is typed <code>Literal3, 4, 5</code> produces an <code>int</code> result,    which is not assignable back to <code>Literal3, 4, 5</code>."
-      },
-      {
-        "type": "text",
-        "html": "Every verdict is structural over the parsed <code>ruff</code> AST (LINESCANPLAN-AST-MIGRATION, issue #408): <code>Literal</code> resolves through the import cascade under any spelling, literal values compare as parsed values (<code>0x14</code> equals <code>20</code>; <code>0</code> never equals <code>False</code> because the AST keeps int and bool distinct), and assignments are <code>AnnAssign</code>/<code>AugAssign</code> nodes, never reconstructed source lines."
       },
       {
         "type": "code",
@@ -5084,21 +5099,17 @@
     "tags": [
       "pep"
     ],
-    "summary": "possibly-unbound variable at a `return`",
-    "summaryHtml": "possibly-unbound variable at a <code>return</code>",
+    "summary": "Unbound variable on some code paths",
+    "summaryHtml": "Unbound variable on some code paths",
     "body": [
       {
         "type": "text",
-        "html": "NARROWPLAN-INTEGRATION Step 8 (#285(https://github.com/Nimblesite/Basilisk/issues/285)): definite assignment is tracked over ALL paths, and divergence is the walker&#x27;s inference-driven analysis (NARROWPLAN-FLOW, crate::narrow::stmt_diverges) \u2014 a branch that provably never falls through (<code>return</code>, <code>raise</code>, a <code>NoReturn</code>-typed call, <code>while True:</code> without <code>break</code>) cannot leave the name unbound, so it drops out of the merge instead of poisoning it."
+        "html": "When a function contains a <code>return &lt;name&gt;</code> statement and the name is assigned in the function body, but only inside conditional branches (e.g. <code>if</code>, <code>while</code>, <code>try</code>), it may be unbound when the <code>return</code> is reached on other paths."
       },
       {
         "type": "code",
         "lang": "python",
-        "code": "def maybe_assign(flag: bool) -> int:\n    if flag:\n        result = 42\n    return result   # result may be unbound if flag is False \u2192 names_unbound\n\ndef guarded(flag: bool) -> int:\n    if flag:\n        result = 42\n    else:\n        return 0    # this path never reaches the return below\n    return result   # bound on every live path \u2014 silent"
-      },
-      {
-        "type": "text",
-        "html": "Gradual posture (TYPEINF-TARGET-GRADUAL): a read the walk cannot prove bound on every live path fires only where the walk is exact (straight lines, <code>if</code>/<code>elif</code>/<code>else</code>, <code>try</code> success paths, <code>match</code> cases, <code>with</code> bodies); inside loop bodies, <code>except</code> handlers, and <code>finally</code> blocks \u2014 where an earlier iteration or a mid-statement exception makes &quot;bound&quot; path-dependent \u2014 the walk abstains."
+        "code": "def maybe_assign(flag: bool) -> int:\n    if flag:\n        result = 42\n    return result   # result may be unbound if flag is False \u2192 E0019"
       }
     ],
     "group": "Type System",
@@ -5117,30 +5128,26 @@
     "tags": [
       "pep"
     ],
-    "summary": "Reference to a name with no visible definition",
-    "summaryHtml": "Reference to a name with no visible definition",
+    "summary": "Undefined variable used in a return statement or as a module-level callee",
+    "summaryHtml": "Undefined variable used in a return statement or as a module-level callee",
     "body": [
       {
         "type": "text",
-        "html": "Flags any name referenced in a <code>return</code> expression \u2014 bare (<code>return x</code>), the base of an attribute/subscript chain (<code>return x.y</code>), a call argument, or the **callee of a call** (<code>return x()</code>) \u2014 that is not defined in scope. A name is considered defined if it is a parameter, a local assignment (<code>=</code>, <code>for</code>, <code>with</code>), a module-level function, class, variable, import, or <a href=\"https://peps.python.org/pep-0695/\">PEP 695</a> <code>type</code> alias, an enclosing scope&#x27;s binding, a cross-module imported symbol, or a builtin."
+        "html": "Flags any name referenced in a <code>return</code> expression \u2014 bare (<code>return x</code>), the base of an attribute/subscript chain (<code>return x.y</code>), a call argument, or the **callee of a call** (<code>return x()</code>) \u2014 that is not defined in scope. A name is considered defined if it is a parameter, a local assignment (<code>=</code>, <code>for</code>, <code>with</code>), a module-level function, class, variable, or import, an enclosing scope&#x27;s binding, a cross-module imported symbol, or a builtin."
       },
       {
         "type": "text",
-        "html": "Also flags a module-level statement that calls a name bound nowhere in the module (issue #397), and a class that lists **its own name among its bases** (issue #398) \u2014 Python evaluates the bases tuple before binding the class name, so both raise <code>NameError</code> the moment the module is imported. Shadowing stays legal: <code>class D(D)</code> is only flagged when the class statement is the SOLE binding of that name (no earlier class, import, assignment, or builtin to inherit from). A <code>from m import *</code> disables both module-level passes: the star can bind any name."
+        "html": "Also flags a module-level statement that calls a name bound nowhere in the module (issue #397), and a class that names its own yet-unbound self among its bases (issue #398) \u2014 Python evaluates the bases tuple before binding the class name, so both raise <code>NameError</code> the moment the module is imported. Shadowing stays legal: <code>class D(D)</code> is only flagged when the class statement is the SOLE binding of that name (no earlier class, import, assignment, or builtin to inherit from). A <code>from m import *</code> disables both module-level passes: the star can bind any name."
       },
       {
         "type": "code",
         "lang": "python",
-        "code": "def compute() -> int:\n    return undefined_name     # never defined \u2192 E0018\n    return undefined_fn()     # undefined callee \u2192 E0018\n\n\na: int = print2(\"abc\")        # no `print2` anywhere \u2192 E0018\n\nclass D(D):                   # `D` unbound in its own bases \u2192 E0018\n    pass"
+        "code": "def compute() -> int:\n    return undefined_name     # never defined \u2192 E0018\n    return undefined_fn()     # undefined callee \u2192 E0018\n\na: int = print2(\"abc\")        # no `print2` anywhere \u2192 E0018\n\nclass D(D):                   # `D` unbound in its own bases \u2192 E0018\n    pass"
       }
     ],
     "group": "Type System",
     "docsUrl": "https://www.basilisk-python.dev/errors/names_undefined",
     "references": [
-      {
-        "label": "PEP 695",
-        "url": "https://peps.python.org/pep-0695/"
-      },
       {
         "label": "Python language reference: Naming and binding",
         "url": "https://docs.python.org/3/reference/executionmodel.html#naming-and-binding"
@@ -5194,10 +5201,6 @@
       {
         "type": "text",
         "html": "When a function returning <code>TypeGuardX</code> or <code>TypeIsX</code> is passed as an argument where the expected callable return type is NOT <code>bool</code>, this rule reports the mismatch. <code>TypeGuard</code> and <code>TypeIs</code> are subtypes of <code>bool</code> in callable context, so passing them where <code>Callable..., bool</code> is expected is valid, but passing them where e.g. <code>Callable..., str</code> is expected is an error."
-      },
-      {
-        "type": "text",
-        "html": "Every verdict is structural over the parsed <code>ruff</code> AST (LINESCANPLAN-AST-MIGRATION, issue #408): <code>TypeGuard</code>, <code>TypeIs</code>, and <code>Callable</code> resolve through the module&#x27;s import cascade under any spelling, and <code>TypeIs</code> invariance compares type structure, never source formatting."
       },
       {
         "type": "code",
@@ -5339,7 +5342,7 @@
       },
       {
         "type": "text",
-        "html": "<em> If any signature is <code>@staticmethod</code> / <code>@classmethod</code>, </em>all* signatures and   the implementation must carry the same decorator."
+        "html": "<em> If any signature is <code>@staticmethod</code> / <code>@classmethod</code>, </em>all<em> signatures and   the implementation must carry the same decorator. </em> <code>@final</code> and <code>@override</code> apply to the <em>implementation only</em> (or, in a stub,   the first overload). Placing either on an <code>@overload</code> signature when an   implementation is present is an error; in a stub (no implementation),   placing either on any but the first overload is an error."
       }
     ],
     "group": "Type System",
@@ -5583,7 +5586,29 @@
     ],
     "summary": "Protocol conformance violation in annotated assignment",
     "summaryHtml": "Protocol conformance violation in annotated assignment",
-    "body": [],
+    "body": [
+      {
+        "type": "text",
+        "html": "Detects errors in annotated assignments at module level:"
+      },
+      {
+        "type": "text",
+        "html": "1. **Missing protocol members**: the annotation names a Protocol class and the    RHS constructs a class that does not implement all required methods."
+      },
+      {
+        "type": "text",
+        "html": "2. **Non-protocol structural assignment**: the annotation names a class that    inherits from a Protocol but does <em>not</em> itself include <code>Protocol</code> in its    bases (i.e. it is a concrete/abstract class, not a protocol).  In this case    structural subtyping does not apply and only nominal subclasses are allowed."
+      },
+      {
+        "type": "text",
+        "html": "3. **Member-kind mismatch** (see conformance): a member is present but in    an incompatible <em>form</em> \u2014 a read-write protocol property satisfied by a    read-only/immutable member, or a writable protocol instance variable    satisfied by a <code>ClassVar</code>, read-only property, or wrong-typed attribute."
+      },
+      {
+        "type": "code",
+        "lang": "python",
+        "code": "class P(Protocol):\n    def method(self) -> None: ...\n\nclass NotP(P):           # Note: no Protocol \u2014 this is a concrete class\n    def method(self) -> None: pass\n\nclass C:\n    pass\n\nx: P = C()       # E \u2014 C does not implement `method` (case 1)\ny: NotP = C()    # E \u2014 NotP is not a Protocol, no structural subtyping (case 2)"
+      }
+    ],
     "group": "Type System",
     "docsUrl": "https://www.basilisk-python.dev/errors/protocols_definition_2",
     "references": [
@@ -5712,6 +5737,27 @@
     "body": [
       {
         "type": "text",
+        "html": "Detects violations related to generic protocol usage:"
+      },
+      {
+        "type": "text",
+        "html": "1. **ProtocolT combined with GenericT**: The <code>ProtocolT, S, ...</code> shorthand    is already equivalent to <code>Protocol, GenericT, S, ...</code>. It is an error to    combine the shorthand with an explicit <code>Generic...</code> base."
+      },
+      {
+        "type": "text",
+        "html": "2. **Incompatible generic protocol assignment**: When a module-level variable    is annotated with a concrete generic protocol specialisation like    <code>Protoint, str</code> and the RHS is a concrete class, the concrete class&#x27;s    method signatures must be compatible with the substituted type arguments."
+      },
+      {
+        "type": "text",
+        "html": "3. **Self-typed protocol method incompatibility**: When a protocol declares    methods using a <code>self: T</code> annotation (making the return type depend on the    concrete receiver), concrete classes that implement those methods with    incompatible signatures are flagged."
+      },
+      {
+        "type": "code",
+        "lang": "python",
+        "code": "from typing import Generic, Protocol, TypeVar\n\nT_co = TypeVar(\"T_co\", covariant=True)\n\nclass Proto2(Protocol[T_co], Generic[T_co]):  # E \u2014 shorthand + Generic\n    ..."
+      },
+      {
+        "type": "text",
         "html": "<a href=\"https://peps.python.org/pep-0544/\">PEP 544</a>: &lt;https://typing.readthedocs.io/en/latest/spec/protocol.html#generic-protocols&gt;"
       }
     ],
@@ -5781,6 +5827,10 @@
         "type": "code",
         "lang": "python",
         "code": "import some_module\n\nclass MyProtocol(Protocol):\n    timeout: str\n\nx: MyProtocol = some_module  # E \u2014 some_module.timeout is int, not str"
+      },
+      {
+        "type": "text",
+        "html": "This is a simplified check: if the annotation names a class that inherits from <code>Protocol</code> and the RHS is a module name, the assignment is flagged when the module is known to be incompatible."
       },
       {
         "type": "text",
@@ -5990,7 +6040,7 @@
     "body": [
       {
         "type": "text",
-        "html": "<a href=\"https://peps.python.org/pep-0593/\">PEP 593</a> requires that the first argument to <code>Annotated...</code> be a valid type expression. Verdicts are structural, over the parsed <code>ruff</code> AST (LINESCANPLAN-AST-MIGRATION, issue #408). The following are errors:"
+        "html": "<a href=\"https://peps.python.org/pep-0593/\">PEP 593</a> requires that the first argument to <code>Annotated...</code> be a valid type expression. The following are errors:"
       },
       {
         "type": "text",
@@ -6041,6 +6091,11 @@
       {
         "type": "text",
         "html": "<a href=\"https://peps.python.org/pep-0593/\">PEP 593</a> requires <code>Annotated</code> to be subscripted with at least two arguments: a type and one or more metadata values. <code>Annotatedint</code> with only a single argument is a type error."
+      },
+      {
+        "type": "code",
+        "lang": "python",
+        "code": "from typing import Annotated\nbad: Annotated[int]  # E \u2014 only one argument"
       }
     ],
     "group": "Type System",
@@ -6090,10 +6145,6 @@
       {
         "type": "text",
         "html": "1. <code>Final</code> used in a function parameter annotation 2. <code>Final</code> nested inside another type constructor (e.g. <code>listFinal[int]</code>) 3. <code>FinalClassVar[...]</code> or <code>ClassVarFinal[...]</code> \u2014 mutually exclusive 4. <code>FinalT1, T2</code> \u2014 more than one type argument 5. Bare <code>Final</code> (no type arg, no initializer) at module level"
-      },
-      {
-        "type": "text",
-        "html": "Every verdict is structural over the parsed <code>ruff</code> AST, with <code>Final</code>, <code>ClassVar</code>, and <code>Annotated</code> resolved through the module&#x27;s import cascade (LINESCANPLAN-AST-MIGRATION, issue #408) \u2014 no check compares annotation source text against a hardcoded spelling."
       },
       {
         "type": "code",
@@ -6155,15 +6206,23 @@
       },
       {
         "type": "text",
-        "html": "5. **Imported Final re-assignment** \u2014 <code>RATE = 300</code> where <code>RATE</code> is imported    from a module that declares it <code>Final</code>."
+        "html": "5. **Module-level Final re-assignment** \u2014 <code>RATE = 300</code> after <code>RATE: Final = 3000</code>."
       },
       {
         "type": "text",
-        "html": "6. **Subclass override of Final** \u2014 <code>BORDER_WIDTH = 2.5</code> in a subclass when the    parent declares <code>BORDER_WIDTH: Final = 2.5</code>."
+        "html": "6. **Class attribute re-assignment** \u2014 <code>ClassB.DEFAULT_ID = 0</code> when <code>DEFAULT_ID</code>    is declared <code>Final</code> in <code>ClassB</code>."
       },
       {
         "type": "text",
-        "html": "7. **Function-local Final modification** \u2014 <code>x += 1</code> when <code>x: Final = 3</code>, or    walrus/for/with/tuple-unpack on a <code>Final</code> variable."
+        "html": "7. **Subclass override of Final** \u2014 <code>BORDER_WIDTH = 2.5</code> in a subclass when the    parent declares <code>BORDER_WIDTH: Final = 2.5</code>."
+      },
+      {
+        "type": "text",
+        "html": "8. **Function-local Final modification** \u2014 <code>x += 1</code> when <code>x: Final = 3</code>, or    walrus/for/with/tuple-unpack on a <code>Final</code> variable."
+      },
+      {
+        "type": "text",
+        "html": "9. **Global Final modification** \u2014 <code>global ID1; ID1 = 2</code> inside a function    when <code>ID1</code> is a module-level <code>Final</code>."
       }
     ],
     "group": "Type System",
@@ -6200,7 +6259,7 @@
     "body": [
       {
         "type": "text",
-        "html": "Two violations are detected:"
+        "html": "Three violations are detected:"
       },
       {
         "type": "text",
@@ -6208,7 +6267,11 @@
       },
       {
         "type": "text",
-        "html": "2. **Overriding a <code>@final</code> method** \u2014 a method decorated with <code>@final</code>    in a base class cannot be overridden in a subclass."
+        "html": "2. **<code>@final</code> on a non-method function** \u2014 <code>@final</code> is only valid on    methods defined inside a class body, not on module-level functions."
+      },
+      {
+        "type": "text",
+        "html": "3. **Overriding a <code>@final</code> method** \u2014 a method decorated with <code>@final</code>    in a base class cannot be overridden in a subclass."
       }
     ],
     "group": "Type System",
@@ -6323,7 +6386,7 @@
       },
       {
         "type": "text",
-        "html": "1. The function body is not a stub (<code>...</code> or <code>pass</code>). 2. The last top-level statement is **not** a <code>raise</code> statement and is    **not** a standalone call expression (which may itself be <code>NoReturn</code>)."
+        "html": "1. The declared return type is exactly <code>NoReturn</code> or <code>Never</code> (checked by    extracting the annotation text from the span). 2. The function body is not a stub (<code>...</code> or <code>pass</code>). 3. The last top-level statement is **not** a <code>raise</code> statement and is    **not** a standalone call expression (which may itself be <code>NoReturn</code>)."
       },
       {
         "type": "text",
@@ -6361,10 +6424,6 @@
       {
         "type": "text",
         "html": "1. Assigning a parameter typed <code>ContainerNever</code> to a local annotated    <code>ContainerT</code> where <code>T</code> is not <code>Never</code> or <code>Any</code> (invariant violation) 2. Returning <code>ClassCNever()</code> from a function annotated <code>-&gt; ClassCU</code>    where the class&#x27;s type parameter is invariant (not covariant)"
-      },
-      {
-        "type": "text",
-        "html": "Every verdict is structural over the parsed <code>ruff</code> AST (LINESCANPLAN-AST-MIGRATION, issue #408): <code>Never</code> and <code>Any</code> resolve through the import cascade under any spelling, assignments are <code>AnnAssign</code> nodes, and return expressions are parsed calls \u2014 never reconstructed source lines or <code>&quot;](&quot;</code> shape matching."
       },
       {
         "type": "code",
@@ -6436,15 +6495,23 @@
     "body": [
       {
         "type": "text",
-        "html": "Detects several categories of invalid use of <code>typeX</code>:"
+        "html": "Detects several categories of invalid use of <code>typeX</code> (or <code>TypeX</code>):"
       },
       {
         "type": "text",
-        "html": "1. **Incompatible class passed to <code>typeA | B</code>** \u2014 when a function expects    <code>typeA | B</code>, passing a class that is neither <code>A</code> nor <code>B</code> is an error."
+        "html": "1. **Callable passed as <code>typeT</code> argument** \u2014 <code>Callable</code> and other special    forms are not valid class objects and cannot be passed where <code>typeT</code> is    expected."
       },
       {
         "type": "text",
-        "html": "2. **Unknown attribute access on <code>typeobject</code>** \u2014    <code>typeobject</code> only exposes <code>object</code>&#x27;s own attributes; accessing any other    member is an error."
+        "html": "2. **Incompatible class passed to <code>typeA | B</code>** \u2014 when a function expects    <code>typeA | B</code>, passing a class that is neither <code>A</code> nor <code>B</code> is an error."
+      },
+      {
+        "type": "text",
+        "html": "3. **Unknown attribute access on <code>typeobject</code>** \u2014 unlike <code>typeAny</code>,    <code>typeobject</code> only exposes <code>object</code>&#x27;s own attributes; accessing any other    member is an error."
+      },
+      {
+        "type": "text",
+        "html": "4. **Unknown attribute access on a <code>TypeAlias</code> bound to <code>type</code> / <code>Type</code>** \u2014    a bare alias such as <code>TA1: TypeAlias = Type</code> resolves to <code>typeAny</code>, but    the alias <em>name itself</em> (used at module scope like <code>TA1.unknown</code>) does not    expose arbitrary attributes."
       }
     ],
     "group": "Type System",
@@ -6523,10 +6590,6 @@
         "html": "Detects subscript access on a fixed-length <code>tupleT1, T2, ...</code> parameter where the index is a known integer literal (either an inline <code>int</code> literal or a parameter typed as <code>LiteralN</code>) that falls outside the valid range <code>-len, len-1</code>."
       },
       {
-        "type": "text",
-        "html": "Every verdict is structural over the parsed <code>ruff</code> AST (LINESCANPLAN-AST-MIGRATION, issue #408): tuple shapes and <code>Literal</code> indices resolve through the import cascade under any spelling, subscripts are <code>Expr::Subscript</code> nodes scoped to their own function body \u2014 never substring hits on raw lines that also match comments and strings."
-      },
-      {
         "type": "code",
         "lang": "python",
         "code": "def f(v: tuple[int, str, list[bool]], b: Literal[5]):\n    v[b]   # E \u2014 index 5 out of range for 3-element tuple\n    v[4]   # E \u2014 index 4 out of range\n    v[-4]  # E \u2014 index -4 out of range (valid: -3..-1)"
@@ -6566,7 +6629,7 @@
       },
       {
         "type": "text",
-        "html": "Covers module-level bare reassignments of annotated tuple variables and function-body variable assignments. Every verdict is structural over the parsed <code>ruff</code> AST (LINESCANPLAN-AST-MIGRATION, issue #408): declarations are <code>AnnAssign</code> nodes, reassignments are <code>Assign</code> nodes, and tuple shapes come from expression structure \u2014 never reconstructed source lines."
+        "html": "Covers module-level bare reassignments of annotated tuple variables and function-body variable assignments."
       },
       {
         "type": "text",

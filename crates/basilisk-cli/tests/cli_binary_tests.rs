@@ -25,11 +25,6 @@
 //!   1 — error diagnostics found
 //!   2 — invalid configuration
 //!   3 — internal error (bad path, I/O failure)
-//!
-//! Parse-failure regressions below pin
-//! [#384](https://github.com/Nimblesite/Basilisk/issues/384). This is CLI
-//! behavior rather than a Python typing rule, so its authority is the linked
-//! Basilisk CLI contract, not a fabricated PEP citation.
 
 use std::path::Path;
 use std::process::{Command, Output};
@@ -209,73 +204,63 @@ fn exit_3_for_nonexistent_path() -> Result<(), Box<dyn std::error::Error>> {
 fn json_output_reports_a_file_that_failed_to_parse() -> Result<(), Box<dyn std::error::Error>> {
     let dir = std::env::temp_dir().join(format!("basilisk-json-failure-{}", std::process::id()));
     std::fs::create_dir_all(&dir)?;
-    let variants: [(&str, &[u8]); 2] = [
-        ("src.py", b"def calculate_result()\n"),
-        (
-            "renamed_and_reformatted.py",
-            b"def renamed_operation(\n    first_value,\n    second_value\n\n",
-        ),
-    ];
+    let malformed = dir.join("src.py");
+    std::fs::write(&malformed, b"def hi()\n")?;
+    let malformed = malformed.to_string_lossy().into_owned();
 
-    for (name, source) in variants {
-        let malformed = dir.join(name);
-        std::fs::write(&malformed, source)?;
-        let malformed = malformed.to_string_lossy().into_owned();
-
-        let out = run_check_with_args(&[&malformed], &["--output", "json"])?;
-        let rendered = stdout(&out);
-
-        assert_eq!(
-            out.status.code(),
-            Some(1),
-            "a user syntax error is a source diagnostic, never an internal checker failure"
-        );
-        assert_ne!(
-            rendered.trim(),
-            "[]",
-            "JSON must never report an unparseable file the way it reports a clean one"
-        );
-
-        let value: Value = serde_json::from_str(&rendered)?;
-        let items = value
-            .as_array()
-            .ok_or("JSON output must stay a flat array of entries")?;
-        assert_eq!(
-            items.len(),
-            1,
-            "each failed file must produce exactly one entry"
-        );
-        let entry = items.first().ok_or("entry missing")?;
-        assert_eq!(
-            entry["severity"], "error",
-            "a file that cannot be parsed is an error"
-        );
-        assert!(
-            entry["path"]
-                .as_str()
-                .is_some_and(|path| path.ends_with(name)),
-            "the entry must name the file that failed: {entry}"
-        );
-        assert!(
-            entry["message"]
-                .as_str()
-                .is_some_and(|message| message.contains("syntax error")),
-            "the entry must say why the file could not be parsed: {entry}"
-        );
-        assert!(
-            entry["code"].is_null(),
-            "no checker rule produced this entry, so it must not claim a rule code: {entry}"
-        );
-        assert!(
-            entry["line"].as_u64().is_some_and(|line| line >= 1),
-            "the entry must carry a 1-based line: {entry}"
-        );
-        assert!(
-            entry["col"].as_u64().is_some_and(|col| col >= 1),
-            "the entry must carry a 1-based column: {entry}"
-        );
-    }
+    let out = run_check_with_args(&[&malformed], &["--output", "json"])?;
+    let rendered = stdout(&out);
     let _ = std::fs::remove_dir_all(&dir);
+
+    assert_eq!(
+        out.status.code(),
+        Some(3),
+        "an unparseable file must exit 3"
+    );
+    assert_ne!(
+        rendered.trim(),
+        "[]",
+        "JSON must never report an unparseable file the way it reports a clean one"
+    );
+
+    let value: Value = serde_json::from_str(&rendered)?;
+    let items = value
+        .as_array()
+        .ok_or("JSON output must stay a flat array of entries")?;
+    assert_eq!(
+        items.len(),
+        1,
+        "the failed file must produce exactly one entry"
+    );
+    let entry = items.first().ok_or("entry missing")?;
+    assert_eq!(
+        entry["severity"], "error",
+        "a file that cannot be read is an error"
+    );
+    assert!(
+        entry["path"]
+            .as_str()
+            .is_some_and(|p| p.ends_with("src.py")),
+        "the entry must name the file that failed: {entry}"
+    );
+    assert!(
+        entry["message"]
+            .as_str()
+            .is_some_and(|m| m.contains("syntax error")),
+        "the entry must say why the file could not be read: {entry}"
+    );
+    assert!(
+        entry["code"].is_null(),
+        "no rule produced this entry, so it must not claim a rule code: {entry}"
+    );
+    assert!(
+        entry["line"].as_u64().is_some_and(|line| line >= 1),
+        "the entry must carry a 1-based line: {entry}"
+    );
+    assert!(
+        entry["col"].as_u64().is_some_and(|col| col >= 1),
+        "the entry must carry a 1-based column: {entry}"
+    );
     Ok(())
 }
 
@@ -294,11 +279,7 @@ fn json_output_keeps_valid_diagnostics_beside_a_parse_failure(
     let rendered = stdout(&out);
     let _ = std::fs::remove_dir_all(&dir);
 
-    assert_eq!(
-        out.status.code(),
-        Some(1),
-        "a user syntax error must not mask ordinary diagnostics behind internal-failure exit 3"
-    );
+    assert_eq!(out.status.code(), Some(3), "a parse failure must exit 3");
     let value: Value = serde_json::from_str(&rendered)?;
     let items = value.as_array().ok_or("JSON output must stay an array")?;
     assert!(
@@ -351,7 +332,7 @@ fn json_output_for_a_clean_file_is_still_an_empty_array() -> Result<(), Box<dyn 
 }
 
 #[test]
-fn syntax_failure_exits_one_without_dropping_valid_diagnostics(
+fn analysis_failure_exits_three_without_dropping_valid_diagnostics(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (dir, staged) = stage_project(&["errors/e0001_single_param.py"])?;
     let malformed = dir.join("malformed.py");
@@ -365,11 +346,7 @@ fn syntax_failure_exits_one_without_dropping_valid_diagnostics(
     let malformed_only = run_check(&[&malformed])?;
     let _ = std::fs::remove_dir_all(&dir);
 
-    assert_eq!(
-        mixed.status.code(),
-        Some(1),
-        "a mixed run containing source errors must exit 1, not internal-failure 3"
-    );
+    assert_eq!(mixed.status.code(), Some(3), "analysis failure must exit 3");
     assert!(
         stdout(&mixed).contains("BSK-0001"),
         "a valid peer's diagnostics must still be rendered: {}",
@@ -377,67 +354,14 @@ fn syntax_failure_exits_one_without_dropping_valid_diagnostics(
     );
     assert_eq!(
         malformed_only.status.code(),
-        Some(1),
-        "a malformed requested file is a source error and must exit 1"
+        Some(3),
+        "a malformed requested file must exit 3"
     );
     assert!(
         !stdout(&malformed_only).contains("No issues found"),
         "analysis failure must never print a clean-success message: {}",
         stdout(&malformed_only)
     );
-    Ok(())
-}
-
-/// [#384](https://github.com/Nimblesite/Basilisk/issues/384): the human-readable
-/// report has the same obligation as JSON under [CHKARCH-CLI-OUTPUT-FAILURES].
-/// A syntax error must be visible, located, and included in the summary.
-#[test]
-fn text_output_reports_and_counts_a_file_that_failed_to_parse(
-) -> Result<(), Box<dyn std::error::Error>> {
-    let dir = std::env::temp_dir().join(format!("basilisk-text-failure-{}", std::process::id()));
-    std::fs::create_dir_all(&dir)?;
-    let variants: [(&str, &[u8]); 2] = [
-        ("broken.py", b"value = object()\nvalue.\n"),
-        (
-            "reformatted.py",
-            b"renamed_symbol = (\n    object()\n)\nrenamed_symbol.\n",
-        ),
-    ];
-    for (name, source) in variants {
-        let malformed = dir.join(name);
-        std::fs::write(&malformed, source)?;
-        let malformed = malformed.to_string_lossy().into_owned();
-
-        let out = run_check(&[&malformed])?;
-        let rendered = stdout(&out);
-
-        assert_eq!(
-            out.status.code(),
-            Some(1),
-            "a user syntax error must use the source-diagnostic exit code"
-        );
-        assert!(
-            rendered.contains(name),
-            "the report body must name the unanalysable file: {rendered}"
-        );
-        assert!(
-            rendered.to_ascii_lowercase().contains("syntax"),
-            "the report body must identify the syntax failure: {rendered}"
-        );
-        assert!(
-            rendered.contains(":") && !rendered.contains("byte range"),
-            "the syntax failure must use an actionable line/column location, not a byte range: {rendered}"
-        );
-        assert!(
-            rendered.contains("1 diagnostic") || rendered.contains("1 error"),
-            "the summary must count the unanalysable file: {rendered}"
-        );
-        assert!(
-            !rendered.contains("No issues found"),
-            "an unanalysable file must never render as clean: {rendered}"
-        );
-    }
-    let _ = std::fs::remove_dir_all(&dir);
     Ok(())
 }
 

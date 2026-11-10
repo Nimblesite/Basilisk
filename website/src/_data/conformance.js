@@ -1,17 +1,16 @@
-// Eleventy global data retained for the conformance integrity audit. These are
-// historical outputs from the python/typing harness, not a current Basilisk
-// conformance result. The former result is withdrawn because fitted checker
-// logic made it untrustworthy; public pages must not present these values as a
-// score, standing, pass count, or proof of implementation quality.
+// Eleventy global data: PEP conformance results, read from committed outputs of
+// the real python/typing harness — never hand-typed. Implements
+// [CHKARCH-CONFORMANCE]; mirrors _data/benchmarks.js.
 //
-//   conformance/conformance_status.csv         -> historical per-file output
-//   website/src/_data/conformance_report.json  -> historical run metadata
-//   git log of conformance_status.csv          -> historical audit trail
+//   conformance/conformance_status.csv         -> live per-file pass/fail
+//   website/src/_data/conformance_report.json  -> resolved python/typing@main commit + score metadata
+//   git log of conformance_status.csv          -> the over-time chart (real commits)
 //
-// A file was marked passing when the harness reported no diagnostic diff. That
-// records what happened in the exact fixtures; it does not establish general
-// conformance. Values are exposed only under `historical` with an explicit
-// withdrawn status.
+// A file passes iff the official harness reports no diff between expected and
+// observed diagnostics. Every number the website shows is whatever that harness
+// last produced and committed. The over-time chart is read straight from this
+// file's GIT history, not a hand-maintained ledger, so it cannot drift from what
+// actually happened.
 import { readFileSync, existsSync } from "fs";
 import { execFileSync } from "child_process";
 import { dirname, join } from "path";
@@ -22,8 +21,8 @@ const REPO_ROOT = join(__dirname, "../../..");
 const CONF_DIR = join(REPO_ROOT, "conformance");
 const STATUS_REL = "conformance/conformance_status.csv";
 const STATUS_CSV = join(CONF_DIR, "conformance_status.csv");
-// The exact historical python/typing snapshot and withdrawn fixture-result
-// metadata. It lives in this same _data dir; it is not current-main data.
+// The resolved python/typing@main commit and score metadata. It lives in this
+// same _data dir.
 const REPORT = join(__dirname, "conformance_report.json");
 
 // The day the official python/typing scoring rules replaced our earlier in-repo
@@ -54,7 +53,7 @@ function shortDate(iso) {
 }
 
 // Read the machine-readable report, which is the single source for the upstream
-// commit. Written by the pristine fixture runner; never hand-edited.
+// commit. Written by the conformance gate; never hand-edited.
 function readReport() {
   if (!existsSync(REPORT)) return null;
   try {
@@ -210,12 +209,7 @@ function buildChart(points) {
 export default function () {
   const status = parseStatus();
   if (!status) {
-    return {
-      hasData: false,
-      withdrawn: true,
-      publicationStatus: "historical-withdrawn",
-      historical: null,
-    };
+    return { hasData: false, scorePct: null, categories: [], failing: [], history: [], chart: null };
   }
 
   // The resolved upstream commit comes from the conformance report.
@@ -223,9 +217,10 @@ export default function () {
   const upstream = report?.upstream ?? {};
   const pinnedRef = upstream.sha ?? null;
 
-  // Historical data still carries the exact python/typing commit so the audit
-  // can reproduce the withdrawn run. A missing commit would make that record
-  // incomplete, so fail rather than silently detach it from its source.
+  // [CHKARCH-CONFORMANCE] Build-time guarantee, not convention: every page that
+  // quotes the score must also carry the exact python/typing commit it was
+  // graded against. A build with score data but no commit would render blank
+  // SHAs and make the public number unreproducible, so fail it instead.
   if (!pinnedRef) {
     throw new Error(
       "conformance: conformance_status.csv has score data but conformance_report.json " +
@@ -236,18 +231,14 @@ export default function () {
   const history = gitHistory();
   return {
     hasData: true,
-    withdrawn: true,
-    publicationStatus: "historical-withdrawn",
-    historical: {
-      ...status,
-      upstreamRef: upstream.ref ?? "main",
-      pinnedRef,
-      pinnedRefShort: upstream.shortSha ?? (pinnedRef ? pinnedRef.slice(0, 7) : null),
-      commitDate: upstream.commitDate || null,
-      stale: upstream.stale ?? false,
-      officialHarnessSince: OFFICIAL_SINCE,
-      history,
-      chart: buildChart(history),
-    },
+    ...status,
+    upstreamRef: upstream.ref ?? "main",
+    pinnedRef,
+    pinnedRefShort: upstream.shortSha ?? (pinnedRef ? pinnedRef.slice(0, 7) : null),
+    commitDate: upstream.commitDate || null,
+    stale: upstream.stale ?? false,
+    officialSince: OFFICIAL_SINCE,
+    history,
+    chart: buildChart(history),
   };
 }

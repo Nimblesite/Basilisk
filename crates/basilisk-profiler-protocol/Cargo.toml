@@ -1,0 +1,20 @@
+[package]
+name = "basilisk-profiler-protocol"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Wire protocol shared by the Basilisk LSP and the elevated profiler helper"
+publish = false
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { version = "1", features = ["io-util"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["io-util", "macros", "rt"] }
+
+[lints]
+workspace = true

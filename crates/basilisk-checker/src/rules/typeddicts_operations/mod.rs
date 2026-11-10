@@ -21,6 +21,8 @@
 //! movie2: Movie = {"title": "Blade Runner", "year": 1982}  # E: invalid/missing keys
 //! ```
 
+mod type_consistency;
+
 use basilisk_resolver::{ResolvedModule, TypedDictKeyViolationKind};
 
 use crate::diagnostic::{error_diagnostic_owned, Diagnostic, ErrorCode};
@@ -42,6 +44,8 @@ impl Rule for TypedDictKeyValidation {
         _ctx: &super::CheckContext,
         diagnostics: &mut Vec<Diagnostic>,
     ) {
+        type_consistency::check_typeddict_assignability(module, diagnostics);
+
         // TypedDicts declared with `extra_items=` accept keys beyond their
         // schema (PEP 728) — unknown-key violations do not apply to them.
         let extra_items_classes: std::collections::HashSet<&str> = module

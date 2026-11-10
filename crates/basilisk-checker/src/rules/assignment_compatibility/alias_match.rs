@@ -1,27 +1,3 @@
-// ############################################################################
-// # BROKEN — THIS FILE DOES NOT COMPILE. DO NOT "FIX" IT BY RESTORING TEXT   #
-// # MATCHING.                                                                #
-// #                                                                          #
-// # Deleted helper this file called:                                         #
-// #   InferredType::from_annotation (types_parsing.rs)
-// #                                                                          #
-// # That helper decided types from the SPELLING of source text (lowercased   #
-// # annotation strings, `"int"`/`"str"`/`"object"` literal matching, `|`     #
-// # splitting, `starts_with("tuple[")`). It was deleted, not replaced.       #
-// #                                                                          #
-// # The call sites below are LEFT BROKEN ON PURPOSE. They are the map of     #
-// # what must be rebuilt on the resolved AST — resolved bindings, canonical  #
-// # `TypeNode`, and `assignable`/`equivalent` — or made to abstain.          #
-// #                                                                          #
-// # Restoring the deleted helper, vendoring a copy of it, or re-deriving a   #
-// # type from source text anywhere below is FORBIDDEN.                       #
-// #                                                                          #
-// # Evidence and the failing tests that pin the real behaviour:              #
-// #   docs/RULE-VALIDITY-REPORT.md                                           #
-// #   crates/basilisk-checker/tests/legacy_annotation_text_parser_pin_tests.rs
-// #   crates/basilisk-checker/tests/pep_spelling_invariance_pin_tests.rs     #
-// ############################################################################
-
 //! Implements [`assignment_compatibility`] from [CHKARCH-DIAG-TYPESAFETY]. See docs/specs/CHECKER-ARCHITECTURE-SPEC.md#CHKARCH-DIAG-TYPESAFETY
 //! Recursive type-alias value matching for `assignment_compatibility`.
 //!
@@ -33,17 +9,21 @@
 //! j4: Json = {"a": 1, "b": 3j}  # E: complex is not a Json value
 //! ```
 //!
+//! and *generic* recursive aliases such as
+//!
+//! ```python
+//! G = list["G[T]" | T]            # T = TypeVar("T", str, int)
+//! S = G[str]
+//! g1: S = ["hi", ["hi", "hi"]]    # OK
+//! g3: G[str] = ["hi", [2.4]]      # E: float is not a `str` leaf
+//! ```
+//!
 //! cannot be validated by the plain `is_assignable_to` check because the
 //! annotation is a `Named` reference and the right-hand side is a literal
-//! structure. This module resolves a bare alias name to its (possibly
-//! recursive) definition and verifies whether the inferred RHS literal type
+//! structure. This module resolves a bare or specialised alias name to its
+//! (possibly recursive) definition — substituting `TypeVar` arguments for
+//! generic aliases — and verifies whether the inferred RHS literal type
 //! *positively* matches it.
-//!
-//! *Generic* alias references (`G[str]` where `G = list["G[T]" | T]`) are NOT
-//! specialised any more: substituting the use-site arguments would require
-//! splitting and rewriting the rendered reference text, which is banned
-//! ([ASTREBUILD-LAW]). Those references now abstain — the caller stays
-//! lenient and emits nothing ([ASTREBUILD-PHASE-RESOLVER]).
 //!
 //! **Positive-match semantics.** A value matches only when every part is
 //! demonstrably compatible. `Unknown`/`Any` values do **not** positively match a
@@ -53,6 +33,8 @@
 
 use std::collections::{HashMap, HashSet};
 
+use super::callable_check::replace_word;
+use crate::rules::shared::split_top_level_commas;
 use crate::span_util::slice_span;
 use crate::types::InferredType;
 use basilisk_resolver::{ResolvedModule, VariableInfo};
@@ -91,22 +73,12 @@ pub(super) fn collect_value_aliases(module: &ResolvedModule) -> HashMap<String, 
         .collect();
     let mut aliases = HashMap::new();
     for var in &module.module_vars {
-        if var.has_annotation {
+        if var.has_annotation && !is_typealias_annotation(var, &module.source) {
             continue;
         }
-        let Some(text) = alias_rhs_text(var, module) else {
+        let Some(text) = alias_rhs_text(var, &module.source) else {
             continue;
         };
-        // NOT `resolver.resolve_text`: this table feeds a depth-limited
-        // recursive matcher that needs the alias body's OWN shape, with
-        // self-references intact as leaves. The cascade expands aliases
-        // transparently and cuts the cycle to gradual `Unknown`, which
-        // erases exactly the leaf the matcher recurses on — measured to cost
-        // two recursive-alias acceptances (`fp_elimination_tests`).
-        // Retiring this site means deleting the matcher in favour of the
-        // cascade's own recursive-alias handling, not swapping the parser
-        // ([NARROWPLAN-INTEGRATION] Step 7,
-        // [#379](https://github.com/Nimblesite/Basilisk/issues/379)).
         let def = InferredType::from_annotation(text.trim());
         let include = match def {
             InferredType::Union(_) => true,
@@ -151,11 +123,14 @@ fn free_typevars(lowered: &str, typevars: &HashSet<String>) -> Vec<String> {
 /// `G = list["G[T]" | T]`), then specialisations that reference a root via a
 /// subscript (e.g. `S = G[str]`) and therefore bind no params of their own.
 ///
-/// The collected roots are no longer specialised — [`resolve_generic`]
-/// abstains for any alias that binds params ([ASTREBUILD-LAW]) — but the
-/// table still identifies which annotations name a value alias, so the
-/// caller can stay lenient on them instead of misjudging the reference
-/// through the ordinary assignability path.
+/// Unlike [`collect_value_aliases`], annotated assignments are skipped even
+/// when the annotation is an explicit `TypeAlias`. Substituting into a generic
+/// alias is textual here, which is sound for the container bodies this pass
+/// targets but not for a `Callable` body parameterised by a `ParamSpec` —
+/// `Callback: TypeAlias = Callable[P, str]` used as `Callback[...]` needs real
+/// `ParamSpec` semantics, and approximating it produced false positives on the
+/// conformance suite's `callables_annotation` / `callables_subtyping` fixtures.
+/// Those forms are left to the callable-compatibility path that does model them.
 pub(super) fn collect_generic_aliases(module: &ResolvedModule) -> HashMap<String, GenericAlias> {
     let typevars: HashSet<String> = module
         .typevar_calls
@@ -168,7 +143,7 @@ pub(super) fn collect_generic_aliases(module: &ResolvedModule) -> HashMap<String
         if var.has_annotation {
             continue;
         }
-        let Some(text) = alias_rhs_text(var, module) else {
+        let Some(text) = alias_rhs_text(var, &module.source) else {
             continue;
         };
         let lowered = text.to_ascii_lowercase();
@@ -193,7 +168,7 @@ pub(super) fn collect_generic_aliases(module: &ResolvedModule) -> HashMap<String
         if generics.contains_key(&key) {
             continue;
         }
-        let Some(text) = alias_rhs_text(var, module) else {
+        let Some(text) = alias_rhs_text(var, &module.source) else {
             continue;
         };
         let lowered = text.to_ascii_lowercase();
@@ -217,10 +192,6 @@ pub(super) fn collect_generic_aliases(module: &ResolvedModule) -> HashMap<String
 /// `Some(true)` when `value` positively matches it and `Some(false)` otherwise.
 /// Returns `None` when the name is not a value alias, so the caller can fall
 /// back to its ordinary assignability check.
-#[expect(
-    dead_code,
-    reason = "orphaned by the deletion of the spelling-keyed `check_vars` pipeline; retained as the map for the identity-keyed rebuild ([ASTREBUILD-PHASE-TYPEEXPR])"
-)]
 pub(super) fn alias_value_assignable(
     value: &InferredType,
     declared_name: &str,
@@ -233,40 +204,36 @@ pub(super) fn alias_value_assignable(
     None
 }
 
-/// The trimmed RHS source text of an alias assignment, if non-empty.
+/// Returns `true` when `var` carries an explicit `TypeAlias` annotation, i.e.
+/// `Name: TypeAlias = ...` (also `typing.TypeAlias`). Such assignments are
+/// value aliases too and must be collected despite `has_annotation` being set.
 ///
-/// A `Name = TypeAliasType("Name", body, type_params=(T,))` definition is NOT a
-/// textual alias body: its body is the call's SECOND ARGUMENT, and the call
-/// expression itself denotes no type at all. Matching a value against that text
-/// asks whether e.g. `1` matches `typealiastype("goodalias4", …)`, which can
-/// only ever answer "no" — a false positive on every valid use of a
-/// `TypeAliasType` alias. These aliases are resolved by the
-/// [TYPEINF-ANNOTATION-RESOLUTION] cascade instead, so they are excluded here
-/// rather than approximated.
-fn alias_rhs_text(var: &VariableInfo, module: &ResolvedModule) -> Option<String> {
-    if is_type_alias_type_call(var, module) {
-        return None;
-    }
-    let rhs_span = var.rhs_span?;
-    let rhs_text = slice_span(&module.source, rhs_span)?.trim();
-    (!rhs_text.is_empty()).then(|| rhs_text.to_owned())
+/// The annotation may be written as a string — `Name: "TypeAlias" = ...` is the
+/// same declaration to a type checker, since any annotation may appear as a
+/// forward reference ([annotation expressions](https://typing.python.org/en/latest/spec/annotations.html#string-annotations)).
+/// [`alias_base`] strips those quotes for the same reason, so the two agree on
+/// what a name is.
+fn is_typealias_annotation(var: &VariableInfo, source: &str) -> bool {
+    let Some(span) = var.annotation_span else {
+        return false;
+    };
+    let Some(text) = slice_span(source, span) else {
+        return false;
+    };
+    let unquoted = alias_base(text.trim());
+    let base = unquoted.rsplit('.').next().unwrap_or(unquoted);
+    base == "TypeAlias"
 }
 
-/// Whether `var` is the LHS of a `TypeAliasType(...)` call the resolver
-/// recognised (structural, never a text match on the RHS).
-fn is_type_alias_type_call(var: &VariableInfo, module: &ResolvedModule) -> bool {
-    module
-        .type_alias_type_calls
-        .iter()
-        .any(|call| call.lhs_name == var.name)
+/// The trimmed RHS source text of an alias assignment, if non-empty.
+fn alias_rhs_text(var: &VariableInfo, source: &str) -> Option<String> {
+    let rhs_span = var.rhs_span?;
+    let rhs_text = slice_span(source, rhs_span)?.trim();
+    (!rhs_text.is_empty()).then(|| rhs_text.to_owned())
 }
 
 /// Returns `true` when `value` positively matches the (possibly recursive)
 /// alias `target`. See the module docs for the positive-match contract.
-#[expect(
-    dead_code,
-    reason = "orphaned by the deletion of the spelling-keyed `check_vars` pipeline; retained as the map for the identity-keyed rebuild ([ASTREBUILD-PHASE-TYPEEXPR])"
-)]
 pub(super) fn alias_assignable(
     value: &InferredType,
     target: &InferredType,
@@ -316,23 +283,23 @@ pub(super) fn alias_assignable(
     }
 }
 
-/// Match a value against a `Named` target, resolving union aliases and generic
-/// alias specialisations.
-#[expect(
-    dead_code,
-    reason = "orphaned by the deletion of the spelling-keyed `check_vars` pipeline; retained as the map for the identity-keyed rebuild ([ASTREBUILD-PHASE-TYPEEXPR])"
-)]
+/// Match a value against a `Named` target, resolving union aliases, generic
+/// alias specialisations, and the `Mapping[K, V]` ABC (left as a `Named`).
 fn match_named_target(value: &InferredType, name: &str, ctx: &AliasCtx<'_>, depth: u32) -> bool {
+    // `Mapping[K, V]` arrives as a Named; treat it structurally like a dict.
+    if let Some(dict) = parse_mapping_named(name) {
+        return alias_assignable(value, &dict, ctx, depth + 1);
+    }
+
     let base = alias_base(name);
     if let Some(def) = ctx.union.get(base) {
         return alias_assignable(value, def, ctx, depth + 1);
     }
     if let Some(generic) = ctx.generic.get(base) {
-        return match resolve_generic(generic) {
+        return match resolve_generic(name, generic) {
             Some(resolved) => alias_assignable(value, &resolved, ctx, depth + 1),
-            // A parameterised alias cannot be specialised here (see
-            // [`resolve_generic`]): the checker cannot prove a mismatch, so
-            // stay lenient and emit nothing.
+            // Arity mismatch (e.g. a bare generic alias used without args):
+            // the checker cannot prove a mismatch, so stay lenient.
             None => true,
         };
     }
@@ -345,33 +312,41 @@ fn match_named_target(value: &InferredType, name: &str, ctx: &AliasCtx<'_>, dept
     }
 }
 
-/// Expand a generic alias into a matchable type.
-///
-/// A parameterised alias (`G[str]`) would need its use-site subscript
-/// arguments resolved and substituted, but this matcher only holds the
-/// rendered reference text, which may not lawfully be split or rewritten
-/// ([ASTREBUILD-LAW]). Such references return `None` and the caller stays
-/// lenient ([ASTREBUILD-PHASE-RESOLVER]); the matcher itself dies with the
-/// alias tables in [NARROWPLAN-INTEGRATION] Step 7. A parameterless
-/// specialisation (`S = G[str]` collected as its own entry) expands its
-/// stored definition directly.
-#[expect(
-    dead_code,
-    reason = "orphaned by the deletion of the spelling-keyed `check_vars` pipeline; retained as the map for the identity-keyed rebuild ([ASTREBUILD-PHASE-TYPEEXPR])"
-)]
-fn resolve_generic(alias: &GenericAlias) -> Option<InferredType> {
-    if !alias.params.is_empty() {
+/// Specialise a generic alias use-site (`Name[Arg, …]`) into a concrete type by
+/// substituting its `TypeVar` params. Returns `None` on arity mismatch.
+fn resolve_generic(name: &str, alias: &GenericAlias) -> Option<InferredType> {
+    let args = subscript_args(name);
+    let mut text = alias.def_text.clone();
+    if alias.params.len() == args.len() {
+        for (param, arg) in alias.params.iter().zip(args.iter()) {
+            text = replace_word(&text, param, arg);
+        }
+    } else if !alias.params.is_empty() {
         return None;
     }
-    Some(InferredType::from_annotation(&alias.def_text))
+    Some(InferredType::from_annotation(&text))
+}
+
+/// Extract the top-level subscript arguments from a `Name[A, B]` reference.
+fn subscript_args(name: &str) -> Vec<String> {
+    let trimmed = name.trim().trim_matches(|c| c == '"' || c == '\'');
+    let Some(open) = trimmed.find('[') else {
+        return Vec::new();
+    };
+    let Some(close) = trimmed.rfind(']') else {
+        return Vec::new();
+    };
+    if close <= open + 1 {
+        return Vec::new();
+    }
+    split_top_level_commas(&trimmed[open + 1..close])
+        .into_iter()
+        .map(|arg| arg.trim().to_owned())
+        .collect()
 }
 
 /// Match a value against a tuple target, handling the homogeneous
 /// `tuple[X, ...]` form (the parser stores the `...` terminator as `Named`).
-#[expect(
-    dead_code,
-    reason = "orphaned by the deletion of the spelling-keyed `check_vars` pipeline; retained as the map for the identity-keyed rebuild ([ASTREBUILD-PHASE-TYPEEXPR])"
-)]
 fn match_tuple_target(
     value: &InferredType,
     target_elems: &[InferredType],
@@ -397,10 +372,6 @@ fn match_tuple_target(
 
 /// Positive structural match for primitive base types. Notably `Unknown`/`Any`
 /// values do NOT match a concrete base type — the checker cannot prove it.
-#[expect(
-    dead_code,
-    reason = "orphaned by the deletion of the spelling-keyed `check_vars` pipeline; retained as the map for the identity-keyed rebuild ([ASTREBUILD-PHASE-TYPEEXPR])"
-)]
 fn positive_base_match(value: &InferredType, target: &InferredType) -> bool {
     use crate::types::LiteralValue;
     use InferredType::{Bool, Bytes, Float, Int, Literal, LiteralString, None_, Str};
@@ -421,33 +392,17 @@ fn positive_base_match(value: &InferredType, target: &InferredType) -> bool {
     }
 }
 
-// ##########################################################################
-// # DELETED BODY — `alias_base`. DO NOT RESTORE IT. DO NOT SUBSTITUTE A    #
-// # PLACEHOLDER THAT RETURNS THE INPUT UNCHANGED.                          #
-// #                                                                        #
-// # It read:                                                               #
-// #   let trimmed = name.trim_matches(|c| c == '"' || c == '\'');          #
-// #   trimmed.split('[').next().unwrap_or(trimmed).trim()                  #
-// #                                                                        #
-// # Three spelling operations in two lines: unquoting a FORWARD REFERENCE  #
-// # by stripping quote characters, taking a generic head by splitting at a #
-// # bracket, and trimming whitespace that a formatter controls. A quoted   #
-// # annotation is an `Expr::StringLiteral` whose contents parse as a type  #
-// # expression — the binding table already answers it via                  #
-// # `form_of_quoted_annotation`. None of it is a text problem.             #
-// #                                                                        #
-// # Pinned by: tests/no_type_spelling_surgery_tests.rs                     #
-// ##########################################################################
+/// Extract the alias-lookup base from a `Named` text: strip surrounding quotes
+/// and any `[...]` subscript, returning the bare name.
+fn alias_base(name: &str) -> &str {
+    let trimmed = name.trim_matches(|c| c == '"' || c == '\'');
+    trimmed.split('[').next().unwrap_or(trimmed).trim()
+}
 
-/// DELETED — panics. The signature survives only so its callers stay visible
-/// as the rebuild map; see the banner above.
-fn alias_base(_name: &str) -> &str {
-    panic!(
-        "basilisk-checker: `alias_base` was DELETED because it found an alias's \
-         lookup key by stripping quote characters and splitting a RENDERED type at \
-         `[`. It panics because the real implementation — resolving the annotation \
-         expression (including quoted forward references) through the binding table \
-         — DOES NOT EXIST YET. Do not restore the string surgery and do not return \
-         the input unchanged in its place."
-    )
+/// Parse a `mapping[K, V]` Named into a `Dict(K, V)` so it can be matched
+/// structurally against a dict literal value.
+fn parse_mapping_named(name: &str) -> Option<InferredType> {
+    let inner = name.strip_prefix("mapping[")?.strip_suffix(']')?;
+    let (key, val) = crate::types_parsing::parse_key_value_args(inner)?;
+    Some(InferredType::Dict(Box::new(key), Box::new(val)))
 }
